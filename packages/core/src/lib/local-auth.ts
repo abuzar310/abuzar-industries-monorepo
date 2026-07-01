@@ -1,4 +1,4 @@
-// Local app lock: pick a user (Afsar / Ajju) and enter the shared password.
+// Local app lock: pick a user (Afsar / Ajju) and enter their password.
 // This gates access to the whole app; cloud sync runs separately on the anon key.
 import { metaGet, metaSet } from "./db";
 import { getState, setUser } from "@/store/app-store";
@@ -9,9 +9,12 @@ export const USERS: LocalUser[] = [
   { id: "ajju", name: "Ajju", role: "manager" },
 ];
 
-// Shared password for now (env-overridable). Not a real secret boundary — it's a
-// staff app lock, not cryptographic auth.
-const PASSWORD = process.env.NEXT_PUBLIC_APP_PASSWORD ?? "kingking";
+// Per-user staff passwords (hardcoded). Not a real secret boundary — it's a staff
+// app lock, not cryptographic auth.
+const PASSWORDS: Record<string, string> = {
+  afsar: "afsar786",
+  ajju: "ajju123",
+};
 
 export const isOwner = () => getState().user?.role === "owner";
 
@@ -25,7 +28,7 @@ export async function loadLocalUser(): Promise<LocalUser | null> {
 /** Attempt to unlock as the given user. Returns true on success. */
 export async function unlock(userId: string, password: string): Promise<boolean> {
   const u = USERS.find((x) => x.id === userId);
-  if (!u || password !== PASSWORD) return false;
+  if (!u || password !== PASSWORDS[u.id]) return false;
   setUser(u);
   await metaSet("localUser", u);
   return true;
