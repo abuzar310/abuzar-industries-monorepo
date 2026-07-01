@@ -4,14 +4,17 @@ import type { Section } from "@/lib/types";
 
 type CellKey = "l" | "w" | "t" | "pcs" | "cft";
 
+type Mode = "cft" | "direct" | "rft";
+
 interface Props {
   sec: Section;
   si: number;
   cft: number;
   amt: number;
+  modes: Mode[]; // which entry modes to offer (official invoice: by-size + total-CFT)
   onName: (si: number, v: string) => void;
   onRate: (si: number, v: string) => void;
-  onMode: (si: number) => void;
+  onSetMode: (si: number, mode: Mode) => void;
   onCell: (si: number, ri: number, k: CellKey, v: string) => void;
   onAddRow: (si: number) => void;
   onDelRow: (si: number, ri: number) => void;
@@ -19,13 +22,13 @@ interface Props {
 }
 
 const DIM: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
+const MODE_LABEL: Record<Mode, string> = { cft: "By size", direct: "Total CFT", rft: "Running ft" };
 
-export default function SectionCard({ sec, si, cft, amt, onName, onRate, onMode, onCell, onAddRow, onDelRow, onDelSec }: Props) {
+export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, onSetMode, onCell, onAddRow, onDelRow, onDelSec }: Props) {
   const mode = sec.calcMode === "rft" ? "rft" : sec.calcMode === "direct" ? "direct" : "cft";
   const direct = mode === "direct";
   const rft = mode === "rft";
   const unit = rft ? "FT" : "CFT";
-  const modeLabel = direct ? "CFT" : rft ? "FT" : "DIM";
   const measure = (r: Section["rows"][number]) => (rft ? rftOf(r) : direct ? directOf(r) : cftOf(r));
   return (
     <div className={"section" + (direct ? " direct" : "")}>
@@ -36,9 +39,13 @@ export default function SectionCard({ sec, si, cft, amt, onName, onRate, onMode,
           <i />
         </span>
         <input className="sec-name" list="woodtypes" value={sec.name} aria-label="Wood type name" onChange={(e) => onName(si, e.target.value)} />
-        <button className="mode-btn" title="Switch entry: DIM (L·W·T·Pcs) · CFT (direct) · FT (running feet)" onClick={() => onMode(si)}>
-          {modeLabel}
-        </button>
+        <span className="mode-seg" role="group" aria-label="Entry mode">
+          {modes.map((m) => (
+            <button key={m} className={m === mode ? "on" : ""} onClick={() => onSetMode(si, m)} title={`Enter ${MODE_LABEL[m]}`}>
+              {MODE_LABEL[m]}
+            </button>
+          ))}
+        </span>
         <button className="x-sec" title="Remove wood type" onClick={() => onDelSec(si)}>
           ✕
         </button>

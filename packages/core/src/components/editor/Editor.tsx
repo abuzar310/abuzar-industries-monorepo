@@ -52,6 +52,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const feat = getFeatures();
   const isInv = doc.kind === "invoice";
   const isBuy = isInv && doc.tradeType === "buy"; // purchase invoice
+  // entry modes offered per section: invoices → by-size / total-CFT; quotes also allow running-ft
+  const secModes: ("cft" | "direct" | "rft")[] = isInv ? ["cft", "direct"] : ["cft", "direct", "rft"];
   const totals = useMemo(() => computeDoc(doc), [doc]);
   const totalCft = totals.secCft.reduce((s, c) => s + c, 0);
   // accept-payment: final = round-figure override or the computed grand; balance clears over time
@@ -106,11 +108,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     update((d) => ((d as unknown as Record<string, unknown>)[k] = v));
   const onName = (si: number, v: string) => update((d) => (d.sections[si].name = v));
   const onRate = (si: number, v: string) => update((d) => (d.sections[si].rate = v));
-  const onMode = (si: number) =>
-    update((d) => {
-      const cur = d.sections[si].calcMode;
-      d.sections[si].calcMode = cur === "cft" || !cur ? "direct" : cur === "direct" ? "rft" : "cft";
-    });
+  const onSetMode = (si: number, mode: "cft" | "direct" | "rft") =>
+    update((d) => (d.sections[si].calcMode = mode));
   const onCell = (si: number, ri: number, k: "l" | "w" | "t" | "pcs" | "cft", v: string) => {
     const clean = v.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
     update((d) => (d.sections[si].rows[ri][k] = clean));
@@ -671,9 +670,10 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                 si={si}
                 cft={cft}
                 amt={amt}
+                modes={secModes}
                 onName={onName}
                 onRate={onRate}
-                onMode={onMode}
+                onSetMode={onSetMode}
                 onCell={onCell}
                 onAddRow={onAddRow}
                 onDelRow={onDelRow}
