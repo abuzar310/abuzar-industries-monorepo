@@ -1,0 +1,9 @@
+{
+  "name": "Timber Books",
+  "short_name": "Daybook",
+  "description": "Timber quotations, customers and daily cash book.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F2ECE0",
+  "theme_color": "#33241A"
+}
