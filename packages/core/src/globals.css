@@ -700,6 +700,9 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .mast,.section,.totals{border-color:var(--line-2)}
   .row input.dim{border:none; background:transparent}
   .meta input,.co-name,.sec-name,.rate-box input,.gst-lab input,.cust-block input{box-shadow:none}
+  /* selects inside the printed sheet: drop the dropdown arrow, render as plain text */
+  #sheet select{-webkit-appearance:none; -moz-appearance:none; appearance:none;
+    background-image:none !important; background:transparent !important; border:none !important; padding-right:0 !important}
   @page{margin:10mm}
   #sheet{zoom:1}
   .mast{border-radius:0}
