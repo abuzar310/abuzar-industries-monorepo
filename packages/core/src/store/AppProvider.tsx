@@ -1,0 +1,162 @@
+"use client";
+import { useEffect, useRef } from "react";
+import type { AppFeatures, Tab } from "@/lib/types";
+import { setFeatures } from "@/lib/features";
+import { allRec, metaGet, openDB, put } from "@/lib/db";
+import { nowIso } from "@/lib/calc";
+import {
+  authRequired,
+  bgPull,
+  bindCloud,
+  dayKey,
+  ensureAuth,
+  gateStrict,
+  getSupa,
+  isLoggedIn,
+  loadSupa,
+  authLoad,
+  sessionMode,
+  signOut,
+  trySync,
+} from "@/lib/cloud";
+import {
+  bumpData,
+  setReady,
+  setShowLogin,
+  setSyncState,
+  toast as toastMsg,
+  type BrandMode,
+} from "./app-store";
+import { refreshAuthIdentity } from "./session";
+import { seedAccounts } from "@/lib/ledger";
+import { initPwa } from "@/lib/pwa";
+import { loadBrand } from "@/lib/brand";
+import { loadLocalUser } from "@/lib/local-auth";
+import { checkOwnerNotifications, loadNotifyState } from "@/lib/notify";
+import TopNav from "@/components/TopNav";
+import Toast from "@/components/Toast";
+import LoginGate from "@/components/LoginGate";
+import LockGate from "@/components/LockGate";
+import DialogHost from "@/components/DialogHost";
+
+async function seedStock() {
+  const s = await allRec("stock");
+  if (!s.length) {
+    await put("stock", { key: "teak", name: "Teak", cft: 0, updatedAt: nowIso(), synced: false });
+    await put("stock", { key: "neem", name: "Neem", cft: 0, updatedAt: nowIso(), synced: false });
+  }
+}
+
+export default function AppProvider({
+  children,
+  tabs,
+  features,
+  defaultBrand = "demo",
+}: {
+  children: React.ReactNode;
+  tabs: Tab[];
+  features?: AppFeatures;
+  defaultBrand?: BrandMode;
+}) {
+  // Set per-app features before children render (idempotent, static per app).
+  if (features) setFeatures(features);
+  const booted = useRef(false);
+
+  useEffect(() => {
+    if (booted.current) return;
+    booted.current = true;
+
+    initPwa();
+    bindCloud({
+      sync: setSyncState,
+      needLogin: () => setShowLogin(true, gateStrict() && navigator.onLine),
+      dataChanged: bumpData,
+    });
+
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const onVisible = () => {
+      const supa = getSupa();
+      if (!document.hidden && supa.url && supa.key && navigator.onLine) {
+        trySync();
+        bgPull();
+      }
+    };
+    const onOnline = () => trySync();
+    const onOffline = () => setSyncState("off");
+
+    (async function boot() {
+      await openDB();
+      await seedStock();
+      await seedAccounts();
+      await loadBrand(defaultBrand);
+      await loadLocalUser();
+      await loadNotifyState();
+      await loadSupa();
+      await authLoad();
+      refreshAuthIdentity();
+      const supa = getSupa();
+      setSyncState(supa.url ? "queue" : "local");
+
+      // session policy: should this open require a fresh sign-in?
+      if (supa.url && supa.key && navigator.onLine && isLoggedIn()) {
+        const mode = sessionMode();
+        let expire = false;
+        if (mode === "always") expire = true;
+        else if (mode === "daily") {
+          const last = await metaGet("lastLoginDay", "");
+          expire = last !== dayKey();
+        }
+        if (expire) {
+          await signOut();
+          refreshAuthIdentity();
+        }
+      }
+
+      if (gateStrict() && supa.url && supa.key && !isLoggedIn()) {
+        setShowLogin(true, gateStrict() && navigator.onLine);
+      } else {
+        if (isLoggedIn()) await ensureAuth();
+        trySync();
+      }
+
+      setReady(true);
+      await checkOwnerNotifications();
+
+      // self-driving sync from here on
+      timer = setInterval(async () => {
+        const s = getSupa();
+        if (!s.url || !s.key || !navigator.onLine) return;
+        if (authRequired() && !isLoggedIn()) return;
+        await trySync();
+        await bgPull();
+        await checkOwnerNotifications();
+      }, 20000);
+      document.addEventListener("visibilitychange", onVisible);
+      window.addEventListener("online", onOnline);
+      window.addEventListener("offline", onOffline);
+    })().catch((e) => {
+      console.error(e);
+      toastMsg("Startup error — see console");
+    });
+
+    return () => {
+      if (timer) clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+    // boot runs once; defaultBrand is a static per-app constant
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <>
+      <TopNav tabs={tabs} />
+      <div className="wrap">{children}</div>
+      <Toast />
+      <LoginGate />
+      <LockGate />
+      <DialogHost />
+    </>
+  );
+}

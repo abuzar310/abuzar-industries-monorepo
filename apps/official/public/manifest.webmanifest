@@ -1,0 +1,13 @@
+{
+  "name": "Quotation & Invoice System",
+  "short_name": "Daybook",
+  "description": "Timber quotations, invoices, customers, stock and daily cash book.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F2ECE0",
+  "theme_color": "#33241A",
+  "icons": [
+    { "src": "/icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
