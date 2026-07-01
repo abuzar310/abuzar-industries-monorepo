@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { delRec } from "@/lib/db";
 import { inr } from "@/lib/calc";
-import { addExpense, allSessions, closeSession, dayTotals, ENTRY_TYPES, isInflow, openExpenses, typeLabel } from "@/lib/expenses";
-import { markExpensesSeen } from "@/lib/notify";
+import { addExpense, allExpenses, allSessions, closeSession, dayTotals, ENTRY_TYPES, isInflow, typeLabel } from "@/lib/expenses";
+import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -15,8 +15,10 @@ const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id;
 export default function ExpensesView() {
   const { dataVersion, user } = useApp();
   const isOwner = user?.role === "owner"; // Afsar: clean read-only view
-  const [list, setList] = useState<Expense[]>([]);
+  const [all, setAll] = useState<Expense[]>([]);
   const [sessions, setSessions] = useState<DaybookSession[]>([]);
+  const [openSes, setOpenSes] = useState<string | null>(null);
+  const [notif, setNotif] = useState(""); // "" until client checks; then default/granted/denied
 
   // inline quick-entry form state
   const [type, setType] = useState<EntryType>("sale");
@@ -26,15 +28,18 @@ export default function ExpensesView() {
   const amountRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
-    openExpenses().then((arr) => {
+    allExpenses().then((arr) => {
       arr.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-      setList(arr);
+      setAll(arr);
     });
     allSessions().then((arr) => {
       arr.sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || ""));
       setSessions(arr);
     });
   }, []);
+  // current open session = entries not yet archived into a closed session
+  const list = all.filter((e) => !e.sessionId);
+  const sessionEntries = (id: string) => all.filter((e) => e.sessionId === id);
   useEffect(() => {
     load();
   }, [load, dataVersion]);
@@ -47,6 +52,17 @@ export default function ExpensesView() {
   useEffect(() => {
     if (isOwner) markExpensesSeen();
   }, [isOwner, dataVersion]);
+
+  // owner: reflect the current notification permission (client-only, avoids hydration mismatch)
+  useEffect(() => {
+    if (typeof Notification !== "undefined") setNotif(Notification.permission);
+  }, [dataVersion]);
+
+  async function enableNotifications() {
+    const p = await requestNotifyPermission();
+    setNotif(p);
+    toast(p === "granted" ? "Notifications on — you'll get alerts here" : "Notifications not enabled");
+  }
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -97,6 +113,17 @@ export default function ExpensesView() {
       <div className="sectitle">
         Daybook <small>— current session</small>
       </div>
+
+      {isOwner && notif && notif !== "granted" && (
+        <div className="panel-card" style={{ padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+            🔔 Get an alert whenever Ajju records an entry or hands over cash.
+          </span>
+          <button className="btn primary sm" onClick={enableNotifications}>
+            {notif === "denied" ? "Notifications blocked — enable in browser settings" : "Turn on notifications"}
+          </button>
+        </div>
+      )}
 
       {!isOwner && (
         <form className="panel-card daybook-entry" onSubmit={add}>
@@ -200,18 +227,64 @@ export default function ExpensesView() {
           <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
             Session history <small>— {sessions.length}</small>
           </div>
-          {sessions.map((s) => (
-            <div className="panel-card" key={s.id}>
-              <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-                <span>
-                  {s.date} · Given ₹{inr(s.given)} to Afsar
-                </span>
-                <span style={{ fontFamily: "var(--mono)", fontSize: 12, letterSpacing: 0, textTransform: "none" }}>
-                  In ₹{inr(s.totalIn)} · Spent ₹{inr(s.spent)} · {s.count} entries · by {userName(s.by)}
-                </span>
+          <p className="note" style={{ marginTop: -6 }}>Tap a day to see every transaction in it.</p>
+          {sessions.map((s) => {
+            const open = openSes === s.id;
+            const entries = open
+              ? sessionEntries(s.id).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))
+              : [];
+            return (
+              <div className="panel-card" key={s.id}>
+                <div
+                  className="pc-head"
+                  style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8, cursor: "pointer" }}
+                  onClick={() => setOpenSes(open ? null : s.id)}
+                >
+                  <span>
+                    <span className="um-caret" style={{ marginRight: 6 }}>{open ? "▾" : "▸"}</span>
+                    {s.date} · Given ₹{inr(s.given)} to Afsar
+                  </span>
+                  <span style={{ fontFamily: "var(--mono)", fontSize: 12, letterSpacing: 0, textTransform: "none" }}>
+                    In ₹{inr(s.totalIn)} · Spent ₹{inr(s.spent)} · {s.count} entries · by {userName(s.by)}
+                  </span>
+                </div>
+                {open && (
+                  <>
+                    <div className="dash-grid g3" style={{ margin: "10px 14px" }}>
+                      <div className="stat">
+                        <div className="k">Money In</div>
+                        <div className="v money">₹ {inr(s.totalIn)}</div>
+                        <div className="sub">Cash ₹{inr(s.cashIn)} · UPI ₹{inr(s.upiIn)}</div>
+                      </div>
+                      <div className="stat">
+                        <div className="k">Spent</div>
+                        <div className="v" style={{ color: "var(--danger)" }}>₹ {inr(s.spent)}</div>
+                      </div>
+                      <div className="stat">
+                        <div className="k">Given to Afsar</div>
+                        <div className="v" style={{ color: "var(--green)" }}>₹ {inr(s.given)}</div>
+                      </div>
+                    </div>
+                    {entries.map((e) => (
+                      <div className="exprow" key={e.id}>
+                        <span className={"exptag " + (isInflow(e.type) ? "in" : "out")}>{typeLabel(e.type).split(" ")[0]}</span>
+                        <span className="expnote">
+                          {e.note || typeLabel(e.type)}
+                          <small>
+                            {e.date} · {userName(e.enteredBy)}
+                            {isInflow(e.type) && e.mode ? " · " + e.mode.toUpperCase() : ""}
+                          </small>
+                        </span>
+                        <span className={"expamt " + (isInflow(e.type) ? "in" : "out")}>
+                          {isInflow(e.type) ? "+" : "−"}₹ {inr(e.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </>
       )}
     </div>

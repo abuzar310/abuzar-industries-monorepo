@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, delRec, getRec } from "@/lib/db";
 import { inr } from "@/lib/calc";
-import { createQuotationForCustomer } from "@/lib/create";
+import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/create";
+import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
 import { customerFollowupMessage, waLink } from "@/lib/whatsapp";
@@ -46,11 +47,12 @@ export default function CustomersView() {
       bumpData();
     }
   }
-  async function newQuote(e: React.MouseEvent, id: string) {
+  const invoiceMode = getFeatures().invoices;
+  async function newDoc(e: React.MouseEvent, id: string) {
     e.stopPropagation();
     const c = await getRec<Customer>("customers", id);
     if (!c) return;
-    const d = await createQuotationForCustomer(c);
+    const d = invoiceMode ? await createInvoiceForCustomer(c) : await createQuotationForCustomer(c);
     router.push("/editor/" + d.id);
   }
   function whatsapp(e: React.MouseEvent, c: Customer) {
@@ -102,8 +104,8 @@ export default function CustomersView() {
                   )}
                 </div>
                 <div className="links">
-                  <button className="btn sm" onClick={(e) => newQuote(e, c.id)}>
-                    New quote
+                  <button className="btn sm" onClick={(e) => newDoc(e, c.id)}>
+                    {invoiceMode ? "New invoice" : "New quote"}
                   </button>
                   <button className="btn wa sm" onClick={(e) => whatsapp(e, c)}>
                     WhatsApp

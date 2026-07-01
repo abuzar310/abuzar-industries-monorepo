@@ -29,6 +29,7 @@ import {
 } from "./app-store";
 import { refreshAuthIdentity } from "./session";
 import { seedAccounts } from "@/lib/ledger";
+import { startRealtime, stopRealtime } from "@/lib/realtime";
 import { initPwa } from "@/lib/pwa";
 import { loadBrand } from "@/lib/brand";
 import { loadLocalUser } from "@/lib/local-auth";
@@ -74,6 +75,15 @@ export default function AppProvider({
     });
 
     let timer: ReturnType<typeof setInterval> | undefined;
+    // Realtime: on any cloud change, pull + refresh + notify instantly (debounced).
+    let rtTimer: ReturnType<typeof setTimeout> | undefined;
+    const onRealtime = () => {
+      clearTimeout(rtTimer);
+      rtTimer = setTimeout(async () => {
+        await bgPull();
+        await checkOwnerNotifications();
+      }, 200);
+    };
     const onVisible = () => {
       const supa = getSupa();
       if (!document.hidden && supa.url && supa.key && navigator.onLine) {
@@ -122,7 +132,8 @@ export default function AppProvider({
       setReady(true);
       await checkOwnerNotifications();
 
-      // self-driving sync from here on
+      // instant updates via realtime; the interval is just a safety-net fallback
+      if (supa.url && supa.key) startRealtime(supa.url, supa.key, onRealtime);
       timer = setInterval(async () => {
         const s = getSupa();
         if (!s.url || !s.key || !navigator.onLine) return;
@@ -130,7 +141,7 @@ export default function AppProvider({
         await trySync();
         await bgPull();
         await checkOwnerNotifications();
-      }, 20000);
+      }, 15000);
       document.addEventListener("visibilitychange", onVisible);
       window.addEventListener("online", onOnline);
       window.addEventListener("offline", onOffline);
@@ -141,6 +152,8 @@ export default function AppProvider({
 
     return () => {
       if (timer) clearInterval(timer);
+      clearTimeout(rtTimer);
+      stopRealtime();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);

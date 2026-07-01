@@ -410,6 +410,9 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     const sheet = sheetRef.current;
     if (!sheet) return;
     const fit = () => {
+      // Invoices are laid out to fill a full A4 via CSS (aspect-ratio + footer at bottom);
+      // don't shrink them, or the footer floats up the page.
+      if (isInv) return;
       const probe = document.createElement("div");
       probe.style.cssText = "position:absolute;left:-9999px;top:0;width:190mm;height:277mm;visibility:hidden";
       document.body.appendChild(probe);
@@ -431,7 +434,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       window.removeEventListener("beforeprint", fit);
       window.removeEventListener("afterprint", unfit);
     };
-  }, []);
+  }, [isInv]);
 
   const badgeCls = isInv ? PAY_BADGE[doc.paymentStatus] || "b-pending" : STATUS_BADGE[doc.status] || "b-draft";
   const badgeText = isInv ? "Invoice · " + (doc.paymentStatus || "Pending") : doc.status;

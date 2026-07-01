@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
-// Root is auto-detected from the repo-level pnpm-lock.yaml, so Turbopack can
-// resolve shared source in ../../packages/core.
-const nextConfig: NextConfig = {};
+// Shared code lives in @abuzar/core (packages/core); imports resolve via the
+// tsconfig "@/*" alias. Turbopack finds it via the repo-root pnpm-lock.yaml.
+const nextConfig: NextConfig = {
+  transpilePackages: ["@abuzar/core"],
+};
 
 export default nextConfig;

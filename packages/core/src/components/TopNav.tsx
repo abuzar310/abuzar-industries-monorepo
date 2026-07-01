@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/store/useApp";
@@ -25,6 +26,14 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
   const router = useRouter();
   const isOwner = user?.role === "owner";
   const brand = brandFor(brandMode);
+
+  const [userMenu, setUserMenu] = useState(false);
+  useEffect(() => {
+    if (!userMenu) return;
+    const close = () => setUserMenu(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [userMenu]);
 
   function onSearch(value: string) {
     setSearch(value);
@@ -76,10 +85,29 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
           <span>{SYNC_LABEL[syncState]}</span>
         </span>
         {user && (
-          <button className="userchip" title="Lock app" onClick={() => lockApp()}>
-            <i>{user.name.charAt(0)}</i>
-            {user.name} ⏻
-          </button>
+          <div className="usermenu" onClick={(e) => e.stopPropagation()}>
+            <button className="userchip" title={user.name} onClick={() => setUserMenu((v) => !v)}>
+              <i>{user.name.charAt(0)}</i>
+              {user.name}
+              <span className="um-caret">▾</span>
+            </button>
+            {userMenu && (
+              <div className="usermenu-pop">
+                <div className="um-head">
+                  {user.name} · {user.role === "owner" ? "Owner" : "Manager"}
+                </div>
+                <button
+                  className="um-logout"
+                  onClick={() => {
+                    setUserMenu(false);
+                    lockApp();
+                  }}
+                >
+                  Log out
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

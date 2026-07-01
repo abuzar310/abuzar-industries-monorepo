@@ -43,6 +43,21 @@ export default function TradingView() {
   const lines = invoices.map(docTrade);
   const tr = computeTrading(lines, { value: cfg.value, cft: cfg.cft }, cfg.closingCft);
 
+  // per-invoice stock movements: a sale DEBITS stock (amount + CFT), a purchase CREDITS it.
+  const dsort = (d: string) => {
+    const [dd, mm, yy] = (d || "").split("-");
+    return "20" + (yy || "") + (mm || "") + (dd || "");
+  };
+  let runCft = tr.openCft;
+  const moves = [...invoices]
+    .sort((a, b) => dsort(a.date).localeCompare(dsort(b.date)))
+    .map((d) => {
+      const it = docTrade(d);
+      runCft = Math.round((runCft + (it.buy ? it.cft : -it.cft)) * 100) / 100;
+      return { id: d.id, name: d.customerName || d.id, date: d.date, buy: it.buy, cft: it.cft, amount: it.taxable, runCft };
+    })
+    .reverse();
+
   // month-wise Karnataka/GST/Total P.K vs Sell/Sell GST/Total Sell (like the Excel)
   const mmap = new Map<string, MRow>();
   invoices.forEach((d) => {
@@ -78,13 +93,12 @@ export default function TradingView() {
     toast("Stock opening saved");
   }
 
-  const boxes = [
-    { k: "Opening", v: "₹ " + inr(tr.openValue), sub: num(tr.openCft) + " CFT" },
-    { k: "Purchase", v: "₹ " + inr(tr.purchaseValue), sub: num(tr.purchaseCft) + " CFT" },
-    { k: "Sell", v: "₹ " + inr(tr.saleValue), sub: num(tr.saleCft) + " CFT", money: true },
-    { k: "Gross Profit", v: "₹ " + inr(tr.grossProfit), tone: tr.grossProfit < 0 ? "var(--danger)" : "var(--green)" },
-    { k: "Total Amount", v: "₹ " + inr(tr.totalAmount) },
-    { k: "Closing Stock Today", v: "₹ " + inr(tr.closingValue), sub: num(tr.closingCft) + " CFT · avg ₹" + inr(tr.avgRate), money: true },
+  const stmt: { k: string; cft: number; val: number; sub?: boolean; tot?: boolean }[] = [
+    { k: "Opening stock", cft: tr.openCft, val: tr.openValue },
+    { k: "+ Purchases", cft: tr.purchaseCft, val: tr.purchaseValue },
+    { k: "= Goods available", cft: tr.availCft, val: tr.availValue, sub: true },
+    { k: "− Sold (at cost)", cft: tr.saleCft, val: tr.cogs },
+    { k: "= Closing stock", cft: tr.closingCft, val: tr.closingValue, tot: true },
   ];
 
   return (
@@ -114,16 +128,80 @@ export default function TradingView() {
         </button>
       </form>
 
-      <div className="dash-grid" style={{ marginTop: 8, gridTemplateColumns: "repeat(3,1fr)" }}>
-        {boxes.map((b) => (
-          <div className="stat" key={b.k}>
-            <div className="k">{b.k}</div>
-            <div className={"v" + (b.money ? " money" : "")} style={b.tone ? { color: b.tone } : undefined}>
-              {b.v}
-            </div>
-            {b.sub && <div className="sub">{b.sub}</div>}
+      {/* live stock position */}
+      <div className="dash-grid g2" style={{ marginTop: 8 }}>
+        <div className="stat">
+          <div className="k">Closing Stock (CFT)</div>
+          <div className="v">{num(tr.closingCft)}</div>
+          <div className="sub">available {num(tr.availCft)} − sold {num(tr.saleCft)}</div>
+        </div>
+        <div className="stat">
+          <div className="k">Closing Stock Value</div>
+          <div className="v money">₹ {inr(tr.closingValue)}</div>
+          <div className="sub">avg ₹{inr(tr.avgRate)} / CFT</div>
+        </div>
+      </div>
+
+      {/* stock statement: CFT + value, purchases add, sales debit */}
+      <div className="panel-card" style={{ marginTop: 14 }}>
+        <div className="pc-head">Stock statement</div>
+        <div className="stmt sthead">
+          <span>Item</span>
+          <span>CFT</span>
+          <span>Value ₹</span>
+        </div>
+        {stmt.map((r) => (
+          <div className={"stmt" + (r.tot ? " sttot" : r.sub ? " stsub" : "")} key={r.k}>
+            <span>{r.k}</span>
+            <span>{num(r.cft)}</span>
+            <span>{inr(r.val)}</span>
           </div>
         ))}
+      </div>
+
+      {/* sales & profit */}
+      <div className="dash-grid g3" style={{ marginTop: 14 }}>
+        <div className="stat">
+          <div className="k">Sales (revenue)</div>
+          <div className="v money">₹ {inr(tr.saleValue)}</div>
+          <div className="sub">{num(tr.saleCft)} CFT sold</div>
+        </div>
+        <div className="stat">
+          <div className="k">Gross Profit</div>
+          <div className="v" style={{ color: tr.grossProfit < 0 ? "var(--danger)" : "var(--green)" }}>₹ {inr(tr.grossProfit)}</div>
+        </div>
+        <div className="stat">
+          <div className="k">Avg Rate / CFT</div>
+          <div className="v">₹ {inr(tr.avgRate)}</div>
+        </div>
+      </div>
+
+      <div className="panel-card" style={{ marginTop: 20 }}>
+        <div className="pc-head">
+          Stock movements <small style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· each sale debits stock (amount + CFT)</small>
+        </div>
+        {moves.length ? (
+          moves.map((m) => (
+            <div className="exprow" key={m.id}>
+              <span className={"exptag " + (m.buy ? "in" : "out")}>{m.buy ? "BUY" : "SALE"}</span>
+              <span className="expnote">
+                {m.name}
+                <small>
+                  {m.date} · {num(m.cft)} CFT · stock now {num(m.runCft)} CFT
+                </small>
+              </span>
+              <span className={"expamt " + (m.buy ? "in" : "out")}>
+                {m.buy ? "+" : "−"}₹ {inr(m.amount)}
+              </span>
+            </div>
+          ))
+        ) : (
+          <div className="empty">
+            <div className="empty-icon">🪵</div>
+            <div className="empty-title">No stock movements yet</div>
+            <div className="empty-note">Each selling invoice debits stock; buying invoices credit it.</div>
+          </div>
+        )}
       </div>
 
       <div className="panel-card" style={{ marginTop: 20, overflowX: "auto" }}>

@@ -38,6 +38,18 @@ export async function createQuotationForCustomer(c: Customer): Promise<Doc> {
   });
 }
 
+export async function createInvoiceForCustomer(c: Customer): Promise<Doc> {
+  return createInvoice({
+    customerId: c.id,
+    customerName: c.name,
+    phone: c.phone,
+    site: c.site,
+    address: c.address,
+    custGstin: c.gstin || "",
+    notes: c.notes,
+  });
+}
+
 export async function createSampleQuotation(sections: Section[]): Promise<Doc> {
   return createQuotation({
     customerName: "Walk-in Customer",

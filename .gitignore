@@ -44,3 +44,10 @@ next-env.d.ts
 # monorepo app build output
 apps/*/.next/
 apps/*/out/
+
+# real business data — never commit
+Tally.ods
+reference/invoice-refs/
+
+# nested workspace node_modules
+**/node_modules/

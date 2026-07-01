@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, delRec, getRec } from "@/lib/db";
 import { inr } from "@/lib/calc";
-import { createQuotationForCustomer } from "@/lib/create";
+import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/create";
+import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
 import { customerFollowupMessage, waLink } from "@/lib/whatsapp";
@@ -59,8 +60,9 @@ export default function CustomerDetail({ id }: { id: string }) {
       bumpData();
     }
   }
-  async function newQuote() {
-    const d = await createQuotationForCustomer(cust!);
+  const invoiceMode = getFeatures().invoices;
+  async function newDoc() {
+    const d = invoiceMode ? await createInvoiceForCustomer(cust!) : await createQuotationForCustomer(cust!);
     router.push("/editor/" + d.id);
   }
   function whatsapp() {
@@ -97,7 +99,7 @@ export default function CustomerDetail({ id }: { id: string }) {
             </div>
           </div>
           <div className="links" style={{ marginTop: 0 }}>
-            <button className="btn primary sm" onClick={newQuote}>New quote</button>
+            <button className="btn primary sm" onClick={newDoc}>{invoiceMode ? "New invoice" : "New quote"}</button>
             <button className="btn wa sm" onClick={whatsapp}>WhatsApp</button>
             <button className="btn sm" onClick={edit}>Edit</button>
             <button className="btn warn sm" onClick={remove}>Delete</button>

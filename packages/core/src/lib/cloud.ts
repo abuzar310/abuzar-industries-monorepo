@@ -110,7 +110,7 @@ export function supaHeaders(): Record<string, string> {
     Prefer: "resolution=merge-duplicates,return=minimal",
   };
   if (auth.token) h["Authorization"] = "Bearer " + auth.token;
-  else if (/^eyJ/.test(k)) h["Authorization"] = "Bearer " + k; // legacy JWT anon key
+  else if (k) h["Authorization"] = "Bearer " + k; // anon: legacy JWT or new sb_publishable_ key
   return h;
 }
 

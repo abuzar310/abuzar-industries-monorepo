@@ -47,7 +47,7 @@ export const REAL_BRAND: Brand = {
 };
 
 export const DEMO_BRAND: Brand = {
-  name: "Vanya Timber Co.",
+  name: "Safa Timbers",
   tagline: "TIMBER",
   addr: "Industrial Estate, Karnataka",
   phone: "",
