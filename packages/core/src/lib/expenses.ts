@@ -1,6 +1,6 @@
-import { allRec, put } from "./db";
+import { allRec, delRec, put } from "./db";
 import { nowIso, todayStr, uid } from "./calc";
-import { trySync } from "./cloud";
+import { cloudDelete, trySync } from "./cloud";
 import type { DaybookSession, EntryType, Expense, PayMode } from "./types";
 
 export const ENTRY_TYPES: { value: EntryType; label: string; flow: "in" | "out" }[] = [
@@ -51,6 +51,7 @@ export async function addExpense(fields: {
   label?: string;
   enteredBy: string;
   date?: string;
+  sourceId?: string;
 }): Promise<Expense> {
   const e: Expense = {
     id: "EXP-" + uid(),
@@ -61,6 +62,7 @@ export async function addExpense(fields: {
     amount: r2(fields.amount),
     note: fields.note || "",
     enteredBy: fields.enteredBy,
+    sourceId: fields.sourceId,
     createdAt: nowIso(),
     updatedAt: nowIso(),
     synced: false,
@@ -71,6 +73,17 @@ export async function addExpense(fields: {
 }
 
 export const allExpenses = () => allRec<Expense>("expenses");
+
+/** Delete (locally + cloud) every daybook entry auto-created from a given doc. Returns the count removed. */
+export async function deleteExpensesBySource(sourceId: string): Promise<number> {
+  if (!sourceId) return 0;
+  const linked = (await allExpenses()).filter((e) => e.sourceId === sourceId);
+  for (const e of linked) {
+    await delRec("expenses", e.id);
+    cloudDelete("expenses", e.id);
+  }
+  return linked.length;
+}
 
 /** Entries in the current open session (not yet handed over). */
 export const openExpenses = async () => (await allExpenses()).filter((e) => !e.sessionId);

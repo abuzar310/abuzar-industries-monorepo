@@ -40,17 +40,25 @@ export interface DocTotals {
   secCft: number[];
 }
 
+/** Running feet for one line: L (ft) × Pcs. */
+export const rftOf = (r: Row) => (+r.l || 0) * (+r.pcs || 0);
+/** Directly-entered CFT for one line. */
+export const directOf = (r: Row) => +(r.cft ?? 0) || 0;
+
 export function computeDoc(d: Doc): DocTotals {
   let sub = 0;
   const secCft: number[] = [];
   d.sections.forEach((sec) => {
-    let cft = 0;
-    sec.rows.forEach((r) => (cft += cftOf(r)));
-    secCft.push(cft);
-    sub += Math.round(cft * (+sec.rate || 0) * 100) / 100;
+    const measureOf = sec.calcMode === "rft" ? rftOf : sec.calcMode === "direct" ? directOf : cftOf;
+    let m = 0;
+    sec.rows.forEach((r) => (m += measureOf(r)));
+    secCft.push(m);
+    sub += Math.round(m * (+sec.rate || 0) * 100) / 100;
   });
   sub = Math.round(sub * 100) / 100;
-  const gstAmt = Math.round(sub * (+d.gst || 0)) / 100;
+  // flat: gst is a rupee amount; percent: gst is a % of the sub-total.
+  const gstAmt =
+    d.gstMode === "flat" ? Math.round((+d.gst || 0) * 100) / 100 : Math.round(sub * (+d.gst || 0)) / 100;
   const grand = Math.round((sub + gstAmt) * 100) / 100;
   return { sub, gstAmt, grand, secCft };
 }

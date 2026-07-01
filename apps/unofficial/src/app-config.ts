@@ -4,6 +4,9 @@ import type { AppFeatures, Tab } from "@/lib/types";
 // No invoices, no ledger, no stock.
 export const FEATURES: AppFeatures = { invoices: false, simpleQuote: true, acceptPayment: true };
 
+// Isolated data namespace — Safa (Cut Size Wood) never shares tables/DB with Abuzar.
+export const CLOUD_PREFIX = "sf_";
+
 export const TABS: Tab[] = [
   { label: "Dashboard", href: "/" },
   { label: "Quotation", href: "/editor" },

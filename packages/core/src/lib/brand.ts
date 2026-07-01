@@ -47,14 +47,14 @@ export const REAL_BRAND: Brand = {
 };
 
 export const DEMO_BRAND: Brand = {
-  name: "Safa Timbers",
-  tagline: "TIMBER",
-  addr: "Industrial Estate, Karnataka",
+  name: "Cut Size Wood",
+  tagline: "",
+  addr: "",
   phone: "",
   web: "",
   gstin: "",
   logo: false,
-  goods: "IMPORTED SAW WOOD",
+  goods: "",
   bank: { name: "—", ac: "—", ifsc: "—" },
   terms: INVOICE_TERMS,
 };

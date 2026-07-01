@@ -2,12 +2,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/store/useApp";
 import { USERS, unlock } from "@/lib/local-auth";
+import { getFeatures } from "@/lib/features";
 import { brandFor } from "@/lib/brand";
 import { afterUnlock } from "@/store/session";
 
 export default function LockGate() {
   const { ready, user, brandMode } = useApp();
-  const [picked, setPicked] = useState<string | null>(null);
+  const solo = getFeatures().soloLogin; // official: no picker, just Afsar's password
+  const [picked, setPicked] = useState<string | null>(solo ? "afsar" : null);
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
   const passRef = useRef<HTMLInputElement>(null);
@@ -61,10 +63,12 @@ export default function LockGate() {
         ) : (
           <>
             <p className="lock-sub">
-              <button className="lock-back" onClick={() => { setPicked(null); setErr(""); setPass(""); }}>
-                ‹
-              </button>
-              Signing in as <b>{pickedUser?.name}</b>
+              {!solo && (
+                <button className="lock-back" onClick={() => { setPicked(null); setErr(""); setPass(""); }}>
+                  ‹
+                </button>
+              )}
+              {solo ? "Enter password to unlock" : <>Signing in as <b>{pickedUser?.name}</b></>}
             </p>
             <input
               ref={passRef}

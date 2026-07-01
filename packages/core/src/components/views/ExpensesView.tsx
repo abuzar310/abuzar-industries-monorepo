@@ -1,9 +1,11 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { delRec } from "@/lib/db";
+import { cloudDelete } from "@/lib/cloud";
 import { inr } from "@/lib/calc";
 import { addExpense, allExpenses, allSessions, closeSession, dayTotals, ENTRY_TYPES, isInflow, typeLabel } from "@/lib/expenses";
 import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
+import { isIOS, isStandalone } from "@/lib/pwa";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -88,6 +90,7 @@ export default function ExpensesView() {
     });
     if (!ok) return;
     await delRec("expenses", e.id);
+    await cloudDelete("expenses", e.id); // propagate the delete to the cloud so it doesn't re-sync back
     load();
     bumpData();
   }
@@ -114,16 +117,25 @@ export default function ExpensesView() {
         Daybook <small>— current session</small>
       </div>
 
-      {isOwner && notif && notif !== "granted" && (
-        <div className="panel-card" style={{ padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
-            🔔 Get an alert whenever Ajju records an entry or hands over cash.
-          </span>
-          <button className="btn primary sm" onClick={enableNotifications}>
-            {notif === "denied" ? "Notifications blocked — enable in browser settings" : "Turn on notifications"}
-          </button>
-        </div>
-      )}
+      {isOwner && notif && notif !== "granted" && (() => {
+        const iosNeedsInstall = isIOS() && !isStandalone();
+        return (
+          <div className="panel-card" style={{ padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+              🔔 {iosNeedsInstall
+                ? "To get alerts on iPhone: tap Share → Add to Home Screen, then open the app from there."
+                : notif === "denied"
+                  ? "Notifications are off. Turn them on in Settings → this app → Notifications, then tap below."
+                  : "Get an alert whenever Ajju records an entry or hands over cash."}
+            </span>
+            {!iosNeedsInstall && (
+              <button className="btn primary sm" onClick={enableNotifications}>
+                {notif === "denied" ? "Try again" : "Turn on notifications"}
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {!isOwner && (
         <form className="panel-card daybook-entry" onSubmit={add}>

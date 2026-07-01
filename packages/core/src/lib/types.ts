@@ -9,12 +9,17 @@ export interface Row {
   w: string | number;
   t: string | number;
   pcs: string | number;
+  /** directly-entered CFT (used when the section's calcMode is "direct"). */
+  cft?: string | number;
 }
 
 export interface Section {
   name: string;
   rate: string | number;
   rows: Row[];
+  /** "cft" (L×W×T×Pcs÷144 × rate), "direct" (type CFT directly × rate),
+   *  or "rft" (running feet Σ(L×Pcs) × rate). Default cft. */
+  calcMode?: "cft" | "direct" | "rft";
 }
 
 export interface Doc {
@@ -31,6 +36,12 @@ export interface Doc {
   date: string;
   sections: Section[];
   gst: string | number;
+  /** "percent" (gst is a %) or "flat" (gst is a ₹ amount). Default percent. */
+  gstMode?: "percent" | "flat";
+  /** invoice tax split: "split" = SGST+CGST (intrastate), "igst" = single IGST (interstate). Default split. */
+  gstKind?: "split" | "igst";
+  /** accepted round-figure price override; falls back to the computed grand total. */
+  finalPrice?: number;
   quotationId: string;
   paymentStatus: string;
   amountPaid: number;
@@ -58,6 +69,8 @@ export interface AppFeatures {
   simpleQuote: boolean;
   /** show accept-payment (cash/UPI) on a created quote, posting to the daybook (unofficial). */
   acceptPayment: boolean;
+  /** single-owner lock: no user picker, just the Afsar password (official). */
+  soloLogin?: boolean;
 }
 
 export interface Customer {
@@ -126,6 +139,8 @@ export interface Expense {
   note?: string;
   /** local user id who entered it */
   enteredBy: string;
+  /** the quote/invoice id this entry was auto-created from (for cascade delete). */
+  sourceId?: string;
   /** set once the entry is archived into a closed session; falsy = current open session */
   sessionId?: string;
   createdAt: string;

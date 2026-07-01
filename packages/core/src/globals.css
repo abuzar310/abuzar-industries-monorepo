@@ -239,6 +239,26 @@ body{
 .sec-tot b{color:var(--ink); font-size:15px; font-weight:600}
 .formula{padding:7px 13px 10px; font-family:var(--mono); font-size:10.5px; color:var(--ink-faint); border-top:1px solid var(--line)}
 .formula b{color:var(--ochre-deep)}
+/* calc-mode toggle (CFT ⇄ running-ft), in the dark section header */
+.mode-btn{margin-left:auto; font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.06em;
+  padding:3px 8px; border-radius:7px; border:1px solid rgba(255,255,255,.22); background:rgba(255,255,255,.1);
+  color:#EBD9BF; cursor:pointer; flex:0 0 auto}
+.mode-btn:hover{background:rgba(255,255,255,.2); color:#fff}
+/* rate box now lives in the light footer */
+.sec-foot .rate-box{margin-left:0; color:var(--ink-soft)}
+.sec-foot .rate-box input{color:var(--ink); border-bottom-color:var(--line-2)}
+.row input.dim.muted{opacity:.38}
+/* direct-CFT entry columns: # | CFT | delete */
+.thead.dcols,.row.dcols{grid-template-columns:22px 1fr 20px}
+/* GST % / flat toggle in the totals */
+.gst-toggle{font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.04em; padding:2px 7px; margin:0 5px;
+  border-radius:6px; border:1px solid var(--line-2); background:var(--panel); color:var(--ochre-deep); cursor:pointer; vertical-align:middle}
+.gst-toggle:hover{border-color:var(--ochre)}
+/* simple quote (Cut Size Wood): tighter header, less whitespace */
+#sheet.sq .mast-top{padding:12px 22px 8px}
+#sheet.sq .co-name{font-size:26px}
+#sheet.sq .meta .f,#sheet.sq .cust-block .f{padding:9px 20px}
+#sheet.sq #sections{margin-top:9px}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);
@@ -667,7 +687,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   body{background:#fff; background-image:none}
   .wrap{padding:0; max-width:none}
   .topnav,#toast{display:none !important}
-  .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint{display:none !important}
+  .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint,.mode-btn{display:none !important}
   .mast,.totals,.listwrap,.section{box-shadow:none}
   .mast::after,.stat::before,.grand::before{display:none}
   .mast,.section,.totals{border-color:var(--line-2)}
@@ -684,8 +704,9 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .meta .f,.cust-block .f{padding:3px 14px}
   .meta label,.cust-block label{font-size:7.5px; margin-bottom:0}
   .meta input,.meta .ro,.cust-block input{font-size:10px}
-  #sections{margin-top:4px; gap:8px 12px}
-  #sections .section{margin-top:0}
+  /* keep two wood tables side by side on paper, never split a table across columns */
+  #sections{margin-top:4px; gap:6px 10px; grid-template-columns:1fr 1fr}
+  #sections .section{margin-top:0; break-inside:avoid; page-break-inside:avoid}
   .sec-head{padding:5px 10px; background:var(--walnut) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact}
   .sec-name{font-size:15px}
   .rate-box{font-size:9px}

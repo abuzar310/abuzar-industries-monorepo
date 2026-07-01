@@ -47,6 +47,15 @@ export const TABLE = {
   sessions: "sessions",
 } as const;
 
+// Per-app cloud namespace so the two apps never share tables (e.g. "sf_" for Safa).
+let cloudPrefix = "";
+export const setCloudPrefix = (p: string) => {
+  cloudPrefix = p || "";
+};
+export const getCloudPrefix = () => cloudPrefix;
+/** Actual Supabase table name for a store, with the per-app prefix applied. */
+export const tableName = (s: string) => cloudPrefix + (TABLE[s as keyof typeof TABLE] || s);
+
 export function cleanSupaUrl(u: string): string {
   u = (u || "").trim();
   if (!u) return "";
@@ -213,7 +222,7 @@ export async function trySync(force?: boolean) {
         const body = JSON.stringify([
           { id: rec.id || rec.key, data: rec, updated_at: rec.updatedAt || nowIso() },
         ]);
-        const r = await fetch(supa.url + "/rest/v1/" + TABLE[s], {
+        const r = await fetch(supa.url + "/rest/v1/" + tableName(s), {
           method: "POST",
           headers: supaHeaders(),
           body,
@@ -247,7 +256,7 @@ export async function bgPull(openDocId: string = _openId, openDocStore: string =
   let changed = false;
   for (const s of Object.keys(TABLE) as (keyof typeof TABLE)[]) {
     try {
-      const r = await fetch(supa.url + "/rest/v1/" + TABLE[s] + "?select=*", { headers: supaHeaders() });
+      const r = await fetch(supa.url + "/rest/v1/" + tableName(s) + "?select=*", { headers: supaHeaders() });
       if (!r.ok) continue;
       const rows = await r.json();
       for (const row of rows) {
@@ -285,7 +294,7 @@ export async function pullFromCloud(force?: boolean): Promise<number> {
   let pulled = 0;
   for (const s of Object.keys(TABLE) as (keyof typeof TABLE)[]) {
     try {
-      const r = await fetch(supa.url + "/rest/v1/" + TABLE[s] + "?select=*", { headers: supaHeaders() });
+      const r = await fetch(supa.url + "/rest/v1/" + tableName(s) + "?select=*", { headers: supaHeaders() });
       if (!r.ok) continue;
       const rows = await r.json();
       for (const row of rows) {
@@ -316,7 +325,7 @@ export async function cloudDelete(storeName: string, id: string) {
   try {
     await ensureAuth();
     await fetch(
-      supa.url + "/rest/v1/" + (TABLE[storeName as keyof typeof TABLE] || storeName) + "?id=eq." + encodeURIComponent(id),
+      supa.url + "/rest/v1/" + tableName(storeName) + "?id=eq." + encodeURIComponent(id),
       { method: "DELETE", headers: supaHeaders() },
     );
   } catch {}
@@ -329,7 +338,7 @@ export async function cloudClear(tables: (keyof typeof TABLE)[]): Promise<{ ok: 
   } catch {}
   const failed: string[] = [];
   for (const s of tables) {
-    const tbl = TABLE[s] || s;
+    const tbl = tableName(s);
     try {
       const r = await fetch(supa.url + "/rest/v1/" + tbl + "?id=not.is.null", {
         method: "DELETE",
@@ -359,7 +368,7 @@ export async function hasRealData(): Promise<boolean> {
 
 /** Test the saved config by hitting one table. */
 export async function testConnection(): Promise<{ status: number; ok: boolean; text: string }> {
-  const r = await fetch(supa.url + "/rest/v1/quotations?select=id&limit=1", { headers: supaHeaders() });
+  const r = await fetch(supa.url + "/rest/v1/" + tableName("quotations") + "?select=id&limit=1", { headers: supaHeaders() });
   const text = r.ok ? "" : (await r.text().catch(() => "")).replace(/\s+/g, " ").trim();
   return { status: r.status, ok: r.ok, text };
 }

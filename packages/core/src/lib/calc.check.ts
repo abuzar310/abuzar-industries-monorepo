@@ -28,6 +28,19 @@ assert.equal(t.gstAmt, 216);
 assert.equal(t.grand, 1416);
 assert.deepEqual(t.secCft, [12]);
 
+// direct-CFT mode: type CFT directly (5) × rate 100 = 500
+const dd = { sections: [{ name: "Bulk", rate: 100, calcMode: "direct", rows: [{ l: "", w: "", t: "", pcs: "", cft: 5 }] }], gst: 0 } as unknown as Doc;
+assert.equal(computeDoc(dd).sub, 500);
+
+// running-ft mode: L 7 × Pcs 3 = 21 ft × rate 10 = 210
+const dr = { sections: [{ name: "Ply", rate: 10, calcMode: "rft", rows: [{ l: 7, w: 0, t: 0, pcs: 3 }] }], gst: 0 } as unknown as Doc;
+assert.equal(computeDoc(dr).sub, 210);
+
+// flat GST: gst is a rupee amount, not a percent
+const df = { sections: [{ name: "Teak", rate: 100, rows: [{ l: 12, w: 12, t: 12, pcs: 1 }] }], gst: 500, gstMode: "flat" } as unknown as Doc;
+assert.equal(computeDoc(df).gstAmt, 500);
+assert.equal(computeDoc(df).grand, 1700);
+
 // formatting
 assert.equal(inr(1416), "1,416.00");
 

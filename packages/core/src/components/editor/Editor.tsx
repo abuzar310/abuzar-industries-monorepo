@@ -13,11 +13,11 @@ import { upsertCustomerFromDoc } from "@/lib/customers";
 import { maybeDeductStock } from "@/lib/stock";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { getFeatures } from "@/lib/features";
-import { addExpense } from "@/lib/expenses";
+import { addExpense, deleteExpensesBySource } from "@/lib/expenses";
 import { quoteMessage, reminderMessage, waLink } from "@/lib/whatsapp";
 import { generatePdf } from "@/lib/pdf";
 import { folderConnected, saveCopyToFolder, writeDbSnapshot } from "@/lib/backup";
-import { setSyncState, toast } from "@/store/app-store";
+import { bumpData, setSyncState, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import type { Doc } from "@/lib/types";
 import SectionCard from "./SectionCard";
@@ -51,7 +51,14 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
 
   const feat = getFeatures();
   const isInv = doc.kind === "invoice";
+  const isBuy = isInv && doc.tradeType === "buy"; // purchase invoice
   const totals = useMemo(() => computeDoc(doc), [doc]);
+  const totalCft = totals.secCft.reduce((s, c) => s + c, 0);
+  // accept-payment: final = round-figure override or the computed grand; balance clears over time
+  const finalPrice = doc.finalPrice != null && doc.finalPrice > 0 ? doc.finalPrice : totals.grand;
+  const paidSoFar = Math.round(((doc.payCash || 0) + (doc.payUpi || 0)) * 100) / 100;
+  const payBalance = Math.round((finalPrice - paidSoFar) * 100) / 100;
+  const settled = payBalance <= 0.5;
   const { brandMode, user } = useApp();
   const brand = brandFor(brandMode);
 
@@ -99,7 +106,12 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     update((d) => ((d as unknown as Record<string, unknown>)[k] = v));
   const onName = (si: number, v: string) => update((d) => (d.sections[si].name = v));
   const onRate = (si: number, v: string) => update((d) => (d.sections[si].rate = v));
-  const onCell = (si: number, ri: number, k: "l" | "w" | "t" | "pcs", v: string) => {
+  const onMode = (si: number) =>
+    update((d) => {
+      const cur = d.sections[si].calcMode;
+      d.sections[si].calcMode = cur === "cft" || !cur ? "direct" : cur === "direct" ? "rft" : "cft";
+    });
+  const onCell = (si: number, ri: number, k: "l" | "w" | "t" | "pcs" | "cft", v: string) => {
     const clean = v.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
     update((d) => (d.sections[si].rows[ri][k] = clean));
   };
@@ -112,7 +124,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const onDelSec = (si: number) => update((d) => d.sections.length > 1 && d.sections.splice(si, 1));
   const onAddSec = () =>
     update((d) =>
-      d.sections.push({ name: "Wood type " + (d.sections.length + 1), rate: 0, rows: [{ l: "", w: "", t: "", pcs: "" }] }),
+      d.sections.push({ name: "White Teak", rate: 0, rows: [{ l: "", w: "", t: "", pcs: "" }] }),
     );
 
   // ---- arrow-key grid navigation (identical behaviour to legacy) ----
@@ -231,22 +243,29 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const onSaveDraft = () => setStatusAndSave("Draft", "Saved as draft");
   const onCreate = () => setStatusAndSave("Created", "Quotation " + docRef.current.number + " created ✓");
 
+  // final accepted price override (round figure); autosaved, doesn't change the itemised total
+  const onFinalPrice = (v: string) =>
+    update((d) => (d.finalPrice = v.trim() === "" ? undefined : Math.max(0, +v || 0)));
+
   async function onAcceptPayment() {
-    const grand = computeDoc(docRef.current).grand;
+    const d0 = docRef.current;
+    const grand = computeDoc(d0).grand;
+    const finalP = d0.finalPrice != null && d0.finalPrice > 0 ? d0.finalPrice : grand;
     const cash = Math.max(0, +payCash || 0);
     const upi = Math.max(0, +payUpi || 0);
     if (cash + upi <= 0) return toast("Enter a cash or UPI amount");
-    const cust = (docRef.current.customerName || "").trim() || "Walk-in";
-    const note = cust + " · " + docRef.current.number;
+    const cust = (d0.customerName || "").trim() || "Walk-in";
+    const note = cust + " · " + d0.number;
     const by = user?.id || "unknown";
-    if (cash > 0) await addExpense({ type: "sale", amount: cash, mode: "cash", note, enteredBy: by });
-    if (upi > 0) await addExpense({ type: "sale", amount: upi, mode: "upi", note, enteredBy: by });
-    const next = clone(docRef.current);
-    next.payCash = cash;
-    next.payUpi = upi;
-    next.amountPaid = Math.round((cash + upi) * 100) / 100;
+    if (cash > 0) await addExpense({ type: "sale", amount: cash, mode: "cash", note, enteredBy: by, sourceId: d0.id });
+    if (upi > 0) await addExpense({ type: "sale", amount: upi, mode: "upi", note, enteredBy: by, sourceId: d0.id });
+    const next = clone(d0);
+    next.finalPrice = finalP;
+    next.payCash = Math.round(((next.payCash || 0) + cash) * 100) / 100; // cumulative — clear over time
+    next.payUpi = Math.round(((next.payUpi || 0) + upi) * 100) / 100;
+    next.amountPaid = Math.round((next.payCash + next.payUpi) * 100) / 100;
     next.paidLogged = true;
-    next.paymentStatus = next.amountPaid + 0.001 >= grand ? "Paid" : "Partial";
+    next.paymentStatus = next.amountPaid + 0.001 >= finalP ? "Paid" : "Partial";
     commit(next, true);
     setPayCash("");
     setPayUpi("");
@@ -380,9 +399,31 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     const id = docRef.current.id;
     await delRec(st, id);
     await cloudDelete(st, id);
+    // cascade: remove any daybook entries this doc's payments created
+    const n = await deleteExpensesBySource(id);
     await metaSet("lastOpen", null);
-    toast(doc.number + " deleted");
+    bumpData();
+    toast(doc.number + " deleted" + (n ? " · " + n + " daybook entr" + (n === 1 ? "y" : "ies") + " removed" : ""));
     router.push(st === "invoices" ? "/invoices" : "/quotations");
+  }
+  async function onClearPayments() {
+    const ok = await confirmDialog({
+      title: "Clear payments?",
+      message: "Deletes the daybook entries created from this quote's payments and resets it to unpaid.",
+      confirmLabel: "Clear payments",
+      danger: true,
+    });
+    if (!ok) return;
+    await deleteExpensesBySource(docRef.current.id);
+    const next = clone(docRef.current);
+    next.payCash = 0;
+    next.payUpi = 0;
+    next.amountPaid = 0;
+    next.paidLogged = false;
+    next.paymentStatus = "Pending";
+    commit(next, true);
+    bumpData();
+    toast("Payments cleared");
   }
   async function onNewQuote() {
     const d = await createQuotation();
@@ -462,6 +503,13 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               <option value="sell">Selling</option>
               <option value="buy">Buying</option>
             </select>
+            <span className="lab" style={{ marginLeft: 8 }}>
+              Tax
+            </span>
+            <select className="paysel" value={doc.gstKind || "split"} onChange={(e) => setField("gstKind", e.target.value)}>
+              <option value="split">SGST + CGST</option>
+              <option value="igst">IGST (interstate)</option>
+            </select>
           </>
         )}
         {!feat.simpleQuote && (
@@ -490,8 +538,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       </div>
 
       {/* printable sheet */}
-      <div id="sheet" className={isInv ? "inv" : ""} ref={sheetRef}>
-        {isInv && (
+      <div id="sheet" className={isInv ? "inv" : feat.simpleQuote ? "sq" : ""} ref={sheetRef}>
+        {isInv && !isBuy && (
           <div className="wmark" aria-hidden="true">
             <span>{brand.name}</span>
           </div>
@@ -499,34 +547,45 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         <div className="mast">
           <div className="mast-top">
             <div className="brand-row">
-              {brand.logo && (
+              {!isBuy && brand.logo && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img className="logo" alt={brand.name} src="/logo.png" />
               )}
               <div className="brand">
                 <div className="co-name">
-                  {brand.name}{" "}
-                  <span className="kindtag">
-                    {isInv ? (doc.tradeType === "buy" ? "Purchase Invoice" : "Tax Invoice") : "Quotation"}
-                  </span>
+                  {isBuy ? (
+                    <>
+                      Purchase <span className="kindtag">Invoice</span>
+                    </>
+                  ) : (
+                    <>
+                      {brand.name} <span className="kindtag">{isInv ? "Tax Invoice" : "Quotation"}</span>
+                    </>
+                  )}
                 </div>
-                {isInv && brand.goods && <div className="co-goods">{brand.goods}</div>}
-                <div className="co-meta">
-                  {brand.addr && <div>{brand.addr}</div>}
-                  <div>
-                    {brand.phone && (
-                      <>
-                        <b>Ph</b> {brand.phone}
-                      </>
-                    )}
-                    {brand.gstin && (
-                      <>
-                        {brand.phone ? " · " : ""}
-                        <b>GSTIN</b> {brand.gstin}
-                      </>
-                    )}
+                {!isBuy && isInv && brand.goods && <div className="co-goods">{brand.goods}</div>}
+                {isBuy ? (
+                  <div className="co-meta">
+                    <div>Purchased by {brand.name}{brand.gstin ? " · GSTIN " + brand.gstin : ""}</div>
                   </div>
-                </div>
+                ) : (
+                  <div className="co-meta">
+                    {brand.addr && <div>{brand.addr}</div>}
+                    <div>
+                      {brand.phone && (
+                        <>
+                          <b>Ph</b> {brand.phone}
+                        </>
+                      )}
+                      {brand.gstin && (
+                        <>
+                          {brand.phone ? " · " : ""}
+                          <b>GSTIN</b> {brand.gstin}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -549,7 +608,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               )}
             </div>
             <div className="f">
-              <label>Date</label>
+              <label>{isBuy ? "Purchase Date" : "Date"}</label>
               <input value={doc.date} onChange={(e) => setField("date", e.target.value)} />
             </div>
             {showLink && (
@@ -561,7 +620,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
           </div>
           <div className="cust-block">
             <div className="f">
-              <label>Customer Name</label>
+              <label>{isBuy ? "Supplier Name" : "Customer Name"}</label>
               <input
                 placeholder="—"
                 value={doc.customerName}
@@ -573,17 +632,17 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               <input placeholder="—" value={doc.phone} onChange={(e) => setField("phone", e.target.value)} />
             </div>
             <div className="f">
-              <label>Site</label>
+              <label>{feat.simpleQuote ? "Carpenter" : isBuy ? "Firm / Place" : "Site"}</label>
               <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
             </div>
             {isInv && (
               <>
                 <div className="f">
-                  <label>Address</label>
+                  <label>{isBuy ? "Supplier Address" : "Address"}</label>
                   <input placeholder="—" value={doc.address} onChange={(e) => setField("address", e.target.value)} />
                 </div>
                 <div className="f">
-                  <label>Customer GSTIN</label>
+                  <label>{isBuy ? "Supplier GSTIN" : "Customer GSTIN"}</label>
                   <input placeholder="—" value={doc.custGstin || ""} onChange={(e) => setField("custGstin", e.target.value)} />
                 </div>
                 <div className="f">
@@ -614,6 +673,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                 amt={amt}
                 onName={onName}
                 onRate={onRate}
+                onMode={onMode}
                 onCell={onCell}
                 onAddRow={onAddRow}
                 onDelRow={onDelRow}
@@ -625,41 +685,56 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         <button className="add-sec" onClick={onAddSec}>
           + Add wood type
         </button>
+        <datalist id="woodtypes">
+          {["Teak", "White Teak", "Nagpur Teak", "CP Teak", "Ghana Teak", "Honne", "Neem", "Sagwan", "Rosewood"].map((w) => (
+            <option key={w} value={w} />
+          ))}
+        </datalist>
 
-        <Totals doc={doc} sub={totals.sub} gstAmt={totals.gstAmt} grand={totals.grand} onGst={(v) => setField("gst", v)} />
+        <Totals
+          doc={doc}
+          sub={totals.sub}
+          gstAmt={totals.gstAmt}
+          grand={totals.grand}
+          totalCft={totalCft}
+          onGst={(v) => setField("gst", v)}
+          onGstMode={(m) => setField("gstMode", m)}
+        />
 
         {isInv && (
           <div className="inv-foot">
-            <div className="inv-cols">
-              <div className="inv-bank">
-                <div className="ib-h">Bank Details</div>
-                <div>{brand.bank?.name || "—"}</div>
-                <div>A/c No: {brand.bank?.ac || "—"}</div>
-                <div>IFSC: {brand.bank?.ifsc || "—"}</div>
-              </div>
-              {brand.terms && brand.terms.length > 0 && (
-                <div className="inv-terms">
-                  <div className="ib-h">Terms &amp; Conditions</div>
-                  <ol>
-                    {brand.terms.map((t, i) => (
-                      <li key={i}>{t}</li>
-                    ))}
-                  </ol>
+            {!isBuy && (
+              <div className="inv-cols">
+                <div className="inv-bank">
+                  <div className="ib-h">Bank Details</div>
+                  <div>{brand.bank?.name || "—"}</div>
+                  <div>A/c No: {brand.bank?.ac || "—"}</div>
+                  <div>IFSC: {brand.bank?.ifsc || "—"}</div>
                 </div>
-              )}
-            </div>
+                {brand.terms && brand.terms.length > 0 && (
+                  <div className="inv-terms">
+                    <div className="ib-h">Terms &amp; Conditions</div>
+                    <ol>
+                      {brand.terms.map((t, i) => (
+                        <li key={i}>{t}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="inv-sign">
               <div className="sign-box">
                 <div className="sign-line" />
-                <div className="sign-role">Customer Signature</div>
+                <div className="sign-role">{isBuy ? "Supplier Signature" : "Customer Signature"}</div>
               </div>
               <div className="sign-box">
-                <div className="sign-for">For {brand.name}</div>
+                <div className="sign-for">{isBuy ? "Received by " + brand.name : "For " + brand.name}</div>
                 <div className="sign-line" />
-                <div className="sign-role">Proprietor · Authorised Signature</div>
+                <div className="sign-role">{isBuy ? "Authorised Signature" : "Proprietor · Authorised Signature"}</div>
               </div>
             </div>
-            <div className="inv-thanks">Thank you for your business 🙏</div>
+            {!isBuy && <div className="inv-thanks">Thank you for your business 🙏</div>}
           </div>
         )}
       </div>
@@ -709,34 +784,59 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         </div>
       </div>
 
-      {/* App A: accept payment on a created quotation → posts to the Daybook */}
+      {/* App A: accept payment on a created quotation → final price + cash/UPI → Daybook */}
       {feat.acceptPayment && !isInv && doc.status === "Created" && (
-        doc.paidLogged ? (
-          <div className="panel-card" style={{ marginTop: 12, padding: "14px 16px" }}>
-            <b>Payment received</b> — ₹{inr(doc.payCash || 0)} cash + ₹{inr(doc.payUpi || 0)} UPI
-            <span style={{ color: "var(--ink-faint)" }}> · added to Daybook</span>
+        <div className="panel-card daybook-entry" style={{ marginTop: 12 }}>
+          <label className="modal-field">
+            <span>Final price ₹ <small style={{ color: "var(--ink-faint)" }}>(quote ₹{inr(totals.grand)})</small></span>
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder={inr(totals.grand)}
+              value={doc.finalPrice != null ? doc.finalPrice : ""}
+              onChange={(e) => onFinalPrice(e.target.value)}
+            />
+          </label>
+          <div style={{ flexBasis: "100%", fontFamily: "var(--mono)", fontSize: 13 }}>
+            Received ₹{inr(paidSoFar)} of ₹{inr(finalPrice)} ·{" "}
+            {settled ? (
+              <b style={{ color: "var(--green)" }}>Settled ✓</b>
+            ) : (
+              <b style={{ color: "var(--danger)" }}>Balance ₹{inr(payBalance)}</b>
+            )}
           </div>
-        ) : (
-          <div className="panel-card daybook-entry" style={{ marginTop: 12 }}>
-            <div style={{ flexBasis: "100%", fontFamily: "var(--mono)", fontSize: 12, color: "var(--ink-faint)" }}>
-              Accept payment — Grand total ₹{inr(totals.grand)}
+          {!settled && (
+            <>
+              <label className="modal-field">
+                <span>Cash now</span>
+                <input type="number" inputMode="decimal" placeholder="0" value={payCash} onChange={(e) => setPayCash(e.target.value)} />
+              </label>
+              <label className="modal-field">
+                <span>UPI now</span>
+                <input type="number" inputMode="decimal" placeholder="0" value={payUpi} onChange={(e) => setPayUpi(e.target.value)} />
+              </label>
+              <button className="btn sm" type="button" onClick={() => { setPayCash(String(payBalance)); setPayUpi(""); }}>
+                Full → Cash
+              </button>
+              <button className="btn sm" type="button" onClick={() => { setPayUpi(String(payBalance)); setPayCash(""); }}>
+                Full → UPI
+              </button>
+              <button className="btn primary" type="button" onClick={onAcceptPayment}>
+                Record payment
+              </button>
+            </>
+          )}
+          {paidSoFar > 0 && (
+            <div style={{ flexBasis: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, color: "var(--ink-faint)", fontFamily: "var(--mono)" }}>
+                Paid so far: ₹{inr(doc.payCash || 0)} cash + ₹{inr(doc.payUpi || 0)} UPI
+              </span>
+              <button className="btn warn sm" type="button" onClick={onClearPayments}>
+                Clear payments
+              </button>
             </div>
-            <label className="modal-field">
-              <span>Cash (₹)</span>
-              <input type="number" inputMode="decimal" placeholder={inr(totals.grand)} value={payCash} onChange={(e) => setPayCash(e.target.value)} />
-            </label>
-            <label className="modal-field">
-              <span>UPI (₹)</span>
-              <input type="number" inputMode="decimal" placeholder="0" value={payUpi} onChange={(e) => setPayUpi(e.target.value)} />
-            </label>
-            <button className="btn sm" type="button" onClick={() => setPayCash(String(totals.grand))}>
-              Full in cash
-            </button>
-            <button className="btn primary" type="button" onClick={onAcceptPayment}>
-              Accept payment
-            </button>
-          </div>
-        )
+          )}
+        </div>
       )}
 
       <p className="hint">

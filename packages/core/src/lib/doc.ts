@@ -21,7 +21,7 @@ export function blankDoc(id: string): Doc {
     address: "",
     notes: "",
     date: todayStr(),
-    sections: [{ name: "Wood type 1", rate: 0, rows: [{ l: "", w: "", t: "", pcs: "" }] }],
+    sections: [{ name: "Teak", rate: 0, rows: [{ l: "", w: "", t: "", pcs: "" }] }],
     gst: 18,
     quotationId: "",
     paymentStatus: "Pending",

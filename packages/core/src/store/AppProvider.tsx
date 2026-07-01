@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useRef } from "react";
-import type { AppFeatures, Tab } from "@/lib/types";
+import type { AppFeatures, StoreName, Tab } from "@/lib/types";
 import { setFeatures } from "@/lib/features";
-import { allRec, metaGet, openDB, put } from "@/lib/db";
+import { allRec, delRec, metaGet, openDB, put, setDbSuffix } from "@/lib/db";
 import { nowIso } from "@/lib/calc";
 import {
   authRequired,
@@ -16,6 +16,7 @@ import {
   loadSupa,
   authLoad,
   sessionMode,
+  setCloudPrefix,
   signOut,
   trySync,
 } from "@/lib/cloud";
@@ -53,14 +54,18 @@ export default function AppProvider({
   tabs,
   features,
   defaultBrand = "demo",
+  cloudPrefix = "",
 }: {
   children: React.ReactNode;
   tabs: Tab[];
   features?: AppFeatures;
   defaultBrand?: BrandMode;
+  cloudPrefix?: string;
 }) {
-  // Set per-app features before children render (idempotent, static per app).
+  // Set per-app config before anything opens the DB or syncs (idempotent, static per app).
   if (features) setFeatures(features);
+  setCloudPrefix(cloudPrefix); // separate Supabase tables per app
+  setDbSuffix(cloudPrefix); // separate local IndexedDB per app
   const booted = useRef(false);
 
   useEffect(() => {
@@ -76,8 +81,15 @@ export default function AppProvider({
 
     let timer: ReturnType<typeof setInterval> | undefined;
     // Realtime: on any cloud change, pull + refresh + notify instantly (debounced).
+    // DELETEs aren't captured by the upsert-only pull, so apply them directly.
     let rtTimer: ReturnType<typeof setTimeout> | undefined;
-    const onRealtime = () => {
+    const onRealtime = (store: string, eventType: string, oldId?: string) => {
+      if (eventType === "DELETE" && oldId) {
+        delRec(store as StoreName, oldId)
+          .then(() => bumpData())
+          .catch(() => {});
+        return;
+      }
       clearTimeout(rtTimer);
       rtTimer = setTimeout(async () => {
         await bgPull();
@@ -133,7 +145,7 @@ export default function AppProvider({
       await checkOwnerNotifications();
 
       // instant updates via realtime; the interval is just a safety-net fallback
-      if (supa.url && supa.key) startRealtime(supa.url, supa.key, onRealtime);
+      if (supa.url && supa.key) startRealtime(supa.url, supa.key, cloudPrefix, onRealtime);
       timer = setInterval(async () => {
         const s = getSupa();
         if (!s.url || !s.key || !navigator.onLine) return;

@@ -3,12 +3,20 @@
 // (child effects can run before the AppProvider boot effect).
 import type { StoreName } from "./types";
 
-const DB_NAME = "abuzar_industries";
+const DB_BASE = "abuzar_industries";
 const DB_VER = 4;
 export const STORES: StoreName[] = [
   "customers", "quotations", "invoices", "stock", "expenses", "meta",
   "vendors", "accounts", "ledger", "sessions",
 ];
+
+// Per-app local database so the two apps never share IndexedDB data.
+// Must be set (once, from AppProvider) before openDB() is called.
+let dbSuffix = "";
+export const setDbSuffix = (s: string) => {
+  dbSuffix = (s || "").replace(/[^a-z0-9]/gi, "");
+};
+const dbName = () => (dbSuffix ? DB_BASE + "_" + dbSuffix : DB_BASE);
 
 let _db: IDBDatabase | null = null;
 let _opening: Promise<IDBDatabase> | null = null;
@@ -17,7 +25,7 @@ export function openDB(): Promise<IDBDatabase> {
   if (_db) return Promise.resolve(_db);
   if (_opening) return _opening; // share one open across concurrent callers
   _opening = new Promise<IDBDatabase>((res, rej) => {
-    const r = indexedDB.open(DB_NAME, DB_VER);
+    const r = indexedDB.open(dbName(), DB_VER);
     r.onupgradeneeded = () => {
       const db = r.result;
       for (const s of STORES) {

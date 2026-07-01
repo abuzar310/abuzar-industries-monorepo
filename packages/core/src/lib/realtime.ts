@@ -9,7 +9,12 @@ const TABLES = ["customers", "quotations", "invoices", "stock", "expenses", "ven
 let client: SupabaseClient | null = null;
 let channel: RealtimeChannel | null = null;
 
-export function startRealtime(url: string, key: string, onChange: () => void) {
+export function startRealtime(
+  url: string,
+  key: string,
+  prefix: string,
+  onEvent: (store: string, eventType: string, oldId?: string) => void,
+) {
   if (!url || !key || channel) return;
   client = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -17,7 +22,10 @@ export function startRealtime(url: string, key: string, onChange: () => void) {
   });
   const ch = client.channel("app-sync");
   for (const t of TABLES) {
-    ch.on("postgres_changes", { event: "*", schema: "public", table: t }, () => onChange());
+    ch.on("postgres_changes", { event: "*", schema: "public", table: (prefix || "") + t }, (payload) => {
+      const old = payload.old as { id?: string } | undefined;
+      onEvent(t, payload.eventType, old?.id);
+    });
   }
   ch.subscribe();
   channel = ch;
