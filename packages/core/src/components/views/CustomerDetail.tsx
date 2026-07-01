@@ -93,7 +93,7 @@ export default function CustomerDetail({ id }: { id: string }) {
             <h3 style={{ fontSize: 26 }}>{cust.name}</h3>
             <div className="ph">{cust.phone || "—"}</div>
             <div className="meta2">
-              {cust.site && <>Site: {cust.site}<br /></>}
+              {cust.site && <>Carpenter: {cust.site}<br /></>}
               {cust.address && <>{cust.address}<br /></>}
               {cust.notes && <>Note: {cust.notes}</>}
             </div>

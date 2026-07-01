@@ -632,7 +632,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               <input placeholder="—" value={doc.phone} onChange={(e) => setField("phone", e.target.value)} />
             </div>
             <div className="f">
-              <label>{feat.simpleQuote ? "Carpenter" : isBuy ? "Firm / Place" : "Site"}</label>
+              <label>{isBuy ? "Firm / Place" : "Carpenter"}</label>
               <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
             </div>
             {isInv && (

@@ -64,7 +64,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
         <div className="lhead">
           <span>No.</span>
           <span>Customer</span>
-          <span>Phone / Site</span>
+          <span>Phone / Carpenter</span>
           <span className="col-date">Date</span>
           <span className="col-status">{statusCol}</span>
           <span style={{ textAlign: "right" }}>Total / Actions</span>
