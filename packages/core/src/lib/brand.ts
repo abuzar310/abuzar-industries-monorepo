@@ -40,7 +40,7 @@ export const REAL_BRAND: Brand = {
   web: "www.abuzarindustries.in",
   gstin: "29AROPA1101B1ZK",
   logo: true,
-  goods: "IMPORTED SAW WOOD",
+  goods: "",
   // ponytail: A/c no + IFSC per the paper invoice — owner should confirm the exact digits.
   bank: { name: "HDFC Bank, Chitradurga", ac: "—", ifsc: "—" },
   terms: INVOICE_TERMS,
