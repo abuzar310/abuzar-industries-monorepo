@@ -27,12 +27,15 @@ const bal = (n: number) => {
 };
 
 const MENU: { key: string; label: string; view: View; note?: string }[] = [
-  { key: "V", label: "Accounting Vouchers", view: "voucher", note: "F4–F9" },
+  { key: "N", label: "Accounting Vouchers", view: "voucher", note: "press N" },
   { key: "D", label: "Day Book", view: "daybook" },
   { key: "L", label: "Ledgers", view: "accounts" },
-  { key: "G", label: "Group Summary", view: "groups" },
+  { key: "S", label: "Group Summary", view: "groups" },
   { key: "T", label: "Trial Balance", view: "trial" },
 ];
+// Reliable single-letter nav — works on every keyboard (unlike F-keys, which Mac/browsers eat).
+const NAV: Record<string, View> = { g: "gateway", d: "daybook", l: "accounts", s: "groups", t: "trial" };
+// F-keys kept as a bonus for Windows users who have them free; not relied on.
 const FKEYS: Record<string, VoucherType> = { F4: "Contra", F5: "Payment", F6: "Receipt", F7: "Journal", F8: "Sales", F9: "Purchase" };
 
 export default function LedgerView({ initialLedgerId }: { initialLedgerId?: string }) {
@@ -86,46 +89,42 @@ export default function LedgerView({ initialLedgerId }: { initialLedgerId?: stri
     setOpenId(id);
     setView("ledger");
   }, []);
+  const openVoucher = useCallback((t: VoucherType) => {
+    setVType(t);
+    setView("voucher");
+  }, []);
 
   // focus search when entering the Ledgers list
   useEffect(() => {
     if (view === "accounts") setTimeout(() => searchRef.current?.focus(), 30);
   }, [view]);
 
-  // keyboard: Tally-style navigation everywhere
+  // keyboard: reliable Tally-style navigation on any PC/Mac
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (FKEYS[e.key]) {
-        e.preventDefault();
-        setVType(FKEYS[e.key]);
-        setView("voucher");
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        goBack();
-        return;
-      }
-      if (view === "voucher") return; // the voucher screen owns its keys
-      const typing = /INPUT|SELECT|TEXTAREA/.test((e.target as HTMLElement)?.tagName || "");
+      const el = e.target as HTMLElement | null;
+      const typing = !!el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable);
+      if (e.key === "Escape") { e.preventDefault(); goBack(); return; }
+      if (FKEYS[e.key]) { e.preventDefault(); openVoucher(FKEYS[e.key]); return; } // bonus where the OS allows it
+      // arrows/Enter drive the menu + list even while the search box is focused
       if (view === "gateway") {
-        if (e.key === "ArrowDown") { e.preventDefault(); setMenuIdx((i) => (i + 1) % MENU.length); }
-        else if (e.key === "ArrowUp") { e.preventDefault(); setMenuIdx((i) => (i - 1 + MENU.length) % MENU.length); }
-        else if (e.key === "Enter") { e.preventDefault(); openMenu(MENU[menuIdx]); }
-        else {
-          const m = MENU.find((x) => x.key.toLowerCase() === e.key.toLowerCase());
-          if (m) { e.preventDefault(); openMenu(m); }
-        }
+        if (e.key === "ArrowDown") { e.preventDefault(); setMenuIdx((i) => (i + 1) % MENU.length); return; }
+        if (e.key === "ArrowUp") { e.preventDefault(); setMenuIdx((i) => (i - 1 + MENU.length) % MENU.length); return; }
+        if (e.key === "Enter") { e.preventDefault(); openMenu(MENU[menuIdx]); return; }
       } else if (view === "accounts") {
-        if (e.key === "ArrowDown") { e.preventDefault(); setListIdx((i) => Math.min(filtered.length - 1, i + 1)); }
-        else if (e.key === "ArrowUp") { e.preventDefault(); setListIdx((i) => Math.max(0, i - 1)); }
-        else if (e.key === "Enter") { e.preventDefault(); const l = filtered[Math.min(listIdx, filtered.length - 1)]; if (l) openLedgerById(l.id); }
-        else if (!typing && /^[a-zA-Z0-9]$/.test(e.key)) searchRef.current?.focus();
+        if (e.key === "ArrowDown") { e.preventDefault(); setListIdx((i) => Math.min(filtered.length - 1, i + 1)); return; }
+        if (e.key === "ArrowUp") { e.preventDefault(); setListIdx((i) => Math.max(0, i - 1)); return; }
+        if (e.key === "Enter") { e.preventDefault(); const l = filtered[Math.min(listIdx, filtered.length - 1)]; if (l) openLedgerById(l.id); return; }
       }
+      // single-letter shortcuts (any view) — skipped while typing in a field or on the voucher screen
+      if (typing || view === "voucher") return;
+      const k = e.key.toLowerCase();
+      if (k === "n") { e.preventDefault(); openVoucher("Receipt"); return; }
+      if (NAV[k]) { e.preventDefault(); if (NAV[k] === "accounts") setListIdx(0); setView(NAV[k]); return; }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [view, menuIdx, listIdx, filtered, goBack, openMenu, openLedgerById]);
+  }, [view, menuIdx, listIdx, filtered, goBack, openMenu, openLedgerById, openVoucher]);
 
   async function newLedger() {
     if (await editLedgerDialog()) { load(); bumpData(); }
@@ -163,7 +162,7 @@ export default function LedgerView({ initialLedgerId }: { initialLedgerId?: stri
         <div className="tally-report">
           <div className="tr-head">
             <span>{title}</span>
-            <small>{view === "gateway" ? "↑↓ + Enter · or press the red letter" : view === "accounts" ? "type to search · ↑↓ + Enter" : "Esc: back"}</small>
+            <small>{view === "gateway" ? "↑↓ Enter · keys N D L S T" : view === "accounts" ? "type to search · ↑↓ Enter · Esc back" : "keys: N D L S T · Esc back"}</small>
           </div>
           <div className="tr-body">
             {view === "gateway" && <Gateway idx={menuIdx} onPick={openMenu} onHover={setMenuIdx} tb={tb} />}
@@ -193,13 +192,14 @@ export default function LedgerView({ initialLedgerId }: { initialLedgerId?: stri
 
         <div className="tally-btnbar">
           {view !== "gateway" && <button className="t-btn" onClick={() => setView("gateway")}><span className="k">Esc</span>Gateway</button>}
+          <button className="t-btn" onClick={() => openVoucher("Receipt")}><span className="k">N</span>New Voucher</button>
           <button className="t-btn" onClick={() => setView("daybook")}><span className="k">D</span>Day Book</button>
           <button className="t-btn" onClick={() => { setListIdx(0); setView("accounts"); }}><span className="k">L</span>Ledgers</button>
-          <button className="t-btn" onClick={() => setView("groups")}><span className="k">G</span>Groups</button>
+          <button className="t-btn" onClick={() => setView("groups")}><span className="k">S</span>Groups</button>
           <button className="t-btn" onClick={() => setView("trial")}><span className="k">T</span>Trial Bal</button>
-          <button className="t-btn" onClick={newLedger}><span className="k">Alt+C</span>New Ledger</button>
+          <button className="t-btn" onClick={newLedger}>＋ New Ledger</button>
           {Object.entries(FKEYS).map(([k, t]) => (
-            <button key={k} className={"t-btn" + (k === "F4" ? " sp" : "")} onClick={() => { setVType(t); setView("voucher"); }}>
+            <button key={k} className={"t-btn" + (k === "F4" ? " sp" : "")} title={"Voucher: " + t + " (or " + k + ")"} onClick={() => openVoucher(t)}>
               <span className="k">{k}</span>{t}
             </button>
           ))}
