@@ -29,8 +29,8 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
   const direct = mode === "direct";
   const rft = mode === "rft";
   const pcs = mode === "pcs";
-  const single = direct || pcs; // one-input-per-line modes
-  const singleKey: CellKey = direct ? "cft" : "pcs";
+  const single = direct; // only "Total CFT" uses a single input; "Per price" shows full dimensions
+  const singleKey: CellKey = "cft";
   const unit = rft ? "FT" : pcs ? "Pcs" : "CFT";
   const measure = (r: Section["rows"][number]) => (rft ? rftOf(r) : pcs ? pcsOf(r) : direct ? directOf(r) : cftOf(r));
   const totalText = pcs ? String(Math.round(cft)) : cft.toFixed(2);
@@ -91,7 +91,7 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
         </>
       ) : (
         <>
-          <div className="thead">
+          <div className={"thead" + (pcs ? " pcstab" : "")}>
             <span>#</span>
             <span>
               L<i className="unit">feet</i>
@@ -105,12 +105,12 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
             <span>
               Pcs<i className="unit">qty</i>
             </span>
-            <span>{unit}</span>
+            {!pcs && <span>{unit}</span>}
             <span />
           </div>
           <div className="rows">
             {sec.rows.map((r, ri) => (
-              <div className="row" key={ri}>
+              <div className={"row" + (pcs ? " pcstab" : "")} key={ri}>
                 <span className="sl">{ri + 1}</span>
                 {DIM.map((k) => (
                   <input
@@ -127,7 +127,7 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
                     onChange={(e) => onCell(si, ri, k, e.target.value)}
                   />
                 ))}
-                <span className="cft">{measure(r).toFixed(2)}</span>
+                {!pcs && <span className="cft">{measure(r).toFixed(2)}</span>}
                 <button className="x-row" title="Remove line" onClick={() => onDelRow(si, ri)}>
                   ×
                 </button>

@@ -271,6 +271,8 @@ body{
 .row input.dim.muted{opacity:.38}
 /* direct-CFT entry columns: # | CFT | delete */
 .thead.dcols,.row.dcols{grid-template-columns:22px 1fr 20px}
+/* Per-price columns: # | L | W | T | Pcs | delete (no CFT measure column) */
+.thead.pcstab,.row.pcstab{grid-template-columns:22px 1fr 1fr 1fr 1fr 20px}
 /* GST % / flat toggle in the totals */
 .gst-toggle{font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.04em; padding:2px 7px; margin:0 5px;
   border-radius:6px; border:1px solid var(--line-2); background:var(--panel); color:var(--ochre-deep); cursor:pointer; vertical-align:middle}
@@ -323,6 +325,12 @@ body{
 #sheet.inv .inv-foot{margin-top:auto}
 /* one wood box below another on the invoice (never side by side) */
 #sheet.inv #sections{grid-template-columns:1fr}
+/* invoice box is full width, but value inputs stay regular-width on the left;
+   a trailing spacer keeps the row line running clean to the right edge */
+#sheet.inv .thead, #sheet.inv .row{grid-template-columns:26px 72px 72px 72px 72px 62px 1fr 22px}
+#sheet.inv .thead > span:last-child, #sheet.inv .row > .x-row{grid-column:8}
+#sheet.inv .thead.dcols, #sheet.inv .row.dcols{grid-template-columns:26px 110px 1fr 22px}
+#sheet.inv .thead.dcols > span:last-child, #sheet.inv .row.dcols > .x-row{grid-column:4}
 /* compact totals so the tax box stays short */
 #sheet.inv .totals{border-radius:var(--radius-md)}
 #sheet.inv .t-row{padding:6px 22px; font-size:13px}
@@ -733,7 +741,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   body{background:#fff; background-image:none}
   .wrap{padding:0; max-width:none}
   .topnav,#toast{display:none !important}
-  .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint,.mode-btn,.mode-seg{display:none !important}
+  .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint,.mode-btn,.mode-seg,.no-print{display:none !important}
   .mast,.totals,.listwrap,.section{box-shadow:none}
   .mast::after,.stat::before,.grand::before{display:none}
   .mast,.section,.totals{border-color:var(--line-2)}

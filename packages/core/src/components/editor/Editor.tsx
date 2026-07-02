@@ -515,6 +515,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             <span>Tax Invoice</span>
           </div>
         )}
+        {feat.simpleQuote && (
+          <div className="inv-tag-top">
+            <span>Wood Quotation</span>
+          </div>
+        )}
         <div className={"mast" + (isInv && !isBuy ? " mast-c" : "")}>
           <div className="mast-top">
             <div className="brand-row">
@@ -529,6 +534,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                       Purchase <span className="kindtag">Invoice</span>
                     </>
                   ) : isInv ? (
+                    brand.name
+                  ) : feat.simpleQuote ? (
                     brand.name
                   ) : (
                     <>
@@ -749,7 +756,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
 
       {/* App A: accept payment on a created quotation → final price + cash/UPI → Daybook */}
       {feat.acceptPayment && !isInv && doc.status === "Created" && (
-        <div className="panel-card daybook-entry" style={{ marginTop: 12 }}>
+        <div className="panel-card daybook-entry no-print" style={{ marginTop: 12 }}>
           <label className="modal-field">
             <span>Final price ₹ <small style={{ color: "var(--ink-faint)" }}>(quote ₹{inr(totals.grand)})</small></span>
             <input
