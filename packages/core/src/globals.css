@@ -754,7 +754,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   display:flex; flex-direction:column;
   /* near-full-bleed, but leave a clean margin so the desk shows around it */
   width:calc(100vw - 48px); margin:2px 0 30px; margin-left:calc(50% - 50vw + 24px);
-  border-radius:14px; min-height:calc(100dvh - 168px);
+  border-radius:14px; height:calc(100dvh - 168px);
 }
 .tally-strip{background:linear-gradient(#3a2a19,#241B12); color:#E7D6B6; font-size:12px; font-weight:700;
   letter-spacing:.04em; padding:6px 16px; display:flex; justify-content:space-between; border-bottom:1px solid #14100a}
@@ -763,7 +763,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .tally-title .tl-mid{flex:1; text-align:center; color:var(--t-head); font-weight:800; padding:7px 10px; letter-spacing:.06em; text-transform:uppercase}
 .tally-title .tl-right{padding:7px 16px; color:#5c4a1f; border-left:1px solid var(--t-line); white-space:nowrap}
 .tally-work{display:flex; flex:1; min-height:0}
-.tally-report{flex:1; background:var(--t-cream); border-right:2px solid var(--t-line); display:flex; flex-direction:column; min-width:0}
+.tally-report{flex:1; background:var(--t-cream); border-right:2px solid var(--t-line); display:flex; flex-direction:column; min-width:0; min-height:0}
 .tr-head{background:var(--t-head); color:#fff; font-weight:700; letter-spacing:.05em; padding:8px 16px;
   display:flex; justify-content:space-between; align-items:baseline; font-size:15px}
 .tr-head small{color:#F3E4C2; font-weight:400}
@@ -822,10 +822,33 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .t-vsave{margin:14px 18px; background:var(--t-head); color:#fff; border:0; padding:10px 26px; font:inherit; font-weight:700; letter-spacing:.03em; cursor:pointer; border-radius:5px}
 .t-vsave:hover{background:var(--ochre-deep)}
 @media(max-width:760px){
-  .tally-app{width:calc(100vw - 20px); margin-left:calc(50% - 50vw + 10px); border-radius:10px; min-height:calc(100dvh - 130px)}
-  .tally-btnbar{width:128px; flex-basis:128px; padding:6px}
-  .t-btn{font-size:11px; padding:6px 7px}
-  .t-vrow{flex-wrap:wrap} .t-vrow label{flex-basis:100%}
-  .tally-title{font-size:12px}
-  .tally-title .tl-left,.tally-title .tl-right{padding:6px 10px}
+  .tally-app{width:calc(100vw - 16px); margin-left:calc(50% - 50vw + 8px); margin-top:0; border-radius:10px; height:auto; min-height:calc(100dvh - 116px)}
+  /* stack: report on top full-width, action bar becomes a horizontal toolbar below */
+  .tally-work{flex-direction:column}
+  .tally-report{border-right:none; border-bottom:2px solid var(--t-line); min-height:0}
+  .tally-btnbar{order:-1; width:auto; flex:0 0 auto; flex-direction:row; overflow-x:auto; overflow-y:hidden;
+    gap:6px; padding:8px 10px; -webkit-overflow-scrolling:touch; border-bottom:2px solid rgba(0,0,0,.12)}
+  .t-btn{width:auto; flex:0 0 auto; white-space:nowrap; text-align:center; font-size:11.5px; padding:8px 12px}
+  .t-btn.sp{margin-top:0}
+  /* title: drop the redundant "Gateway of Tally" tag, keep company + period */
+  .tally-title .tl-left{display:none}
+  .tally-title .tl-mid{font-size:13px; padding:7px 8px}
+  .tally-title .tl-right{font-size:11px; padding:7px 10px}
+  .tally-strip{font-size:11px; padding:5px 10px}
+  /* tighter reports; horizontal swipe kept for wide columns */
+  .tr-head{font-size:13px; padding:7px 12px}
+  .tr-body{padding:10px 8px}
+  .t-table{font-size:12.5px; min-width:480px}
+  .t-table th{padding:6px 9px} .t-table td{padding:6px 9px}
+  .t-gateway{margin:16px auto; max-width:none}
+  .t-menu-item{font-size:15px; padding:9px 16px}
+  /* voucher form: labels stack above fields */
+  .t-voucher{margin:8px 0}
+  .t-vrow{flex-wrap:wrap; gap:6px} .t-vrow label{flex-basis:100%}
+  .t-vrow .drcr{flex-basis:auto}
+  .t-vrow input,.t-vrow select{flex:1 1 60%}
+}
+@media(max-width:400px){
+  .tally-title .tl-right{display:none}
+  .t-table{font-size:12px; min-width:420px}
 }
