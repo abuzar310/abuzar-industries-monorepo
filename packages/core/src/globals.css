@@ -879,3 +879,23 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .tform input:focus{outline:none; border-color:var(--t-head); box-shadow:var(--ring)}
 .tform .btn{align-self:flex-end}
 @media(max-width:640px){ .tsum{grid-template-columns:repeat(2,1fr)} .tform input{width:100%} .tform label{flex:1 1 45%} }
+
+/* ---------- daybook quick-entry (clean In/Out) ---------- */
+.db-entry{display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-top:8px}
+.db-seg{display:flex; gap:6px; flex-basis:100%}
+.db-seg.sm{flex-basis:auto}
+.seg-btn{flex:1; padding:11px 14px; border:1px solid var(--line-2); background:var(--panel); color:var(--ink-soft);
+  border-radius:11px; font:inherit; font-weight:700; font-size:14px; cursor:pointer; transition:.12s}
+.db-seg.sm .seg-btn{flex:0 0 auto; padding:10px 20px}
+.seg-btn:hover{border-color:var(--ink-faint)}
+.seg-btn.on{color:#fff; background:var(--ochre-deep); border-color:var(--ochre-deep)}
+.seg-btn.on.in{background:var(--green); border-color:var(--green)}
+.seg-btn.on.out{background:var(--danger); border-color:var(--danger)}
+.db-amt,.db-cat,.db-note{display:flex; flex-direction:column; gap:4px}
+.db-amt{flex:1 1 170px} .db-cat{flex:1 1 160px} .db-note{flex:1 1 100%}
+.db-amt span,.db-cat span,.db-note span{font-size:12px; color:var(--ink-soft); font-weight:600}
+.db-amt input{font-size:26px; font-weight:700; font-family:var(--mono); padding:8px 12px;
+  border:1px solid var(--line-2); border-radius:11px; background:var(--panel-2); color:var(--ink); width:100%}
+.db-cat select,.db-note input{padding:11px 12px; border:1px solid var(--line-2); border-radius:11px; background:var(--panel-2); font:inherit; color:var(--ink); width:100%}
+.db-add{flex-basis:100%; justify-content:center; padding:13px}
+.db-amt input:focus,.db-cat select:focus,.db-note input:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}

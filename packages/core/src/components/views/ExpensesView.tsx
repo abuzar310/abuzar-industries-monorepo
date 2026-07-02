@@ -110,6 +110,8 @@ export default function ExpensesView() {
   }
 
   const t = dayTotals(list);
+  const flow = isInflow(type) ? "in" : "out";
+  const setFlow = (f: "in" | "out") => setType(f === "in" ? "sale" : isInflow(type) ? "additional" : type);
 
   return (
     <div>
@@ -138,37 +140,35 @@ export default function ExpensesView() {
       })()}
 
       {!isOwner && (
-        <form className="panel-card daybook-entry" onSubmit={add}>
-          <label className="modal-field">
-            <span>Type</span>
-            <select value={type} onChange={(ev) => setType(ev.target.value as EntryType)}>
-              {ENTRY_TYPES.map((et) => (
-                <option key={et.value} value={et.value}>
-                  {et.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="modal-field">
-            <span>Amount (₹)</span>
+        <form className="panel-card db-entry" onSubmit={add}>
+          <div className="db-seg">
+            <button type="button" className={"seg-btn" + (flow === "in" ? " on in" : "")} onClick={() => setFlow("in")}>Money In</button>
+            <button type="button" className={"seg-btn" + (flow === "out" ? " on out" : "")} onClick={() => setFlow("out")}>Money Out</button>
+          </div>
+          <label className="db-amt">
+            <span>Amount ₹</span>
             <input ref={amountRef} type="number" inputMode="decimal" placeholder="0" value={amount} onChange={(ev) => setAmount(ev.target.value)} />
           </label>
-          {isInflow(type) && (
-            <label className="modal-field">
-              <span>Paid via</span>
-              <select value={mode} onChange={(ev) => setMode(ev.target.value as PayMode)}>
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
+          {flow === "in" ? (
+            <div className="db-seg sm">
+              <button type="button" className={"seg-btn" + (mode === "cash" ? " on" : "")} onClick={() => setMode("cash")}>Cash</button>
+              <button type="button" className={"seg-btn" + (mode === "upi" ? " on" : "")} onClick={() => setMode("upi")}>UPI</button>
+            </div>
+          ) : (
+            <label className="db-cat">
+              <span>Category</span>
+              <select value={type} onChange={(ev) => setType(ev.target.value as EntryType)}>
+                {ENTRY_TYPES.filter((e) => e.flow === "out").map((et) => (
+                  <option key={et.value} value={et.value}>{et.label}</option>
+                ))}
               </select>
             </label>
           )}
-          <label className="modal-field note">
-            <span>Note / label</span>
+          <label className="db-note">
+            <span>Note</span>
             <input placeholder="e.g. teak planks, helper salary…" value={note} onChange={(ev) => setNote(ev.target.value)} />
           </label>
-          <button className="btn primary" type="submit">
-            Add entry
-          </button>
+          <button className="btn primary db-add" type="submit">Add entry</button>
         </form>
       )}
 
