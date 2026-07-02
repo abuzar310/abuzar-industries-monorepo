@@ -515,7 +515,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             <span>Tax Invoice</span>
           </div>
         )}
-        <div className={"mast" + (isInv && !isBuy ? " mast-c" : "")}>
+        <div className="mast">
           <div className="mast-top">
             <div className="brand-row">
               {!isBuy && brand.logo && (
