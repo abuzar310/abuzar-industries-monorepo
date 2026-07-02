@@ -782,7 +782,11 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   #sheet.inv .kindtag{font-size:11px; padding:3px 10px; font-weight:800; border-width:1.5px}
   #sheet.inv .co-meta{font-size:11px}
   #sheet.inv .inv-tag-top span{font-size:12px; padding:4px 16px}
-  #sheet.inv .inv-sign{padding:18px 22px 10px}
+  #sheet.inv .inv-sign{padding:14px 22px 8px}
+  /* compress the bank details / terms box so two wood boxes still fit one page */
+  #sheet.inv .inv-bank, #sheet.inv .inv-terms{padding:8px 14px; line-height:1.45}
+  #sheet.inv .inv-terms li{margin:1px 0}
+  #sheet.inv .inv-thanks{padding:6px}
 }
 
 /* ======================================================================

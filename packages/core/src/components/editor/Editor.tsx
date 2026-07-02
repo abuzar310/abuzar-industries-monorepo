@@ -425,9 +425,6 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     const sheet = sheetRef.current;
     if (!sheet) return;
     const fit = () => {
-      // Invoices are laid out to fill a full A4 via CSS (aspect-ratio + footer at bottom);
-      // don't shrink them, or the footer floats up the page.
-      if (isInv) return;
       const probe = document.createElement("div");
       probe.style.cssText = "position:absolute;left:-9999px;top:0;width:190mm;height:277mm;visibility:hidden";
       document.body.appendChild(probe);
@@ -437,7 +434,9 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       sheet.style.zoom = "1";
       sheet.style.width = pageW + "px";
       const need = sheet.scrollHeight;
-      if (need > pageH) sheet.style.zoom = (pageH / need).toFixed(4);
+      // shrink to one page only when the content actually overflows (e.g. two wood boxes).
+      // short invoices already fill A4 via the aspect-ratio rule, so leave those untouched.
+      if (need > pageH + 2) sheet.style.zoom = (pageH / need).toFixed(4);
     };
     const unfit = () => {
       sheet.style.width = "";
