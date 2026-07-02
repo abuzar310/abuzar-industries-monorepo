@@ -2,45 +2,24 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clearStore, metaSet, STORES } from "@/lib/db";
-import {
-  cloudClear,
-  getSupa,
-  pullFromCloud,
-  sessionMode,
-  setOpenLock,
-  setSecure,
-  signOut,
-  testConnection,
-  trySync,
-} from "@/lib/cloud";
+import { cloudClear, getSupa, pullFromCloud, testConnection, trySync } from "@/lib/cloud";
 import { resetCounters } from "@/lib/numbering";
-import { exportBackup, importBackup, connectFolder } from "@/lib/backup";
+import { exportBackup, importBackup } from "@/lib/backup";
 import { createQuotation } from "@/lib/create";
 import { canInstall, promptInstall } from "@/lib/pwa";
 import { getFeatures } from "@/lib/features";
 import { autoPostEnabled, setAutoPost } from "@/lib/ledger-autopost";
-import { useApp } from "@/store/useApp";
-import { bumpData, setShowLogin, setSyncState, toast } from "@/store/app-store";
+import { bumpData, setSyncState, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
-import { doLogin, refreshAuthIdentity } from "@/store/session";
 
 export default function SettingsView() {
-  const { authEmail } = useApp();
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
-  const [secure, setSecureUI] = useState(false);
-  const [openLock, setOpenLockUI] = useState<"never" | "daily" | "always">("daily");
-  const [folderStatus, setFolderStatus] = useState("Folder: not connected.");
   const [cloud, setCloud] = useState("Checking cloud…");
   const [autoPost, setAutoPostUI] = useState(false);
   const ledgerOn = getFeatures().ledger;
 
   useEffect(() => {
-    // reading module state after mount (Settings opens well after boot) avoids a hydration mismatch
     /* eslint-disable react-hooks/set-state-in-effect */
-    setSecureUI(!!getSupa().secure);
-    setOpenLockUI(sessionMode());
     setCloud(getSupa().url && getSupa().key ? "Connected to cloud" : "Local only (no cloud configured)");
     /* eslint-enable react-hooks/set-state-in-effect */
     autoPostEnabled().then(setAutoPostUI);
@@ -52,7 +31,6 @@ export default function SettingsView() {
     toast(v ? "Invoices will now post to the Ledger" : "Auto-posting off");
   }
 
-  // ---- cloud ----
   async function testCloud() {
     if (!getSupa().url || !getSupa().key) {
       setCloud("Local only (no cloud configured)");
@@ -91,7 +69,6 @@ export default function SettingsView() {
     toast(n ? "Restored " + n + " records" : "Cloud is empty — nothing to restore");
   }
 
-  // ---- local backup ----
   function importFile() {
     const inp = document.createElement("input");
     inp.type = "file";
@@ -105,13 +82,6 @@ export default function SettingsView() {
       router.push("/");
     };
     inp.click();
-  }
-  async function connect() {
-    const ok = await connectFolder().catch(() => false);
-    if (ok) {
-      setFolderStatus("Folder: connected ✓ — snapshots + document copies will be written here.");
-      toast("Folder connected");
-    } else toast("Folder access needs Chrome/Edge desktop");
   }
   async function startFresh() {
     const ok = await confirmDialog({
@@ -136,8 +106,7 @@ export default function SettingsView() {
   async function eraseAll() {
     const ok = await confirmDialog({
       title: "Erase everything?",
-      message:
-        "Removes ALL data on this device AND in the cloud. Export a backup first if unsure. This cannot be undone.",
+      message: "Removes ALL data on this device AND in the cloud. Export a backup first if unsure. This cannot be undone.",
       confirmLabel: "Erase everything",
       danger: true,
     });
@@ -148,37 +117,6 @@ export default function SettingsView() {
     toast("All data erased");
     location.reload();
   }
-
-  // ---- security ----
-  async function signInSettings() {
-    const msg = await doLogin(email, pass);
-    if (!msg) setPass("");
-    else toast(msg);
-  }
-  async function signOutSettings() {
-    await signOut();
-    refreshAuthIdentity();
-    setSyncState(getSupa().url ? "queue" : "local");
-    toast("Signed out");
-  }
-  async function toggleSecure(v: boolean) {
-    setSecureUI(v);
-    await setSecure(v);
-    if (v) {
-      setShowLogin(true, true);
-      toast("Security on — sign in to sync");
-    } else toast("Security off");
-  }
-  async function changeOpenLock(v: "never" | "daily" | "always") {
-    setOpenLockUI(v);
-    await setOpenLock(v);
-    if (v !== "never") setSecureUI(true);
-    if (v === "never") toast("You will stay signed in on this device");
-    else if (v === "daily") toast("You will sign in once a day");
-    else toast("You will sign in every time the app opens");
-    if (v !== "never") setShowLogin(true, true);
-  }
-
   async function installApp() {
     if (canInstall()) await promptInstall();
     else toast("Use the browser menu → Install / Add to Home screen");
@@ -187,97 +125,54 @@ export default function SettingsView() {
   return (
     <div>
       <div className="sectitle">
-        Settings <small>— app, backup &amp; cloud</small>
-      </div>
-
-      <div className="setbox">
-        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Install app</div>
-        <p className="note">
-          Install to your phone / desktop — opens in its own window with a home-screen icon and enables notifications.
-        </p>
-        <div className="rowbtns">
-          <button className="btn primary sm" onClick={installApp}>
-            Install on this device
-          </button>
-        </div>
+        Settings <small>— app, cloud &amp; backup</small>
       </div>
 
       <div className="setbox">
         <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Cloud sync</div>
         <p className="note">
-          Everything saves on this device first (offline-first) and syncs to the cloud automatically when online. Status:{" "}
-          <b>{cloud}</b>.
+          Everything saves on this device first and syncs to the cloud automatically when online. Status: <b>{cloud}</b>.
         </p>
         <div className="rowbtns">
-          <button className="btn primary sm" onClick={testCloud}>
-            Check connection
-          </button>
-          <button className="btn sm" onClick={() => trySync(true)}>
-            Sync now
-          </button>
-          <button className="btn sm" onClick={restore}>
-            Restore from cloud
-          </button>
+          <button className="btn primary sm" onClick={testCloud}>Check connection</button>
+          <button className="btn sm" onClick={() => trySync(true)}>Sync now</button>
+          <button className="btn sm" onClick={restore}>Restore from cloud</button>
         </div>
       </div>
+
+      {ledgerOn && (
+        <div className="setbox">
+          <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Ledger</div>
+          <p className="note">
+            When on, every invoice writes a Sales/Purchase voucher (and a Receipt/Payment for money received) straight into
+            the Ledger. Leave off to keep the Ledger manual.
+          </p>
+          <label className="secline">
+            <input type="checkbox" checked={autoPost} onChange={(e) => toggleAutoPost(e.target.checked)} /> Auto-post invoices
+            &amp; payments to Ledger
+          </label>
+        </div>
+      )}
 
       <div className="setbox">
         <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Backup &amp; reset</div>
         <p className="note">Export a full backup file you can keep anywhere or move to another device.</p>
         <div className="rowbtns">
-          <button className="btn sm" onClick={exportBackup}>
-            Export backup (.json)
-          </button>
-          <button className="btn sm" onClick={importFile}>
-            Import backup
-          </button>
-          <button className="btn sm" onClick={connect}>
-            Connect data folder
-          </button>
+          <button className="btn sm" onClick={exportBackup}>Export backup (.json)</button>
+          <button className="btn sm" onClick={importFile}>Import backup</button>
         </div>
-        <p className="note">{folderStatus}</p>
         <div className="rowbtns" style={{ marginTop: 10 }}>
-          <button className="btn warn sm" onClick={startFresh}>
-            Start fresh (clear quotations &amp; invoices)
-          </button>
-          <button className="btn warn sm" onClick={eraseAll}>
-            Erase everything
-          </button>
+          <button className="btn warn sm" onClick={startFresh}>Start fresh (clear quotations &amp; invoices)</button>
+          <button className="btn warn sm" onClick={eraseAll}>Erase everything</button>
         </div>
       </div>
 
       <div className="setbox">
-        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Security — require login</div>
-        <p className="note">{authEmail ? "Signed in as " + authEmail + "." : "Not signed in."}</p>
-        <label>Email</label>
-        <input type="email" placeholder="you@business.com" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <label>Password</label>
-        <input type="password" placeholder="••••••••" autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} />
+        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Install app</div>
+        <p className="note">Install to your phone / desktop — opens in its own window with a home-screen icon and enables notifications.</p>
         <div className="rowbtns">
-          <button className="btn primary sm" onClick={signInSettings}>
-            Sign in
-          </button>
-          <button className="btn sm" onClick={signOutSettings}>
-            Sign out
-          </button>
+          <button className="btn primary sm" onClick={installApp}>Install on this device</button>
         </div>
-        <label className="secline">
-          <input type="checkbox" checked={secure} onChange={(e) => toggleSecure(e.target.checked)} /> Require login to
-          read/write cloud data
-        </label>
-        <label className="secline" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          Ask to sign in:
-          <select value={openLock} onChange={(e) => changeOpenLock(e.target.value as "never")} style={{ padding: "4px 8px", borderRadius: 8 }}>
-            <option value="never">Stay signed in</option>
-            <option value="daily">Once a day</option>
-            <option value="always">Every time it opens</option>
-          </select>
-        </label>
-        {ledgerOn && (
-          <label className="secline" title="When on, each invoice writes a Sales/Purchase voucher (and a Receipt/Payment for money received) into the Ledger. Turn off to keep the Ledger manual.">
-            <input type="checkbox" checked={autoPost} onChange={(e) => toggleAutoPost(e.target.checked)} /> Auto-post invoices &amp; payments to Ledger
-          </label>
-        )}
       </div>
     </div>
   );
