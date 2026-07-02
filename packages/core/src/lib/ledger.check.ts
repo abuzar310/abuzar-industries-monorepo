@@ -1,73 +1,70 @@
-// Self-check for ledger balance math (pure functions, no DB).
-// Run: node src/lib/ledger.check.ts
-import assert from "node:assert/strict";
-import { gstOf, partyLedger, accountBook, dmyToIso, isoToDmy, dmyToSort } from "./ledger-calc.ts";
-import type { LedgerEntry, VoucherKind } from "./types.ts";
+// Self-check for the pure double-entry math (no DB).
+// Run: npx tsx packages/core/src/lib/ledger.check.ts
+import type { Ledger, Voucher } from "./types";
+import { gstSplit, isBalanced, ledgerBalance, ledgerStatement, trialBalance } from "./ledger-calc";
 
-let seq = 0;
-function v(kind: VoucherKind, amount: number, extra: Partial<LedgerEntry> = {}): LedgerEntry {
-  seq++;
-  return {
-    id: "VCH-" + seq,
-    date: extra.date || "0" + seq + "-01-26",
-    kind,
-    partyKind: extra.partyKind ?? "",
-    partyId: extra.partyId ?? "",
-    amount,
-    taxable: amount,
-    gstRate: 0,
-    account: extra.account ?? "",
-    fromAccount: extra.fromAccount ?? "",
-    ref: "",
-    note: "",
-    enteredBy: "test",
-    createdAt: "2026-01-0" + seq,
-    updatedAt: "2026-01-0" + seq,
-    synced: false,
-  };
+let n = 0;
+const ok = (cond: boolean, msg: string) => {
+  n++;
+  if (!cond) throw new Error("FAIL: " + msg);
+};
+
+const L = (id: string, name: string, group: Ledger["group"], opening = 0): Ledger => ({
+  id, name, group, opening, gstin: "", phone: "", address: "", notes: "",
+  createdAt: "", updatedAt: "", synced: false,
+});
+const V = (id: string, type: Voucher["type"], date: string, legs: Voucher["legs"]): Voucher => ({
+  id, no: 1, date, type, legs, narration: "", enteredBy: "t",
+  createdAt: id, updatedAt: "", synced: false,
+});
+
+export function demo() {
+  const cash = L("cash", "Cash", "Cash-in-hand", 100000);
+  const cap = L("cap", "Capital", "Capital Account", -100000);
+  const party = L("p", "ARADHYA", "Sundry Debtors");
+  const sales = L("s", "Sales @ 18%", "Sales Accounts");
+  const cgst = L("cg", "CGST", "Duties & Taxes");
+  const sgst = L("sg", "SGST", "Duties & Taxes");
+  const hdfc = L("h", "HDFC", "Bank Accounts");
+  const ledgers = [cash, cap, party, sales, cgst, sgst, hdfc];
+
+  // GST split: 120285 @ 18% split → 21651.30 gst, 10825.65 each
+  const g = gstSplit(120285, 18, "split");
+  ok(g.total === 141936.3 && g.cgst === 10825.65 && g.sgst === 10825.65, "gst split 18% on 120285");
+
+  const sale = V("v1", "Sales", "03-05-26", [
+    { ledgerId: "p", dr: g.total, cr: 0 },
+    { ledgerId: "s", dr: 0, cr: g.taxable },
+    { ledgerId: "cg", dr: 0, cr: g.cgst },
+    { ledgerId: "sg", dr: 0, cr: g.sgst },
+  ]);
+  const rcpt = V("v2", "Receipt", "09-05-26", [
+    { ledgerId: "h", dr: 43000, cr: 0 },
+    { ledgerId: "p", dr: 0, cr: 43000 },
+  ]);
+  const contra = V("v3", "Contra", "10-05-26", [
+    { ledgerId: "h", dr: 20000, cr: 0 },
+    { ledgerId: "cash", dr: 0, cr: 20000 },
+  ]);
+  const vouchers = [sale, rcpt, contra];
+
+  ok(vouchers.every(isBalanced), "every voucher balances Dr=Cr");
+  ok(ledgerBalance(party, vouchers) === 98936.3, "debtor 141936.30 − 43000 = 98936.30 Dr");
+  ok(ledgerBalance(hdfc, vouchers) === 63000, "bank 43000 + 20000 contra = 63000 Dr");
+  ok(ledgerBalance(cash, vouchers) === 80000, "cash 100000 − 20000 = 80000");
+  ok(ledgerBalance(sales, vouchers) === -120285, "sales credit −120285 (Cr)");
+
+  const st = ledgerStatement(party, vouchers, (id) => ledgers.find((x) => x.id === id)!.name);
+  ok(st.closing === 98936.3, "statement closing = balance");
+  ok(st.rows[0].particulars.startsWith("Sales @ 18%"), "sale particulars = sales head");
+  ok(st.rows[1].particulars === "HDFC", "receipt particulars = bank");
+
+  const tb = trialBalance(ledgers, vouchers);
+  ok(tb.balanced, "trial balance Dr = Cr (" + tb.totalDr + " vs " + tb.totalCr + ")");
+
+  return n;
 }
 
-// GST split
-assert.deepEqual(gstOf(10000, 18), { gstAmount: 1800, total: 11800 });
-assert.deepEqual(gstOf(8000, 0), { gstAmount: 0, total: 8000 });
-
-// Debtor: opening 1000 + sale 8000 − receipt 3000 = 6000 receivable
-const deb = [
-  v("opening", 1000, { partyKind: "debtor", partyId: "C1" }),
-  v("sale", 8000, { partyKind: "debtor", partyId: "C1" }),
-  v("receipt", 3000, { partyKind: "debtor", partyId: "C1", account: "ACC-h" }),
-];
-const dl = partyLedger("debtor", "C1", deb);
-assert.equal(dl.opening, 1000);
-assert.equal(dl.charges, 8000);
-assert.equal(dl.settled, 3000);
-assert.equal(dl.balance, 6000);
-assert.equal(dl.rows[dl.rows.length - 1].running, 6000);
-
-// Creditor: purchase 11800 − payment 4000 = 7800 payable
-const cred = [
-  v("purchase", 11800, { partyKind: "creditor", partyId: "V1" }),
-  v("payment", 4000, { partyKind: "creditor", partyId: "V1", account: "ACC-h" }),
-];
-const cl = partyLedger("creditor", "V1", cred);
-assert.equal(cl.charges, 11800);
-assert.equal(cl.settled, 4000);
-assert.equal(cl.balance, 7800);
-
-// Bank book for ACC-h: opening 50000 −4000 (pay) +3000 (recv) −2000 (contra out) = 47000
-const bank = [
-  v("payment", 4000, { account: "ACC-h" }),
-  v("receipt", 3000, { account: "ACC-h" }),
-  v("contra", 2000, { account: "ACC-c", fromAccount: "ACC-h" }),
-];
-assert.equal(accountBook("ACC-h", bank, 50000).closing, 47000);
-// the contra lands +2000 in ACC-c
-assert.equal(accountBook("ACC-c", bank, 0).closing, 2000);
-
-// date conversions round-trip and sort correctly
-assert.equal(dmyToIso("05-03-26"), "2026-03-05");
-assert.equal(isoToDmy("2026-03-05"), "05-03-26");
-assert.ok(dmyToSort("01-02-26") < dmyToSort("01-03-26"));
-assert.ok(dmyToSort("31-12-25") < dmyToSort("01-01-26"));
-
-console.log("ledger.check: all assertions passed ✓");
+if (typeof process !== "undefined" && process.argv?.[1]?.includes("ledger.check")) {
+  console.log("ledger.check: " + demo() + " assertions passed ✓");
+}

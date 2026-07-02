@@ -71,6 +71,8 @@ export interface AppFeatures {
   acceptPayment: boolean;
   /** single-owner lock: no user picker, just the Afsar password (official). */
   soloLogin?: boolean;
+  /** Tally-style double-entry ledger section (official). */
+  ledger?: boolean;
 }
 
 export interface Customer {
@@ -103,10 +105,9 @@ export type StoreName =
   | "stock"
   | "expenses"
   | "meta"
-  | "vendors"
-  | "accounts"
-  | "ledger"
-  | "sessions";
+  | "sessions"
+  | "ledgers"
+  | "vouchers";
 
 // ---- app navigation (each app supplies its own tab set) ----
 export interface Tab {
@@ -187,57 +188,61 @@ export interface AuthSession {
 
 export type SyncState = "local" | "queue" | "on" | "off";
 
-// ---- ledger (Tally-style debtors / creditors / bank) ----
+// ---- ledger (Tally-style double-entry general ledger) ----
 
-/** Creditor master. Debtors reuse the existing Customer store. */
-export interface Vendor {
-  id: string;
+/** Tally primary groups covering the chart of accounts. */
+export type LedgerGroup =
+  | "Sundry Debtors"
+  | "Sundry Creditors"
+  | "Bank Accounts"
+  | "Bank OD"
+  | "Cash-in-hand"
+  | "Duties & Taxes"
+  | "Loans (Liability)"
+  | "Loans & Advances (Asset)"
+  | "Capital Account"
+  | "Fixed Assets"
+  | "Current Assets"
+  | "Current Liabilities"
+  | "Sales Accounts"
+  | "Purchase Accounts"
+  | "Direct Expenses"
+  | "Indirect Expenses"
+  | "Indirect Incomes";
+
+/** A ledger account — party, bank, tax head, asset, income/expense, capital… */
+export interface Ledger {
+  id: string; // "L-" + uid
   name: string;
+  group: LedgerGroup;
+  /** opening balance, signed: +Dr / −Cr */
+  opening: number;
+  gstin: string;
   phone: string;
   address: string;
-  gstin: string;
   notes: string;
   createdAt: string;
   updatedAt: string;
   synced: boolean;
 }
 
-/** A cash/bank account the user defines (Cash, UPI, HDFC, …). */
-export interface Account {
-  id: string;
-  name: string;
-  /** balance before they started recording — seeds the bank book */
-  opening: number;
-  createdAt: string;
-  updatedAt: string;
-  synced: boolean;
+export type VoucherType = "Receipt" | "Payment" | "Sales" | "Purchase" | "Journal" | "Contra";
+
+/** One posting line of a voucher — exactly one of dr/cr is non-zero. */
+export interface VLeg {
+  ledgerId: string;
+  dr: number;
+  cr: number;
 }
 
-export type VoucherKind = "opening" | "sale" | "purchase" | "receipt" | "payment" | "contra";
-
-export interface LedgerEntry {
-  id: string;
-  /** dd-mm-yy, same format as documents */
-  date: string;
-  kind: VoucherKind;
-  /** "" for contra */
-  partyKind: "debtor" | "creditor" | "";
-  /** customer id (debtor) / vendor id (creditor) / "" (contra) */
-  partyId: string;
-  /** TOTAL incl GST — this is what moves the party balance */
-  amount: number;
-  /** sale/purchase pre-GST base; equals amount for other kinds */
-  taxable: number;
-  /** sale/purchase GST % (0/5/12/18/28); 0 for other kinds */
-  gstRate: number;
-  /** account money lands in / leaves; contra = destination account */
-  account: string;
-  /** contra only: source account */
-  fromAccount: string;
-  /** bill / cheque / UTR */
-  ref: string;
-  note: string;
-  /** local user id who entered it */
+/** A double-entry voucher — balanced legs (Σdr === Σcr). */
+export interface Voucher {
+  id: string; // "V-" + uid
+  no: number; // per-type running number
+  date: string; // dd-mm-yy
+  type: VoucherType;
+  legs: VLeg[];
+  narration: string;
   enteredBy: string;
   createdAt: string;
   updatedAt: string;

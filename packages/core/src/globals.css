@@ -738,3 +738,94 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .inv-cols,.inv-bank,.inv-terms{font-size:11px}
   .inv-sign{padding:30px 22px 16px}
 }
+
+/* ======================================================================
+   TALLY CLONE — Tally structure & keyboard UX in the WOOD palette.
+   Full-bleed screen · warm timber tones · ochre header/button bars.
+   ====================================================================== */
+.tally-app{
+  --t-desk:#241B12; --t-cream:#FCFAF4; --t-cream2:#F1E9D6; --t-cream3:#EBE0C9;
+  --t-line:#D6C8AE; --t-head:#946317; --t-ink:#241B12; --t-sel:#946317;
+  --t-gerua-a:#C68F31; --t-gerua-b:#946317; --t-gerua-ink:#3a2708;
+  --t-dr:#566B3B; --t-cr:#A53D29;
+  font-family:var(--disp); color:var(--t-ink);
+  background:var(--t-desk);
+  overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.22);
+  display:flex; flex-direction:column;
+  /* break out of the centered .wrap to fill the viewport */
+  width:100vw; margin-left:calc(50% - 50vw); margin-top:-10px; border-radius:0;
+  min-height:calc(100dvh - 128px);
+}
+.tally-strip{background:linear-gradient(#3a2a19,#241B12); color:#E7D6B6; font-size:12px; font-weight:700;
+  letter-spacing:.04em; padding:6px 16px; display:flex; justify-content:space-between; border-bottom:1px solid #14100a}
+.tally-title{display:flex; align-items:stretch; background:var(--t-cream2); border-bottom:2px solid var(--t-line); font-size:13px}
+.tally-title .tl-left{background:var(--t-head); color:#FBEFCF; font-weight:700; padding:7px 16px; letter-spacing:.02em}
+.tally-title .tl-mid{flex:1; text-align:center; color:var(--t-head); font-weight:800; padding:7px 10px; letter-spacing:.06em; text-transform:uppercase}
+.tally-title .tl-right{padding:7px 16px; color:#5c4a1f; border-left:1px solid var(--t-line); white-space:nowrap}
+.tally-work{display:flex; flex:1; min-height:0}
+.tally-report{flex:1; background:var(--t-cream); border-right:2px solid var(--t-line); display:flex; flex-direction:column; min-width:0}
+.tr-head{background:var(--t-head); color:#fff; font-weight:700; letter-spacing:.05em; padding:8px 16px;
+  display:flex; justify-content:space-between; align-items:baseline; font-size:15px}
+.tr-head small{color:#F3E4C2; font-weight:400}
+.tr-body{padding:14px 16px; overflow:auto; flex:1}
+/* right ochre button bar (Tally key hints) */
+.tally-btnbar{width:180px; flex:0 0 180px; background:linear-gradient(var(--t-gerua-a),var(--t-gerua-b));
+  padding:8px; display:flex; flex-direction:column; gap:6px; overflow:auto}
+.t-btn{display:block; width:100%; text-align:left; background:rgba(255,255,255,.16); color:var(--t-gerua-ink);
+  border:1px solid rgba(255,255,255,.4); border-radius:5px; padding:7px 10px; font:inherit; font-size:12px; font-weight:700;
+  cursor:pointer; letter-spacing:.01em}
+.t-btn:hover{background:rgba(255,255,255,.36)}
+.t-btn .k{color:#6a1f0c; text-decoration:underline; margin-right:6px; font-family:var(--mono)}
+.t-btn.on{background:#fff; border-color:#fff}
+.t-btn.sp{margin-top:auto}
+.tally-foot{background:linear-gradient(#3a2a19,#241B12); color:#E7D6B6; font-size:12px; padding:6px 16px;
+  display:flex; justify-content:space-between; border-top:1px solid #14100a}
+/* Gateway of Tally menu */
+.t-gateway{max-width:480px; margin:34px auto; border:1.5px solid var(--t-line); background:var(--t-cream); box-shadow:0 4px 0 rgba(0,0,0,.06)}
+.t-gw-title{background:var(--t-head); color:#FBEFCF; text-align:center; font-weight:700; letter-spacing:.06em; padding:9px; font-size:15px}
+.t-gw-sec{color:#8a6f2c; font-size:11px; letter-spacing:.12em; text-transform:uppercase; padding:12px 20px 3px}
+.t-menu-item{display:flex; justify-content:space-between; align-items:center; padding:8px 20px; cursor:pointer; color:var(--t-ink); font-size:16px}
+.t-menu-item .k{color:var(--t-sel); font-weight:800; font-family:var(--mono)}
+.t-menu-item:hover{background:var(--t-sel); color:#fff}
+.t-menu-item:hover .k{color:#FBEFCF}
+.t-menu-item small{color:#8a7b45}
+.t-menu-item:hover small{color:#F3E4C2}
+/* Tally report tables */
+.t-table{width:100%; border-collapse:collapse; font-size:14px; min-width:600px}
+.t-table th{background:var(--t-cream2); color:var(--t-head); text-align:left; font-weight:700; padding:8px 14px;
+  border-bottom:1.5px solid var(--t-line); border-top:1px solid var(--t-line); white-space:nowrap}
+.t-table td{padding:7px 14px; border-bottom:1px dotted #D8CBAE; vertical-align:top}
+.t-table .amt{text-align:right; white-space:nowrap; font-family:var(--mono); font-variant-numeric:tabular-nums}
+.t-table td.dr{color:var(--t-dr)} .t-table td.cr{color:var(--t-cr)}
+.t-table td.vch{color:#6a5a2f; font-size:12.5px; white-space:nowrap; font-family:var(--mono)}
+.t-table tbody tr.click{cursor:pointer}
+.t-table tbody tr.click:hover td{background:rgba(148,99,23,.10)}
+.t-table tr.op td,.t-table tr.cl td{background:var(--t-cream3); color:var(--t-head)}
+.t-table tr.tot td{border-top:1.5px solid var(--t-line); border-bottom:2.5px double var(--t-line); font-weight:700; background:var(--t-cream3)}
+.t-table tr.grp td{background:var(--t-head); color:#fff; font-weight:700; letter-spacing:.03em}
+.t-empty{text-align:center; color:#8a7b45; padding:48px 12px}
+/* Tally voucher-entry screen */
+.t-voucher{max-width:760px; margin:10px auto; background:var(--t-cream); border:1.5px solid var(--t-line)}
+.t-vtypes{display:flex; flex-wrap:wrap; gap:3px; background:var(--t-cream2); padding:6px; border-bottom:1.5px solid var(--t-line)}
+.t-vtype{font:inherit; font-size:12.5px; font-weight:700; padding:6px 13px; border:1px solid var(--t-line); background:#fff; color:var(--t-head); cursor:pointer; border-radius:4px}
+.t-vtype:hover{background:#FBF2DC}
+.t-vtype.on{background:var(--t-sel); border-color:var(--t-sel); color:#fff}
+.t-vbody{padding:14px 18px}
+.t-vrow{display:flex; align-items:center; gap:12px; padding:6px 0; border-bottom:1px dotted #D8CBAE}
+.t-vrow label{flex:0 0 160px; color:var(--t-head); font-weight:700; font-size:14px}
+.t-vrow .drcr{flex:0 0 34px; font-weight:800; font-family:var(--mono)}
+.t-vrow .drcr.dr{color:var(--t-dr)} .t-vrow .drcr.cr{color:var(--t-cr)}
+.t-vrow input,.t-vrow select{flex:1; font:inherit; font-size:14px; padding:7px 9px; border:1px solid var(--t-line); background:#fff; color:var(--t-ink); min-width:0}
+.t-vrow input:focus,.t-vrow select:focus{outline:none; border-color:var(--t-sel); box-shadow:var(--ring)}
+.t-vgst{padding:10px 18px; color:#6a5a2f; font-size:14px; background:var(--t-cream3); border-top:1px solid var(--t-line); font-family:var(--mono)}
+.t-vgst b{color:var(--t-head)}
+.t-vsave{margin:14px 18px; background:var(--t-head); color:#fff; border:0; padding:10px 26px; font:inherit; font-weight:700; letter-spacing:.03em; cursor:pointer; border-radius:5px}
+.t-vsave:hover{background:var(--ochre-deep)}
+@media(max-width:760px){
+  .tally-app{margin-top:-6px; min-height:calc(100dvh - 118px)}
+  .tally-btnbar{width:128px; flex-basis:128px; padding:6px}
+  .t-btn{font-size:11px; padding:6px 7px}
+  .t-vrow{flex-wrap:wrap} .t-vrow label{flex-basis:100%}
+  .tally-title{font-size:12px}
+  .tally-title .tl-left,.tally-title .tl-right{padding:6px 10px}
+}

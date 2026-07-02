@@ -41,10 +41,9 @@ export const TABLE = {
   invoices: "invoices",
   stock: "stock",
   expenses: "expenses",
-  vendors: "vendors",
-  accounts: "accounts",
-  ledger: "ledger",
   sessions: "sessions",
+  ledgers: "ledgers",
+  vouchers: "vouchers",
 } as const;
 
 // Per-app cloud namespace so the two apps never share tables (e.g. "sf_" for Safa).

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import type { AppFeatures, StoreName, Tab } from "@/lib/types";
-import { setFeatures } from "@/lib/features";
+import { getFeatures, setFeatures } from "@/lib/features";
 import { allRec, delRec, metaGet, openDB, put, setDbSuffix } from "@/lib/db";
 import { nowIso } from "@/lib/calc";
 import {
@@ -29,7 +29,7 @@ import {
   type BrandMode,
 } from "./app-store";
 import { refreshAuthIdentity } from "./session";
-import { seedAccounts } from "@/lib/ledger";
+import { seedLedger } from "@/lib/ledger";
 import { startRealtime, stopRealtime } from "@/lib/realtime";
 import { initPwa } from "@/lib/pwa";
 import { loadBrand } from "@/lib/brand";
@@ -109,7 +109,7 @@ export default function AppProvider({
     (async function boot() {
       await openDB();
       await seedStock();
-      await seedAccounts();
+      if (getFeatures().ledger) await seedLedger("system");
       await loadBrand(defaultBrand);
       await loadLocalUser();
       await loadNotifyState();

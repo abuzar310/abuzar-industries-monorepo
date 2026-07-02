@@ -132,7 +132,7 @@ export default function SettingsView() {
     });
     if (!ok) return;
     toast("Erasing…");
-    await cloudClear(["quotations", "invoices", "customers", "stock", "expenses", "vendors", "accounts", "ledger", "sessions"]);
+    await cloudClear(["quotations", "invoices", "customers", "stock", "expenses", "sessions", "ledgers", "vouchers"]);
     for (const s of STORES) await clearStore(s);
     toast("All data erased");
     location.reload();

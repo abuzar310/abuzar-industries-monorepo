@@ -4,7 +4,7 @@
 // gates what changes are received.
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 
-const TABLES = ["customers", "quotations", "invoices", "stock", "expenses", "vendors", "accounts", "ledger", "sessions"];
+const TABLES = ["customers", "quotations", "invoices", "stock", "expenses", "sessions", "ledgers", "vouchers"];
 
 let client: SupabaseClient | null = null;
 let channel: RealtimeChannel | null = null;
