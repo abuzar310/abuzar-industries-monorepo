@@ -750,11 +750,11 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   --t-dr:#566B3B; --t-cr:#A53D29;
   font-family:var(--disp); color:var(--t-ink);
   background:var(--t-desk);
-  overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.22);
+  overflow:hidden; box-shadow:0 10px 34px rgba(0,0,0,.20); border:1px solid rgba(0,0,0,.12);
   display:flex; flex-direction:column;
-  /* break out of the centered .wrap to fill the viewport */
-  width:100vw; margin-left:calc(50% - 50vw); margin-top:-10px; border-radius:0;
-  min-height:calc(100dvh - 128px);
+  /* near-full-bleed, but leave a clean margin so the desk shows around it */
+  width:calc(100vw - 48px); margin:2px 0 30px; margin-left:calc(50% - 50vw + 24px);
+  border-radius:14px; min-height:calc(100dvh - 168px);
 }
 .tally-strip{background:linear-gradient(#3a2a19,#241B12); color:#E7D6B6; font-size:12px; font-weight:700;
   letter-spacing:.04em; padding:6px 16px; display:flex; justify-content:space-between; border-bottom:1px solid #14100a}
@@ -822,7 +822,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .t-vsave{margin:14px 18px; background:var(--t-head); color:#fff; border:0; padding:10px 26px; font:inherit; font-weight:700; letter-spacing:.03em; cursor:pointer; border-radius:5px}
 .t-vsave:hover{background:var(--ochre-deep)}
 @media(max-width:760px){
-  .tally-app{margin-top:-6px; min-height:calc(100dvh - 118px)}
+  .tally-app{width:calc(100vw - 20px); margin-left:calc(50% - 50vw + 10px); border-radius:10px; min-height:calc(100dvh - 130px)}
   .tally-btnbar{width:128px; flex-basis:128px; padding:6px}
   .t-btn{font-size:11px; padding:6px 7px}
   .t-vrow{flex-wrap:wrap} .t-vrow label{flex-basis:100%}
