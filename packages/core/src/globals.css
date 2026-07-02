@@ -282,6 +282,9 @@ body{
 #sheet.sq .co-name{font-size:26px}
 #sheet.sq .meta .f,#sheet.sq .cust-block .f{padding:9px 20px}
 #sheet.sq #sections{margin-top:9px}
+/* quotation: sub-total + grand total always sit at the bottom of the page */
+#sheet.sq{display:flex; flex-direction:column; aspect-ratio:210/297}
+#sheet.sq .totals{margin-top:auto}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);
@@ -325,12 +328,10 @@ body{
 #sheet.inv .inv-foot{margin-top:auto}
 /* one wood box below another on the invoice (never side by side) */
 #sheet.inv #sections{grid-template-columns:1fr}
-/* invoice box is full width, but value inputs stay regular-width on the left;
-   a trailing spacer keeps the row line running clean to the right edge */
-#sheet.inv .thead, #sheet.inv .row{grid-template-columns:26px 72px 72px 72px 72px 62px 1fr 22px}
-#sheet.inv .thead > span:last-child, #sheet.inv .row > .x-row{grid-column:8}
-#sheet.inv .thead.dcols, #sheet.inv .row.dcols{grid-template-columns:26px 110px 1fr 22px}
-#sheet.inv .thead.dcols > span:last-child, #sheet.inv .row.dcols > .x-row{grid-column:4}
+/* invoice box is full width, but the value inputs stay regular-width, grouped on the
+   left; a trailing spacer at the end keeps the row line running clean to the right edge */
+#sheet.inv .thead, #sheet.inv .row{grid-template-columns:26px 72px 72px 72px 72px 62px 22px 1fr}
+#sheet.inv .thead.dcols, #sheet.inv .row.dcols{grid-template-columns:26px 110px 22px 1fr}
 /* compact totals so the tax box stays short */
 #sheet.inv .totals{border-radius:var(--radius-md)}
 #sheet.inv .t-row{padding:6px 22px; font-size:13px}

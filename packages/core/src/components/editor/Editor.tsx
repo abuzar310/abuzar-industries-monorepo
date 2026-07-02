@@ -515,11 +515,6 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             <span>Tax Invoice</span>
           </div>
         )}
-        {feat.simpleQuote && (
-          <div className="inv-tag-top">
-            <span>Wood Quotation</span>
-          </div>
-        )}
         <div className={"mast" + (isInv && !isBuy ? " mast-c" : "")}>
           <div className="mast-top">
             <div className="brand-row">
@@ -536,7 +531,9 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                   ) : isInv ? (
                     brand.name
                   ) : feat.simpleQuote ? (
-                    brand.name
+                    <>
+                      {brand.name} <span className="kindtag">Wood Quotation</span>
+                    </>
                   ) : (
                     <>
                       {brand.name} <span className="kindtag">Quotation</span>
