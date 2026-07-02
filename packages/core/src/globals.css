@@ -318,8 +318,9 @@ body{
 /* invoice sheet fills a full A4 page (screen preview + PDF).
    The totals + footer are pinned to the bottom; empty space grows above the totals. */
 #sheet.inv{position:relative; display:flex; flex-direction:column; aspect-ratio:210/297}
-#sheet.inv .totals{margin-top:auto}
-#sheet.inv .inv-foot{margin-top:14px}
+/* totals flow right under the items (no stretch); only the footer sits at the page bottom */
+#sheet.inv .totals{margin-top:16px}
+#sheet.inv .inv-foot{margin-top:auto}
 /* one wood box below another on the invoice (never side by side) */
 #sheet.inv #sections{grid-template-columns:1fr}
 /* compact totals so the tax box stays short */
@@ -787,6 +788,17 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   #sheet.inv .inv-bank, #sheet.inv .inv-terms{padding:8px 14px; line-height:1.45}
   #sheet.inv .inv-terms li{margin:1px 0}
   #sheet.inv .inv-thanks{padding:6px}
+  /* compact wood boxes + footer calc so two stacked boxes fit one page at full width */
+  #sheet.inv .sec-head{padding:4px 10px}
+  #sheet.inv .thead, #sheet.inv .row{padding:2px 9px}
+  #sheet.inv .sec-foot{padding:4px 12px}
+  #sheet.inv .sec-calc{gap:3px}
+  #sheet.inv .sc-total{font-size:9px}
+  #sheet.inv .sc-total b{font-size:13px}
+  #sheet.inv .sc-row{gap:14px; padding-top:3px}
+  #sheet.inv .sc i{font-size:8px}
+  #sheet.inv .sc b{font-size:12px}
+  #sheet.inv .sc input{font-size:12px; width:64px}
 }
 
 /* ======================================================================
