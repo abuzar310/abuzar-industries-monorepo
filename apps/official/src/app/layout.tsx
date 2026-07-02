@@ -19,7 +19,7 @@ export const viewport: Viewport = { themeColor: "#5A3D24" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${serif.variable} ${ui.variable} ${mono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${serif.variable} ${ui.variable} ${mono.variable}`}>
       <body>
         <AppProvider tabs={TABS} features={FEATURES} defaultBrand="real" cloudPrefix={CLOUD_PREFIX}>{children}</AppProvider>
       </body>
