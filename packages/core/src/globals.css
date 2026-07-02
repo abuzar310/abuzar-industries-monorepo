@@ -239,6 +239,15 @@ body{
 .add-row:active{transform:scale(.97)}
 .sec-tot{font-family:var(--mono); font-size:13px; color:var(--ink-soft); text-align:right; font-variant-numeric:tabular-nums}
 .sec-tot b{color:var(--ink); font-size:15px; font-weight:600}
+/* clean calc row in the footer: Total | Rate | Amount */
+.sec-calc{display:flex; align-items:flex-end; gap:18px; margin-left:auto}
+.sc{display:flex; flex-direction:column; gap:2px; text-align:right}
+.sc i{font-style:normal; font-family:var(--disp); font-size:9px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-faint); font-weight:700}
+.sc b{font-family:var(--mono); font-size:15px; color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums}
+.sc.amt b{font-size:16px; color:var(--walnut)}
+.sc input{width:74px; text-align:right; font-family:var(--mono); font-size:14px; border:none;
+  border-bottom:1.5px solid var(--line-2); background:transparent; color:var(--ink); padding:1px 2px}
+.sc input:focus{outline:none; border-color:var(--brass)}
 .formula{padding:7px 13px 10px; font-family:var(--mono); font-size:10.5px; color:var(--ink-faint); border-top:1px solid var(--line)}
 .formula b{color:var(--ochre-deep)}
 /* calc-mode toggle (By size ⇄ Total CFT ⇄ Running ft), in the dark section header */
@@ -308,14 +317,27 @@ body{
 #sheet.inv{position:relative; display:flex; flex-direction:column; aspect-ratio:210/297}
 #sheet.inv .totals{margin-top:auto}
 #sheet.inv .inv-foot{margin-top:14px}
+/* one wood box below another on the invoice (never side by side) */
+#sheet.inv #sections{grid-template-columns:1fr}
 /* compact totals so the tax box stays short */
 #sheet.inv .totals{border-radius:var(--radius-md)}
 #sheet.inv .t-row{padding:6px 22px; font-size:13px}
 #sheet.inv .t-row .lab{font-size:11px}
-#sheet.inv .grand{padding:12px 22px}
+/* grand total: slimmer row + a lighter (still dark) brown */
+#sheet.inv .grand{padding:9px 22px; background:linear-gradient(180deg,#5b4227,#42301c) !important}
 #sheet.inv .grand .lab{font-size:12px}
-#sheet.inv .grand .val{font-size:26px}
+#sheet.inv .grand .val{font-size:24px}
 #sheet.inv .words{padding:8px 22px; font-size:12.5px}
+/* centered TAX-INVOICE masthead: tag above the box, big centered ALL-CAPS name, address below */
+.inv-tag-top{text-align:center; margin-bottom:8px}
+.inv-tag-top span{display:inline-block; font-family:var(--disp); text-transform:uppercase; letter-spacing:.22em;
+  font-weight:800; font-size:13px; color:var(--ochre-deep); border:1.5px solid var(--ochre-deep); border-radius:6px; padding:5px 18px}
+.mast-c .mast-top{justify-content:center}
+.mast-c .brand-row{flex-direction:column; align-items:center; text-align:center; gap:12px; flex:0 1 auto}
+.mast-c .brand{text-align:center; min-width:0}
+.mast-c .logo{height:128px}
+.mast-c .co-name{justify-content:center; text-transform:uppercase; letter-spacing:.01em; font-size:50px}
+.mast-c .co-meta{text-align:center; margin-top:8px}
 .wmark{position:absolute; inset:0; z-index:0; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden;
   -webkit-print-color-adjust:exact; print-color-adjust:exact}
 .wmark span{font-family:var(--serif); font-weight:600; font-size:78px; letter-spacing:.02em; color:var(--walnut); opacity:.055;
@@ -750,11 +772,12 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .inv-cols,.inv-bank,.inv-terms{font-size:11px}
   .inv-sign{padding:30px 22px 16px}
   /* invoice masthead: big logo + name, bold TAX INVOICE tag, address below */
-  #sheet.inv .mast-top{padding:14px 20px}
-  #sheet.inv .logo{height:74px}
-  #sheet.inv .co-name{font-size:34px; font-weight:700}
+  #sheet.inv .mast-top{padding:16px 20px}
+  #sheet.inv .logo{height:3.4cm}
+  #sheet.inv .co-name{font-size:40px; font-weight:700}
   #sheet.inv .kindtag{font-size:11px; padding:3px 10px; font-weight:800; border-width:1.5px}
   #sheet.inv .co-meta{font-size:11px}
+  #sheet.inv .inv-tag-top span{font-size:12px; padding:4px 16px}
   #sheet.inv .inv-sign{padding:18px 22px 10px}
 }
 

@@ -1,17 +1,16 @@
 "use client";
-import { cftOf, directOf, inr, rftOf } from "@/lib/calc";
+import { cftOf, directOf, inr, pcsOf, rftOf } from "@/lib/calc";
 import type { Section } from "@/lib/types";
 
 type CellKey = "l" | "w" | "t" | "pcs" | "cft";
-
-type Mode = "cft" | "direct" | "rft";
+type Mode = "cft" | "direct" | "rft" | "pcs";
 
 interface Props {
   sec: Section;
   si: number;
   cft: number;
   amt: number;
-  modes: Mode[]; // which entry modes to offer (official invoice: by-size + total-CFT)
+  modes: Mode[]; // which entry modes to offer
   onName: (si: number, v: string) => void;
   onRate: (si: number, v: string) => void;
   onSetMode: (si: number, mode: Mode) => void;
@@ -22,16 +21,22 @@ interface Props {
 }
 
 const DIM: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
-const MODE_LABEL: Record<Mode, string> = { cft: "By size", direct: "Total CFT", rft: "Running ft" };
+const MODE_LABEL: Record<Mode, string> = { cft: "By size", direct: "Total CFT", rft: "Running ft", pcs: "Per price" };
 
 export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, onSetMode, onCell, onAddRow, onDelRow, onDelSec }: Props) {
-  const mode = sec.calcMode === "rft" ? "rft" : sec.calcMode === "direct" ? "direct" : "cft";
+  const mode: Mode =
+    sec.calcMode === "rft" ? "rft" : sec.calcMode === "direct" ? "direct" : sec.calcMode === "pcs" ? "pcs" : "cft";
   const direct = mode === "direct";
   const rft = mode === "rft";
-  const unit = rft ? "FT" : "CFT";
-  const measure = (r: Section["rows"][number]) => (rft ? rftOf(r) : direct ? directOf(r) : cftOf(r));
+  const pcs = mode === "pcs";
+  const single = direct || pcs; // one-input-per-line modes
+  const singleKey: CellKey = direct ? "cft" : "pcs";
+  const unit = rft ? "FT" : pcs ? "Pcs" : "CFT";
+  const measure = (r: Section["rows"][number]) => (rft ? rftOf(r) : pcs ? pcsOf(r) : direct ? directOf(r) : cftOf(r));
+  const totalText = pcs ? String(Math.round(cft)) : cft.toFixed(2);
+
   return (
-    <div className={"section" + (direct ? " direct" : "")}>
+    <div className={"section" + (single ? " direct" : "")}>
       <div className="sec-head">
         <span className="grain">
           <i />
@@ -51,12 +56,13 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
         </button>
       </div>
 
-      {direct ? (
+      {single ? (
         <>
           <div className="thead dcols">
             <span>#</span>
             <span>
-              CFT<i className="unit">qty</i>
+              {unit}
+              <i className="unit">qty</i>
             </span>
             <span />
           </div>
@@ -69,12 +75,12 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
                   type="text"
                   inputMode="decimal"
                   autoComplete="off"
-                  aria-label="cft"
+                  aria-label={singleKey}
                   data-si={si}
                   data-ri={ri}
-                  data-k="cft"
-                  value={r.cft === "" || r.cft == null ? "" : (r.cft as string | number)}
-                  onChange={(e) => onCell(si, ri, "cft", e.target.value)}
+                  data-k={singleKey}
+                  value={r[singleKey] === "" || r[singleKey] == null ? "" : (r[singleKey] as string | number)}
+                  onChange={(e) => onCell(si, ri, singleKey, e.target.value)}
                 />
                 <button className="x-row" title="Remove line" onClick={() => onDelRow(si, ri)}>
                   ×
@@ -135,29 +141,20 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
         <button className="add-row" onClick={() => onAddRow(si)}>
           + Add line
         </button>
-        <span className="rate-box">
-          Rate ₹{" "}
-          <input type="number" inputMode="decimal" value={sec.rate} aria-label="Rate" onChange={(e) => onRate(si, e.target.value)} />{" "}
-          / {unit}
-        </span>
-        <span className="sec-tot">
-          {cft.toFixed(2)} {unit} &nbsp;·&nbsp; <b>₹ {inr(amt)}</b>
-        </span>
-      </div>
-      <div className="formula">
-        {direct ? (
-          <>
-            amount = CFT × <b>₹{sec.rate || 0}</b>
-          </>
-        ) : rft ? (
-          <>
-            {unit} = L × Pcs &nbsp;·&nbsp; amount = {unit} × <b>₹{sec.rate || 0}</b>
-          </>
-        ) : (
-          <>
-            CFT = (L × W × T × Pcs) ÷ 144 &nbsp;·&nbsp; amount = CFT × <b>₹{sec.rate || 0}</b>
-          </>
-        )}
+        <div className="sec-calc">
+          <span className="sc">
+            <i>Total {unit}</i>
+            <b>{totalText}</b>
+          </span>
+          <span className="sc">
+            <i>Rate ₹/{unit}</i>
+            <input type="number" inputMode="decimal" value={sec.rate} aria-label="Rate" onChange={(e) => onRate(si, e.target.value)} />
+          </span>
+          <span className="sc amt">
+            <i>Amount</i>
+            <b>₹ {inr(amt)}</b>
+          </span>
+        </div>
       </div>
     </div>
   );

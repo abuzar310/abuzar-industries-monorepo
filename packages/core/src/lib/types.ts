@@ -19,7 +19,7 @@ export interface Section {
   rows: Row[];
   /** "cft" (L×W×T×Pcs÷144 × rate), "direct" (type CFT directly × rate),
    *  or "rft" (running feet Σ(L×Pcs) × rate). Default cft. */
-  calcMode?: "cft" | "direct" | "rft";
+  calcMode?: "cft" | "direct" | "rft" | "pcs";
 }
 
 export interface Doc {

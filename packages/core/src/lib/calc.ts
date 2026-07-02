@@ -44,12 +44,15 @@ export interface DocTotals {
 export const rftOf = (r: Row) => (+r.l || 0) * (+r.pcs || 0);
 /** Directly-entered CFT for one line. */
 export const directOf = (r: Row) => +(r.cft ?? 0) || 0;
+/** Per-piece pricing: just the piece count (amount = Pcs × rate). */
+export const pcsOf = (r: Row) => +r.pcs || 0;
 
 export function computeDoc(d: Doc): DocTotals {
   let sub = 0;
   const secCft: number[] = [];
   d.sections.forEach((sec) => {
-    const measureOf = sec.calcMode === "rft" ? rftOf : sec.calcMode === "direct" ? directOf : cftOf;
+    const measureOf =
+      sec.calcMode === "rft" ? rftOf : sec.calcMode === "direct" ? directOf : sec.calcMode === "pcs" ? pcsOf : cftOf;
     let m = 0;
     sec.rows.forEach((r) => (m += measureOf(r)));
     secCft.push(m);

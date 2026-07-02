@@ -36,6 +36,10 @@ const STATUS_BADGE: Record<string, string> = {
   "Converted to Invoice": "b-conv",
 };
 
+// Default per-CFT rates for common woods (auto-filled when a wood is chosen and the rate is still a default).
+const WOOD_PRICES: Record<string, number> = { teak: 4000, "white teak": 2600 };
+const DEFAULT_RATES = new Set(Object.values(WOOD_PRICES));
+
 export default function Editor({ initialDoc, action }: { initialDoc: Doc; action?: string }) {
   const router = useRouter();
   const [doc, setDoc] = useState<Doc>(initialDoc);
@@ -51,8 +55,10 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const feat = getFeatures();
   const isInv = doc.kind === "invoice";
   const isBuy = isInv && doc.tradeType === "buy"; // purchase invoice
-  // entry modes offered per section: invoices → by-size / total-CFT; quotes also allow running-ft
-  const secModes: ("cft" | "direct" | "rft")[] = isInv ? ["cft", "direct"] : ["cft", "direct", "rft"];
+  // entry modes offered per section per app:
+  //  invoice → by-size + total-CFT; unofficial quote → by-size + per-price; official quote → by-size + total-CFT + running-ft
+  const secModes: ("cft" | "direct" | "rft" | "pcs")[] =
+    isInv ? ["cft", "direct"] : feat.simpleQuote ? ["cft", "pcs"] : ["cft", "direct", "rft"];
   const totals = useMemo(() => computeDoc(doc), [doc]);
   const totalCft = totals.secCft.reduce((s, c) => s + c, 0);
   // accept-payment: final = round-figure override or the computed grand; balance clears over time
@@ -107,9 +113,16 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   // ---- field handlers ----
   const setField = (k: keyof Doc, v: string) =>
     update((d) => ((d as unknown as Record<string, unknown>)[k] = v));
-  const onName = (si: number, v: string) => update((d) => (d.sections[si].name = v));
+  const onName = (si: number, v: string) =>
+    update((d) => {
+      d.sections[si].name = v;
+      // auto-fill the default rate for known woods (only if the rate is empty or still a default)
+      const price = WOOD_PRICES[v.trim().toLowerCase()];
+      const cur = +d.sections[si].rate || 0;
+      if (price && (cur === 0 || DEFAULT_RATES.has(cur))) d.sections[si].rate = String(price);
+    });
   const onRate = (si: number, v: string) => update((d) => (d.sections[si].rate = v));
-  const onSetMode = (si: number, mode: "cft" | "direct" | "rft") =>
+  const onSetMode = (si: number, mode: "cft" | "direct" | "rft" | "pcs") =>
     update((d) => (d.sections[si].calcMode = mode));
   const onCell = (si: number, ri: number, k: "l" | "w" | "t" | "pcs" | "cft", v: string) => {
     const clean = v.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
@@ -124,7 +137,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const onDelSec = (si: number) => update((d) => d.sections.length > 1 && d.sections.splice(si, 1));
   const onAddSec = () =>
     update((d) =>
-      d.sections.push({ name: "White Teak", rate: 0, rows: [{ l: "", w: "", t: "", pcs: "" }] }),
+      d.sections.push({ name: "White Teak", rate: WOOD_PRICES["white teak"], rows: [{ l: "", w: "", t: "", pcs: "" }] }),
     );
 
   // ---- arrow-key grid navigation (identical behaviour to legacy) ----
@@ -497,7 +510,12 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             <span>{brand.name}</span>
           </div>
         )}
-        <div className="mast">
+        {isInv && !isBuy && (
+          <div className="inv-tag-top">
+            <span>Tax Invoice</span>
+          </div>
+        )}
+        <div className={"mast" + (isInv && !isBuy ? " mast-c" : "")}>
           <div className="mast-top">
             <div className="brand-row">
               {!isBuy && brand.logo && (
@@ -510,9 +528,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                     <>
                       Purchase <span className="kindtag">Invoice</span>
                     </>
+                  ) : isInv ? (
+                    brand.name
                   ) : (
                     <>
-                      {brand.name} <span className="kindtag">{isInv ? "Tax Invoice" : "Quotation"}</span>
+                      {brand.name} <span className="kindtag">Quotation</span>
                     </>
                   )}
                 </div>
