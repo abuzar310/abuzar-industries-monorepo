@@ -47,7 +47,7 @@ export const REAL_BRAND: Brand = {
 };
 
 export const DEMO_BRAND: Brand = {
-  name: "Cut Size Wood",
+  name: "Cut Size",
   tagline: "",
   addr: "",
   phone: "",
