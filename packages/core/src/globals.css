@@ -326,10 +326,10 @@ body{
 #sheet.inv .totals{border-radius:var(--radius-md)}
 #sheet.inv .t-row{padding:6px 22px; font-size:13px}
 #sheet.inv .t-row .lab{font-size:11px}
-/* grand total: slimmer row + a lighter (still dark) brown */
-#sheet.inv .grand{padding:9px 22px; background:linear-gradient(180deg,#5b4227,#42301c) !important}
-#sheet.inv .grand .lab{font-size:12px}
-#sheet.inv .grand .val{font-size:24px}
+/* grand total: thin row + a lighter (still dark) brown */
+#sheet.inv .grand{padding:6px 22px; background:linear-gradient(180deg,#5b4227,#42301c) !important}
+#sheet.inv .grand .lab{font-size:11px}
+#sheet.inv .grand .val{font-size:19px}
 #sheet.inv .words{padding:8px 22px; font-size:12.5px}
 /* TAX-INVOICE tag centered above the box; masthead centered with a big bold name */
 .inv-tag-top{text-align:center; margin-bottom:8px}
