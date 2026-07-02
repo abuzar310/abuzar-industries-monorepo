@@ -192,7 +192,8 @@ body{
 .sec-name{
   font-family:var(--disp); font-weight:700; text-transform:none;
   letter-spacing:.01em; font-size:16px; line-height:1; color:#F6ECDD;
-  background:transparent; border:none; padding:2px; min-width:60px; max-width:38vw; width:108px;
+  background:transparent; border:none; padding:2px; min-width:80px; max-width:100%;
+  width:auto; field-sizing:content; /* grow the box to whatever the user types */
 }
 .sec-name:focus{outline:1.5px dashed var(--brass); outline-offset:3px; border-radius:3px}
 .rate-box{margin-left:auto; display:flex; align-items:center; gap:5px;
@@ -344,6 +345,8 @@ body{
 #sheet.inv .grand{padding:6px 22px; background:linear-gradient(180deg,#5b4227,#42301c) !important}
 #sheet.inv .grand .lab{font-size:11px}
 #sheet.inv .grand .val{font-size:19px}
+/* wood-box header bar: same thinness + colour as the grand-total bar */
+#sheet.inv .sec-head{padding:6px 13px; background:linear-gradient(180deg,#5b4227,#42301c) !important}
 #sheet.inv .words{padding:8px 22px; font-size:12.5px}
 /* TAX-INVOICE tag centered above the box; masthead centered with a big bold name */
 .inv-tag-top{text-align:center; margin-bottom:8px}
@@ -767,6 +770,10 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .meta .f,.cust-block .f{padding:3px 14px}
   .meta label,.cust-block label{font-size:7.5px; margin-bottom:0}
   .meta input,.meta .ro,.cust-block input{font-size:10px}
+  /* invoice: bigger, more readable customer name / invoice no / date */
+  #sheet.inv .meta label,#sheet.inv .cust-block label{font-size:9px}
+  #sheet.inv .meta input,#sheet.inv .meta .ro,#sheet.inv .cust-block input{font-size:13px}
+  #sheet.inv .meta .f,#sheet.inv .cust-block .f{padding:5px 14px}
   /* keep two wood tables side by side on paper, never split a table across columns */
   #sections{margin-top:4px; gap:6px 10px; grid-template-columns:1fr 1fr}
   #sections .section{margin-top:0; break-inside:avoid; page-break-inside:avoid}

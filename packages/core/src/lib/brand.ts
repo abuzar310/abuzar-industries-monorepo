@@ -5,6 +5,7 @@ import { getState, setBrandMode, type BrandMode } from "@/store/app-store";
 
 export interface BankInfo {
   name: string;
+  acName?: string;
   ac: string;
   ifsc: string;
 }
@@ -41,8 +42,7 @@ export const REAL_BRAND: Brand = {
   gstin: "29AROPA1101B1ZK",
   logo: true,
   goods: "",
-  // ponytail: A/c no + IFSC per the paper invoice — owner should confirm the exact digits.
-  bank: { name: "HDFC Bank, Chitradurga", ac: "—", ifsc: "—" },
+  bank: { name: "AXIS Bank, Chitradurga", acName: "ABUZAR INDUSTRIES", ac: "921030054955694", ifsc: "UTIB0001019" },
   terms: INVOICE_TERMS,
 };
 

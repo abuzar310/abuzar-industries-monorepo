@@ -680,6 +680,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                 <div className="inv-bank">
                   <div className="ib-h">Bank Details</div>
                   <div>{brand.bank?.name || "—"}</div>
+                  <div>A/c Name: {brand.bank?.acName || brand.name}</div>
                   <div>A/c No: {brand.bank?.ac || "—"}</div>
                   <div>IFSC: {brand.bank?.ifsc || "—"}</div>
                 </div>
