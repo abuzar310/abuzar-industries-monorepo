@@ -1,11 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { clearStore, metaSet, STORES } from "@/lib/db";
-import { cloudClear, getSupa, pullFromCloud, testConnection, trySync } from "@/lib/cloud";
-import { resetCounters } from "@/lib/numbering";
+import { getSupa, pullFromCloud, testConnection, trySync } from "@/lib/cloud";
 import { exportBackup, importBackup } from "@/lib/backup";
-import { createQuotation } from "@/lib/create";
 import { canInstall, promptInstall } from "@/lib/pwa";
 import { getFeatures } from "@/lib/features";
 import { autoPostEnabled, setAutoPost } from "@/lib/ledger-autopost";
@@ -83,40 +80,6 @@ export default function SettingsView() {
     };
     inp.click();
   }
-  async function startFresh() {
-    const ok = await confirmDialog({
-      title: "Start fresh?",
-      message:
-        "Permanently deletes ALL quotations and invoices — here AND in the cloud — and resets numbering to 001. Customers and stock are kept. This cannot be undone.",
-      confirmLabel: "Start fresh",
-      danger: true,
-    });
-    if (!ok) return;
-    toast("Clearing…");
-    await clearStore("quotations");
-    await clearStore("invoices");
-    await cloudClear(["quotations", "invoices"]);
-    await resetCounters();
-    await metaSet("lastOpen", null);
-    const d = await createQuotation();
-    bumpData();
-    toast("Done — starting fresh from " + d.number);
-    router.push("/editor/" + d.id);
-  }
-  async function eraseAll() {
-    const ok = await confirmDialog({
-      title: "Erase everything?",
-      message: "Removes ALL data on this device AND in the cloud. Export a backup first if unsure. This cannot be undone.",
-      confirmLabel: "Erase everything",
-      danger: true,
-    });
-    if (!ok) return;
-    toast("Erasing…");
-    await cloudClear(["quotations", "invoices", "customers", "stock", "expenses", "sessions", "ledgers", "vouchers"]);
-    for (const s of STORES) await clearStore(s);
-    toast("All data erased");
-    location.reload();
-  }
   async function installApp() {
     if (canInstall()) await promptInstall();
     else toast("Use the browser menu → Install / Add to Home screen");
@@ -155,15 +118,11 @@ export default function SettingsView() {
       )}
 
       <div className="setbox">
-        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Backup &amp; reset</div>
+        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Backup</div>
         <p className="note">Export a full backup file you can keep anywhere or move to another device.</p>
         <div className="rowbtns">
           <button className="btn sm" onClick={exportBackup}>Export backup (.json)</button>
           <button className="btn sm" onClick={importFile}>Import backup</button>
-        </div>
-        <div className="rowbtns" style={{ marginTop: 10 }}>
-          <button className="btn warn sm" onClick={startFresh}>Start fresh (clear quotations &amp; invoices)</button>
-          <button className="btn warn sm" onClick={eraseAll}>Erase everything</button>
         </div>
       </div>
 
