@@ -852,3 +852,30 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .tally-title .tl-right{display:none}
   .t-table{font-size:12px; min-width:420px}
 }
+
+/* ---------- Tally-style report sheet (Stock Summary etc.) ---------- */
+.tsheet{
+  --t-cream:#FCFAF4; --t-cream2:#F1E9D6; --t-cream3:#EBE0C9; --t-line:#D6C8AE;
+  --t-head:#946317; --t-ink:#241B12; --t-dr:#566B3B; --t-cr:#A53D29;
+  background:var(--t-cream); border:1px solid var(--t-line); border-radius:12px; overflow:hidden;
+  margin-top:10px; box-shadow:0 6px 22px rgba(0,0,0,.07)}
+.tsheet-head{background:var(--t-head); color:#fff; font-weight:700; letter-spacing:.04em; padding:9px 16px;
+  display:flex; justify-content:space-between; align-items:baseline; font-size:15px}
+.tsheet-head small{color:#F3E4C2; font-weight:400; text-transform:none; letter-spacing:0}
+.tsheet-body{padding:14px 16px}
+.tsheet + .tsheet{margin-top:14px}
+.tsheet .t-table.narrow{min-width:0}
+/* headline figure cards */
+.tsum{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:14px}
+.tsum > div{background:var(--t-cream2); border:1px solid var(--t-line); border-radius:10px; padding:11px 13px}
+.tsum b{display:block; font-size:21px; color:var(--t-head); font-family:var(--mono); line-height:1.2}
+.tsum span{font-size:12px; color:#7a6a3f}
+/* tiny collapse toggle (opening / month-wise) — a text link, not a button */
+.tlink{background:none; border:0; color:var(--t-head); font-family:inherit; font-size:13px; font-weight:700;
+  cursor:pointer; padding:4px 0; text-decoration:underline}
+.tform{display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin:8px 0 2px}
+.tform label{display:flex; flex-direction:column; gap:3px; font-size:12px; color:#7a6a3f; font-weight:600}
+.tform input{font:inherit; padding:6px 9px; border:1px solid var(--t-line); background:#fff; border-radius:6px; width:130px}
+.tform input:focus{outline:none; border-color:var(--t-head); box-shadow:var(--ring)}
+.tform .btn{align-self:flex-end}
+@media(max-width:640px){ .tsum{grid-template-columns:repeat(2,1fr)} .tform input{width:100%} .tform label{flex:1 1 45%} }

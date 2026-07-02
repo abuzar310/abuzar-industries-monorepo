@@ -26,6 +26,8 @@ export default function TradingView() {
   const [oVal, setOVal] = useState("");
   const [oCft, setOCft] = useState("");
   const [cCft, setCCft] = useState("");
+  const [editOpening, setEditOpening] = useState(false);
+  const [showMonths, setShowMonths] = useState(false);
 
   const load = useCallback(() => {
     allRec<Doc>("invoices").then(setInvoices);
@@ -88,6 +90,7 @@ export default function TradingView() {
   async function saveCfg(e: React.FormEvent) {
     e.preventDefault();
     await setStockConfig({ value: +oVal || 0, cft: +oCft || 0, closingCft: cCft.trim() === "" ? null : +cCft || 0 });
+    setEditOpening(false);
     load();
     bumpData();
     toast("Stock opening saved");
@@ -104,148 +107,119 @@ export default function TradingView() {
   return (
     <div>
       <div className="sectitle">
-        Stock &amp; Trading <small>— opening → purchases − sales = closing</small>
+        Stock <small>— opening + purchases − sold = closing</small>
       </div>
 
-      <form className="panel-card daybook-entry" onSubmit={saveCfg}>
-        <div style={{ flexBasis: "100%", fontFamily: "var(--mono)", fontSize: 12, color: "var(--ink-faint)" }}>
-          Opening stock before recording. Sales reduce closing stock automatically; set a physical closing count only if you counted it.
+      {/* Stock Summary sheet */}
+      <div className="tsheet">
+        <div className="tsheet-head">
+          <span>Stock Summary</span>
+          <small>avg ₹{inr(tr.avgRate)} / CFT</small>
         </div>
-        <label className="modal-field">
-          <span>Opening value (₹)</span>
-          <input type="number" inputMode="decimal" placeholder="0" value={oVal} onChange={(e) => setOVal(e.target.value)} />
-        </label>
-        <label className="modal-field">
-          <span>Opening CFT</span>
-          <input type="number" inputMode="decimal" placeholder="0" value={oCft} onChange={(e) => setOCft(e.target.value)} />
-        </label>
-        <label className="modal-field">
-          <span>Closing CFT (physical, optional)</span>
-          <input type="number" inputMode="decimal" placeholder={num(tr.availCft - tr.saleCft) + " (auto)"} value={cCft} onChange={(e) => setCCft(e.target.value)} />
-        </label>
-        <button className="btn primary" type="submit">
-          Save
-        </button>
-      </form>
-
-      {/* live stock position */}
-      <div className="dash-grid g2" style={{ marginTop: 8 }}>
-        <div className="stat">
-          <div className="k">Closing Stock (CFT)</div>
-          <div className="v">{num(tr.closingCft)}</div>
-          <div className="sub">available {num(tr.availCft)} − sold {num(tr.saleCft)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Closing Stock Value</div>
-          <div className="v money">₹ {inr(tr.closingValue)}</div>
-          <div className="sub">avg ₹{inr(tr.avgRate)} / CFT</div>
-        </div>
-      </div>
-
-      {/* stock statement: CFT + value, purchases add, sales debit */}
-      <div className="panel-card" style={{ marginTop: 14 }}>
-        <div className="pc-head">Stock statement</div>
-        <div className="stmt sthead">
-          <span>Item</span>
-          <span>CFT</span>
-          <span>Value ₹</span>
-        </div>
-        {stmt.map((r) => (
-          <div className={"stmt" + (r.tot ? " sttot" : r.sub ? " stsub" : "")} key={r.k}>
-            <span>{r.k}</span>
-            <span>{num(r.cft)}</span>
-            <span>{inr(r.val)}</span>
+        <div className="tsheet-body">
+          <div className="tsum">
+            <div><b>{num(tr.closingCft)}</b><span>Closing stock (CFT)</span></div>
+            <div><b>₹{inr(tr.closingValue)}</b><span>Stock value</span></div>
+            <div><b>₹{inr(tr.saleValue)}</b><span>Sales · {num(tr.saleCft)} CFT sold</span></div>
+            <div><b style={{ color: tr.grossProfit < 0 ? "var(--t-cr)" : "var(--t-dr)" }}>₹{inr(tr.grossProfit)}</b><span>Gross profit</span></div>
           </div>
-        ))}
+
+          <table className="t-table narrow">
+            <thead><tr><th>Particulars</th><th className="amt">CFT</th><th className="amt">Value ₹</th></tr></thead>
+            <tbody>
+              {stmt.map((r) => (
+                <tr key={r.k} className={r.tot ? "tot" : r.sub ? "op" : ""}>
+                  <td>{r.k}</td>
+                  <td className="amt">{num(r.cft)}</td>
+                  <td className="amt">{inr(r.val)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* opening — collapsed by default (set once) */}
+          <div style={{ marginTop: 10 }}>
+            {!editOpening ? (
+              <button className="tlink" onClick={() => setEditOpening(true)}>
+                Opening: {num(tr.openCft)} CFT · ₹{inr(tr.openValue)} — edit
+              </button>
+            ) : (
+              <form className="tform" onSubmit={saveCfg}>
+                <label>Opening value ₹<input type="number" inputMode="decimal" placeholder="0" value={oVal} onChange={(e) => setOVal(e.target.value)} /></label>
+                <label>Opening CFT<input type="number" inputMode="decimal" placeholder="0" value={oCft} onChange={(e) => setOCft(e.target.value)} /></label>
+                <label>Closing CFT (physical, optional)<input type="number" inputMode="decimal" placeholder={num(tr.availCft - tr.saleCft) + " auto"} value={cCft} onChange={(e) => setCCft(e.target.value)} /></label>
+                <button className="btn primary sm" type="submit">Save</button>
+                <button className="btn sm" type="button" onClick={() => setEditOpening(false)}>Cancel</button>
+              </form>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* sales & profit */}
-      <div className="dash-grid g3" style={{ marginTop: 14 }}>
-        <div className="stat">
-          <div className="k">Sales (revenue)</div>
-          <div className="v money">₹ {inr(tr.saleValue)}</div>
-          <div className="sub">{num(tr.saleCft)} CFT sold</div>
-        </div>
-        <div className="stat">
-          <div className="k">Gross Profit</div>
-          <div className="v" style={{ color: tr.grossProfit < 0 ? "var(--danger)" : "var(--green)" }}>₹ {inr(tr.grossProfit)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Avg Rate / CFT</div>
-          <div className="v">₹ {inr(tr.avgRate)}</div>
+      {/* Stock movements */}
+      <div className="tsheet">
+        <div className="tsheet-head"><span>Stock Movements</span><small>each sale debits stock · each purchase adds</small></div>
+        <div className="tsheet-body" style={{ overflowX: "auto" }}>
+          {moves.length ? (
+            <table className="t-table">
+              <thead><tr><th>Date</th><th>Party</th><th>Type</th><th className="amt">CFT</th><th className="amt">Value ₹</th><th className="amt">Balance CFT</th></tr></thead>
+              <tbody>
+                {moves.map((m) => (
+                  <tr key={m.id}>
+                    <td>{m.date}</td>
+                    <td>{m.name}</td>
+                    <td className={m.buy ? "dr" : "cr"} style={{ fontWeight: 700 }}>{m.buy ? "Buy" : "Sale"}</td>
+                    <td className={"amt " + (m.buy ? "dr" : "cr")}>{m.buy ? "+" : "−"}{num(m.cft)}</td>
+                    <td className="amt">{inr(m.amount)}</td>
+                    <td className="amt">{num(m.runCft)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="t-empty">No stock movements yet — selling invoices debit stock, buying invoices add to it.</div>
+          )}
         </div>
       </div>
 
-      <div className="panel-card" style={{ marginTop: 20 }}>
-        <div className="pc-head">
-          Stock movements <small style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>· each sale debits stock (amount + CFT)</small>
-        </div>
-        {moves.length ? (
-          moves.map((m) => (
-            <div className="exprow" key={m.id}>
-              <span className={"exptag " + (m.buy ? "in" : "out")}>{m.buy ? "BUY" : "SALE"}</span>
-              <span className="expnote">
-                {m.name}
-                <small>
-                  {m.date} · {num(m.cft)} CFT · stock now {num(m.runCft)} CFT
-                </small>
-              </span>
-              <span className={"expamt " + (m.buy ? "in" : "out")}>
-                {m.buy ? "+" : "−"}₹ {inr(m.amount)}
-              </span>
+      {/* Month-wise — collapsed */}
+      {mrows.length > 0 && (
+        <div className="tsheet">
+          <div className="tsheet-head" style={{ cursor: "pointer" }} onClick={() => setShowMonths((s) => !s)}>
+            <span>{showMonths ? "▾" : "▸"} Month-wise · Purchase vs Sell</span>
+            <small>{mrows.length} month{mrows.length === 1 ? "" : "s"}</small>
+          </div>
+          {showMonths && (
+            <div className="tsheet-body" style={{ overflowX: "auto" }}>
+              <table className="t-table">
+                <thead><tr><th>Month</th><th className="amt">Purchase</th><th className="amt">GST</th><th className="amt">Total</th><th className="amt">Sell</th><th className="amt">Sell GST</th><th className="amt">Total</th></tr></thead>
+                <tbody>
+                  {mrows.map((m) => (
+                    <tr key={m.key}>
+                      <td>{monthName(m.key)}</td>
+                      <td className="amt">{inr(m.pTax)}</td>
+                      <td className="amt">{inr(m.pGst)}</td>
+                      <td className="amt">{inr(m.pTot)}</td>
+                      <td className="amt">{inr(m.sTax)}</td>
+                      <td className="amt">{inr(m.sGst)}</td>
+                      <td className="amt">{inr(m.sTot)}</td>
+                    </tr>
+                  ))}
+                  <tr className="tot">
+                    <td>Total</td>
+                    <td className="amt">{inr(tr.purchaseValue)}</td>
+                    <td className="amt">{inr(tr.purchaseGst)}</td>
+                    <td className="amt">{inr(tr.purchaseTotal)}</td>
+                    <td className="amt">{inr(tr.saleValue)}</td>
+                    <td className="amt">{inr(tr.saleGst)}</td>
+                    <td className="amt">{inr(tr.saleTotal)}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-          ))
-        ) : (
-          <div className="empty">
-            <div className="empty-icon">🪵</div>
-            <div className="empty-title">No stock movements yet</div>
-            <div className="empty-note">Each selling invoice debits stock; buying invoices credit it.</div>
-          </div>
-        )}
-      </div>
-
-      <div className="panel-card" style={{ marginTop: 20, overflowX: "auto" }}>
-        <div className="pc-head">Month-wise · Purchase (Karnataka) vs Sell</div>
-        <div className="tgrid thead-tg">
-          <span>Month</span>
-          <span>Karnataka</span>
-          <span>GST</span>
-          <span>Total P.K</span>
-          <span>Sell</span>
-          <span>Sell GST</span>
-          <span>Total Sell</span>
+          )}
         </div>
-        {mrows.length ? (
-          mrows.map((m) => (
-            <div className="tgrid" key={m.key}>
-              <span className="tg-m">{monthName(m.key)}</span>
-              <span>{inr(m.pTax)}</span>
-              <span>{inr(m.pGst)}</span>
-              <span className="tg-b">{inr(m.pTot)}</span>
-              <span>{inr(m.sTax)}</span>
-              <span>{inr(m.sGst)}</span>
-              <span className="tg-b">{inr(m.sTot)}</span>
-            </div>
-          ))
-        ) : (
-          <div className="empty">
-            <div className="empty-icon">📦</div>
-            <div className="empty-title">No invoices yet</div>
-            <div className="empty-note">Selling invoices reduce stock; buying invoices add to it. Totals appear here.</div>
-          </div>
-        )}
-        {mrows.length > 0 && (
-          <div className="tgrid tg-tot">
-            <span className="tg-m">Total</span>
-            <span>{inr(tr.purchaseValue)}</span>
-            <span>{inr(tr.purchaseGst)}</span>
-            <span className="tg-b">{inr(tr.purchaseTotal)}</span>
-            <span>{inr(tr.saleValue)}</span>
-            <span>{inr(tr.saleGst)}</span>
-            <span className="tg-b">{inr(tr.saleTotal)}</span>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
