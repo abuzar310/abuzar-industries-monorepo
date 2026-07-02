@@ -14,9 +14,28 @@ export function fyLabel(d = new Date()): string {
   return start + "-" + pad((start + 1) % 100, 2);
 }
 
-/** Next per-FY number. Quotation → "2026-27-001"; Invoice → "INV-2026-27-001". */
+/** Continue an invoice number from the last created one — increments its trailing
+ *  digits and keeps whatever prefix/suffix the user used (custom or template). */
+async function continueInvoiceNumber(): Promise<string | null> {
+  const arr = await allRec<Doc>("invoices");
+  if (!arr.length) return null;
+  const last = arr.reduce((a, b) => ((a.createdAt || "") >= (b.createdAt || "") ? a : b));
+  const s = String(last.number || last.id || "");
+  const m = s.match(/(\d+)(\D*)$/); // the last run of digits + any trailing text
+  if (!m) return null;
+  const num = m[1];
+  const next = String(parseInt(num, 10) + 1).padStart(num.length, "0");
+  return s.slice(0, m.index) + next + m[2];
+}
+
+/** Next per-FY number. Quotation → "2026-27-001"; Invoice → continues from the last invoice
+ *  (or "INV-2026-27-001" for the very first). */
 export async function nextNumber(kind: Kind): Promise<string> {
   const fy = fyLabel();
+  if (kind === "invoice") {
+    const cont = await continueInvoiceNumber();
+    if (cont) return cont;
+  }
   const key = kind === "quotation" ? "seqQ" : "seqI";
   const c = await metaGet<Seq>(key, { fy, n: 0 });
   const n = (c.fy === fy ? c.n : 0) + 1;
