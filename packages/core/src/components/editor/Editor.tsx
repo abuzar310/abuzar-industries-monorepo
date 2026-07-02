@@ -68,6 +68,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const settled = payBalance <= 0.5;
   const { brandMode, user } = useApp();
   const brand = brandFor(brandMode);
+  const invBank = brand.banks?.[doc.bankIdx ?? 0] || brand.bank; // chosen bank for this invoice
 
   // track the open doc so background pulls don't clobber it
   useEffect(() => {
@@ -484,6 +485,20 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               <option value="split">SGST + CGST</option>
               <option value="igst">IGST (interstate)</option>
             </select>
+            {!isBuy && (brand.banks?.length || 0) > 1 && (
+              <>
+                <span className="lab" style={{ marginLeft: 8 }}>
+                  Bank
+                </span>
+                <select className="paysel" value={doc.bankIdx ?? 0} onChange={(e) => update((d) => (d.bankIdx = +e.target.value || 0))}>
+                  {brand.banks!.map((b, i) => (
+                    <option key={i} value={i}>
+                      {b.name.split(",")[0]}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
           </>
         )}
         {!feat.simpleQuote && !isInv && (
@@ -679,10 +694,10 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               <div className="inv-cols">
                 <div className="inv-bank">
                   <div className="ib-h">Bank Details</div>
-                  <div>{brand.bank?.name || "—"}</div>
-                  <div>A/c Name: {brand.bank?.acName || brand.name}</div>
-                  <div>A/c No: {brand.bank?.ac || "—"}</div>
-                  <div>IFSC: {brand.bank?.ifsc || "—"}</div>
+                  <div>{invBank?.name || "—"}</div>
+                  <div>A/c Name: {invBank?.acName || brand.name}</div>
+                  <div>A/c No: {invBank?.ac || "—"}</div>
+                  <div>IFSC: {invBank?.ifsc || "—"}</div>
                 </div>
                 {brand.terms && brand.terms.length > 0 && (
                   <div className="inv-terms">

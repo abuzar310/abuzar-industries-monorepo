@@ -50,6 +50,8 @@ export interface Doc {
   /** invoice: customer GSTIN + payment type (shown on the tax invoice). */
   custGstin?: string;
   payType?: string;
+  /** which brand bank to print on this invoice (index into brand.banks) — picker not printed */
+  bankIdx?: number;
   /** App A (daybook): cash / UPI split accepted against this quotation. */
   payCash?: number;
   payUpi?: number;

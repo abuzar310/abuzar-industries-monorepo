@@ -22,9 +22,14 @@ export interface Brand {
   /** invoice sub-heading, e.g. "IMPORTED SAW WOOD" */
   goods?: string;
   bank?: BankInfo;
+  /** banks the user can pick from per invoice (the picker is not printed) */
+  banks?: BankInfo[];
   /** invoice terms & conditions lines */
   terms?: string[];
 }
+
+const HDFC_BANK: BankInfo = { name: "HDFC Bank, Chitradurga", acName: "ABUZAR INDUSTRIES", ac: "50200006429458", ifsc: "HDFC0002566" };
+const AXIS_BANK: BankInfo = { name: "AXIS Bank, Chitradurga", acName: "ABUZAR INDUSTRIES", ac: "921030054955694", ifsc: "UTIB0001019" };
 
 const INVOICE_TERMS = [
   "Goods once sold will not be taken back.",
@@ -42,7 +47,8 @@ export const REAL_BRAND: Brand = {
   gstin: "29AROPA1101B1ZK",
   logo: true,
   goods: "",
-  bank: { name: "AXIS Bank, Chitradurga", acName: "ABUZAR INDUSTRIES", ac: "921030054955694", ifsc: "UTIB0001019" },
+  bank: HDFC_BANK,
+  banks: [HDFC_BANK, AXIS_BANK],
   terms: INVOICE_TERMS,
 };
 
