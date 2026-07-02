@@ -153,7 +153,7 @@ export default function AppProvider({
         if (!s.url || !s.key || !navigator.onLine) return;
         if (authRequired() && !isLoggedIn()) return;
         await trySync();
-        await bgPull();
+        await mirrorFromCloud(); // keep every device an exact mirror of the cloud (all features)
         await checkOwnerNotifications();
       }, 15000);
       document.addEventListener("visibilitychange", onVisible);
