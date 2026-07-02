@@ -524,6 +524,17 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .lrow .nm{font-weight:600; color:var(--ink)}
 .lrow .mut{font-family:var(--mono); font-size:11px; color:var(--ink-soft)}
 .lrow .amt{font-family:var(--mono); font-weight:600; text-align:right; color:var(--walnut); font-variant-numeric:tabular-nums}
+/* clean list search bar */
+.searchbar{display:flex; align-items:center; gap:9px; margin:12px 0 4px; padding:0 14px; height:46px;
+  border:1px solid var(--line-2); border-radius:13px; background:var(--panel-2); box-shadow:var(--shadow-sm)}
+.searchbar:focus-within{border-color:var(--ochre); box-shadow:var(--ring)}
+.searchbar .s-ic{color:var(--ink-faint); font-size:19px; line-height:1; flex:0 0 auto}
+.searchbar input{flex:1 1 auto; border:none; background:transparent; font-size:15px; color:var(--ink); outline:none; min-width:0}
+.searchbar input::placeholder{color:var(--ink-faint)}
+.searchbar .s-clear{flex:0 0 auto; border:none; background:var(--line); color:var(--ink-soft); width:22px; height:22px;
+  border-radius:50%; cursor:pointer; font-size:15px; line-height:20px; text-align:center; padding:0}
+.searchbar .s-clear:hover{background:var(--line-2); color:var(--ink)}
+.searchbar .s-count{flex:0 0 auto; font-family:var(--mono); font-size:12px; color:var(--ink-faint); padding-left:2px}
 /* list: multi-select + bulk actions + pagination */
 .selcol{display:inline-flex; align-items:center; gap:8px}
 .selcol input[type="checkbox"]{width:15px; height:15px; accent-color:var(--ochre-deep); cursor:pointer; flex:0 0 auto}

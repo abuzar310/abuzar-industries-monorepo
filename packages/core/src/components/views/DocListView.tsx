@@ -108,14 +108,25 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
         {title} <small>— {sub}</small>
       </div>
 
-      <div className="rowbtns" style={{ alignItems: "center", gap: 10 }}>
-        {showNew && (
+      {showNew && (
+        <div className="rowbtns">
           <button className="btn primary sm" onClick={onNew}>
             {isInv ? "+ New Custom Invoice" : "+ New Quotation"}
           </button>
+        </div>
+      )}
+
+      <div className="searchbar">
+        <span className="s-ic" aria-hidden="true">⌕</span>
+        <input
+          placeholder={`Search ${isInv ? "invoices" : "quotations"} — number, customer, phone…`}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        {q && (
+          <button className="s-clear" onClick={() => setQ("")} aria-label="Clear search">×</button>
         )}
-        <input className="search" placeholder={`Search ${isInv ? "invoices" : "quotations"}…`} value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: "1 1 200px", minWidth: 160 }} />
-        <span style={{ fontSize: 12, color: "var(--ink-faint)", fontFamily: "var(--mono)" }}>{filtered.length} total</span>
+        <span className="s-count">{filtered.length}</span>
       </div>
 
       {sel.size > 0 && (
