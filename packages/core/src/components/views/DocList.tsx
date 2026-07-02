@@ -11,12 +11,9 @@ const STATUS_BADGE: Record<string, string> = {
   Rejected: "b-reject",
   "Converted to Invoice": "b-conv",
 };
-const PAY_BADGE: Record<string, string> = { Paid: "b-paid", Pending: "b-pending", Partial: "b-partial" };
 
 export function StatusBadge({ doc }: { doc: Doc }) {
-  if (doc.kind === "invoice") {
-    return <span className={"badge " + (PAY_BADGE[doc.paymentStatus] || "b-pending")}>{doc.paymentStatus || "Pending"}</span>;
-  }
+  if (doc.kind === "invoice") return <span className="badge b-conv">Invoice</span>;
   return <span className={"badge " + (STATUS_BADGE[doc.status] || "b-draft")}>{doc.status}</span>;
 }
 

@@ -10,7 +10,6 @@ import { docStore } from "@/lib/doc";
 import { nextNumber } from "@/lib/numbering";
 import { cloudDelete, setOpenDoc, trySync } from "@/lib/cloud";
 import { upsertCustomerFromDoc } from "@/lib/customers";
-import { maybeDeductStock } from "@/lib/stock";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { getFeatures } from "@/lib/features";
 import { addExpense, deleteExpensesBySource } from "@/lib/expenses";
@@ -36,7 +35,6 @@ const STATUS_BADGE: Record<string, string> = {
   Rejected: "b-reject",
   "Converted to Invoice": "b-conv",
 };
-const PAY_BADGE: Record<string, string> = { Paid: "b-paid", Pending: "b-pending", Partial: "b-partial" };
 
 export default function Editor({ initialDoc, action }: { initialDoc: Doc; action?: string }) {
   const router = useRouter();
@@ -200,16 +198,6 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   // ---- status / payment ----
   const onStatus = (v: string) => update((d) => (d.status = v));
   const onTradeType = (v: string) => update((d) => (d.tradeType = v === "buy" ? "buy" : "sell"));
-  async function onPayment(v: string) {
-    const next = clone(docRef.current);
-    next.paymentStatus = v;
-    if (v === "Paid") {
-      next.amountPaid = computeDoc(next).grand;
-      const deducted = await maybeDeductStock(next);
-      if (deducted) toast("Stock deducted for " + next.number);
-    }
-    commit(next);
-  }
 
   // ---- document number inline edit ----
   function commitNumber(raw: string) {
@@ -343,36 +331,6 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     toast("Invoice " + invId + " created · prices locked");
     router.push("/editor/" + invId);
   }
-  async function onRecordPayment() {
-    const grand = computeDoc(docRef.current).grand;
-    const cur = +docRef.current.amountPaid || 0;
-    const res = await formDialog({
-      title: "Record payment",
-      message: `${docRef.current.number} · Grand total ₹${inr(grand)}`,
-      fields: [
-        {
-          name: "amount",
-          label: "Total received so far (₹)",
-          type: "number",
-          inputMode: "decimal",
-          value: cur ? String(cur) : "",
-          placeholder: "0",
-        },
-      ],
-      submitLabel: "Save payment",
-    });
-    if (res === null) return;
-    const paid = Math.max(0, +res.amount || 0);
-    const next = clone(docRef.current);
-    next.amountPaid = paid;
-    next.paymentStatus = paid <= 0 ? "Pending" : paid + 0.001 >= grand ? "Paid" : "Partial";
-    if (next.paymentStatus === "Paid") {
-      next.amountPaid = grand;
-      await maybeDeductStock(next);
-    }
-    commit(next);
-    toast("Payment recorded · " + next.paymentStatus);
-  }
   async function onFolder() {
     if (!folderConnected()) {
       toast("Connect a data folder first (Settings)");
@@ -480,8 +438,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     };
   }, [isInv]);
 
-  const badgeCls = isInv ? PAY_BADGE[doc.paymentStatus] || "b-pending" : STATUS_BADGE[doc.status] || "b-draft";
-  const badgeText = isInv ? "Invoice · " + (doc.paymentStatus || "Pending") : doc.status;
+  const badgeCls = isInv ? "b-conv" : STATUS_BADGE[doc.status] || "b-draft";
+  const badgeText = isInv ? (isBuy ? "Purchase Invoice" : "Invoice") : doc.status;
   const showLink = isInv && !!doc.quotationId;
 
   return (
@@ -515,24 +473,16 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             </select>
           </>
         )}
-        {!feat.simpleQuote && (
+        {!feat.simpleQuote && !isInv && (
           <>
             <span className="lab" style={{ marginLeft: 8 }}>
               Status
             </span>
-            {isInv ? (
-              <select className="paysel" value={doc.paymentStatus} onChange={(e) => onPayment(e.target.value)}>
-                <option>Pending</option>
-                <option>Partial</option>
-                <option>Paid</option>
-              </select>
-            ) : (
-              <select className="statussel" value={doc.status} onChange={(e) => onStatus(e.target.value)}>
-                {STATUSES.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-            )}
+            <select className="statussel" value={doc.status} onChange={(e) => onStatus(e.target.value)}>
+              {STATUSES.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
           </>
         )}
         <span className={"badge " + badgeCls} style={{ marginLeft: "auto" }}>
@@ -765,16 +715,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         <button className="btn go" onClick={onPrint}>
           Print
         </button>
-        {feat.invoices &&
-          (!isInv ? (
-            <button className="btn" onClick={onConvert}>
-              Convert to Invoice
-            </button>
-          ) : (
-            <button className="btn" onClick={onRecordPayment}>
-              Record Payment
-            </button>
-          ))}
+        {feat.invoices && !isInv && (
+          <button className="btn" onClick={onConvert}>
+            Convert to Invoice
+          </button>
+        )}
         <div style={{ marginLeft: "auto" }}>
           <MoreMenu>
             <button onClick={onPdf}>Download PDF</button>

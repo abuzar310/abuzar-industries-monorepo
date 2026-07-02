@@ -41,14 +41,9 @@ export default function DashboardView() {
   const now = new Date();
   const ym = now.getFullYear() + "-" + pad(now.getMonth() + 1);
   let monthRev = 0;
-  const receivables = invs
-    .map((i) => ({ i, bal: Math.round((computeDoc(i).grand - (+i.amountPaid || 0)) * 100) / 100 }))
-    .filter((r) => r.bal > 0.001)
-    .sort((a, b) => b.bal - a.bal);
   invs.forEach((i) => {
     if ((i.createdAt || "").slice(0, 7) === ym) monthRev += computeDoc(i).grand;
   });
-  const outstanding = receivables.reduce((s, r) => s + r.bal, 0);
   const follow = quotes.filter((q) => q.status === "Follow-up Pending");
   const lowStock = stk.filter((s) => (+s.cft || 0) <= 0);
 
@@ -60,7 +55,6 @@ export default function DashboardView() {
   ];
   const overviewCards = [
     { k: "This Month Sales", v: "₹ " + inr(monthRev), money: true, sub: ym, onClick: () => router.push("/invoices") },
-    { k: "Outstanding", v: "₹ " + inr(outstanding), danger: outstanding > 0, sub: receivables.length + " invoice(s)" },
     { k: "Follow-ups", v: String(follow.length), sub: "to chase", onClick: () => router.push("/quotations") },
     { k: "Low Stock", v: String(lowStock.length), danger: lowStock.length > 0, sub: "wood type(s)", onClick: () => router.push("/stock") },
   ];
@@ -100,7 +94,7 @@ export default function DashboardView() {
             className="stat"
             key={c.k}
             onClick={c.onClick}
-            style={c.onClick ? { cursor: "pointer" } : undefined}
+            style={{ cursor: "pointer" }}
           >
             <div className="k">{c.k}</div>
             <div className={"v" + (c.money ? " money" : "")} style={c.danger ? { color: "var(--danger)" } : undefined}>
@@ -109,28 +103,6 @@ export default function DashboardView() {
             {c.sub && <div className="sub">{c.sub}</div>}
           </div>
         ))}
-      </div>
-
-      <div className="panel-card">
-        <div className="pc-head">Outstanding Payments</div>
-        {receivables.length ? (
-          receivables.slice(0, 6).map(({ i, bal }) => (
-            <div className="lrow" key={i.id} style={{ cursor: "pointer" }} onClick={() => router.push("/editor/" + i.id)}>
-              <span className="id">{i.id}</span>
-              <span className="nm">{i.customerName || "—"}</span>
-              <span className="mut">{i.phone}</span>
-              <span className="mut col-date">{i.date}</span>
-              <span className="col-status">
-                <StatusBadge doc={i} />
-              </span>
-              <span className="amt" style={{ color: "var(--danger)" }}>
-                ₹ {inr(bal)}
-              </span>
-            </div>
-          ))
-        ) : (
-          <div className="empty">All invoices settled. ✓</div>
-        )}
       </div>
 
       <div className="panel-card">

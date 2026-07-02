@@ -15,8 +15,6 @@ interface Props {
 export default function Totals({ doc, sub, gstAmt, grand, totalCft, onGst, onGstMode }: Props) {
   const isInv = doc.kind === "invoice";
   const flat = doc.gstMode === "flat";
-  const paid = +doc.amountPaid || 0;
-  const bal = Math.round((grand - paid) * 100) / 100;
   const half = Math.round((+doc.gst || 0) * 50) / 100; // e.g. 18 -> 9
   const halfAmt = Math.round(gstAmt * 50) / 100;
   return (
@@ -66,18 +64,6 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, onGst, onGst
         <span className="lab">Grand total</span>
         <span className="val">₹ {inr(grand)}</span>
       </div>
-      {isInv && (
-        <div className="t-row">
-          <span className="lab">Paid</span>
-          <span className="val">{inr(paid)}</span>
-        </div>
-      )}
-      {isInv && (
-        <div className="t-row">
-          <span className="lab">Balance</span>
-          <span className="val">{inr(bal)}</span>
-        </div>
-      )}
       <div className="words">
         Amount in words: <b>{rupeesInWords(grand)}</b>
       </div>
