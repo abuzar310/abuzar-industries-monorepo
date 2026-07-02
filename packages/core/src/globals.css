@@ -285,11 +285,9 @@ body{
 /* quotation: sub-total + grand total always sit at the bottom of the page */
 #sheet.sq{display:flex; flex-direction:column; aspect-ratio:210/297}
 #sheet.sq .totals{margin-top:auto}
-/* centre the "Cut Size · Wood Quotation" masthead row */
-#sheet.sq .mast-top{justify-content:center}
-#sheet.sq .brand-row{justify-content:center}
-#sheet.sq .co-name{justify-content:center}
-#sheet.sq .co-meta{text-align:center}
+/* "Cut Size" stays on the left; only the "Wood Quotation" tag is centered in the row */
+#sheet.sq .mast-top{position:relative}
+#sheet.sq .co-name .kindtag{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%)}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);
