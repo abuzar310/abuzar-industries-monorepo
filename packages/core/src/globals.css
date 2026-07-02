@@ -118,21 +118,23 @@ body{
   -webkit-mask-image:radial-gradient(circle at center, #000 60%, transparent 72%);
   mask-image:radial-gradient(circle at center, #000 60%, transparent 72%);
 }
-.mast-top{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:22px 28px 14px; position:relative; z-index:1}
-.brand-row{display:flex; gap:18px; align-items:center; min-width:0}
-.logo{flex:0 0 auto; height:62px; width:auto; object-fit:contain; display:block;
+.mast-top{display:flex; align-items:flex-start; gap:22px; padding:24px 28px 18px; position:relative; z-index:1}
+.brand-row{display:flex; gap:22px; align-items:flex-start; min-width:0; flex:1}
+.logo{flex:0 0 auto; height:96px; width:auto; object-fit:contain; display:block;
   filter:drop-shadow(0 4px 10px rgba(40,28,16,.16))}
-.brand{min-width:0; display:flex; align-items:baseline; gap:8px 14px; flex-wrap:wrap}
+.brand{min-width:0; display:block}
+.co-name{
+  font-family:var(--serif); font-weight:700; letter-spacing:-.015em; text-transform:none;
+  font-size:46px; line-height:1; margin:0; color:var(--ink);
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+}
 .kindtag{
   font-family:var(--disp); letter-spacing:.16em; text-transform:uppercase;
-  font-size:10.5px; font-weight:700; color:var(--ochre-deep); background:rgba(176,124,40,.1);
-  border:1px solid rgba(176,124,40,.28); padding:4px 10px; border-radius:20px; transform:translateY(-4px);
+  font-size:13px; font-weight:800; color:var(--ochre-deep); background:transparent;
+  border:1.5px solid var(--ochre-deep); padding:4px 12px; border-radius:6px; align-self:center;
+  -webkit-print-color-adjust:exact; print-color-adjust:exact;
 }
-.co-name{
-  font-family:var(--serif); font-weight:600; letter-spacing:-.015em; text-transform:none;
-  font-size:42px; line-height:.98; margin:0; color:var(--ink);
-}
-.co-meta{font-family:var(--mono); font-size:13px; color:var(--ink-soft); line-height:1.5; margin:0}
+.co-meta{font-family:var(--mono); font-size:13px; color:var(--ink-soft); line-height:1.6; margin:10px 0 0}
 .co-meta b{color:var(--walnut); font-weight:600}
 
 .meta{display:flex; flex-wrap:wrap; gap:0; position:relative; z-index:1; border-top:1px solid var(--line)}
@@ -301,9 +303,19 @@ body{
 
 /* ---------- official invoice: goods line, watermark, footer ---------- */
 .co-goods{font-family:var(--disp); font-size:11px; letter-spacing:.18em; text-transform:uppercase; font-weight:700; color:var(--ochre-deep); margin-top:2px}
-/* invoice sheet fills a full A4 page (screen preview + PDF); footer pinned to the bottom */
+/* invoice sheet fills a full A4 page (screen preview + PDF).
+   The totals + footer are pinned to the bottom; empty space grows above the totals. */
 #sheet.inv{position:relative; display:flex; flex-direction:column; aspect-ratio:210/297}
-#sheet.inv .inv-foot{margin-top:auto}
+#sheet.inv .totals{margin-top:auto}
+#sheet.inv .inv-foot{margin-top:14px}
+/* compact totals so the tax box stays short */
+#sheet.inv .totals{border-radius:var(--radius-md)}
+#sheet.inv .t-row{padding:6px 22px; font-size:13px}
+#sheet.inv .t-row .lab{font-size:11px}
+#sheet.inv .grand{padding:12px 22px}
+#sheet.inv .grand .lab{font-size:12px}
+#sheet.inv .grand .val{font-size:26px}
+#sheet.inv .words{padding:8px 22px; font-size:12.5px}
 .wmark{position:absolute; inset:0; z-index:0; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden;
   -webkit-print-color-adjust:exact; print-color-adjust:exact}
 .wmark span{font-family:var(--serif); font-weight:600; font-size:78px; letter-spacing:.02em; color:var(--walnut); opacity:.055;
@@ -733,10 +745,17 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .grand{padding:7px 14px; background:var(--walnut) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact}
   .grand .val{font-size:18px}
   .words{padding:5px 14px; font-size:10px}
-  /* official invoice fills a full A4 via the base aspect-ratio rule + footer margin-top:auto */
+  /* official invoice fills a full A4; totals pinned bottom via #sheet.inv rules */
   .wmark span{font-size:104px}
   .inv-cols,.inv-bank,.inv-terms{font-size:11px}
   .inv-sign{padding:30px 22px 16px}
+  /* invoice masthead: big logo + name, bold TAX INVOICE tag, address below */
+  #sheet.inv .mast-top{padding:14px 20px}
+  #sheet.inv .logo{height:74px}
+  #sheet.inv .co-name{font-size:34px; font-weight:700}
+  #sheet.inv .kindtag{font-size:11px; padding:3px 10px; font-weight:800; border-width:1.5px}
+  #sheet.inv .co-meta{font-size:11px}
+  #sheet.inv .inv-sign{padding:18px 22px 10px}
 }
 
 /* ======================================================================

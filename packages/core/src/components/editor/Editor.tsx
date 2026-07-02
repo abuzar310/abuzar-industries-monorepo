@@ -524,19 +524,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                 ) : (
                   <div className="co-meta">
                     {brand.addr && <div>{brand.addr}</div>}
-                    <div>
-                      {brand.phone && (
-                        <>
-                          <b>Ph</b> {brand.phone}
-                        </>
-                      )}
-                      {brand.gstin && (
-                        <>
-                          {brand.phone ? " · " : ""}
-                          <b>GSTIN</b> {brand.gstin}
-                        </>
-                      )}
-                    </div>
+                    {brand.gstin && (
+                      <div>
+                        <b>GSTIN</b> {brand.gstin}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -584,10 +576,12 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               <label>Phone</label>
               <input placeholder="—" value={doc.phone} onChange={(e) => setField("phone", e.target.value)} />
             </div>
-            <div className="f">
-              <label>{isBuy ? "Firm / Place" : "Carpenter"}</label>
-              <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
-            </div>
+            {!isInv && (
+              <div className="f">
+                <label>Carpenter</label>
+                <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
+              </div>
+            )}
             {isInv && (
               <>
                 <div className="f">
