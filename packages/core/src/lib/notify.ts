@@ -1,18 +1,32 @@
-// Owner notifications: when a new daybook entry made by someone else syncs in,
-// the owner's device flags it (unseen badge + browser Notification while online).
-import { metaGet, metaSet } from "./db";
-import { inr, nowIso } from "./calc";
+// Owner notifications: when someone else adds a daybook entry, hands over cash, or
+// creates a quotation, the owner's device fires a notification (and flags the unseen
+// badge). The notification watermark (lastNotifiedAt) is kept SEPARATE from the
+// seen/badge watermark (lastSeen) so opening the daybook can never suppress future
+// alerts — that was the "fires once then stops" bug.
+//
+// iOS note: a PWA only runs JS while it's open, so without a push server these fire
+// only while the app is in the foreground. True background delivery needs Web Push.
+import { allRec, metaGet, metaSet } from "./db";
+import { computeDoc, inr, nowIso } from "./calc";
 import { allExpenses, allSessions, typeLabel } from "./expenses";
+import { getFeatures } from "./features";
 import { USERS } from "./local-auth";
 import { getState, setUnseen } from "@/store/app-store";
+import type { Doc } from "./types";
 
-let lastSeen = "";
-let notified = new Set<string>();
+let lastSeen = ""; // badge: owner opened the daybook
+let lastNotifiedAt = ""; // notifications: never re-alert on anything older than this
 
 const whoName = (id: string) => USERS.find((u) => u.id === id)?.name || id;
 
 export async function loadNotifyState() {
   lastSeen = await metaGet<string>("lastSeenExpenseAt", "");
+  lastNotifiedAt = await metaGet<string>("lastNotifiedAt", "");
+  // first ever run: start the notification clock now so we don't alert for all of history
+  if (!lastNotifiedAt) {
+    lastNotifiedAt = nowIso();
+    await metaSet("lastNotifiedAt", lastNotifiedAt);
+  }
 }
 
 /** Ask for notification permission. Returns the resulting permission. Must be
@@ -29,7 +43,7 @@ export async function requestNotifyPermission(): Promise<string> {
 
 function fire(title: string, body: string, tag: string) {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-  // Prefer the service-worker registration on installed PWAs (works on iOS home-screen apps).
+  // Prefer the service-worker registration (required on installed iOS home-screen apps).
   try {
     navigator.serviceWorker?.ready
       .then((reg) => reg.showNotification(title, { body, tag }))
@@ -41,37 +55,57 @@ function fire(title: string, body: string, tag: string) {
   }
 }
 
-/** Recount unseen activity from other users and fire notifications for new entries + handovers. */
+interface Ev {
+  at: string;
+  title: string;
+  body: string;
+  tag: string;
+}
+
+/** Refresh the unseen badge and fire a notification for each new item by someone else. */
 export async function checkOwnerNotifications() {
   const me = getState().user;
   if (me?.role !== "owner") return;
   const [list, sessions] = await Promise.all([allExpenses(), allSessions()]);
-  const fresh = list.filter((e) => e.enteredBy !== me.id && (!lastSeen || (e.createdAt || "") > lastSeen));
-  const freshSessions = sessions.filter((s) => s.by !== me.id && (!lastSeen || (s.closedAt || "") > lastSeen));
-  setUnseen(fresh.length + freshSessions.length);
 
-  fresh
-    .filter((e) => !notified.has(e.id))
-    .slice(0, 3)
-    .forEach((e) => {
-      fire("New daybook entry", `${whoName(e.enteredBy)}: ${typeLabel(e.type)} — ₹${inr(e.amount)}`, e.id);
-      notified.add(e.id);
-    });
-  freshSessions
-    .filter((s) => !notified.has(s.id))
-    .slice(0, 2)
-    .forEach((s) => {
-      fire("Cash handed over", `${whoName(s.by)} gave ₹${inr(s.given)} · session closed`, s.id);
-      notified.add(s.id);
-    });
-  fresh.forEach((e) => notified.add(e.id));
-  freshSessions.forEach((s) => notified.add(s.id));
+  // --- unseen badge (independent of notifications) ---
+  const unseenE = list.filter((e) => e.enteredBy !== me.id && (!lastSeen || (e.createdAt || "") > lastSeen)).length;
+  const unseenS = sessions.filter((s) => s.by !== me.id && (!lastSeen || (s.closedAt || "") > lastSeen)).length;
+  setUnseen(unseenE + unseenS);
+
+  // --- notifications: everything newer than lastNotifiedAt, by someone else ---
+  const events: Ev[] = [];
+  for (const e of list) {
+    if (e.enteredBy !== me.id && (e.createdAt || "") > lastNotifiedAt) {
+      events.push({ at: e.createdAt || "", title: "New daybook entry", body: `${whoName(e.enteredBy)}: ${typeLabel(e.type)} — ₹${inr(e.amount)}`, tag: e.id });
+    }
+  }
+  for (const s of sessions) {
+    if (s.by !== me.id && (s.closedAt || "") > lastNotifiedAt) {
+      events.push({ at: s.closedAt || "", title: "Cash handed over", body: `${whoName(s.by)} gave ₹${inr(s.given)} · session closed`, tag: s.id });
+    }
+  }
+  // quotations — only in multi-user apps (owner watching a manager), not the solo official app
+  if (!getFeatures().soloLogin) {
+    const quotes = await allRec<Doc>("quotations");
+    for (const q of quotes) {
+      if ((q.createdAt || "") > lastNotifiedAt && q.status === "Created") {
+        events.push({ at: q.createdAt || "", title: "New quotation", body: `${q.number} · ${q.customerName || "—"} · ₹${inr(computeDoc(q).grand)}`, tag: q.id });
+      }
+    }
+  }
+
+  if (!events.length) return;
+  events.sort((a, b) => a.at.localeCompare(b.at));
+  events.slice(-6).forEach((ev) => fire(ev.title, ev.body, ev.tag)); // cap the burst, never spam
+  // advance past EVERY candidate so nothing re-fires, even the ones beyond the cap
+  lastNotifiedAt = events.reduce((mx, ev) => (ev.at > mx ? ev.at : mx), lastNotifiedAt);
+  await metaSet("lastNotifiedAt", lastNotifiedAt);
 }
 
-/** Owner opened the daybook — everything up to now is seen. */
+/** Owner opened the daybook — clears the unseen badge only (never touches notifications). */
 export async function markExpensesSeen() {
   lastSeen = nowIso();
-  notified = new Set();
   await metaSet("lastSeenExpenseAt", lastSeen);
   setUnseen(0);
 }
