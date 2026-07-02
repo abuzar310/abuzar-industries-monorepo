@@ -426,23 +426,29 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     const sheet = sheetRef.current;
     if (!sheet) return;
     const fit = () => {
-      // Invoices fill a full A4 via CSS (aspect-ratio); never zoom them, or they get
-      // letterboxed (narrower than the page). Two boxes fit via the compact print CSS.
-      if (isInv) return;
       const probe = document.createElement("div");
       probe.style.cssText = "position:absolute;left:-9999px;top:0;width:190mm;height:277mm;visibility:hidden";
       document.body.appendChild(probe);
       const pageW = probe.offsetWidth;
       const pageH = probe.offsetHeight;
       probe.remove();
+      sheet.classList.remove("inv-tight");
       sheet.style.zoom = "1";
       sheet.style.width = pageW + "px";
+      if (isInv) {
+        // Invoices fill a full A4 via CSS; never zoom them (that letterboxes them).
+        // If two boxes overrun the page, compress the totals + bank/sign boxes instead.
+        if (sheet.scrollHeight > pageH + 2) sheet.classList.add("inv-tight");
+        sheet.style.width = "";
+        return;
+      }
       const need = sheet.scrollHeight;
       if (need > pageH) sheet.style.zoom = (pageH / need).toFixed(4);
     };
     const unfit = () => {
       sheet.style.width = "";
       sheet.style.zoom = "1";
+      sheet.classList.remove("inv-tight");
     };
     window.addEventListener("beforeprint", fit);
     window.addEventListener("afterprint", unfit);

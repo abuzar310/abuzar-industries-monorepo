@@ -30,6 +30,11 @@ export async function generatePdf(sheet: HTMLElement, fileBase: string) {
   holder.style.cssText = "position:fixed;left:-10000px;top:0;width:" + width + "px;background:#FAF6EF";
   holder.appendChild(clone);
   document.body.appendChild(holder);
+  // invoice: if it runs over one A4 page, compress the boxes (same as print) so it stays one page
+  if (clone.classList.contains("inv")) {
+    const a4h = (width * 297) / 210;
+    if (clone.scrollHeight > a4h + 4) clone.classList.add("inv-tight");
+  }
 
   try {
     const canvas = await html2canvas(clone, {

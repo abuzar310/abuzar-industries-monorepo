@@ -347,6 +347,18 @@ body{
 #sheet.inv .grand .val{font-size:19px}
 /* wood-box header bar: same thinness + colour as the grand-total bar */
 #sheet.inv .sec-head{padding:6px 13px; background:linear-gradient(180deg,#5b4227,#42301c) !important}
+/* smart fit: added only when a long invoice would overflow — shrink the boxes' heights */
+#sheet.inv.inv-tight .sec-head{padding:3px 13px}
+#sheet.inv.inv-tight .thead, #sheet.inv.inv-tight .row{padding:1px 9px}
+#sheet.inv.inv-tight .totals{margin-top:8px}
+#sheet.inv.inv-tight .t-row{padding:3px 22px; font-size:12px}
+#sheet.inv.inv-tight .grand{padding:3px 22px}
+#sheet.inv.inv-tight .grand .val{font-size:16px}
+#sheet.inv.inv-tight .words{padding:4px 22px; font-size:11px}
+#sheet.inv.inv-tight .inv-foot{margin-top:8px}
+#sheet.inv.inv-tight .inv-bank, #sheet.inv.inv-tight .inv-terms{padding:5px 14px; line-height:1.32}
+#sheet.inv.inv-tight .inv-sign{padding:8px 22px 5px}
+#sheet.inv.inv-tight .inv-thanks{padding:3px}
 #sheet.inv .words{padding:8px 22px; font-size:12.5px}
 /* TAX-INVOICE tag centered above the box; masthead centered with a big bold name */
 .inv-tag-top{text-align:center; margin-bottom:8px}
