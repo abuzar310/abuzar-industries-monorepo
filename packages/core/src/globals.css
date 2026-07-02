@@ -351,11 +351,12 @@ body{
   font-weight:800; font-size:13px; color:var(--ochre-deep); border:1.5px solid var(--ochre-deep); border-radius:6px; padding:5px 18px}
 /* invoice masthead: bold UPPERCASE name, centered (logo on top, name + address below) */
 #sheet.inv .co-name{font-weight:800; text-transform:uppercase; letter-spacing:.005em}
-.mast-c .mast-top{justify-content:center}
-.mast-c .brand-row{flex-direction:column; align-items:center; text-align:center; gap:10px; flex:0 1 auto}
-.mast-c .brand{text-align:center; min-width:0}
+/* logo stays on the left; the ABUZAR INDUSTRIES name is centered on that same line */
+.mast-c .mast-top{position:relative; justify-content:flex-start; align-items:center}
+.mast-c .brand-row{flex-direction:row; align-items:center; gap:0; flex:1 1 auto; min-height:2.6cm}
+.mast-c .brand{position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); text-align:center; min-width:0}
 .mast-c .co-name{justify-content:center}
-.mast-c .co-meta{text-align:center; margin-top:6px}
+.mast-c .co-meta{text-align:center; margin-top:4px}
 .wmark{position:absolute; inset:0; z-index:0; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden;
   -webkit-print-color-adjust:exact; print-color-adjust:exact}
 .wmark span{font-family:var(--serif); font-weight:600; font-size:78px; letter-spacing:.02em; color:var(--walnut); opacity:.055;
