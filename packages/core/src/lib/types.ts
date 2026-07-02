@@ -244,6 +244,8 @@ export interface Voucher {
   legs: VLeg[];
   narration: string;
   enteredBy: string;
+  /** set when auto-posted from an invoice (the invoice id) — used to re-post / unpost */
+  sourceId?: string;
   createdAt: string;
   updatedAt: string;
   synced: boolean;

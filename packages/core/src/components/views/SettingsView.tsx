@@ -17,6 +17,8 @@ import { resetCounters } from "@/lib/numbering";
 import { exportBackup, importBackup, connectFolder } from "@/lib/backup";
 import { createQuotation } from "@/lib/create";
 import { canInstall, promptInstall } from "@/lib/pwa";
+import { getFeatures } from "@/lib/features";
+import { autoPostEnabled, setAutoPost } from "@/lib/ledger-autopost";
 import { useApp } from "@/store/useApp";
 import { bumpData, setShowLogin, setSyncState, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -31,6 +33,8 @@ export default function SettingsView() {
   const [openLock, setOpenLockUI] = useState<"never" | "daily" | "always">("daily");
   const [folderStatus, setFolderStatus] = useState("Folder: not connected.");
   const [cloud, setCloud] = useState("Checking cloud…");
+  const [autoPost, setAutoPostUI] = useState(false);
+  const ledgerOn = getFeatures().ledger;
 
   useEffect(() => {
     // reading module state after mount (Settings opens well after boot) avoids a hydration mismatch
@@ -39,7 +43,14 @@ export default function SettingsView() {
     setOpenLockUI(sessionMode());
     setCloud(getSupa().url && getSupa().key ? "Connected to cloud" : "Local only (no cloud configured)");
     /* eslint-enable react-hooks/set-state-in-effect */
+    autoPostEnabled().then(setAutoPostUI);
   }, []);
+
+  async function toggleAutoPost(v: boolean) {
+    setAutoPostUI(v);
+    await setAutoPost(v);
+    toast(v ? "Invoices will now post to the Ledger" : "Auto-posting off");
+  }
 
   // ---- cloud ----
   async function testCloud() {
@@ -262,6 +273,11 @@ export default function SettingsView() {
             <option value="always">Every time it opens</option>
           </select>
         </label>
+        {ledgerOn && (
+          <label className="secline" title="When on, each invoice writes a Sales/Purchase voucher (and a Receipt/Payment for money received) into the Ledger. Turn off to keep the Ledger manual.">
+            <input type="checkbox" checked={autoPost} onChange={(e) => toggleAutoPost(e.target.checked)} /> Auto-post invoices &amp; payments to Ledger
+          </label>
+        )}
       </div>
     </div>
   );

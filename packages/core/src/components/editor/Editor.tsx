@@ -14,6 +14,7 @@ import { maybeDeductStock } from "@/lib/stock";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { getFeatures } from "@/lib/features";
 import { addExpense, deleteExpensesBySource } from "@/lib/expenses";
+import { postInvoice, unpostInvoice } from "@/lib/ledger-autopost";
 import { quoteMessage, reminderMessage, waLink } from "@/lib/whatsapp";
 import { generatePdf } from "@/lib/pdf";
 import { folderConnected, saveCopyToFolder, writeDbSnapshot } from "@/lib/backup";
@@ -86,6 +87,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     put(docStore(d), clone(d));
     setSyncState("queue");
     trySync();
+    // optional: mirror this invoice into the Tally ledger (no-op unless the toggle is on)
+    if (d.kind === "invoice") postInvoice(d).catch(() => {});
   }
   function scheduleSave() {
     clearTimeout(saveTimer.current);
@@ -400,6 +403,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     await cloudDelete(st, id);
     // cascade: remove any daybook entries this doc's payments created
     const n = await deleteExpensesBySource(id);
+    if (st === "invoices") await unpostInvoice(id); // remove any auto-posted ledger vouchers
     await metaSet("lastOpen", null);
     bumpData();
     toast(doc.number + " deleted" + (n ? " · " + n + " daybook entr" + (n === 1 ? "y" : "ies") + " removed" : ""));
