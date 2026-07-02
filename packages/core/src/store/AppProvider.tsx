@@ -15,6 +15,7 @@ import {
   isLoggedIn,
   loadSupa,
   loadTombstones,
+  mirrorFromCloud,
   authLoad,
   sessionMode,
   setCloudPrefix,
@@ -99,11 +100,10 @@ export default function AppProvider({
     const onVisible = () => {
       const supa = getSupa();
       if (!document.hidden && supa.url && supa.key && navigator.onLine) {
-        trySync();
-        bgPull();
+        trySync().then(() => mirrorFromCloud()); // re-converge to the cloud on return
       }
     };
-    const onOnline = () => trySync();
+    const onOnline = () => trySync().then(() => mirrorFromCloud());
     const onOffline = () => setSyncState("off");
 
     (async function boot() {
@@ -139,7 +139,8 @@ export default function AppProvider({
         setShowLogin(true, gateStrict() && navigator.onLine);
       } else {
         if (isLoggedIn()) await ensureAuth();
-        trySync();
+        await trySync(); // push any pending local writes up first…
+        await mirrorFromCloud(); // …then make this device match the cloud (single source of truth)
       }
 
       setReady(true);

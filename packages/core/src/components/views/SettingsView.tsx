@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { clearStore } from "@/lib/db";
 import { getSupa, pullFromCloud, testConnection, trySync } from "@/lib/cloud";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { canInstall, promptInstall } from "@/lib/pwa";
@@ -66,25 +65,6 @@ export default function SettingsView() {
     bumpData();
     toast(n ? "Restored " + n + " records" : "Cloud is empty — nothing to restore");
   }
-  async function resetToCloud() {
-    const ok = await confirmDialog({
-      title: "Match this device to the cloud?",
-      message:
-        "Clears this device's local records and reloads exactly what's in the cloud — removes any local-only leftovers. Anything not yet synced up will be lost.",
-      confirmLabel: "Match to cloud",
-      danger: true,
-    });
-    if (!ok) return;
-    toast("Cleaning up…");
-    for (const s of ["quotations", "invoices", "customers", "stock", "expenses", "sessions", "ledgers", "vouchers"] as const) {
-      await clearStore(s);
-    }
-    const n = await pullFromCloud(true);
-    setSyncState("on");
-    bumpData();
-    toast("Done — matched to the cloud (" + n + " records)");
-    router.push("/");
-  }
 
   function importFile() {
     const inp = document.createElement("input");
@@ -122,12 +102,8 @@ export default function SettingsView() {
           <button className="btn sm" onClick={restore}>Restore from cloud</button>
         </div>
         <p className="note" style={{ marginTop: 8 }}>
-          Seeing old/leftover records that aren&apos;t on your other devices? They&apos;re local-only. Match this device to
-          the cloud to clear them.
+          The cloud is the single source of truth — every device shows the same data and stays in sync automatically.
         </p>
-        <div className="rowbtns">
-          <button className="btn warn sm" onClick={resetToCloud}>Match this device to the cloud</button>
-        </div>
       </div>
 
       {ledgerOn && (

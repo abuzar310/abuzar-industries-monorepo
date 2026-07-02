@@ -1,6 +1,6 @@
 // Supabase cloud sync + GoTrue auth — hand-rolled REST against {id, data jsonb,
 // updated_at} tables, faithfully ported from the legacy single-file app.
-import { allRec, getRec, metaGet, metaSet, put } from "./db";
+import { allRec, delRec, getRec, metaGet, metaSet, put } from "./db";
 import { nowIso, pad } from "./calc";
 import { fixCounters } from "./numbering";
 import { BAKED } from "./constants";
@@ -338,6 +338,48 @@ export async function pullFromCloud(force?: boolean): Promise<number> {
   }
   await fixCounters();
   return pulled;
+}
+
+/** Cloud is the single source of truth: pull everything AND drop local records the
+ *  cloud no longer has (so every device converges to the same set). Pending local
+ *  writes (synced:false, not yet pushed) are kept so nothing you just made is lost. */
+export async function mirrorFromCloud(): Promise<boolean> {
+  if (!supa.url || !supa.key || !navigator.onLine) return false;
+  if (authRequired() && !isLoggedIn()) return false;
+  try {
+    await ensureAuth();
+  } catch {}
+  let ok = false;
+  for (const s of Object.keys(TABLE) as (keyof typeof TABLE)[]) {
+    try {
+      const r = await fetch(supa.url + "/rest/v1/" + tableName(s) + "?select=*", { headers: supaHeaders() });
+      if (!r.ok) continue;
+      const rows = await r.json();
+      const cloudIds = new Set<string>();
+      for (const row of rows) {
+        const rec = row && row.data;
+        if (!rec) continue;
+        const key = s === "stock" ? rec.key : rec.id;
+        if (!key) continue;
+        cloudIds.add(String(key));
+        if (isTombstoned(s, key)) continue;
+        rec.synced = true;
+        await put(s, rec);
+      }
+      const local = await allRec<{ id?: string; key?: string; synced?: boolean }>(s);
+      for (const rec of local) {
+        const key = s === "stock" ? rec.key : rec.id;
+        if (!key) continue;
+        // drop only records that came from the cloud but are gone now (keep unsynced local writes)
+        if (rec.synced && !cloudIds.has(String(key)) && !(_openId === key && _openStore === s)) {
+          await delRec(s, key);
+        }
+      }
+      ok = true;
+    } catch {}
+  }
+  if (ok) cb.dataChanged();
+  return ok;
 }
 
 export async function cloudDelete(storeName: string, id: string) {
