@@ -239,8 +239,11 @@ body{
 .add-row:active{transform:scale(.97)}
 .sec-tot{font-family:var(--mono); font-size:13px; color:var(--ink-soft); text-align:right; font-variant-numeric:tabular-nums}
 .sec-tot b{color:var(--ink); font-size:15px; font-weight:600}
-/* clean calc row in the footer: Total | Rate | Amount */
-.sec-calc{display:flex; align-items:flex-end; gap:18px; margin-left:auto}
+/* footer: a Total line, then a Total · Rate · Total Price row */
+.sec-calc{display:flex; flex-direction:column; align-items:flex-end; gap:7px; margin-left:auto}
+.sc-total{font-family:var(--disp); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); font-weight:700}
+.sc-total b{font-family:var(--mono); font-size:17px; color:var(--ink); margin-left:7px; font-variant-numeric:tabular-nums}
+.sc-row{display:flex; align-items:flex-end; gap:20px; border-top:1px solid var(--line-2); padding-top:6px}
 .sc{display:flex; flex-direction:column; gap:2px; text-align:right}
 .sc i{font-style:normal; font-family:var(--disp); font-size:9px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-faint); font-weight:700}
 .sc b{font-family:var(--mono); font-size:15px; color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums}
@@ -328,10 +331,12 @@ body{
 #sheet.inv .grand .lab{font-size:12px}
 #sheet.inv .grand .val{font-size:24px}
 #sheet.inv .words{padding:8px 22px; font-size:12.5px}
-/* TAX-INVOICE tag centered above the masthead box (left-aligned logo + name below) */
+/* TAX-INVOICE tag centered above the box; masthead centered with a big bold name */
 .inv-tag-top{text-align:center; margin-bottom:8px}
 .inv-tag-top span{display:inline-block; font-family:var(--disp); text-transform:uppercase; letter-spacing:.22em;
   font-weight:800; font-size:13px; color:var(--ochre-deep); border:1.5px solid var(--ochre-deep); border-radius:6px; padding:5px 18px}
+/* invoice masthead: keep left-aligned (icon left, name right), just make the name bold */
+#sheet.inv .co-name{font-weight:800}
 .wmark{position:absolute; inset:0; z-index:0; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden;
   -webkit-print-color-adjust:exact; print-color-adjust:exact}
 .wmark span{font-family:var(--serif); font-weight:600; font-size:78px; letter-spacing:.02em; color:var(--walnut); opacity:.055;
@@ -767,8 +772,8 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .inv-sign{padding:30px 22px 16px}
   /* invoice masthead: big logo + name, bold TAX INVOICE tag, address below */
   #sheet.inv .mast-top{padding:12px 20px}
-  #sheet.inv .logo{height:1.9cm}
-  #sheet.inv .co-name{font-size:34px; font-weight:700}
+  #sheet.inv .logo{height:2cm}
+  #sheet.inv .co-name{font-size:36px; font-weight:800}
   #sheet.inv .kindtag{font-size:11px; padding:3px 10px; font-weight:800; border-width:1.5px}
   #sheet.inv .co-meta{font-size:11px}
   #sheet.inv .inv-tag-top span{font-size:12px; padding:4px 16px}

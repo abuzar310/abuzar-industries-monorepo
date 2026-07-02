@@ -142,18 +142,23 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
           + Add line
         </button>
         <div className="sec-calc">
-          <span className="sc">
-            <i>Total {unit}</i>
-            <b>{totalText}</b>
-          </span>
-          <span className="sc">
-            <i>Rate ₹/{unit}</i>
-            <input type="number" inputMode="decimal" value={sec.rate} aria-label="Rate" onChange={(e) => onRate(si, e.target.value)} />
-          </span>
-          <span className="sc amt">
-            <i>Amount</i>
-            <b>₹ {inr(amt)}</b>
-          </span>
+          <div className="sc-total">
+            Total {unit} <b>{totalText}</b>
+          </div>
+          <div className="sc-row">
+            <span className="sc">
+              <i>Total {unit}</i>
+              <b>{totalText}</b>
+            </span>
+            <span className="sc">
+              <i>Rate ₹/{unit}</i>
+              <input type="number" inputMode="decimal" value={sec.rate} aria-label="Rate" onChange={(e) => onRate(si, e.target.value)} />
+            </span>
+            <span className="sc amt">
+              <i>Total Price</i>
+              <b>₹ {inr(amt)}</b>
+            </span>
+          </div>
         </div>
       </div>
     </div>
