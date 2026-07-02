@@ -14,6 +14,7 @@ import {
   getSupa,
   isLoggedIn,
   loadSupa,
+  loadTombstones,
   authLoad,
   sessionMode,
   setCloudPrefix,
@@ -113,6 +114,7 @@ export default function AppProvider({
       await loadLocalUser();
       await loadNotifyState();
       await loadSupa();
+      await loadTombstones();
       await authLoad();
       refreshAuthIdentity();
       const supa = getSupa();

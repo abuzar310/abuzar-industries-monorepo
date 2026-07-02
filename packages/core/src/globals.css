@@ -332,6 +332,9 @@ body{
 #sheet.inv .inv-foot{margin-top:auto}
 /* one wood box below another on the invoice (never side by side) */
 #sheet.inv #sections{grid-template-columns:1fr}
+/* bold, readable customer name / phone / address / invoice-no / date values */
+#sheet.inv .cust-block input, #sheet.inv .meta input, #sheet.inv .meta .ro{font-weight:700; color:var(--ink)}
+#sheet.inv .cust-block label, #sheet.inv .meta label{color:var(--ink-soft); font-weight:700}
 /* invoice box is full width, but the value inputs stay regular-width, grouped on the
    left; a trailing spacer at the end keeps the row line running clean to the right edge */
 #sheet.inv .thead, #sheet.inv .row{grid-template-columns:26px 72px 72px 72px 72px 62px 22px 1fr}
@@ -703,7 +706,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 /* ---------- overflow "More" menu ---------- */
 .moremenu{position:relative; display:inline-block}
 .moremenu-pop{
-  position:absolute; right:0; bottom:calc(100% + 8px); z-index:60; min-width:210px;
+  z-index:200; min-width:210px; max-width:calc(100vw - 16px);
   background:var(--panel-2); border:1px solid var(--line-2); border-radius:var(--radius-md);
   box-shadow:var(--shadow-lg); padding:6px; display:flex; flex-direction:column; gap:1px;
   animation:card-in .18s ease;

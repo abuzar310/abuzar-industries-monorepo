@@ -247,6 +247,25 @@ export async function trySync(force?: boolean) {
   setSync(pending === 0 ? "on" : ok ? "on" : "queue");
 }
 
+// ---- delete tombstones ----
+// A local delete records a tombstone so an in-flight pull can't re-add the record
+// before the cloud DELETE lands (that's the "deleted thing comes back" bug). Pruned
+// after 14 days (cloud delete is long done by then).
+let tombstones: Record<string, number> = {};
+const tombKey = (s: string, id: string) => s + ":" + id;
+export const isTombstoned = (s: string, id: string) => !!tombstones[tombKey(s, id)];
+export async function loadTombstones() {
+  const t = await metaGet<Record<string, number>>("tombstones", {});
+  const cutoff = Date.now() - 14 * 864e5;
+  tombstones = {};
+  for (const [k, ts] of Object.entries(t)) if (ts > cutoff) tombstones[k] = ts;
+  await metaSet("tombstones", tombstones);
+}
+async function addTombstone(s: string, id: string) {
+  tombstones[tombKey(s, id)] = Date.now();
+  await metaSet("tombstones", tombstones);
+}
+
 /** Pull others' changes without disturbing the open document. */
 export async function bgPull(openDocId: string = _openId, openDocStore: string = _openStore) {
   if (!supa.url || !supa.key || !navigator.onLine) return;
@@ -263,6 +282,7 @@ export async function bgPull(openDocId: string = _openId, openDocStore: string =
         if (!rec) continue;
         const key = s === "stock" ? rec.key : rec.id;
         if (!key) continue;
+        if (isTombstoned(s, key)) continue; // locally deleted — don't resurrect it
         if (openDocId && openDocId === key && openDocStore === s) continue; // never clobber the open doc
         let local: (Doc & { updatedAt?: string }) | undefined;
         try {
@@ -301,6 +321,7 @@ export async function pullFromCloud(force?: boolean): Promise<number> {
         if (!rec) continue;
         const key = s === "stock" ? rec.key : rec.id;
         if (!key) continue;
+        if (!force && isTombstoned(s, key)) continue; // locally deleted — don't resurrect it
         let local: (Doc & { updatedAt?: string }) | undefined;
         try {
           local = await getRec(s, key);
@@ -320,6 +341,7 @@ export async function pullFromCloud(force?: boolean): Promise<number> {
 }
 
 export async function cloudDelete(storeName: string, id: string) {
+  await addTombstone(storeName, id); // guard against a pull resurrecting it, even if offline
   if (!supa.url || !supa.key) return;
   try {
     await ensureAuth();
