@@ -281,7 +281,10 @@ body{
 /* simple quote (Cut Size): compact top — "Wood Quotation" title + party in a slim band so the
    wood tables get the maximum height in the middle of the page */
 #sheet.sq .mast-top{padding:4px 22px 2px; position:relative}
-#sheet.sq .co-name{font-size:24px}
+/* "Wood Quotation" centered across the masthead row */
+#sheet.sq .brand-row{justify-content:center}
+#sheet.sq .brand{text-align:center}
+#sheet.sq .co-name{font-size:24px; text-align:center}
 #sheet.sq .meta .f,#sheet.sq .cust-block .f{padding:3px 20px}
 #sheet.sq .meta label,#sheet.sq .cust-block label{margin-bottom:0}
 /* party + date values in bold so they read clearly */
@@ -307,6 +310,9 @@ body{
 #sheet.sq.a4fill #sections .section{display:flex; flex-direction:column; min-height:0}
 #sheet.sq.a4fill #sections .rows{flex:1 1 auto; display:flex; flex-direction:column; min-height:0}
 #sheet.sq.a4fill #sections .row{flex:1 1 auto; min-height:0}
+/* a lonely last wood box (odd count) spans both columns so it fills the full width and the
+   totals sits right under it — no empty half-column on the right */
+#sheet.sq.a4fill #sections .section:last-child:nth-child(odd){grid-column:1 / -1}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);
