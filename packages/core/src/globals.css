@@ -279,15 +279,18 @@ body{
   border-radius:6px; border:1px solid var(--line-2); background:var(--panel); color:var(--ochre-deep); cursor:pointer; vertical-align:middle}
 .gst-toggle:hover{border-color:var(--ochre)}
 /* simple quote (Cut Size): compact top — title + name in 1–2 lines, no wasted space */
-#sheet.sq .mast-top{padding:8px 22px 4px; position:relative}
-#sheet.sq .co-name{font-size:26px}
-#sheet.sq .meta .f,#sheet.sq .cust-block .f{padding:7px 20px}
-#sheet.sq #sections{margin-top:8px}
+#sheet.sq .mast-top{padding:6px 22px 3px; position:relative}
+#sheet.sq .co-name{font-size:24px}
+#sheet.sq .meta .f,#sheet.sq .cust-block .f{padding:5px 20px}
+#sheet.sq .meta label,#sheet.sq .cust-block label{margin-bottom:1px}
+/* wood boxes stacked in one column so rows run down the page (fills the A4) */
+#sheet.sq #sections{margin-top:8px; grid-template-columns:1fr; gap:10px}
 /* "Cut Size" stays on the left; only the "Wood Quotation" tag is centered in the row */
 #sheet.sq .co-name .kindtag{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%)}
-/* slimmer grand-total row */
-#sheet.sq .grand{padding:8px 22px}
-#sheet.sq .grand .val{font-size:22px}
+/* short grand-total row */
+#sheet.sq .grand{padding:5px 22px}
+#sheet.sq .grand .val{font-size:20px}
+#sheet.sq .words{padding:5px 22px}
 /* smart print fill: rows grow (--rowpad, set by the fit script) to fill the A4 when few */
 #sheet.sq .row{padding-top:calc(4px + var(--rowpad, 0px)); padding-bottom:calc(4px + var(--rowpad, 0px))}
 .add-sec{
