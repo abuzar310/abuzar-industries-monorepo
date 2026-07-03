@@ -296,23 +296,27 @@ body{
 #sheet.sq .grand{padding:2px 22px}
 #sheet.sq .grand .val{font-size:18px}
 #sheet.sq .words{padding:3px 22px 5px; line-height:1.3; white-space:normal; overflow:visible}
-/* Fill exactly one A4: the sheet is a fixed-height flex column (masthead · sections · totals);
-   #sections takes the free space as a two-column grid whose rows stretch (grid-auto-rows:1fr)
-   so the wood boxes side-by-side fill the page, and inside each box the data rows stretch to
-   share it (flex:1 1 auto — NOT basis 0, which collapses the rows). Pure CSS, no measure-and-grow
-   script — verified in headless Chrome print. Height is set inline (277mm print / px for the PDF
-   clone); the class is toggled by both the print fit() and the PDF export so they fill identically. */
+/* the totals block lives inside #sections (see Editor.tsx) so it flows in the grid: full width
+   on the editor screen, and on print it drops into the empty half-column beside a lonely last
+   box (odd count) or spans full width when the columns come out even */
+#sheet.sq #sections .totals{grid-column:1 / -1}
+/* Fill exactly one A4: the sheet is a fixed-height flex column (masthead · sections). #sections
+   takes the free space as a two-column grid whose rows stretch (grid-auto-rows:1fr) so the wood
+   boxes fill the page, and inside each box the data rows stretch (flex:1 1 auto — NOT basis 0,
+   which collapses them). Pure CSS, verified in headless Chrome print. Height is set inline
+   (283mm print / px for the PDF clone) by the print fit() and the PDF export so they match. */
 #sheet.sq.a4fill{display:flex; flex-direction:column}
-/* masthead + totals keep their natural height (never shrink/clip); only the tables flex */
-#sheet.sq.a4fill .mast,#sheet.sq.a4fill .totals{flex:0 0 auto}
+/* masthead keeps its natural height (never shrink/clip); only the tables grid flexes */
+#sheet.sq.a4fill .mast{flex:0 0 auto}
 #sheet.sq.a4fill #sections{flex:1 1 auto; display:grid; grid-template-columns:1fr 1fr;
   grid-auto-rows:minmax(min-content, 1fr); align-content:stretch; gap:8px 10px; min-height:0}
 #sheet.sq.a4fill #sections .section{display:flex; flex-direction:column; min-height:0}
 #sheet.sq.a4fill #sections .rows{flex:1 1 auto; display:flex; flex-direction:column; min-height:0}
 #sheet.sq.a4fill #sections .row{flex:1 1 auto; min-height:0}
-/* a lonely last wood box (odd count) spans both columns so it fills the full width and the
-   totals sits right under it — no empty half-column on the right */
-#sheet.sq.a4fill #sections .section:last-child:nth-child(odd){grid-column:1 / -1}
+/* totals as a grid cell: push its content to the bottom so the grand-total row sits at the
+   base of the cell; drop the spanning when it sits beside a lonely last box (even child index) */
+#sheet.sq.a4fill #sections .totals{display:flex; flex-direction:column; justify-content:flex-end}
+#sheet.sq.a4fill #sections .totals:nth-child(even){grid-column:auto}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);

@@ -680,6 +680,19 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               />
             );
           })}
+          {/* Cut Size quote: totals live INSIDE the grid so on print they drop into the empty
+              half-column beside a lonely last box (or span full width when the columns are even) */}
+          {feat.simpleQuote && (
+            <Totals
+              doc={doc}
+              sub={totals.sub}
+              gstAmt={totals.gstAmt}
+              grand={totals.grand}
+              totalCft={totalCft}
+              onGst={(v) => setField("gst", v)}
+              onGstMode={(m) => setField("gstMode", m)}
+            />
+          )}
         </div>
         <button className="add-sec" onClick={onAddSec}>
           + Add wood type
@@ -690,15 +703,17 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
           ))}
         </datalist>
 
-        <Totals
-          doc={doc}
-          sub={totals.sub}
-          gstAmt={totals.gstAmt}
-          grand={totals.grand}
-          totalCft={totalCft}
-          onGst={(v) => setField("gst", v)}
-          onGstMode={(m) => setField("gstMode", m)}
-        />
+        {!feat.simpleQuote && (
+          <Totals
+            doc={doc}
+            sub={totals.sub}
+            gstAmt={totals.gstAmt}
+            grand={totals.grand}
+            totalCft={totalCft}
+            onGst={(v) => setField("gst", v)}
+            onGstMode={(m) => setField("gstMode", m)}
+          />
+        )}
 
         {isInv && (
           <div className="inv-foot">
