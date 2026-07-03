@@ -556,46 +556,73 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
           </div>
         )}
         <div className={"mast" + (isInv && !isBuy ? " mast-c" : "")}>
-          <div className="mast-top">
-            <div className="brand-row">
-              {!isBuy && brand.logo && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className="logo" alt={brand.name} src="/logo.png" />
-              )}
-              <div className="brand">
-                <div className="co-name">
-                  {isBuy ? (
-                    <>
-                      Purchase <span className="kindtag">Invoice</span>
-                    </>
-                  ) : isInv ? (
-                    brand.name
-                  ) : feat.simpleQuote ? (
-                    "Wood Quotation"
-                  ) : (
-                    <>
-                      {brand.name} <span className="kindtag">Quotation</span>
-                    </>
-                  )}
-                </div>
-                {!isBuy && isInv && brand.goods && <div className="co-goods">{brand.goods}</div>}
-                {isBuy ? (
-                  <div className="co-meta">
-                    <div>Purchased by {brand.name}{brand.gstin ? " · GSTIN " + brand.gstin : ""}</div>
-                  </div>
+          {feat.simpleQuote ? (
+            // Cut Size quote: No. on the left, "Wood Quotation" centered, Date on the right — one line
+            <div className="mast-top sq-head">
+              <div className="mh-side mh-no">
+                <label>Quotation No.</label>
+                {editingNo ? (
+                  <input
+                    className="ro"
+                    autoFocus
+                    defaultValue={doc.number}
+                    onBlur={(e) => commitNumber(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === "Tab") (e.target as HTMLInputElement).blur();
+                      if (e.key === "Escape") setEditingNo(false);
+                    }}
+                  />
                 ) : (
-                  <div className="co-meta">
-                    {brand.addr && <div>{brand.addr}</div>}
-                    {brand.gstin && (
-                      <div>
-                        <b>GSTIN</b> {brand.gstin}
-                      </div>
-                    )}
-                  </div>
+                  <input className="ro" value={doc.number} readOnly onClick={() => setEditingNo(true)} />
                 )}
               </div>
+              <div className="co-name">Wood Quotation</div>
+              <div className="mh-side mh-date">
+                <label>Date</label>
+                <input value={doc.date} onChange={(e) => setField("date", e.target.value)} />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="mast-top">
+              <div className="brand-row">
+                {!isBuy && brand.logo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="logo" alt={brand.name} src="/logo.png" />
+                )}
+                <div className="brand">
+                  <div className="co-name">
+                    {isBuy ? (
+                      <>
+                        Purchase <span className="kindtag">Invoice</span>
+                      </>
+                    ) : isInv ? (
+                      brand.name
+                    ) : (
+                      <>
+                        {brand.name} <span className="kindtag">Quotation</span>
+                      </>
+                    )}
+                  </div>
+                  {!isBuy && isInv && brand.goods && <div className="co-goods">{brand.goods}</div>}
+                  {isBuy ? (
+                    <div className="co-meta">
+                      <div>Purchased by {brand.name}{brand.gstin ? " · GSTIN " + brand.gstin : ""}</div>
+                    </div>
+                  ) : (
+                    <div className="co-meta">
+                      {brand.addr && <div>{brand.addr}</div>}
+                      {brand.gstin && (
+                        <div>
+                          <b>GSTIN</b> {brand.gstin}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {!feat.simpleQuote && (
           <div className={"meta" + (showLink ? "" : " two")}>
             <div className="f">
               <label>{isInv ? "Invoice No." : "Quotation No."}</label>
@@ -625,6 +652,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               </div>
             )}
           </div>
+          )}
           <div className="cust-block">
             <div className="f">
               <label>{isBuy ? "Supplier Name" : "Customer Name"}</label>
@@ -782,10 +810,14 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             <button onClick={onPdf}>Download PDF</button>
             {!isInv && <button onClick={onWaRemind}>WhatsApp reminder</button>}
             <button onClick={onFolder}>Save copy to folder</button>
-            <div className="moremenu-sep" />
-            <button className="danger" onClick={onDelete}>
-              Delete {isInv ? "invoice" : "quotation"}
-            </button>
+            {user?.role === "owner" && (
+              <>
+                <div className="moremenu-sep" />
+                <button className="danger" onClick={onDelete}>
+                  Delete {isInv ? "invoice" : "quotation"}
+                </button>
+              </>
+            )}
           </MoreMenu>
         </div>
       </div>

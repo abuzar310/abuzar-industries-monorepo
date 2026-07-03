@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/store/useApp";
 import { setSearch, toast } from "@/store/app-store";
 import { brandFor } from "@/lib/brand";
-import { lockApp } from "@/lib/local-auth";
+import { changePassword, lockApp } from "@/lib/local-auth";
+import { formDialog } from "@/store/dialog-store";
 import type { Tab } from "@/lib/types";
 
 function isActive(href: string, path: string) {
@@ -96,6 +97,28 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
                 <div className="um-head">
                   {user.name} · {user.role === "owner" ? "Owner" : "Manager"}
                 </div>
+                <button
+                  className="um-item"
+                  onClick={async () => {
+                    setUserMenu(false);
+                    const r = await formDialog({
+                      title: "Change my password",
+                      message: "New password for " + user.name,
+                      fields: [
+                        { name: "pw", label: "New password", type: "password", required: true },
+                        { name: "pw2", label: "Confirm password", type: "password", required: true },
+                      ],
+                      submitLabel: "Update",
+                    });
+                    if (!r) return;
+                    if ((r.pw || "").trim().length < 4) return toast("Use at least 4 characters");
+                    if (r.pw !== r.pw2) return toast("Passwords don't match");
+                    await changePassword(user.id, r.pw);
+                    toast("Password updated");
+                  }}
+                >
+                  Change password
+                </button>
                 <button
                   className="um-logout"
                   onClick={() => {

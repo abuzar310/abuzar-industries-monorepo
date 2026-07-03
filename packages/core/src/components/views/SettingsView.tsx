@@ -85,6 +85,7 @@ export default function SettingsView() {
     else toast("Use the browser menu → Install / Add to Home screen");
   }
 
+
   return (
     <div>
       <div className="sectitle">

@@ -31,7 +31,8 @@ function applySearch(arr: Doc[], q: string) {
 }
 
 export default function DocListView({ store, title, sub, statusCol, empty, showNew }: Props) {
-  const { dataVersion, searchTerm } = useApp();
+  const { dataVersion, searchTerm, user } = useApp();
+  const canDelete = user?.role === "owner"; // only the owner (Afsar) may delete
   const router = useRouter();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [q, setQ] = useState("");
@@ -129,7 +130,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
         <span className="s-count">{filtered.length}</span>
       </div>
 
-      {sel.size > 0 && (
+      {canDelete && sel.size > 0 && (
         <div className="bulkbar">
           <span>
             <b>{sel.size}</b> selected
@@ -144,7 +145,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       <div className="listwrap">
         <div className="lhead">
           <span className="selcol">
-            <input type="checkbox" checked={allOnPage} onChange={toggleAll} aria-label="Select all on page" />
+            {canDelete && <input type="checkbox" checked={allOnPage} onChange={toggleAll} aria-label="Select all on page" />}
             No.
           </span>
           <span>Customer</span>
@@ -164,13 +165,15 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
             return (
               <div className={"lrow" + (sel.has(d.id) ? " picked" : "")} key={d.id} onClick={() => open(d.id)} style={{ cursor: "pointer" }}>
                 <span className="id selcol">
-                  <input
-                    type="checkbox"
-                    checked={sel.has(d.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={() => toggle(d.id)}
-                    aria-label={"Select " + d.id}
-                  />
+                  {canDelete && (
+                    <input
+                      type="checkbox"
+                      checked={sel.has(d.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => toggle(d.id)}
+                      aria-label={"Select " + d.id}
+                    />
+                  )}
                   {d.id}
                 </span>
                 <span className="nm">{d.customerName || "—"}</span>
