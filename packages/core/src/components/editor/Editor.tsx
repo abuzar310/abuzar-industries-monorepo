@@ -444,9 +444,10 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         sheet.style.width = "";
         return;
       }
-      // quote: natural 2-column flow (bill sits right after the last box). Only scale the sheet
-      // down if it genuinely overruns one A4.
+      // quote: lock to one A4 and let the grid fill it (boxes + rows stretch, bill at the bottom).
+      // Small safety gap keeps the amount-in-words line off the paper edge; scale down on overflow.
       sheet.classList.add("a4fill");
+      sheet.style.height = pageH - 10 + "px";
       if (sheet.scrollHeight > pageH + 2) sheet.style.zoom = (pageH / sheet.scrollHeight).toFixed(4);
     };
     const unfit = () => {
