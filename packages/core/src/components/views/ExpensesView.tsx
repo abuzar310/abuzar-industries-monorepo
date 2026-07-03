@@ -3,10 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { delRec } from "@/lib/db";
 import { cloudDelete } from "@/lib/cloud";
 import { inr } from "@/lib/calc";
-import { addExpense, allExpenses, allSessions, closeSession, dayTotals, ENTRY_TYPES, isInflow, typeLabel } from "@/lib/expenses";
+import { addExpense, allExpenses, allSessions, closeSession, dayTotals, ENTRY_TYPES, isInflow, isUpi, typeLabel, upiAccounts } from "@/lib/expenses";
 import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
 import { isIOS, isStandalone } from "@/lib/pwa";
 import { USERS } from "@/lib/local-auth";
+import AccountPicker from "@/components/AccountPicker";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -27,6 +28,8 @@ export default function ExpensesView() {
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<PayMode>("cash");
   const [note, setNote] = useState("");
+  const [acct, setAcct] = useState(""); // UPI recipient for a manual UPI entry
+  const [upiAccts, setUpiAccts] = useState<string[]>([]);
   const amountRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
@@ -38,9 +41,13 @@ export default function ExpensesView() {
       arr.sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || ""));
       setSessions(arr);
     });
+    upiAccounts().then(setUpiAccts);
   }, []);
-  // current open session = entries not yet archived into a closed session
-  const list = all.filter((e) => !e.sessionId);
+  // cash daybook (current open session) = non-UPI entries not yet archived
+  const list = all.filter((e) => !e.sessionId && !isUpi(e));
+  // UPI statements are tracked separately (Ajju doesn't owe UPI) — a running log, never archived
+  const upiList = all.filter(isUpi);
+  const upiTotal = Math.round(upiList.reduce((s, e) => s + (+e.amount || 0), 0) * 100) / 100;
   const sessionEntries = (id: string) => all.filter((e) => e.sessionId === id);
   useEffect(() => {
     load();
@@ -73,12 +80,16 @@ export default function ExpensesView() {
       amountRef.current?.focus();
       return toast("Enter an amount");
     }
-    await addExpense({ type, amount: amt, mode, note, label: type === "custom" ? note : "", enteredBy: user?.id || "unknown" });
+    const upiEntry = isInflow(type) && mode === "upi";
+    if (upiEntry && !acct.trim()) return toast("Enter the UPI account (to whom)");
+    await addExpense({ type, amount: amt, mode, note, account: acct, label: type === "custom" ? note : "", enteredBy: user?.id || "unknown" });
     setAmount("");
     setNote("");
+    setAcct("");
+    if (upiEntry && !upiAccts.includes(acct.trim())) setUpiAccts((a) => [...a, acct.trim()].sort());
     amountRef.current?.focus();
     bumpData();
-    toast("Entry added");
+    toast(upiEntry ? "UPI entry added" : "Entry added");
   }
 
   async function remove(e: Expense) {
@@ -150,10 +161,18 @@ export default function ExpensesView() {
             <input ref={amountRef} type="number" inputMode="decimal" placeholder="0" value={amount} onChange={(ev) => setAmount(ev.target.value)} />
           </label>
           {flow === "in" ? (
-            <div className="db-seg sm">
-              <button type="button" className={"seg-btn" + (mode === "cash" ? " on" : "")} onClick={() => setMode("cash")}>Cash</button>
-              <button type="button" className={"seg-btn" + (mode === "upi" ? " on" : "")} onClick={() => setMode("upi")}>UPI</button>
-            </div>
+            <>
+              <div className="db-seg sm">
+                <button type="button" className={"seg-btn" + (mode === "cash" ? " on" : "")} onClick={() => setMode("cash")}>Cash</button>
+                <button type="button" className={"seg-btn" + (mode === "upi" ? " on" : "")} onClick={() => setMode("upi")}>UPI</button>
+              </div>
+              {mode === "upi" && (
+                <div className="acct-field">
+                  <span style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 600 }}>UPI to which account?</span>
+                  <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
+                </div>
+              )}
+            </>
           ) : (
             <label className="db-cat">
               <span>Category</span>
@@ -174,9 +193,9 @@ export default function ExpensesView() {
 
       <div className="dash-grid" style={{ marginTop: 8 }}>
         <div className="stat">
-          <div className="k">Money In</div>
-          <div className="v money">₹ {inr(t.totalIn)}</div>
-          <div className="sub">Cash ₹{inr(t.cashIn)} · UPI ₹{inr(t.upiIn)}</div>
+          <div className="k">Cash In</div>
+          <div className="v money">₹ {inr(t.cashIn)}</div>
+          <div className="sub">UPI tracked separately below</div>
         </div>
         <div className="stat">
           <div className="k">Spent</div>
@@ -234,6 +253,42 @@ export default function ExpensesView() {
         </div>
       )}
 
+      {upiList.length > 0 && (
+        <>
+          <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
+            UPI Statements <small>— ₹{inr(upiTotal)} received · {upiList.length}</small>
+          </div>
+          <p className="note" style={{ marginTop: -6 }}>
+            UPI paid straight into an account — not part of Ajju&apos;s cash handover.
+          </p>
+          <div className="panel-card">
+            <div className="pc-head" style={{ justifyContent: "space-between" }}>
+              <span>Account · Quote · Date</span>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
+                Total ₹{inr(upiTotal)}
+              </span>
+            </div>
+            {upiList.map((e) => (
+              <div className="exprow" key={e.id}>
+                <span className="exptag in">UPI</span>
+                <span className="expnote">
+                  {e.account || "—"}
+                  <small>
+                    {e.note || "—"} · {e.date} · {userName(e.enteredBy)}
+                  </small>
+                </span>
+                <span className="expamt in">+₹ {inr(e.amount)}</span>
+                {!isOwner && (
+                  <button className="x-row" title="Delete" onClick={() => remove(e)}>
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {sessions.length > 0 && (
         <>
           <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
@@ -266,7 +321,7 @@ export default function ExpensesView() {
                       <div className="stat">
                         <div className="k">Money In</div>
                         <div className="v money">₹ {inr(s.totalIn)}</div>
-                        <div className="sub">Cash ₹{inr(s.cashIn)} · UPI ₹{inr(s.upiIn)}</div>
+                        <div className="sub">Cash ₹{inr(s.cashIn)}{s.upiIn > 0 ? " · UPI ₹" + inr(s.upiIn) : ""}</div>
                       </div>
                       <div className="stat">
                         <div className="k">Spent</div>

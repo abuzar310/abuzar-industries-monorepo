@@ -296,11 +296,13 @@ body{
 #sheet.sq .grand{padding:2px 22px}
 #sheet.sq .grand .val{font-size:18px}
 #sheet.sq .words{padding:3px 22px 5px; line-height:1.3; white-space:normal; overflow:visible}
-/* Fill one A4 completely: the sheet is a fixed-height flex column (masthead · sections · bill).
-   #sections takes the free space as a two-column grid whose rows stretch (grid-auto-rows:1fr) so the
-   wood boxes fill the page top-to-bottom, and inside each box the data rows stretch (flex:1 1 auto —
-   NOT basis 0, which collapses them). A lonely last box spans both columns so the right side fills
-   too, and the bill sits full width right under it. Verified in headless Chrome print. Height is set
+/* Fill one A4 completely — bottom AND right: the sheet is a fixed-height flex column
+   (masthead · sections · bill). #sections takes the free space as a two-column grid whose rows
+   stretch (grid-auto-rows:1fr) so the wood boxes fill the page top-to-bottom, and inside each box
+   the data rows stretch (flex:1 1 auto — NOT basis 0, which collapses them). Every box stays ONE
+   column wide; with an ODD box count (≥3) the 2nd box spans two rows so the right column has no
+   hole, and a box that is alone on the sheet spans the full width. The bill sits full width at the
+   end, right below the boxes — never beside one. Verified in headless Chrome print. Height is set
    inline (283mm print / px for the PDF clone) by the print fit() and the PDF export so they match. */
 #sheet.sq.a4fill{display:flex; flex-direction:column}
 #sheet.sq.a4fill .mast,#sheet.sq.a4fill .totals{flex:0 0 auto}
@@ -309,8 +311,10 @@ body{
 #sheet.sq.a4fill #sections .section{display:flex; flex-direction:column; min-height:0}
 #sheet.sq.a4fill #sections .rows{flex:1 1 auto; display:flex; flex-direction:column; min-height:0}
 #sheet.sq.a4fill #sections .row{flex:1 1 auto; min-height:0}
-/* lonely last wood box (odd count) spans both columns so the right half doesn't sit empty */
-#sheet.sq.a4fill #sections .section:last-child:nth-child(odd){grid-column:1 / -1}
+/* only box on the sheet → full width */
+#sheet.sq.a4fill #sections .section:only-child{grid-column:1 / -1}
+/* odd box count (3, 5, …): 2nd box spans two rows — right column fills, no box straddles columns */
+#sheet.sq.a4fill #sections .section:nth-child(2):nth-last-child(even){grid-row:span 2}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);
@@ -1039,3 +1043,14 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .db-cat select,.db-note input{padding:11px 12px; border:1px solid var(--line-2); border-radius:11px; background:var(--panel-2); font:inherit; color:var(--ink); width:100%}
 .db-add{flex-basis:100%; justify-content:center; padding:13px}
 .db-amt input:focus,.db-cat select:focus,.db-note input:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}
+
+/* UPI account picker — tap a chip or type a new account (used on the quote panel + daybook form) */
+.acct-field{flex-basis:100%; display:flex; flex-direction:column; gap:6px}
+.acct-pick{display:flex; flex-wrap:wrap; gap:7px; align-items:center}
+.acct-chip{padding:7px 14px; border:1px solid var(--line-2); border-radius:999px; background:var(--panel-2);
+  font-family:var(--disp); font-size:13px; font-weight:600; color:var(--walnut); cursor:pointer; transition:all var(--t-fast)}
+.acct-chip:hover{border-color:var(--ochre)}
+.acct-chip.on{background:var(--ochre); border-color:var(--ochre); color:#fff; box-shadow:0 1px 6px rgba(176,124,40,.3)}
+.acct-new{flex:1 1 140px; min-width:0; padding:8px 12px; border:1px dashed var(--line-2); border-radius:var(--radius-sm);
+  background:transparent; font:inherit; font-size:14px; color:var(--ink)}
+.acct-new:focus{outline:none; border-style:solid; border-color:var(--ochre)}

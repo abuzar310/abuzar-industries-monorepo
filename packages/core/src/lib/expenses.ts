@@ -13,6 +13,8 @@ export const ENTRY_TYPES: { value: EntryType; label: string; flow: "in" | "out" 
 
 export const typeLabel = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t)?.label ?? t;
 export const isInflow = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t)?.flow === "in";
+/** UPI money-in: kept OUT of the cash daybook (Ajju only owes cash) and shown in its own section. */
+export const isUpi = (e: Expense) => isInflow(e.type) && e.mode === "upi";
 
 export interface DayTotals {
   cashIn: number;
@@ -49,18 +51,21 @@ export async function addExpense(fields: {
   mode: PayMode;
   note?: string;
   label?: string;
+  account?: string;
   enteredBy: string;
   date?: string;
   sourceId?: string;
 }): Promise<Expense> {
+  const mode = isInflow(fields.type) ? fields.mode || "cash" : "";
   const e: Expense = {
     id: "EXP-" + uid(),
     date: fields.date || todayStr(),
     type: fields.type,
     label: fields.label || "",
-    mode: isInflow(fields.type) ? fields.mode || "cash" : "",
+    mode,
     amount: r2(fields.amount),
     note: fields.note || "",
+    account: mode === "upi" ? (fields.account || "").trim() : "",
     enteredBy: fields.enteredBy,
     sourceId: fields.sourceId,
     createdAt: nowIso(),
@@ -73,6 +78,12 @@ export async function addExpense(fields: {
 }
 
 export const allExpenses = () => allRec<Expense>("expenses");
+
+/** Distinct UPI account names used so far (for the "to whom" quick-pick). */
+export async function upiAccounts(): Promise<string[]> {
+  const arr = await allExpenses();
+  return [...new Set(arr.filter(isUpi).map((e) => (e.account || "").trim()).filter(Boolean))].sort();
+}
 
 /** Delete (locally + cloud) every daybook entry auto-created from a given doc. Returns the count removed. */
 export async function deleteExpensesBySource(sourceId: string): Promise<number> {
@@ -93,7 +104,8 @@ export const allSessions = () => allRec<DaybookSession>("sessions");
 /** Close the current session: archive its entries and record the handover.
  *  Returns the created session, or null if there was nothing to close. */
 export async function closeSession(by: string): Promise<DaybookSession | null> {
-  const open = await openExpenses();
+  // only the cash daybook is handed over; UPI entries stay out (Ajju owes cash only)
+  const open = (await openExpenses()).filter((e) => !isUpi(e));
   if (!open.length) return null;
   const t = dayTotals(open);
   const now = nowIso();

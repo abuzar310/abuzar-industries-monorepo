@@ -12,7 +12,7 @@ import { cloudDelete, setOpenDoc, trySync } from "@/lib/cloud";
 import { upsertCustomerFromDoc } from "@/lib/customers";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { getFeatures } from "@/lib/features";
-import { addExpense, deleteExpensesBySource } from "@/lib/expenses";
+import { addExpense, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
 import { postInvoice, unpostInvoice } from "@/lib/ledger-autopost";
 import { quoteMessage, reminderMessage, waLink } from "@/lib/whatsapp";
 import { generatePdf } from "@/lib/pdf";
@@ -23,6 +23,7 @@ import type { Doc } from "@/lib/types";
 import SectionCard from "./SectionCard";
 import Totals from "./Totals";
 import MoreMenu from "./MoreMenu";
+import AccountPicker from "@/components/AccountPicker";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 
@@ -51,6 +52,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const [editingNo, setEditingNo] = useState(false);
   const [payCash, setPayCash] = useState("");
   const [payUpi, setPayUpi] = useState("");
+  const [payUpiAcct, setPayUpiAcct] = useState(""); // which account the UPI landed in
+  const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
 
   const feat = getFeatures();
   const isInv = doc.kind === "invoice";
@@ -75,6 +78,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     setOpenDoc(doc.id, docStore(doc));
     return () => setOpenDoc("", "");
   }, [doc.id, doc.kind]);
+
+  // accept-payment: load the UPI accounts used before, for the "to whom" quick-pick
+  useEffect(() => {
+    if (feat.acceptPayment) upiAccounts().then(setUpiAccts);
+  }, [feat.acceptPayment]);
 
   // apply queued focus after a row is added / re-rendered
   useEffect(() => {
@@ -258,11 +266,14 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     const cash = Math.max(0, +payCash || 0);
     const upi = Math.max(0, +payUpi || 0);
     if (cash + upi <= 0) return toast("Enter a cash or UPI amount");
+    const acct = payUpiAcct.trim();
+    if (upi > 0 && !acct) return toast("Enter the UPI account (to whom it came)");
     const cust = (d0.customerName || "").trim() || "Walk-in";
     const note = cust + " · " + d0.number;
     const by = user?.id || "unknown";
     if (cash > 0) await addExpense({ type: "sale", amount: cash, mode: "cash", note, enteredBy: by, sourceId: d0.id });
-    if (upi > 0) await addExpense({ type: "sale", amount: upi, mode: "upi", note, enteredBy: by, sourceId: d0.id });
+    if (upi > 0) await addExpense({ type: "sale", amount: upi, mode: "upi", note, account: acct, enteredBy: by, sourceId: d0.id });
+    if (upi > 0 && !upiAccts.includes(acct)) setUpiAccts((a) => [...a, acct].sort());
     const next = clone(d0);
     next.finalPrice = finalP;
     next.payCash = Math.round(((next.payCash || 0) + cash) * 100) / 100; // cumulative — clear over time
@@ -273,7 +284,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     commit(next, true);
     setPayCash("");
     setPayUpi("");
-    toast("Payment recorded · added to Daybook");
+    setPayUpiAcct("");
+    toast("Payment recorded" + (cash > 0 ? " · cash → Daybook" : "") + (upi > 0 ? " · UPI → " + acct : ""));
   }
 
   // ---- actions ----
@@ -809,6 +821,12 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                 <span>UPI now</span>
                 <input type="number" inputMode="decimal" placeholder="0" value={payUpi} onChange={(e) => setPayUpi(e.target.value)} />
               </label>
+              {+payUpi > 0 && (
+                <div className="modal-field acct-field">
+                  <span>UPI to which account?</span>
+                  <AccountPicker value={payUpiAcct} onChange={setPayUpiAcct} accounts={upiAccts} />
+                </div>
+              )}
               <button className="btn sm" type="button" onClick={() => { setPayCash(String(payBalance)); setPayUpi(""); }}>
                 Full → Cash
               </button>

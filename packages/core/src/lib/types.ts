@@ -140,6 +140,8 @@ export interface Expense {
   mode: PayMode;
   amount: number;
   note?: string;
+  /** UPI recipient / account this money went to (only for mode "upi"); "" for cash. */
+  account?: string;
   /** local user id who entered it */
   enteredBy: string;
   /** the quote/invoice id this entry was auto-created from (for cascade delete). */
