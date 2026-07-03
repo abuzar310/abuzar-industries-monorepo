@@ -35,13 +35,14 @@ export async function generatePdf(sheet: HTMLElement, fileBase: string) {
     const a4h = (width * 297) / 210;
     if (clone.scrollHeight > a4h + 4) clone.classList.add("inv-tight");
   }
-  // quote: grow the row heights to fill a single A4 when the content is short
+  // quote: lock to one A4 and let the .a4fill flexbox rules stretch the rows to fill it
+  // (same fill as the browser print — see #sheet.sq.a4fill in globals.css)
   if (clone.classList.contains("sq")) {
     const a4h = (width * 297) / 210;
-    let pad = 0;
-    while (pad < 22 && clone.scrollHeight < a4h - 4) {
-      pad += 1;
-      clone.style.setProperty("--rowpad", pad + "px");
+    // fits one page → stretch to fill it; taller than a page → leave it for the multi-page slicer
+    if (clone.scrollHeight <= a4h + 4) {
+      clone.classList.add("a4fill");
+      clone.style.height = a4h + "px";
     }
   }
 
