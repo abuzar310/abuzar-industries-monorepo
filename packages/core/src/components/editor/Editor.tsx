@@ -427,7 +427,9 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     if (!sheet) return;
     const fit = () => {
       const probe = document.createElement("div");
-      probe.style.cssText = "position:absolute;left:-9999px;top:0;width:190mm;height:277mm;visibility:hidden";
+      // printable A4 area for a 6mm @page margin (210-12 × 297-12) — near-full-bleed so the
+      // sheet uses almost all of the paper left-to-right
+      probe.style.cssText = "position:absolute;left:-9999px;top:0;width:198mm;height:285mm;visibility:hidden";
       document.body.appendChild(probe);
       const pageW = probe.offsetWidth;
       const pageH = probe.offsetHeight;
@@ -445,7 +447,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       // quote: lock the sheet to one A4 and let CSS flexbox fill it (rows stretch to share the
       // page). Only if the content genuinely overruns a page do we scale it down to fit.
       sheet.classList.add("a4fill");
-      sheet.style.height = pageH + "px";
+      // leave a small safety gap at the bottom so the amount-in-words line never clips at the paper edge
+      sheet.style.height = pageH - 10 + "px";
       if (sheet.scrollHeight > pageH + 2) sheet.style.zoom = (pageH / sheet.scrollHeight).toFixed(4);
     };
     const unfit = () => {
@@ -557,9 +560,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                   ) : isInv ? (
                     brand.name
                   ) : feat.simpleQuote ? (
-                    <>
-                      {brand.name} <span className="kindtag">Wood Quotation</span>
-                    </>
+                    "Wood Quotation"
                   ) : (
                     <>
                       {brand.name} <span className="kindtag">Quotation</span>
