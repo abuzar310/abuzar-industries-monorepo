@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/db";
 import { inr } from "@/lib/calc";
-import { partyLedger } from "@/lib/payments";
+import { partyLedger, type Party } from "@/lib/payments";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import type { Doc, Expense } from "@/lib/types";
@@ -14,6 +14,7 @@ const hhmm = (iso: string) => {
   const d = new Date(iso);
   return isNaN(+d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
+const pct = (paid: number, billed: number) => (billed <= 0 ? 0 : Math.max(0, Math.min(100, (paid / billed) * 100)));
 
 export default function PaymentsView() {
   const { ready, dataVersion } = useApp();
@@ -22,6 +23,7 @@ export default function PaymentsView() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<"all" | "due" | "settled">("all");
 
   const load = useCallback(() => {
     Promise.all([allRec<Doc>("quotations"), allRec<Expense>("expenses")]).then(([qs, es]) => {
@@ -36,46 +38,66 @@ export default function PaymentsView() {
   const { parties, totalBilled, totalPaid, totalPending } = partyLedger(quotes, expenses);
   const dueCount = parties.filter((p) => p.balance > 0.5).length;
   const term = q.trim().toLowerCase();
-  const shown = term ? parties.filter((p) => p.name.toLowerCase().includes(term) || p.phone.includes(term)) : parties;
+  const shown = parties
+    .filter((p) => (filter === "due" ? p.balance > 0.5 : filter === "settled" ? p.balance <= 0.5 : true))
+    .filter((p) => (term ? p.name.toLowerCase().includes(term) || p.phone.includes(term) : true));
+
+  const balClass = (b: number) => (b < -0.5 ? "adv" : b <= 0.5 ? "ok" : "due");
+  const balText = (b: number) => (b < -0.5 ? "₹" + inr(-b) : b <= 0.5 ? "Settled" : "₹" + inr(b));
+  const balLbl = (b: number) => (b < -0.5 ? "advance" : b <= 0.5 ? "✓ clear" : "due");
 
   return (
     <div>
       <div className="sectitle">
-        Payments <small>— party balances &amp; statements</small>
+        Payments <small>— who owes what</small>
       </div>
 
       {/* overall tracker */}
-      <div className="dash-grid g3" style={{ marginTop: 8 }}>
-        <div className="stat">
-          <div className="k">Total Pending</div>
-          <div className="v" style={{ color: totalPending > 0.5 ? "var(--danger)" : "var(--green)" }}>₹ {inr(totalPending)}</div>
-          <div className="sub">{dueCount} {dueCount === 1 ? "party owes" : "parties owe"}</div>
+      <div className="pay-hero">
+        <div className="ph-main">
+          <span className="ph-k">Total Pending</span>
+          <span className="ph-v">₹ {inr(totalPending)}</span>
+          <span className="ph-sub">
+            {dueCount} {dueCount === 1 ? "party still owes" : "parties still owe"} · ₹{inr(totalPaid)} of ₹{inr(totalBilled)} collected
+          </span>
         </div>
-        <div className="stat">
-          <div className="k">Total Billed</div>
-          <div className="v">₹ {inr(totalBilled)}</div>
-        </div>
-        <div className="stat">
-          <div className="k">Total Received</div>
-          <div className="v money">₹ {inr(totalPaid)}</div>
+        <div className="ph-side">
+          <div className="ph-tile rec">
+            <small>Received</small>
+            <b>₹ {inr(totalPaid)}</b>
+          </div>
+          <div className="ph-tile">
+            <small>Billed</small>
+            <b>₹ {inr(totalBilled)}</b>
+          </div>
         </div>
       </div>
 
-      {parties.length > 6 && (
-        <div className="searchbar">
-          <span className="s-ic">⌕</span>
-          <input placeholder="Search a party by name or phone…" value={q} onChange={(e) => setQ(e.target.value)} />
-          {q && (
-            <button className="s-clear" onClick={() => setQ("")} title="Clear">
-              ×
-            </button>
-          )}
-          <span className="s-count">{shown.length}</span>
-        </div>
+      {/* search + filter */}
+      {parties.length > 0 && (
+        <>
+          <div className="searchbar" style={{ marginTop: 16 }}>
+            <span className="s-ic">⌕</span>
+            <input placeholder="Search a party by name or phone…" value={q} onChange={(e) => setQ(e.target.value)} />
+            {q && (
+              <button className="s-clear" onClick={() => setQ("")} title="Clear">
+                ×
+              </button>
+            )}
+            <span className="s-count">{shown.length}</span>
+          </div>
+          <div className="rowbtns" style={{ marginBottom: 4 }}>
+            {(["all", "due", "settled"] as const).map((f) => (
+              <button key={f} className={"btn sm" + (filter === f ? " primary" : "")} onClick={() => setFilter(f)}>
+                {f === "all" ? "All" : f === "due" ? `Due (${dueCount})` : "Settled"}
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       {shown.length === 0 ? (
-        <div className="listwrap" style={{ marginTop: 16 }}>
+        <div className="listwrap" style={{ marginTop: 12 }}>
           <div className="empty">
             <div className="empty-icon">💰</div>
             <div className="empty-title">{parties.length ? "No match" : "No billed quotes yet"}</div>
@@ -83,96 +105,109 @@ export default function PaymentsView() {
           </div>
         </div>
       ) : (
-        shown.map((p) => {
-          const pid = p.custId || p.name;
-          const isOpen = open === pid;
-          const settled = p.balance <= 0.5;
-          const advance = p.balance < -0.5;
-          return (
-            <div className="panel-card" key={pid} style={{ marginTop: 12 }}>
-              <div
-                className="pc-head"
-                style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8, cursor: "pointer", textTransform: "none", letterSpacing: 0 }}
-                onClick={() => setOpen(isOpen ? null : pid)}
-              >
-                <span style={{ fontSize: 15 }}>
-                  <span className="um-caret" style={{ marginRight: 7 }}>{isOpen ? "▾" : "▸"}</span>
-                  {p.name}
-                  {p.phone && <small style={{ color: "var(--ink-faint)", marginLeft: 8, fontFamily: "var(--mono)" }}>{p.phone}</small>}
-                </span>
-                <span
-                  style={{
-                    fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700,
-                    color: advance ? "var(--blue)" : settled ? "var(--green)" : "var(--danger)",
-                  }}
-                >
-                  {advance ? "Advance ₹" + inr(-p.balance) : settled ? "Settled ✓" : "Due ₹" + inr(p.balance)}
-                </span>
-              </div>
+        shown.map((p) => <PartyCard key={p.custId || p.name} p={p} open={open} setOpen={setOpen} router={router} balClass={balClass} balText={balText} balLbl={balLbl} />)
+      )}
+    </div>
+  );
+}
 
-              {isOpen && (
-                <>
-                  <div className="dash-grid" style={{ margin: "10px 14px" }}>
-                    <div className="stat">
-                      <div className="k">Billed</div>
-                      <div className="v">₹ {inr(p.billed)}</div>
-                      <div className="sub">{p.quoteCount} {p.quoteCount === 1 ? "quote" : "quotes"}</div>
-                    </div>
-                    <div className="stat">
-                      <div className="k">Paid</div>
-                      <div className="v money">₹ {inr(p.paid)}</div>
-                      <div className="sub">Cash ₹{inr(p.cashPaid)} · UPI ₹{inr(p.upiPaid)}</div>
-                    </div>
-                    <div className="stat">
-                      <div className="k">Balance</div>
-                      <div className="v" style={{ color: settled ? "var(--green)" : "var(--danger)" }}>₹ {inr(p.balance)}</div>
-                    </div>
-                    <div className="stat">
-                      <div className="k">Statements</div>
-                      <div className="v">{p.statements.length}</div>
+function PartyCard({
+  p,
+  open,
+  setOpen,
+  router,
+  balClass,
+  balText,
+  balLbl,
+}: {
+  p: Party;
+  open: string | null;
+  setOpen: (v: string | null) => void;
+  router: ReturnType<typeof useRouter>;
+  balClass: (b: number) => string;
+  balText: (b: number) => string;
+  balLbl: (b: number) => string;
+}) {
+  const pid = p.custId || p.name;
+  const isOpen = open === pid;
+  const settled = p.balance <= 0.5;
+  const bc = balClass(p.balance);
+  return (
+    <div>
+      <button className={"party" + (isOpen ? " on" : "")} onClick={() => setOpen(isOpen ? null : pid)}>
+        <div className={"pty-av" + (settled ? " ok" : "")}>{(p.name || "?").charAt(0).toUpperCase()}</div>
+        <div className="pty-main">
+          <div className="pty-name">
+            {p.name}
+            {p.phone && <small>{p.phone}</small>}
+          </div>
+          <div className="pty-bar">
+            <i style={{ width: pct(p.paid, p.billed) + "%" }} />
+          </div>
+          <div className="pty-meta">
+            Paid ₹{inr(p.paid)} of ₹{inr(p.billed)} · {p.quoteCount} {p.quoteCount === 1 ? "quote" : "quotes"}
+          </div>
+        </div>
+        <div className={"pty-bal " + bc}>
+          {balText(p.balance)}
+          <small>{balLbl(p.balance)}</small>
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="party-body">
+          <div className="pbd-stats">
+            <div className="st">
+              <div className="k">Billed</div>
+              <div className="v">₹{inr(p.billed)}</div>
+            </div>
+            <div className="st">
+              <div className="k">Paid</div>
+              <div className="v rec">₹{inr(p.paid)}</div>
+              <small>Cash ₹{inr(p.cashPaid)} · UPI ₹{inr(p.upiPaid)}</small>
+            </div>
+            <div className="st">
+              <div className="k">Balance</div>
+              <div className={"v " + (settled ? "ok" : "due")}>₹{inr(p.balance)}</div>
+            </div>
+          </div>
+
+          {p.statements.length > 0 && (
+            <>
+              <div className="pbd-lbl">Payments received · {p.statements.length}</div>
+              {p.statements.map((s) => (
+                <div className="stmt" key={s.id}>
+                  <div className={"stmt-ic " + (s.mode === "upi" ? "upi" : "cash")}>{s.mode === "upi" ? "UPI" : "₹"}</div>
+                  <div className="stmt-main">
+                    <div className="stmt-to">{s.mode === "upi" ? s.account || "UPI account" : "Cash in hand"}</div>
+                    <div className="stmt-sub">
+                      {s.quoteNo ? "#" + s.quoteNo + " · " : ""}
+                      {s.date}
+                      {hhmm(s.at) ? " · " + hhmm(s.at) : ""} · by {userName(s.by)}
                     </div>
                   </div>
+                  <div className="stmt-amt">+₹{inr(s.amount)}</div>
+                </div>
+              ))}
+            </>
+          )}
 
-                  {/* payment statements */}
-                  {p.statements.length > 0 && (
-                    <>
-                      <div className="pc-sub">Payments received</div>
-                      {p.statements.map((s) => (
-                        <div className="exprow" key={s.id}>
-                          <span className={"exptag " + (s.mode === "upi" ? "in" : "")}>{s.mode === "upi" ? "UPI" : "CASH"}</span>
-                          <span className="expnote">
-                            {s.mode === "upi" ? s.account || "—" : "Cash in hand"}
-                            <small>
-                              {s.quoteNo ? "#" + s.quoteNo + " · " : ""}
-                              {s.date}
-                              {hhmm(s.at) ? " " + hhmm(s.at) : ""} · by {userName(s.by)}
-                            </small>
-                          </span>
-                          <span className="expamt in">+₹ {inr(s.amount)}</span>
-                        </div>
-                      ))}
-                    </>
-                  )}
-
-                  {/* the quotes making up the bill (tap to open + record more) */}
-                  <div className="pc-sub">Quotes</div>
-                  {p.quotes.map((qd) => (
-                    <div className="exprow" key={qd.id} style={{ cursor: "pointer" }} onClick={() => router.push("/editor/" + qd.id)}>
-                      <span className="exptag">#{qd.number}</span>
-                      <span className="expnote">
-                        Bill ₹{inr(qd.bill)}
-                        <small>Paid ₹{inr(qd.paid)} · {qd.balance <= 0.5 ? "settled" : "balance ₹" + inr(qd.balance)}</small>
-                      </span>
-                      <span className="expamt" style={{ color: qd.balance <= 0.5 ? "var(--green)" : "var(--danger)" }}>
-                        {qd.balance <= 0.5 ? "✓" : "₹ " + inr(qd.balance)}
-                      </span>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-          );
-        })
+          <div className="pbd-lbl">Quotes · tap to open &amp; record</div>
+          {p.quotes.map((qd) => {
+            const qsettled = qd.balance <= 0.5;
+            return (
+              <div className="pbd-q" key={qd.id} onClick={() => router.push("/editor/" + qd.id)}>
+                <span className="no">#{qd.number}</span>
+                <span className="info">
+                  Bill ₹{inr(qd.bill)} · paid ₹{inr(qd.paid)}
+                </span>
+                <span className="bal" style={{ color: qsettled ? "var(--green)" : "var(--danger)" }}>
+                  {qsettled ? "✓ clear" : "₹" + inr(qd.balance)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
