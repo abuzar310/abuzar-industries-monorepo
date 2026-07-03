@@ -35,6 +35,15 @@ export async function generatePdf(sheet: HTMLElement, fileBase: string) {
     const a4h = (width * 297) / 210;
     if (clone.scrollHeight > a4h + 4) clone.classList.add("inv-tight");
   }
+  // quote: grow the row heights to fill a single A4 when the content is short
+  if (clone.classList.contains("sq")) {
+    const a4h = (width * 297) / 210;
+    let pad = 0;
+    while (pad < 22 && clone.scrollHeight < a4h - 4) {
+      pad += 1;
+      clone.style.setProperty("--rowpad", pad + "px");
+    }
+  }
 
   try {
     const canvas = await html2canvas(clone, {

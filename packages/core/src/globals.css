@@ -278,17 +278,18 @@ body{
 .gst-toggle{font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.04em; padding:2px 7px; margin:0 5px;
   border-radius:6px; border:1px solid var(--line-2); background:var(--panel); color:var(--ochre-deep); cursor:pointer; vertical-align:middle}
 .gst-toggle:hover{border-color:var(--ochre)}
-/* simple quote (Cut Size Wood): tighter header, less whitespace */
-#sheet.sq .mast-top{padding:12px 22px 8px}
+/* simple quote (Cut Size): compact top — title + name in 1–2 lines, no wasted space */
+#sheet.sq .mast-top{padding:8px 22px 4px; position:relative}
 #sheet.sq .co-name{font-size:26px}
-#sheet.sq .meta .f,#sheet.sq .cust-block .f{padding:9px 20px}
-#sheet.sq #sections{margin-top:9px}
-/* quotation: sub-total + grand total always sit at the bottom of the page */
-#sheet.sq{display:flex; flex-direction:column; aspect-ratio:210/297}
-#sheet.sq .totals{margin-top:auto}
+#sheet.sq .meta .f,#sheet.sq .cust-block .f{padding:7px 20px}
+#sheet.sq #sections{margin-top:8px}
 /* "Cut Size" stays on the left; only the "Wood Quotation" tag is centered in the row */
-#sheet.sq .mast-top{position:relative}
 #sheet.sq .co-name .kindtag{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%)}
+/* slimmer grand-total row */
+#sheet.sq .grand{padding:8px 22px}
+#sheet.sq .grand .val{font-size:22px}
+/* smart print fill: rows grow (--rowpad, set by the fit script) to fill the A4 when few */
+#sheet.sq .row{padding-top:calc(4px + var(--rowpad, 0px)); padding-bottom:calc(4px + var(--rowpad, 0px))}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);
