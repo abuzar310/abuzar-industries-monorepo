@@ -278,21 +278,33 @@ body{
 .gst-toggle{font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.04em; padding:2px 7px; margin:0 5px;
   border-radius:6px; border:1px solid var(--line-2); background:var(--panel); color:var(--ochre-deep); cursor:pointer; vertical-align:middle}
 .gst-toggle:hover{border-color:var(--ochre)}
-/* simple quote (Cut Size): compact top — title + name in 1–2 lines, no wasted space */
-#sheet.sq .mast-top{padding:6px 22px 3px; position:relative}
-#sheet.sq .co-name{font-size:24px}
-#sheet.sq .meta .f,#sheet.sq .cust-block .f{padding:5px 20px}
-#sheet.sq .meta label,#sheet.sq .cust-block label{margin-bottom:1px}
-/* wood boxes stacked in one column so rows run down the page (fills the A4) */
-#sheet.sq #sections{margin-top:8px; grid-template-columns:1fr; gap:10px}
+/* simple quote (Cut Size): compact top — title + name + party in a slim band so the wood
+   tables get the maximum height in the middle of the page */
+#sheet.sq .mast-top{padding:4px 22px 2px; position:relative}
+#sheet.sq .co-name{font-size:22px}
+#sheet.sq .meta .f,#sheet.sq .cust-block .f{padding:3px 20px}
+#sheet.sq .meta label,#sheet.sq .cust-block label{margin-bottom:0}
+#sheet.sq #sections{margin-top:6px}
 /* "Cut Size" stays on the left; only the "Wood Quotation" tag is centered in the row */
 #sheet.sq .co-name .kindtag{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%)}
-/* short grand-total row */
-#sheet.sq .grand{padding:5px 22px}
-#sheet.sq .grand .val{font-size:20px}
-#sheet.sq .words{padding:5px 22px}
-/* smart print fill: rows grow (--rowpad, set by the fit script) to fill the A4 when few */
-#sheet.sq .row{padding-top:calc(4px + var(--rowpad, 0px)); padding-bottom:calc(4px + var(--rowpad, 0px))}
+/* slim totals band: tighter sub-total / GST / grand / words so the tables get more height */
+#sheet.sq .totals{margin-top:6px}
+#sheet.sq .t-row{padding:2px 22px}
+#sheet.sq .grand{padding:4px 22px}
+#sheet.sq .grand .val{font-size:19px}
+#sheet.sq .words{padding:3px 22px; line-height:1.2}
+/* Fill exactly one A4: the sheet is a fixed-height flex column (masthead · sections · totals);
+   #sections takes the free space as a two-column grid whose rows stretch (grid-auto-rows:1fr)
+   so the wood boxes side-by-side fill the page, and inside each box the data rows stretch to
+   share it (flex:1 1 auto — NOT basis 0, which collapses the rows). Pure CSS, no measure-and-grow
+   script — verified in headless Chrome print. Height is set inline (277mm print / px for the PDF
+   clone); the class is toggled by both the print fit() and the PDF export so they fill identically. */
+#sheet.sq.a4fill{display:flex; flex-direction:column}
+#sheet.sq.a4fill #sections{flex:1 1 auto; display:grid; grid-template-columns:1fr 1fr;
+  grid-auto-rows:minmax(min-content, 1fr); align-content:stretch; gap:8px 10px; min-height:0}
+#sheet.sq.a4fill #sections .section{display:flex; flex-direction:column; min-height:0}
+#sheet.sq.a4fill #sections .rows{flex:1 1 auto; display:flex; flex-direction:column; min-height:0}
+#sheet.sq.a4fill #sections .row{flex:1 1 auto; min-height:0}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);

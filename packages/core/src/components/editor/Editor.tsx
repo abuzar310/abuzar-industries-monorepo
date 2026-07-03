@@ -442,24 +442,18 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         sheet.style.width = "";
         return;
       }
-      // quote: too tall → shrink to one page; too short → grow row heights to fill the A4
-      sheet.style.setProperty("--rowpad", "0px");
-      const need = sheet.scrollHeight;
-      if (need > pageH) {
-        sheet.style.zoom = (pageH / need).toFixed(4);
-      } else {
-        let pad = 0;
-        while (pad < 22 && sheet.scrollHeight < pageH - 3) {
-          pad += 1;
-          sheet.style.setProperty("--rowpad", pad + "px");
-        }
-      }
+      // quote: lock the sheet to one A4 and let CSS flexbox fill it (rows stretch to share the
+      // page). Only if the content genuinely overruns a page do we scale it down to fit.
+      sheet.classList.add("a4fill");
+      sheet.style.height = pageH + "px";
+      if (sheet.scrollHeight > pageH + 2) sheet.style.zoom = (pageH / sheet.scrollHeight).toFixed(4);
     };
     const unfit = () => {
       sheet.style.width = "";
+      sheet.style.height = "";
       sheet.style.zoom = "1";
       sheet.classList.remove("inv-tight");
-      sheet.style.setProperty("--rowpad", "0px");
+      sheet.classList.remove("a4fill");
     };
     window.addEventListener("beforeprint", fit);
     window.addEventListener("afterprint", unfit);
