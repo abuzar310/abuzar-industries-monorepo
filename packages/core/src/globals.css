@@ -296,20 +296,14 @@ body{
 #sheet.sq .grand{padding:2px 22px}
 #sheet.sq .grand .val{font-size:18px}
 #sheet.sq .words{padding:3px 22px 5px; line-height:1.3; white-space:normal; overflow:visible}
-/* Fill exactly one A4: the sheet is a fixed-height flex column (masthead · sections · totals).
-   #sections takes the free space as a two-column grid whose rows stretch (grid-auto-rows:1fr) so
-   the wood boxes fill the page, and inside each box the data rows stretch (flex:1 1 auto — NOT
-   basis 0, which collapses them). The totals/bill sits at the END, full width, below all the
-   boxes. Pure CSS, verified in headless Chrome print. Height is set inline (283mm print / px for
-   the PDF clone) by the print fit() and the PDF export so they match. */
-#sheet.sq.a4fill{display:flex; flex-direction:column}
-/* masthead + bill keep their natural height (never shrink/clip); only the tables grid flexes */
-#sheet.sq.a4fill .mast,#sheet.sq.a4fill .totals{flex:0 0 auto}
-#sheet.sq.a4fill #sections{flex:1 1 auto; display:grid; grid-template-columns:1fr 1fr;
-  grid-auto-rows:minmax(min-content, 1fr); align-content:stretch; gap:8px 10px; min-height:0}
-#sheet.sq.a4fill #sections .section{display:flex; flex-direction:column; min-height:0}
-#sheet.sq.a4fill #sections .rows{flex:1 1 auto; display:flex; flex-direction:column; min-height:0}
-#sheet.sq.a4fill #sections .row{flex:1 1 auto; min-height:0}
+/* Natural two-column flow on print: the wood boxes sit at their natural height, and the bill/totals
+   comes right after the last box — any leftover space stays at the very bottom of the page. The
+   fit() only scales the sheet down (zoom) if it overruns one A4. Verified in headless Chrome print. */
+#sheet.sq.a4fill #sections{display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:min-content; gap:8px 10px}
+#sheet.sq.a4fill #sections .section{display:flex; flex-direction:column}
+/* within a row the shorter box stretches to match the taller one — spread its rows to fill it */
+#sheet.sq.a4fill #sections .rows{flex:1 1 auto; display:flex; flex-direction:column}
+#sheet.sq.a4fill #sections .row{flex:1 1 auto}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);

@@ -444,11 +444,9 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         sheet.style.width = "";
         return;
       }
-      // quote: lock the sheet to one A4 and let CSS flexbox fill it (rows stretch to share the
-      // page). Only if the content genuinely overruns a page do we scale it down to fit.
+      // quote: natural 2-column flow (bill sits right after the last box). Only scale the sheet
+      // down if it genuinely overruns one A4.
       sheet.classList.add("a4fill");
-      // leave a small safety gap at the bottom so the amount-in-words line never clips at the paper edge
-      sheet.style.height = pageH - 10 + "px";
       if (sheet.scrollHeight > pageH + 2) sheet.style.zoom = (pageH / sheet.scrollHeight).toFixed(4);
     };
     const unfit = () => {
