@@ -12,6 +12,7 @@ export async function editCustomerDialog(existing?: Customer): Promise<Customer 
       { name: "site", label: "Carpenter", value: existing?.site, placeholder: "Carpenter name (optional)" },
       { name: "address", label: "Address", value: existing?.address, placeholder: "Full address (optional)" },
       { name: "gstin", label: "GSTIN", value: existing?.gstin, placeholder: "GST number (optional)" },
+      { name: "opening", label: "Opening balance ₹", type: "number", inputMode: "decimal", value: existing?.opening ? String(existing.opening) : "", placeholder: "old dues before app (optional)" },
       { name: "notes", label: "Notes", type: "textarea", value: existing?.notes, placeholder: "Anything to remember" },
     ],
     submitLabel: existing ? "Save changes" : "Add customer",

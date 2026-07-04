@@ -6,7 +6,7 @@ import { inr } from "@/lib/calc";
 import { partyLedger, type Party } from "@/lib/payments";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
-import type { Doc, Expense } from "@/lib/types";
+import type { Customer, Doc, Expense } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
 const hhmm = (iso: string) => {
@@ -21,20 +21,22 @@ export default function PaymentsView() {
   const router = useRouter();
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState("");
 
   const load = useCallback(() => {
-    Promise.all([allRec<Doc>("quotations"), allRec<Expense>("expenses")]).then(([qs, es]) => {
+    Promise.all([allRec<Doc>("quotations"), allRec<Expense>("expenses"), allRec<Customer>("customers")]).then(([qs, es, cs]) => {
       setQuotes(qs);
       setExpenses(es);
+      setCustomers(cs);
     });
   }, []);
   useEffect(() => {
     if (ready) load();
   }, [ready, dataVersion, load]);
 
-  const { parties, totalBilled, totalPaid, totalPending } = partyLedger(quotes, expenses);
+  const { parties, totalBilled, totalPaid, totalPending } = partyLedger(quotes, expenses, customers);
   const dueCount = parties.filter((p) => p.balance > 0.5).length;
   const term = q.trim().toLowerCase();
   // only parties who still owe — settled / advance parties are hidden

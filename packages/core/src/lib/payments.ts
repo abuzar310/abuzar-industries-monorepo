@@ -1,5 +1,5 @@
 import { computeDoc } from "./calc";
-import type { Doc, Expense, PayMode } from "./types";
+import type { Customer, Doc, Expense, PayMode } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 /** the effective bill of a quote: the accepted round-figure override, else the computed grand total. */
@@ -77,7 +77,7 @@ export interface PartyLedger {
 }
 
 /** Roll every created quote + its recorded payments up into per-customer balances + statements. */
-export function partyLedger(quotes: Doc[], expenses: Expense[]): PartyLedger {
+export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Customer[] = []): PartyLedger {
   // a quote is a "bill" once it's Created (drafts aren't owed yet)
   const created = quotes.filter((d) => d.status === "Created");
   const key = (d: Doc) => d.customerId || "name:" + (d.customerName || "").trim().toLowerCase() + "|" + (d.phone || "");
@@ -116,6 +116,19 @@ export function partyLedger(quotes: Doc[], expenses: Expense[]): PartyLedger {
     const k = quoteOwner.get(e.sourceId);
     if (!k) continue;
     map.get(k)!.statements.push(mkStatement(e, quoteNoById.get(e.sourceId) || ""));
+  }
+
+  // fold in each customer's opening balance (old dues before the app) — adds to what they owe
+  for (const c of customers) {
+    const op = +(c.opening || 0) || 0;
+    if (Math.abs(op) < 0.005) continue;
+    let p = map.get(c.id);
+    if (!p) {
+      p = { custId: c.id, name: c.name || "Walk-in", phone: c.phone || "",
+        billed: 0, paid: 0, cashPaid: 0, upiPaid: 0, balance: 0, quoteCount: 0, quotes: [], statements: [] };
+      map.set(c.id, p);
+    }
+    p.billed += op;
   }
 
   const parties = [...map.values()].map((p) => ({

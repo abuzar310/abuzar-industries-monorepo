@@ -41,6 +41,7 @@ export async function saveCustomer(fields: {
   site?: string;
   address?: string;
   gstin?: string;
+  opening?: string | number;
   notes?: string;
 }): Promise<Customer> {
   let cust: Customer | undefined;
@@ -51,6 +52,7 @@ export async function saveCustomer(fields: {
   cust.site = (fields.site || "").trim();
   cust.address = (fields.address || "").trim();
   cust.gstin = (fields.gstin || "").trim().toUpperCase();
+  cust.opening = Math.round((+(fields.opening || 0) || 0) * 100) / 100;
   cust.notes = (fields.notes || "").trim();
   cust.updatedAt = nowIso();
   cust.synced = false;

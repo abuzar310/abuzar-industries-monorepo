@@ -4,10 +4,10 @@ import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/db";
 import { computeDoc, inr, pad, todayStr } from "@/lib/calc";
 import { dayTotals } from "@/lib/expenses";
-import { partyLedger } from "@/lib/payments";
+import { partyLedger, quoteBill } from "@/lib/payments";
 import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
-import type { Doc, Expense, Stock } from "@/lib/types";
+import type { Customer, Doc, Expense, Stock } from "@/lib/types";
 import { StatusBadge } from "./DocList";
 
 export default function DashboardView() {
@@ -17,6 +17,7 @@ export default function DashboardView() {
   const [invs, setInvs] = useState<Doc[]>([]);
   const [stk, setStk] = useState<Stock[]>([]);
   const [exp, setExp] = useState<Expense[]>([]);
+  const [custs, setCusts] = useState<Customer[]>([]);
 
   useEffect(() => {
     let live = true;
@@ -25,12 +26,14 @@ export default function DashboardView() {
       allRec<Doc>("invoices"),
       allRec<Stock>("stock"),
       allRec<Expense>("expenses"),
-    ]).then(([q, i, s, e]) => {
+      allRec<Customer>("customers"),
+    ]).then(([q, i, s, e, c]) => {
       if (!live) return;
       setQuotes(q);
       setInvs(i);
       setStk(s);
       setExp(e);
+      setCusts(c);
     });
     return () => {
       live = false;
@@ -42,16 +45,23 @@ export default function DashboardView() {
 
   const now = new Date();
   const ym = now.getFullYear() + "-" + pad(now.getMonth() + 1);
+  const feat = getFeatures();
+  // This month's sales: created quotes for Cut Size (which has no invoices), invoices for the official app
   let monthRev = 0;
-  invs.forEach((i) => {
-    if ((i.createdAt || "").slice(0, 7) === ym) monthRev += computeDoc(i).grand;
-  });
+  if (feat.simpleQuote) {
+    quotes.forEach((qd) => {
+      if (qd.status === "Created" && (qd.createdAt || "").slice(0, 7) === ym) monthRev += quoteBill(qd);
+    });
+  } else {
+    invs.forEach((i) => {
+      if ((i.createdAt || "").slice(0, 7) === ym) monthRev += computeDoc(i).grand;
+    });
+  }
   const follow = quotes.filter((q) => q.status === "Follow-up Pending");
   const lowStock = stk.filter((s) => (+s.cft || 0) <= 0);
 
-  const feat = getFeatures();
   // Cut Size (unofficial): overall outstanding balance + total wood sold, from created quotes
-  const ledger = feat.acceptPayment ? partyLedger(quotes, exp) : null;
+  const ledger = feat.acceptPayment ? partyLedger(quotes, exp, custs) : null;
   const totalOutstanding = ledger ? ledger.totalPending : 0;
   const dueCount = ledger ? ledger.parties.filter((p) => p.balance > 0.5).length : 0;
   let totalCftSold = 0;
@@ -73,7 +83,7 @@ export default function DashboardView() {
       ? [{ k: "Outstanding", v: "₹ " + inr(totalOutstanding), money: true, sub: dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"}` : "all clear", onClick: () => router.push("/payments") }]
       : []),
     ...(feat.simpleQuote ? [{ k: "Total CFT Sold", v: totalCftSold.toFixed(2), sub: "cubic feet", onClick: () => router.push("/quotations") }] : []),
-    { k: "This Month Sales", v: "₹ " + inr(monthRev), money: true, sub: ym, onClick: () => router.push("/invoices") },
+    { k: "This Month Sales", v: "₹ " + inr(monthRev), money: true, sub: ym, onClick: () => router.push(feat.simpleQuote ? "/quotations" : "/invoices") },
     { k: "Follow-ups", v: String(follow.length), sub: "to chase", onClick: () => router.push("/quotations") },
     { k: "Low Stock", v: String(lowStock.length), danger: lowStock.length > 0, sub: "wood type(s)", onClick: () => router.push("/stock") },
   ];
