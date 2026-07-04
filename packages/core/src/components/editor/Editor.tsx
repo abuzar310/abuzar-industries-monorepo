@@ -735,7 +735,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             // Cut Size quote: split the wood boxes into EXACTLY two columns — fill the left column
             // (up to ~one page of thick rows) then start the right. Never more than two columns.
             if (!feat.simpleQuote) return doc.sections.map((_, si) => card(si));
-            const CAP = 13; // rows that fill one column at the thick ~1.5cm height
+            const CAP = 16; // rows that fill one column at the thick ~1.5cm height (fit() thins them if needed)
             const c1: number[] = [];
             const c2: number[] = [];
             let n1 = 0;
@@ -750,10 +750,26 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                 c2.push(i);
               }
             });
+            // the bill sits at the BOTTOM of the right column (pushed down, aligned with the
+            // bottom of the taller column) — see .scol .totals{margin-top:auto}
+            const bill = (
+              <Totals
+                doc={doc}
+                sub={totals.sub}
+                gstAmt={totals.gstAmt}
+                grand={totals.grand}
+                totalCft={totalCft}
+                onGst={(v) => setField("gst", v)}
+                onGstMode={(m) => setField("gstMode", m)}
+              />
+            );
             return (
               <>
                 <div className="scol">{c1.map(card)}</div>
-                <div className="scol">{c2.map(card)}</div>
+                <div className="scol">
+                  {c2.map(card)}
+                  {bill}
+                </div>
               </>
             );
           })()}
@@ -767,15 +783,17 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
           ))}
         </datalist>
 
-        <Totals
-          doc={doc}
-          sub={totals.sub}
-          gstAmt={totals.gstAmt}
-          grand={totals.grand}
-          totalCft={totalCft}
-          onGst={(v) => setField("gst", v)}
-          onGstMode={(m) => setField("gstMode", m)}
-        />
+        {!feat.simpleQuote && (
+          <Totals
+            doc={doc}
+            sub={totals.sub}
+            gstAmt={totals.gstAmt}
+            grand={totals.grand}
+            totalCft={totalCft}
+            onGst={(v) => setField("gst", v)}
+            onGstMode={(m) => setField("gstMode", m)}
+          />
+        )}
 
         {isInv && (
           <div className="inv-foot">
@@ -861,7 +879,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       </div>
 
       {/* App A: accept payment on a created quotation → final price + cash/UPI → Daybook */}
-      {feat.acceptPayment && !isInv && doc.status === "Created" && (
+      {feat.acceptPayment && !isInv && (
         <div className="panel-card daybook-entry no-print" style={{ marginTop: 12 }}>
           <label className="modal-field">
             <span>Final price ₹ <small style={{ color: "var(--ink-faint)" }}>(quote ₹{inr(totals.grand)})</small></span>

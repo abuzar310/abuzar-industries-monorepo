@@ -329,17 +329,19 @@ body{
    the same as 25; the fit() only scales the whole sheet down (zoom) if the content overruns a page. */
 #sheet.sq{--sqrow:1.5cm}
 #sheet.sq.a4fill{display:flex; flex-direction:column}
-#sheet.sq.a4fill .mast,#sheet.sq.a4fill .totals{flex:0 0 auto}
+#sheet.sq.a4fill .mast{flex:0 0 auto}
 /* box flow: EXACTLY two columns (structured in Editor.tsx as two .scol stacks) — boxes fill the
    left column, then the right. Never three columns. Each box is one column wide. */
-#sheet.sq #sections.twocol{display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:start}
+/* two equal-height columns; each is a flex stack of its boxes */
+#sheet.sq #sections.twocol{display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:stretch}
 #sheet.sq #sections .scol{display:flex; flex-direction:column; gap:10px; min-width:0}
-#sheet.sq.a4fill #sections{flex:1 1 auto; gap:8px 10px; align-content:start; min-height:0}
+#sheet.sq.a4fill #sections{flex:0 1 auto; gap:8px 10px; min-height:0}
 #sheet.sq.a4fill #sections .scol{gap:8px}
 #sheet.sq.a4fill #sections .row.cf{height:var(--sqrow)}
-/* totals sit in the RIGHT half only; no amount-in-words line */
+/* the bill sits at the BOTTOM of the right column — pushed down to align with the tallest column's
+   bottom (below all boxes). No amount-in-words line. */
 #sheet.sq .words{display:none}
-#sheet.sq.a4fill .totals{width:calc(50% - 5px); margin-left:auto}
+#sheet.sq #sections .totals{flex:0 0 auto; margin-top:auto}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);

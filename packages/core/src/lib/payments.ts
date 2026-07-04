@@ -17,6 +17,18 @@ export interface PartyStatement {
   quoteNo: string;
 }
 
+/** Build one statement line from a recorded sale expense (shared by party + quote rollups). */
+const mkStatement = (e: Expense, quoteNo: string): PartyStatement => ({
+  id: e.id,
+  amount: +e.amount || 0,
+  mode: e.mode,
+  account: e.account || "",
+  date: e.date,
+  at: e.createdAt || "",
+  by: e.enteredBy,
+  quoteNo,
+});
+
 export interface PartyQuote {
   id: string;
   number: string;
@@ -87,16 +99,7 @@ export function partyLedger(quotes: Doc[], expenses: Expense[]): PartyLedger {
     if (e.type !== "sale" || !e.sourceId) continue;
     const k = quoteOwner.get(e.sourceId);
     if (!k) continue;
-    map.get(k)!.statements.push({
-      id: e.id,
-      amount: +e.amount || 0,
-      mode: e.mode,
-      account: e.account || "",
-      date: e.date,
-      at: e.createdAt || "",
-      by: e.enteredBy,
-      quoteNo: quoteNoById.get(e.sourceId) || "",
-    });
+    map.get(k)!.statements.push(mkStatement(e, quoteNoById.get(e.sourceId) || ""));
   }
 
   const parties = [...map.values()].map((p) => ({
@@ -116,5 +119,66 @@ export function partyLedger(quotes: Doc[], expenses: Expense[]): PartyLedger {
     totalBilled: r2(parties.reduce((s, p) => s + p.billed, 0)),
     totalPaid: r2(parties.reduce((s, p) => s + p.paid, 0)),
     totalPending: r2(parties.reduce((s, p) => s + Math.max(0, p.balance), 0)),
+  };
+}
+
+/** One created quotation with its full payment history (every statement's metadata). */
+export interface QuoteStatements {
+  id: string;
+  number: string;
+  name: string;
+  phone: string;
+  date: string;
+  bill: number;
+  paid: number;
+  balance: number;
+  status: string;
+  statements: PartyStatement[]; // this quote's payments, newest first
+}
+
+export interface QuoteLedger {
+  quotes: QuoteStatements[]; // newest quote first
+  quoteCount: number;
+  payCount: number; // total statements recorded
+  totalReceived: number;
+}
+
+/** Roll each created quote up with its own recorded payments — the per-quotation statement view. */
+export function quoteLedger(quotes: Doc[], expenses: Expense[]): QuoteLedger {
+  const created = quotes.filter((d) => d.status === "Created");
+  const byQuote = new Map<string, PartyStatement[]>();
+  const quoteNoById = new Map(quotes.map((d) => [d.id, d.number] as const));
+  for (const e of expenses) {
+    if (e.type !== "sale" || !e.sourceId) continue;
+    const list = byQuote.get(e.sourceId) || [];
+    list.push(mkStatement(e, quoteNoById.get(e.sourceId) || ""));
+    byQuote.set(e.sourceId, list);
+  }
+
+  const rows: QuoteStatements[] = created
+    .map((d) => {
+      const bill = quoteBill(d);
+      const paid = +d.amountPaid || 0;
+      const statements = (byQuote.get(d.id) || []).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+      return {
+        id: d.id,
+        number: d.number,
+        name: (d.customerName || "").trim() || "Walk-in",
+        phone: d.phone || "",
+        date: d.date,
+        bill: r2(bill),
+        paid: r2(paid),
+        balance: r2(bill - paid),
+        status: d.status,
+        statements,
+      };
+    })
+    .sort((a, b) => (b.number || "").localeCompare(a.number || ""));
+
+  return {
+    quotes: rows,
+    quoteCount: rows.length,
+    payCount: rows.reduce((s, r) => s + r.statements.length, 0),
+    totalReceived: r2(rows.reduce((s, r) => s + r.statements.reduce((t, x) => t + x.amount, 0), 0)),
   };
 }

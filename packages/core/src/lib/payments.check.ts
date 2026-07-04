@@ -1,7 +1,7 @@
 // Self-check for the party-balance rollup (pure, no DB).
 // Run: npx tsx packages/core/src/lib/payments.check.ts
 import type { Doc, Expense } from "./types";
-import { partyLedger } from "./payments";
+import { partyLedger, quoteLedger } from "./payments";
 
 let n = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -46,4 +46,37 @@ export function demo() {
   console.log(`payments.check OK (${n} assertions)`);
 }
 
+/** Per-quotation statement rollup (the Statements tab). */
+export function demoQuotes() {
+  const quotes = [
+    Q("q1", "Ramesh", "SF-1", 200000, 140000, 90000, 50000),
+    Q("q2", "Suresh", "SF-2", 80000, 80000, 80000, 0),
+    Q("q3", "Ramesh", "SF-3", 50000, 0, 0, 0), // created, no payment yet
+    Q("q4", "Draft Co", "SF-4", 99999, 0, 0, 0, "Draft"), // draft = not billed, excluded
+  ];
+  const expenses = [
+    E("e1", "q1", 50000, "upi", "Afsar GPay"),
+    E("e2", "q1", 90000, "cash"),
+    E("e3", "q2", 80000, "cash"),
+    E("ex", "q4", 100, "cash"), // against a draft → ignored
+  ];
+  const { quotes: rows, quoteCount, payCount, totalReceived } = quoteLedger(quotes, expenses);
+
+  ok(quoteCount === 3, "drafts excluded → 3 created quotations");
+  ok(payCount === 3, "3 payments counted (draft's ignored)");
+  ok(totalReceived === 220000, "total received = 50000 + 90000 + 80000");
+
+  const r1 = rows.find((r) => r.number === "SF-1")!;
+  ok(r1.bill === 200000 && r1.paid === 140000 && r1.balance === 60000, "SF-1 bill/paid/balance");
+  ok(r1.statements.length === 2, "SF-1 has 2 statements");
+  ok(r1.statements[0].at === "e2" && r1.statements[1].at === "e1", "statements newest-first by createdAt");
+  ok(r1.statements[1].account === "Afsar GPay", "UPI account carried onto the statement");
+
+  const r3 = rows.find((r) => r.number === "SF-3")!;
+  ok(r3.statements.length === 0, "SF-3 (unpaid) shows no statements");
+
+  console.log(`payments.check quotes OK (${n} assertions)`);
+}
+
 demo();
+demoQuotes();
