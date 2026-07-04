@@ -457,20 +457,19 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         return;
       }
       // quote: thick fixed rows (~1.5cm), boxes flow down the left column then the right. Keep the
-      // rows at 1.5cm; only when the two columns won't fit one page do we thin the rows a little
-      // (never below ~0.85cm), and as a last resort scale the whole sheet down.
+      // rows at 1.5cm always; if it doesn't fit one A4, DON'T shrink — let it flow onto more pages.
       sheet.classList.add("a4fill");
+      sheet.style.setProperty("--sqrow", "1.5cm");
       sheet.style.height = pageH - 10 + "px";
       const sections = sheet.querySelector("#sections") as HTMLElement | null;
-      const overflows = () =>
+      const overflows =
         (!!sections && sections.scrollWidth > sections.clientWidth + 2) || sheet.scrollHeight > pageH + 2;
-      let rowCm = 1.5;
-      sheet.style.setProperty("--sqrow", rowCm + "cm");
-      while (rowCm > 0.85 && overflows()) {
-        rowCm = Math.round((rowCm - 0.05) * 100) / 100;
-        sheet.style.setProperty("--sqrow", rowCm + "cm");
+      if (overflows) {
+        // too many rows for one page — drop the single-page lock and paginate at full 1.5cm rows
+        sheet.classList.remove("a4fill");
+        sheet.classList.add("a4multi");
+        sheet.style.height = "";
       }
-      if (overflows()) sheet.style.zoom = (pageH / sheet.scrollHeight).toFixed(4);
     };
     const unfit = () => {
       sheet.style.width = "";
@@ -479,6 +478,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       sheet.style.removeProperty("--sqrow");
       sheet.classList.remove("inv-tight");
       sheet.classList.remove("a4fill");
+      sheet.classList.remove("a4multi");
     };
     window.addEventListener("beforeprint", fit);
     window.addEventListener("afterprint", unfit);

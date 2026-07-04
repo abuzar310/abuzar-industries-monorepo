@@ -337,11 +337,16 @@ body{
 #sheet.sq #sections .scol{display:flex; flex-direction:column; gap:10px; min-width:0}
 #sheet.sq.a4fill #sections{flex:0 1 auto; gap:8px 10px; min-height:0}
 #sheet.sq.a4fill #sections .scol{gap:8px}
-#sheet.sq.a4fill #sections .row.cf{height:var(--sqrow)}
+#sheet.sq.a4fill #sections .row.cf,#sheet.sq.a4multi #sections .row.cf{height:var(--sqrow)}
+/* multi-page: same thick rows, two columns at natural heights, boxes never split across a page break */
+#sheet.sq.a4multi #sections.twocol{align-items:start; gap:8px 10px}
+#sheet.sq.a4multi #sections .scol{gap:8px}
+#sheet.sq.a4multi #sections .section{break-inside:avoid; page-break-inside:avoid}
+#sheet.sq.a4multi #sections .totals{margin-top:8px}
 /* the bill sits at the BOTTOM of the right column — pushed down to align with the tallest column's
    bottom (below all boxes). No amount-in-words line. */
 #sheet.sq .words{display:none}
-#sheet.sq #sections .totals{flex:0 0 auto; margin-top:auto}
+#sheet.sq.a4fill #sections .totals{flex:0 0 auto; margin-top:auto}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);
