@@ -8,7 +8,7 @@ import { afterUnlock } from "@/store/session";
 
 export default function LockGate() {
   const { ready, user, brandMode } = useApp();
-  const solo = getFeatures().soloLogin; // official: no picker, just Afsar's password
+  const solo = getFeatures().soloLogin; // official: no picker, just Owner's password
   const [picked, setPicked] = useState<string | null>(solo ? "afsar" : null);
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");

@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { delRec } from "@/lib/db";
+import { allRec, delRec } from "@/lib/db";
 import { cloudDelete } from "@/lib/cloud";
 import { inr } from "@/lib/calc";
 import { addExpense, allExpenses, allSessions, closeSession, dayTotals, ENTRY_TYPES, isInflow, isUpi, typeLabel, upiAccounts } from "@/lib/expenses";
@@ -11,15 +11,16 @@ import AccountPicker from "@/components/AccountPicker";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
-import type { DaybookSession, EntryType, Expense, PayMode } from "@/lib/types";
+import type { DaybookSession, Doc, EntryType, Expense, PayMode } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id;
 
 export default function ExpensesView() {
   const { dataVersion, user } = useApp();
-  const isOwner = user?.role === "owner"; // Afsar: clean read-only view
+  const isOwner = user?.role === "owner"; // Owner: clean read-only view
   const [all, setAll] = useState<Expense[]>([]);
   const [sessions, setSessions] = useState<DaybookSession[]>([]);
+  const [quotes, setQuotes] = useState<Doc[]>([]); // for the customer name + phone on each statement
   const [openSes, setOpenSes] = useState<string | null>(null);
   const [notif, setNotif] = useState(""); // "" until client checks; then default/granted/denied
 
@@ -42,14 +43,31 @@ export default function ExpensesView() {
       setSessions(arr);
     });
     upiAccounts().then(setUpiAccts);
+    allRec<Doc>("quotations").then(setQuotes);
   }, []);
+  // quote id → { name, phone } so each statement can show the customer + their phone
+  const partyBySource = new Map(quotes.map((q) => [q.id, { name: q.customerName || "", phone: q.phone || "" }]));
   // cash daybook (current open session) = non-UPI entries not yet archived
   const list = all.filter((e) => !e.sessionId && !isUpi(e));
   // "Statements" = every payment a customer made — all UPI receipts + cash accepted against a quote.
   // A running log of who took what, kept even after cash is handed over (UPI never enters handover).
   const recvList = all.filter((e) => isUpi(e) || (e.type === "sale" && e.mode === "cash" && !!e.sourceId));
   const recvTotal = Math.round(recvList.reduce((s, e) => s + (+e.amount || 0), 0) * 100) / 100;
-  const sessionEntries = (id: string) => all.filter((e) => e.sessionId === id);
+  // A closed session owns every entry recorded in its window (previous close, this close].
+  // UPI receipts are never sessionId-tagged (they stay out of the cash handover), so we bound by
+  // time instead — that keeps them in the right day's history without mis-tagging older entries.
+  // ponytail: linear scan per open session; fine at this scale (a handful of sessions).
+  const sesAsc = [...sessions].sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
+  const sessionEntries = (id: string) => {
+    const i = sesAsc.findIndex((s) => s.id === id);
+    if (i < 0) return [] as Expense[];
+    const from = i > 0 ? sesAsc[i - 1].closedAt || "" : "";
+    const to = sesAsc[i].closedAt || "";
+    return all.filter((e) => {
+      const at = e.createdAt || "";
+      return !!at && at <= to && (!from || at > from);
+    });
+  };
   useEffect(() => {
     load();
   }, [load, dataVersion]);
@@ -288,28 +306,34 @@ export default function ExpensesView() {
           </p>
           <div className="panel-card">
             <div className="pc-head" style={{ justifyContent: "space-between" }}>
-              <span>Received · Note · Date</span>
+              <span>Customer · Phone · Date</span>
               <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
                 Total ₹{inr(recvTotal)}
               </span>
             </div>
-            {recvList.map((e) => (
-              <div className="exprow" key={e.id}>
-                <span className="exptag in">{e.mode === "upi" ? "UPI" : "Cash"}</span>
-                <span className="expnote">
-                  {e.mode === "upi" ? e.account || "UPI account" : "Cash in hand"}
-                  <small>
-                    {e.note ? e.note + " · " : ""}{e.date} · {userName(e.enteredBy)}
-                  </small>
-                </span>
-                <span className="expamt in">+₹ {inr(e.amount)}</span>
-                {!isOwner && !e.sessionId && (
-                  <button className="x-row" title="Delete" onClick={() => remove(e)}>
-                    ×
-                  </button>
-                )}
-              </div>
-            ))}
+            {recvList.map((e) => {
+              const party = e.sourceId ? partyBySource.get(e.sourceId) : undefined;
+              const phone = party?.phone || "";
+              return (
+                <div className="exprow" key={e.id}>
+                  <span className="exptag in">{e.mode === "upi" ? "UPI" : "Cash"}</span>
+                  <span className="expnote">
+                    {e.note || (e.mode === "upi" ? e.account || "UPI" : "Cash in hand")}
+                    <small>
+                      {phone ? "📞 " + phone + " · " : ""}
+                      {e.date}
+                      {e.mode === "upi" && e.account ? " · " + e.account : ""} · by {userName(e.enteredBy)}
+                    </small>
+                  </span>
+                  <span className="expamt in">+₹ {inr(e.amount)}</span>
+                  {!isOwner && !e.sessionId && (
+                    <button className="x-row" title="Delete" onClick={() => remove(e)}>
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}

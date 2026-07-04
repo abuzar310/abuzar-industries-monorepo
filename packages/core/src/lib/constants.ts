@@ -26,7 +26,7 @@ export const STATUSES = [
 export const BAKED = {
   url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
   key: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
-  // App access is gated by the local user lock (Afsar / Ajju); cloud sync runs on
+  // App access is gated by the local user lock (Owner / Manager); cloud sync runs on
   // the anon publishable key, so the Supabase email gate stays off by default.
   secure: false,
   openLock: "never" as const,

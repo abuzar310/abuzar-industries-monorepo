@@ -1,4 +1,4 @@
-// Local app lock: pick a user (Afsar / Ajju) and enter their password.
+// Local app lock: pick a user (Owner / Manager) and enter their password.
 // This gates access to the whole app; cloud sync runs separately on the anon key.
 import { metaGet, metaSet } from "./db";
 import { getState, setUser } from "@/store/app-store";

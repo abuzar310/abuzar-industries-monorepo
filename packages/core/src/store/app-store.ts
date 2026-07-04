@@ -18,7 +18,7 @@ export interface AppState {
   dataVersion: number;
   /** global search box term, shared across list views */
   searchTerm: string;
-  /** the signed-in local user (Afsar / Ajju), or null when the app is locked */
+  /** the signed-in local user (Owner / Manager), or null when the app is locked */
   user: LocalUser | null;
   /** active brand identity: generic demo (default) or real Abuzar */
   brandMode: BrandMode;

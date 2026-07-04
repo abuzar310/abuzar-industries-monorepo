@@ -71,7 +71,7 @@ export interface AppFeatures {
   simpleQuote: boolean;
   /** show accept-payment (cash/UPI) on a created quote, posting to the daybook (unofficial). */
   acceptPayment: boolean;
-  /** single-owner lock: no user picker, just the Afsar password (official). */
+  /** single-owner lock: no user picker, just the Owner password (official). */
   soloLogin?: boolean;
   /** Tally-style double-entry ledger section (official). */
   ledger?: boolean;

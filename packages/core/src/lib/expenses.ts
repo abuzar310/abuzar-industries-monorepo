@@ -13,7 +13,7 @@ export const ENTRY_TYPES: { value: EntryType; label: string; flow: "in" | "out" 
 
 export const typeLabel = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t)?.label ?? t;
 export const isInflow = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t)?.flow === "in";
-/** UPI money-in: kept OUT of the cash daybook (Ajju only owes cash) and shown in its own section. */
+/** UPI money-in: kept OUT of the cash daybook (Manager only owes cash) and shown in its own section. */
 export const isUpi = (e: Expense) => isInflow(e.type) && e.mode === "upi";
 
 export interface DayTotals {
@@ -111,7 +111,7 @@ export async function openingCarry(): Promise<number> {
  *  `given` = cash actually handed over; the rest (in-hand − given) carries to the next session.
  *  Omit `given` to hand over everything. Returns the created session, or null if nothing to close. */
 export async function closeSession(by: string, given?: number): Promise<DaybookSession | null> {
-  // only the cash daybook is handed over; UPI entries stay out (Ajju owes cash only)
+  // only the cash daybook is handed over; UPI entries stay out (Manager owes cash only)
   const open = (await openExpenses()).filter((e) => !isUpi(e));
   const opening = await openingCarry();
   if (!open.length && opening <= 0) return null;

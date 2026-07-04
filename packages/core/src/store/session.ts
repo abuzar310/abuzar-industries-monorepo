@@ -13,7 +13,7 @@ import { BAKED } from "@/lib/constants";
 import { checkOwnerNotifications, requestNotifyPermission } from "@/lib/notify";
 import { bumpData, getState, setAuthIdentity, setShowLogin, toast } from "./app-store";
 
-/** Side effects after a local user unlocks the app (Afsar / Ajju). */
+/** Side effects after a local user unlocks the app (Owner / Manager). */
 export async function afterUnlock() {
   const u = getState().user;
   if (u?.role === "owner") {
