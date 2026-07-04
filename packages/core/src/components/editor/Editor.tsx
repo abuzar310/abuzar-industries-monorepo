@@ -456,19 +456,26 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         sheet.style.width = "";
         return;
       }
-      // quote: thick fixed rows (~1.5cm), boxes flow down the left column then the right. Keep the
-      // rows at 1.5cm always; if it doesn't fit one A4, DON'T shrink — let it flow onto more pages.
+      // quote: rows are as thick as ~1.75cm. Fit everything on ONE page — thin the rows down (to no
+      // less than 1.2cm) so all the boxes still fit; only when even 1.2cm can't hold it do we flow
+      // onto the next page (a4multi) with full 1.75cm rows.
       sheet.classList.add("a4fill");
-      sheet.style.setProperty("--sqrow", "1.5cm");
       sheet.style.height = pageH - 10 + "px";
       const sections = sheet.querySelector("#sections") as HTMLElement | null;
-      const overflows =
+      const overflows = () =>
         (!!sections && sections.scrollWidth > sections.clientWidth + 2) || sheet.scrollHeight > pageH + 2;
-      if (overflows) {
-        // too many rows for one page — drop the single-page lock and paginate at full 1.5cm rows
+      let rowCm = 1.75;
+      sheet.style.setProperty("--sqrow", rowCm + "cm");
+      while (rowCm > 1.1 && overflows()) {
+        rowCm = Math.round((rowCm - 0.05) * 100) / 100;
+        sheet.style.setProperty("--sqrow", rowCm + "cm");
+      }
+      if (overflows()) {
+        // won't fit one page even at the thinnest allowed row → paginate at full thick rows
         sheet.classList.remove("a4fill");
         sheet.classList.add("a4multi");
         sheet.style.height = "";
+        sheet.style.setProperty("--sqrow", "1.75cm");
       }
     };
     const unfit = () => {
@@ -735,16 +742,20 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             // Cut Size quote: split the wood boxes into EXACTLY two columns — fill the left column
             // (up to ~one page of thick rows) then start the right. Never more than two columns.
             if (!feat.simpleQuote) return doc.sections.map((_, si) => card(si));
-            const CAP = 16; // rows that fill one column at the thick ~1.5cm height (fit() thins them if needed)
+            // Fill the left column by real height (each box ≈ header/footer + rows×1.75cm) up to a
+            // printable column (~24cm); the box that no longer fits starts the right column. fit()
+            // thins the rows a touch if the whole thing is a hair over one page.
+            const COL_CM = 24;
+            const boxCm = (sec: (typeof doc.sections)[number]) => 3 + (sec.rows.length || 1) * 1.75;
             const c1: number[] = [];
             const c2: number[] = [];
-            let n1 = 0;
+            let h1 = 0;
             let filled = false;
             doc.sections.forEach((sec, i) => {
-              const rows = sec.rows.length || 1;
-              if (!filled && (c1.length === 0 || n1 + rows <= CAP)) {
+              const bc = boxCm(sec);
+              if (!filled && (c1.length === 0 || h1 + bc <= COL_CM)) {
                 c1.push(i);
-                n1 += rows;
+                h1 += bc;
               } else {
                 filled = true;
                 c2.push(i);
