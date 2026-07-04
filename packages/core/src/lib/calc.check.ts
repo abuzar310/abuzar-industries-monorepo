@@ -1,6 +1,6 @@
 // Self-check for the money / CFT / words logic. Run: node src/lib/calc.check.ts
 import assert from "node:assert/strict";
-import { cftOf, computeDoc, rupeesInWords, inr } from "./calc.ts";
+import { cftOf, computeDoc, rupeesInWords, inr, splitHandover } from "./calc.ts";
 import type { Doc } from "./types.ts";
 
 // CFT = (L × W × T × Pcs) ÷ 144
@@ -40,6 +40,13 @@ assert.equal(computeDoc(dr).sub, 210);
 const df = { sections: [{ name: "Teak", rate: 100, rows: [{ l: 12, w: 12, t: 12, pcs: 1 }] }], gst: 500, gstMode: "flat" } as unknown as Doc;
 assert.equal(computeDoc(df).gstAmt, 500);
 assert.equal(computeDoc(df).grand, 1700);
+
+// session handover split: 5500 in hand, give 5000 → 500 carries forward
+assert.deepEqual(splitHandover(0, 5500, 5000), { inHand: 5500, given: 5000, carried: 500 });
+assert.deepEqual(splitHandover(500, 5000, 5000), { inHand: 5500, given: 5000, carried: 500 }); // opening folds in
+assert.deepEqual(splitHandover(0, 5500), { inHand: 5500, given: 5500, carried: 0 }); // omit → give all
+assert.deepEqual(splitHandover(0, 5500, 9999), { inHand: 5500, given: 5500, carried: 0 }); // clamped to in-hand
+assert.deepEqual(splitHandover(0, 5500, -50), { inHand: 5500, given: 0, carried: 5500 }); // clamped ≥ 0
 
 // formatting
 assert.equal(inr(1416), "1,416.00");

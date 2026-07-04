@@ -1,5 +1,5 @@
 import { allRec, delRec, put } from "./db";
-import { nowIso, todayStr, uid } from "./calc";
+import { nowIso, splitHandover, todayStr, uid } from "./calc";
 import { cloudDelete, trySync } from "./cloud";
 import type { DaybookSession, EntryType, Expense, PayMode } from "./types";
 
@@ -101,13 +101,22 @@ export const openExpenses = async () => (await allExpenses()).filter((e) => !e.s
 
 export const allSessions = () => allRec<DaybookSession>("sessions");
 
+/** Cash carried over from the most recent closed session — the current session's opening balance. */
+export async function openingCarry(): Promise<number> {
+  const prev = (await allSessions()).sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || ""));
+  return r2(prev[0]?.carried || 0);
+}
+
 /** Close the current session: archive its entries and record the handover.
- *  Returns the created session, or null if there was nothing to close. */
-export async function closeSession(by: string): Promise<DaybookSession | null> {
+ *  `given` = cash actually handed over; the rest (in-hand − given) carries to the next session.
+ *  Omit `given` to hand over everything. Returns the created session, or null if nothing to close. */
+export async function closeSession(by: string, given?: number): Promise<DaybookSession | null> {
   // only the cash daybook is handed over; UPI entries stay out (Ajju owes cash only)
   const open = (await openExpenses()).filter((e) => !isUpi(e));
-  if (!open.length) return null;
+  const opening = await openingCarry();
+  if (!open.length && opening <= 0) return null;
   const t = dayTotals(open);
+  const { given: give, carried } = splitHandover(opening, t.net, given); // opening carry + (cash in − spent)
   const now = nowIso();
   const session: DaybookSession = {
     id: "SES-" + uid(),
@@ -117,7 +126,9 @@ export async function closeSession(by: string): Promise<DaybookSession | null> {
     upiIn: t.upiIn,
     totalIn: t.totalIn,
     spent: t.spent,
-    given: t.net,
+    opening,
+    given: give,
+    carried,
     count: t.count,
     by,
     createdAt: now,

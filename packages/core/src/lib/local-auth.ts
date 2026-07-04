@@ -5,8 +5,8 @@ import { getState, setUser } from "@/store/app-store";
 import type { LocalUser } from "./types";
 
 export const USERS: LocalUser[] = [
-  { id: "afsar", name: "Afsar", role: "owner" },
-  { id: "ajju", name: "Ajju", role: "manager" },
+  { id: "afsar", name: "Owner", role: "owner" },
+  { id: "ajju", name: "Manager", role: "manager" },
 ];
 
 // Default staff passwords (each user can change their own; stored in meta so it syncs to

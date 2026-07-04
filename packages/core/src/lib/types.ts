@@ -86,6 +86,8 @@ export interface Customer {
   notes: string;
   /** GSTIN — used when the customer is treated as a debtor in the Ledger. */
   gstin?: string;
+  /** opening balance — money they owed before using the app (positive = they owe us). */
+  opening?: number;
   createdAt: string;
   updatedAt?: string;
   synced: boolean;
@@ -164,8 +166,12 @@ export interface DaybookSession {
   upiIn: number;
   totalIn: number;
   spent: number;
-  /** amount handed over = money in hand at close */
+  /** cash carried IN from the previous session (opening balance); absent/0 for older sessions. */
+  opening?: number;
+  /** amount actually handed over (may be less than in-hand). */
   given: number;
+  /** cash kept back = in-hand − given, carried forward to the next session. */
+  carried?: number;
   count: number;
   /** local user id who closed it */
   by: string;

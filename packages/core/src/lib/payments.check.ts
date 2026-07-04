@@ -78,5 +78,21 @@ export function demoQuotes() {
   console.log(`payments.check quotes OK (${n} assertions)`);
 }
 
+/** Legacy quote: cash paid on the doc but never itemised → surfaced as a synthetic statement. */
+export function demoReconcile() {
+  const quotes = [Q("qL", "Legacy", "SF-9", 184000, 184000, 54000, 130000)]; // 54k cash + 130k UPI
+  const expenses = [E("u1", "qL", 130000, "upi", "Afsar GPay")]; // only UPI was recorded
+  const { quotes: rows, payCount, totalReceived } = quoteLedger(quotes, expenses);
+  const r = rows[0];
+  ok(r.statements.length === 2, "legacy quote → UPI statement + reconstructed cash statement");
+  const cash = r.statements.find((s) => s.mode === "cash")!;
+  ok(!!cash && cash.synthetic === true, "missing cash surfaced as a synthetic statement");
+  ok(cash.amount === 54000, "synthetic cash = payCash − already-itemised cash = 54000");
+  ok(payCount === 2 && totalReceived === 184000, "reconciled total received = full 184000");
+
+  console.log(`payments.check reconcile OK (${n} assertions)`);
+}
+
 demo();
 demoQuotes();
+demoReconcile();

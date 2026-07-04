@@ -66,6 +66,18 @@ export function computeDoc(d: Doc): DocTotals {
   return { sub, gstAmt, grand, secCft };
 }
 
+/** Split the cash in hand at session close into given vs carried-forward.
+ *  `given` omitted → hand over everything; otherwise it's clamped to [0, in-hand]. */
+export function splitHandover(
+  opening: number,
+  net: number,
+  given?: number,
+): { inHand: number; given: number; carried: number } {
+  const inHand = Math.round(((+opening || 0) + (+net || 0)) * 100) / 100;
+  const g = Math.max(0, Math.min(inHand, given == null ? inHand : Math.round((+given || 0) * 100) / 100));
+  return { inHand, given: g, carried: Math.round((inHand - g) * 100) / 100 };
+}
+
 // ---- amount in words (Indian numbering) ----
 
 export function rupeesInWords(amount: number): string {

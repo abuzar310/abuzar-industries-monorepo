@@ -15,6 +15,8 @@ export interface PartyStatement {
   at: string; // createdAt ISO — used for the time + newest-first sort
   by: string; // enteredBy (local user id)
   quoteNo: string;
+  /** derived from the quote's own payCash/payUpi (legacy payment never itemised as its own expense). */
+  synthetic?: boolean;
 }
 
 /** Build one statement line from a recorded sale expense (shared by party + quote rollups). */
@@ -28,6 +30,20 @@ const mkStatement = (e: Expense, quoteNo: string): PartyStatement => ({
   by: e.enteredBy,
   quoteNo,
 });
+
+/** Surface any paid amount recorded on the quote itself (payCash/payUpi) that was never written
+ *  as its own expense — so an old cash payment still shows as a recorded statement. Never mutates. */
+export function reconcileStatements(d: Doc, statements: PartyStatement[]): PartyStatement[] {
+  const sumBy = (m: PayMode) => statements.reduce((t, s) => (s.mode === m ? t + s.amount : t), 0);
+  const out = [...statements];
+  const add = (mode: PayMode, amount: number) =>
+    out.push({ id: d.id + ":" + mode, amount: r2(amount), mode, account: "", date: d.date, at: "", by: "", quoteNo: d.number, synthetic: true });
+  const missCash = r2((d.payCash || 0) - sumBy("cash"));
+  const missUpi = r2((d.payUpi || 0) - sumBy("upi"));
+  if (missCash > 0.5) add("cash", missCash);
+  if (missUpi > 0.5) add("upi", missUpi);
+  return out;
+}
 
 export interface PartyQuote {
   id: string;
@@ -159,7 +175,9 @@ export function quoteLedger(quotes: Doc[], expenses: Expense[]): QuoteLedger {
     .map((d) => {
       const bill = quoteBill(d);
       const paid = +d.amountPaid || 0;
-      const statements = (byQuote.get(d.id) || []).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+      const statements = reconcileStatements(d, byQuote.get(d.id) || []).sort((a, b) =>
+        (b.at || "").localeCompare(a.at || ""),
+      );
       return {
         id: d.id,
         number: d.number,

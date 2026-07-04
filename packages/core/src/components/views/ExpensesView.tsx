@@ -10,7 +10,7 @@ import { USERS } from "@/lib/local-auth";
 import AccountPicker from "@/components/AccountPicker";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
-import { confirmDialog } from "@/store/dialog-store";
+import { confirmDialog, formDialog } from "@/store/dialog-store";
 import type { DaybookSession, EntryType, Expense, PayMode } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id;
@@ -108,20 +108,36 @@ export default function ExpensesView() {
   }
 
   async function handOver() {
-    const ok = await confirmDialog({
-      title: "Hand over to Afsar?",
-      message: `Give ₹${inr(t.net)} to Afsar and close this session. All entries move to history and a fresh session starts.`,
-      confirmLabel: "Give & close",
+    const res = await formDialog({
+      title: "Hand over to Owner",
+      message: `In hand ₹${inr(inHand)}. Enter how much you're giving — the rest carries to the next session.`,
+      fields: [
+        {
+          name: "given",
+          label: "Giving to Owner (₹)",
+          type: "number",
+          inputMode: "decimal",
+          value: String(inHand),
+          placeholder: "0",
+        },
+      ],
+      submitLabel: "Give & close",
     });
-    if (!ok) return;
-    const s = await closeSession(user?.id || "unknown");
+    if (res === null) return;
+    const give = Math.max(0, Math.min(inHand, +res.given || 0));
+    const s = await closeSession(user?.id || "unknown", give);
     if (!s) return toast("Nothing to hand over");
     load();
     bumpData();
-    toast("Session closed · ₹" + inr(s.given) + " given to Afsar");
+    toast(
+      "Session closed · ₹" + inr(s.given) + " given" + ((s.carried || 0) > 0 ? " · ₹" + inr(s.carried || 0) + " carried over" : ""),
+    );
   }
 
   const t = dayTotals(list);
+  // cash carried in from the last close = this session's opening balance
+  const carryIn = Math.round((sessions[0]?.carried || 0) * 100) / 100;
+  const inHand = Math.round((carryIn + t.net) * 100) / 100;
   const flow = isInflow(type) ? "in" : "out";
   const setFlow = (f: "in" | "out") => setType(f === "in" ? "sale" : isInflow(type) ? "additional" : type);
 
@@ -130,6 +146,13 @@ export default function ExpensesView() {
       <div className="sectitle">
         Daybook <small>— current session</small>
       </div>
+
+      {carryIn > 0 && (
+        <div className="carry-bar">
+          <span>↩ Carried over from last session</span>
+          <b>₹ {inr(carryIn)}</b>
+        </div>
+      )}
 
       {isOwner && notif && notif !== "granted" && (() => {
         const iosNeedsInstall = isIOS() && !isStandalone();
@@ -140,7 +163,7 @@ export default function ExpensesView() {
                 ? "To get alerts on iPhone: tap Share → Add to Home Screen, then open the app from there."
                 : notif === "denied"
                   ? "Notifications are off. Turn them on in Settings → this app → Notifications, then tap below."
-                  : "Get an alert whenever Ajju records an entry or hands over cash."}
+                  : "Get an alert whenever the Manager records an entry or hands over cash."}
             </span>
             {!iosNeedsInstall && (
               <button className="btn primary sm" onClick={enableNotifications}>
@@ -204,7 +227,8 @@ export default function ExpensesView() {
         </div>
         <div className="stat">
           <div className="k">In hand (to give)</div>
-          <div className="v" style={{ color: t.net < 0 ? "var(--danger)" : "var(--green)" }}>₹ {inr(t.net)}</div>
+          <div className="v" style={{ color: inHand < 0 ? "var(--danger)" : "var(--green)" }}>₹ {inr(inHand)}</div>
+          {carryIn > 0 && <div className="sub">incl ₹{inr(carryIn)} carried over</div>}
         </div>
         <div className="stat">
           <div className="k">Entries</div>
@@ -217,7 +241,7 @@ export default function ExpensesView() {
           <div className="empty">
             <div className="empty-icon">📒</div>
             <div className="empty-title">Fresh session</div>
-            <div className="empty-note">Record sales (cash / UPI) and costs. When you hand cash to Afsar, close the session below.</div>
+            <div className="empty-note">Record sales (cash / UPI) and costs. When you hand cash to the Owner, close the session below.</div>
           </div>
         </div>
       ) : (
@@ -246,10 +270,10 @@ export default function ExpensesView() {
         </div>
       )}
 
-      {!isOwner && list.length > 0 && (
+      {!isOwner && (list.length > 0 || carryIn > 0) && (
         <div className="rowbtns" style={{ marginTop: 14 }}>
           <button className="btn primary" onClick={handOver} style={{ width: "100%", justifyContent: "center", padding: "13px" }}>
-            Give ₹{inr(t.net)} to Afsar &amp; start new session
+            Hand over to Owner &amp; close · ₹{inr(inHand)} in hand
           </button>
         </div>
       )}
@@ -260,7 +284,7 @@ export default function ExpensesView() {
             Statements <small>— ₹{inr(recvTotal)} received · {recvList.length}</small>
           </div>
           <p className="note" style={{ marginTop: -6 }}>
-            Every payment a customer made — cash &amp; UPI — and who took it. (UPI stays out of Ajju&apos;s cash handover.)
+            Every payment a customer made — cash &amp; UPI — and who took it. (UPI stays out of the Manager&apos;s cash handover.)
           </p>
           <div className="panel-card">
             <div className="pc-head" style={{ justifyContent: "space-between" }}>
@@ -301,6 +325,20 @@ export default function ExpensesView() {
             const entries = open
               ? sessionEntries(s.id).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))
               : [];
+            const opening = s.opening || 0;
+            const carried = s.carried || 0;
+            // the full money trail for this closed day
+            const trail: { k: string; v: number; c: string; sub?: string }[] = [];
+            if (opening > 0) trail.push({ k: "Carried in", v: opening, c: "var(--ochre-deep)" });
+            trail.push({
+              k: "Money In",
+              v: s.totalIn,
+              c: "var(--ochre-deep)",
+              sub: "Cash ₹" + inr(s.cashIn) + (s.upiIn > 0 ? " · UPI ₹" + inr(s.upiIn) : ""),
+            });
+            trail.push({ k: "Spent", v: s.spent, c: "var(--danger)" });
+            trail.push({ k: "Given to Owner", v: s.given, c: "var(--green)" });
+            if (carried > 0) trail.push({ k: "Carried to next session", v: carried, c: "var(--ochre-deep)" });
             return (
               <div className="panel-card" key={s.id}>
                 <div
@@ -310,7 +348,8 @@ export default function ExpensesView() {
                 >
                   <span>
                     <span className="um-caret" style={{ marginRight: 6 }}>{open ? "▾" : "▸"}</span>
-                    {s.date} · Given ₹{inr(s.given)} to Afsar
+                    {s.date} · Given ₹{inr(s.given)}
+                    {carried > 0 ? " · ₹" + inr(carried) + " carried" : ""}
                   </span>
                   <span style={{ fontFamily: "var(--mono)", fontSize: 12, letterSpacing: 0, textTransform: "none" }}>
                     In ₹{inr(s.totalIn)} · Spent ₹{inr(s.spent)} · {s.count} entries · by {userName(s.by)}
@@ -318,21 +357,18 @@ export default function ExpensesView() {
                 </div>
                 {open && (
                   <>
-                    <div className="dash-grid g3" style={{ margin: "10px 14px" }}>
-                      <div className="stat">
-                        <div className="k">Money In</div>
-                        <div className="v money">₹ {inr(s.totalIn)}</div>
-                        <div className="sub">Cash ₹{inr(s.cashIn)}{s.upiIn > 0 ? " · UPI ₹" + inr(s.upiIn) : ""}</div>
-                      </div>
-                      <div className="stat">
-                        <div className="k">Spent</div>
-                        <div className="v" style={{ color: "var(--danger)" }}>₹ {inr(s.spent)}</div>
-                      </div>
-                      <div className="stat">
-                        <div className="k">Given to Afsar</div>
-                        <div className="v" style={{ color: "var(--green)" }}>₹ {inr(s.given)}</div>
-                      </div>
+                    <div className="ses-trail">
+                      {trail.map((r) => (
+                        <div className="ses-trow" key={r.k}>
+                          <span>
+                            {r.k}
+                            {r.sub && <small>{r.sub}</small>}
+                          </span>
+                          <b style={{ color: r.c }}>₹ {inr(r.v)}</b>
+                        </div>
+                      ))}
                     </div>
+                    {entries.length > 0 && <div className="pbd-lbl">Every transaction · {entries.length}</div>}
                     {entries.map((e) => (
                       <div className="exprow" key={e.id}>
                         <span className={"exptag " + (isInflow(e.type) ? "in" : "out")}>{typeLabel(e.type).split(" ")[0]}</span>

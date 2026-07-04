@@ -1156,3 +1156,38 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .pbd-q .bal{flex:0 0 auto; font-family:var(--mono); font-weight:700; font-size:13px}
 .pbd-lbl{font-family:var(--disp); letter-spacing:.09em; text-transform:uppercase; font-size:10px; font-weight:700;
   color:var(--ink-faint); padding:11px 14px 5px}
+
+/* Statements tab — responsive filter bar + light quote header */
+.stmt-filters{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:10px}
+.stmt-filters .paysel{flex:0 1 auto}
+.stmt-filters .db-seg.sm{flex:0 0 auto}
+.stmt-clear{flex:0 0 auto; font-family:var(--disp); letter-spacing:.04em; text-transform:uppercase; font-size:11px;
+  font-weight:700; color:var(--ochre-deep); background:transparent; border:1px solid var(--line-2); border-radius:9px;
+  padding:9px 13px; cursor:pointer; transition:all var(--t-fast)}
+.stmt-clear:hover{border-color:var(--ochre); background:rgba(176,124,40,.07)}
+.stmt-qhead{display:flex; align-items:center; gap:9px; flex-wrap:wrap; cursor:pointer;
+  padding:12px 15px; background:var(--panel); border-bottom:1px solid var(--line); transition:background var(--t-fast)}
+.stmt-qhead:hover{background:var(--panel-2)}
+.stmt-qhead .sq-no{font-family:var(--mono); font-weight:700; font-size:13px; color:var(--ochre-deep); flex:0 0 auto}
+.stmt-qhead .sq-name{font-family:var(--disp); font-weight:700; font-size:15px; color:var(--ink);
+  flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.stmt-qhead .sq-date{font-family:var(--mono); font-size:11px; color:var(--ink-faint); flex:0 0 auto}
+.stmt-qhead .sq-bal{margin-left:auto; font-family:var(--mono); font-weight:700; font-size:13px; flex:0 0 auto}
+.stmt-qhead .sq-bal.ok{color:var(--green)} .stmt-qhead .sq-bal.due{color:var(--danger)}
+@media(max-width:560px){
+  .stmt-filters .paysel{flex:1 1 42%}
+  .stmt-filters .db-seg.sm{flex:1 1 100%}
+  .stmt-qhead .sq-bal{margin-left:0; flex-basis:100%}
+}
+
+/* Daybook — carried-over start bar + closed-session money trail */
+.carry-bar{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px;
+  padding:11px 15px; border-radius:var(--radius-md); border:1px solid var(--ochre); background:rgba(176,124,40,.08)}
+.carry-bar span{font-family:var(--disp); font-weight:700; font-size:13px; letter-spacing:.02em; color:var(--ochre-deep)}
+.carry-bar b{font-family:var(--mono); font-weight:700; font-size:16px; color:var(--ochre-deep)}
+.ses-trail{padding:6px 14px 4px}
+.ses-trow{display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px dashed var(--line)}
+.ses-trow:last-child{border-bottom:none}
+.ses-trow > span{font-size:13px; color:var(--ink-soft)}
+.ses-trow small{display:block; font-family:var(--mono); font-size:10px; color:var(--ink-faint); margin-top:1px}
+.ses-trow b{font-family:var(--mono); font-weight:700; font-size:15px; font-variant-numeric:tabular-nums}

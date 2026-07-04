@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, delRec, getRec } from "@/lib/db";
+import { cloudDelete } from "@/lib/cloud";
 import { inr } from "@/lib/calc";
 import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/create";
 import { getFeatures } from "@/lib/features";
@@ -77,6 +78,7 @@ export default function CustomerDetail({ id }: { id: string }) {
     });
     if (!ok) return;
     await delRec("customers", cust!.id);
+    await cloudDelete("customers", cust!.id); // tombstone it so the cloud doesn't re-sync it back
     toast("Customer deleted");
     router.push("/customers");
   }

@@ -26,7 +26,7 @@ export default function AccountPicker({
       ))}
       <input
         className="acct-new"
-        placeholder={accounts.length ? "+ new account" : "account name (e.g. Afsar GPay)"}
+        placeholder={accounts.length ? "+ new account" : "account name (e.g. GPay / PhonePe)"}
         value={known ? "" : value}
         onChange={(e) => onChange(e.target.value)}
       />

@@ -14,6 +14,15 @@ const hhmm = (iso: string) => {
   const d = new Date(iso);
   return isNaN(+d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
+// dd-mm-yy → month / 2-digit-year parts
+const parts = (d: string) => {
+  const [, mm = "", yy = ""] = (d || "").split("-");
+  return { mm, yy };
+};
+const MONTHS: [string, string][] = [
+  ["01", "Jan"], ["02", "Feb"], ["03", "Mar"], ["04", "Apr"], ["05", "May"], ["06", "Jun"],
+  ["07", "Jul"], ["08", "Aug"], ["09", "Sep"], ["10", "Oct"], ["11", "Nov"], ["12", "Dec"],
+];
 
 export default function StatementsView() {
   const { ready, dataVersion } = useApp();
@@ -21,6 +30,8 @@ export default function StatementsView() {
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [q, setQ] = useState("");
+  const [month, setMonth] = useState("");
+  const [year, setYear] = useState("");
   const [onlyPaid, setOnlyPaid] = useState(false);
 
   const load = useCallback(() => {
@@ -33,13 +44,28 @@ export default function StatementsView() {
     if (ready) load();
   }, [ready, dataVersion, load]);
 
-  const { quotes: rows, quoteCount, payCount, totalReceived } = quoteLedger(quotes, expenses);
+  const { quotes: rows } = quoteLedger(quotes, expenses);
+  const years = [...new Set(rows.map((r) => parts(r.date).yy).filter(Boolean))].sort((a, b) => b.localeCompare(a));
   const term = q.trim().toLowerCase();
-  const shown = rows
-    .filter((r) => (onlyPaid ? r.statements.length > 0 : true))
-    .filter((r) =>
-      term ? r.number.toLowerCase().includes(term) || r.name.toLowerCase().includes(term) || r.phone.includes(term) : true,
-    );
+  const shown = rows.filter((r) => {
+    const { mm, yy } = parts(r.date);
+    if (month && mm !== month) return false;
+    if (year && yy !== year) return false;
+    if (onlyPaid && r.statements.length === 0) return false;
+    if (term && !(r.number.toLowerCase().includes(term) || r.name.toLowerCase().includes(term) || r.phone.includes(term)))
+      return false;
+    return true;
+  });
+  // summary reflects the active filter, so the numbers always match what's on screen
+  const shownReceived = shown.reduce((s, r) => s + r.statements.reduce((t, x) => t + x.amount, 0), 0);
+  const shownPayCount = shown.reduce((s, r) => s + r.statements.length, 0);
+  const filtered = !!(month || year || onlyPaid || term);
+  const clearAll = () => {
+    setQ("");
+    setMonth("");
+    setYear("");
+    setOnlyPaid(false);
+  };
 
   return (
     <div>
@@ -47,30 +73,32 @@ export default function StatementsView() {
         Statements <small>— every payment, per quotation</small>
       </div>
 
-      {/* overall summary */}
+      {/* summary — tracks the current filter */}
       <div className="pay-hero">
         <div className="ph-main">
           <span className="ph-k">Payments recorded</span>
-          <span className="ph-v">{payCount}</span>
+          <span className="ph-v">{shownPayCount}</span>
           <span className="ph-sub">
-            across {quoteCount} {quoteCount === 1 ? "quotation" : "quotations"} · ₹{inr(totalReceived)} received
+            across {shown.length} {shown.length === 1 ? "quotation" : "quotations"} · ₹{inr(shownReceived)} received
+            {filtered ? " · filtered" : ""}
           </span>
         </div>
         <div className="ph-side">
           <div className="ph-tile rec">
             <small>Received</small>
-            <b>₹ {inr(totalReceived)}</b>
+            <b>₹ {inr(shownReceived)}</b>
           </div>
           <div className="ph-tile">
             <small>Quotations</small>
-            <b>{quoteCount}</b>
+            <b>{shown.length}</b>
           </div>
         </div>
       </div>
 
+      {/* search */}
       <div className="searchbar" style={{ marginTop: 16 }}>
         <span className="s-ic">⌕</span>
-        <input placeholder="Search a quote by number, customer or phone…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input placeholder="Search by quote no., customer or phone…" value={q} onChange={(e) => setQ(e.target.value)} />
         {q && (
           <button className="s-clear" onClick={() => setQ("")} title="Clear">
             ×
@@ -78,10 +106,39 @@ export default function StatementsView() {
         )}
         <span className="s-count">{shown.length}</span>
       </div>
-      <label className="modal-field" style={{ flexDirection: "row", alignItems: "center", gap: 8, margin: "8px 2px 0" }}>
-        <input type="checkbox" checked={onlyPaid} onChange={(e) => setOnlyPaid(e.target.checked)} style={{ width: "auto" }} />
-        <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>Only quotations with a payment</span>
-      </label>
+
+      {/* filters — month · year · payment state */}
+      <div className="stmt-filters">
+        <select className="paysel" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Filter by month">
+          <option value="">All months</option>
+          {MONTHS.map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>
+        <select className="paysel" value={year} onChange={(e) => setYear(e.target.value)} aria-label="Filter by year">
+          <option value="">All years</option>
+          {years.map((y) => (
+            <option key={y} value={y}>
+              20{y}
+            </option>
+          ))}
+        </select>
+        <div className="db-seg sm">
+          <button type="button" className={"seg-btn" + (!onlyPaid ? " on" : "")} onClick={() => setOnlyPaid(false)}>
+            All
+          </button>
+          <button type="button" className={"seg-btn" + (onlyPaid ? " on" : "")} onClick={() => setOnlyPaid(true)}>
+            With payment
+          </button>
+        </div>
+        {filtered && (
+          <button type="button" className="stmt-clear" onClick={clearAll}>
+            Clear
+          </button>
+        )}
+      </div>
 
       {shown.length === 0 ? (
         <div className="listwrap" style={{ marginTop: 12 }}>
@@ -91,34 +148,21 @@ export default function StatementsView() {
             <div className="empty-note">
               {!rows.length
                 ? "Create a quote and record a payment — each quotation's statement shows up here."
-                : "No quotation matches your search or filter."}
+                : "No quotation matches these filters."}
             </div>
           </div>
         </div>
       ) : (
         shown.map((r) => (
           <div className="panel-card" key={r.id} style={{ marginTop: 12 }}>
-            <div
-              className="pc-head"
-              onClick={() => router.push("/editor/" + r.id)}
-              style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
-              title="Open quotation"
-            >
-              <span>
-                #{r.number} · {r.name}
-              </span>
-              <small style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400, color: "var(--ink-faint)" }}>
+            <div className="stmt-qhead" onClick={() => router.push("/editor/" + r.id)} title="Open quotation">
+              <span className="sq-no">#{r.number}</span>
+              <span className="sq-name">{r.name}</span>
+              <small className="sq-date">
                 {r.date}
                 {r.phone ? " · " + r.phone : ""}
               </small>
-              <span
-                style={{
-                  marginLeft: "auto",
-                  fontFamily: "var(--mono)",
-                  fontWeight: 700,
-                  color: r.balance <= 0.5 ? "var(--green)" : "var(--danger)",
-                }}
-              >
+              <span className={"sq-bal " + (r.balance <= 0.5 ? "ok" : "due")}>
                 {r.balance <= 0.5 ? "✓ clear" : "Due ₹" + inr(r.balance)}
               </span>
             </div>
@@ -148,7 +192,8 @@ export default function StatementsView() {
                       <div className="stmt-to">{s.mode === "upi" ? s.account || "UPI account" : "Cash in hand"}</div>
                       <div className="stmt-sub">
                         {s.mode === "upi" ? "UPI" : "Cash"} · {s.date}
-                        {hhmm(s.at) ? " · " + hhmm(s.at) : ""} · by {userName(s.by)}
+                        {hhmm(s.at) ? " · " + hhmm(s.at) : ""}
+                        {s.synthetic ? " · from quote record" : " · by " + userName(s.by)}
                       </div>
                     </div>
                     <div className="stmt-amt">+₹{inr(s.amount)}</div>
