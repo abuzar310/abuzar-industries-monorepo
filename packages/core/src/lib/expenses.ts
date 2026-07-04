@@ -101,48 +101,85 @@ export const openExpenses = async () => (await allExpenses()).filter((e) => !e.s
 
 export const allSessions = () => allRec<DaybookSession>("sessions");
 
-/** Cash carried over from the most recent closed session — the current session's opening balance. */
+/** Only finalised (owner-confirmed) sessions, newest first — pending requests are excluded. */
+const confirmedSessions = async () =>
+  (await allSessions()).filter((s) => !s.pending).sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || ""));
+
+/** Cash carried over from the most recent confirmed session — the current session's opening balance. */
 export async function openingCarry(): Promise<number> {
-  const prev = (await allSessions()).sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || ""));
+  const prev = await confirmedSessions();
   return r2(prev[0]?.carried || 0);
 }
 
-/** Close the current session: archive its entries and record the handover.
- *  `given` = cash actually handed over; the rest (in-hand − given) carries to the next session.
- *  Omit `given` to hand over everything. Returns the created session, or null if nothing to close. */
-export async function closeSession(by: string, given?: number): Promise<DaybookSession | null> {
-  // only the cash daybook is handed over; UPI entries stay out (Manager owes cash only)
-  const open = (await openExpenses()).filter((e) => !isUpi(e));
-  const opening = await openingCarry();
-  if (!open.length && opening <= 0) return null;
-  const t = dayTotals(open);
-  const { given: give, carried } = splitHandover(opening, t.net, given); // opening carry + (cash in − spent)
+/** The handover currently awaiting the owner's confirmation, if any. */
+export async function pendingHandover(): Promise<DaybookSession | null> {
+  return (await allSessions()).find((s) => s.pending) || null;
+}
+
+/** Manager requests a handover: snapshot this session and record how much is being given, but
+ *  DON'T archive the entries yet — it only "takes off" once the owner confirms. Returns the
+ *  pending session, or null if there's nothing to hand over. */
+export async function requestHandover(by: string, given?: number): Promise<DaybookSession | null> {
   const now = nowIso();
+  const prevClose = (await confirmedSessions())[0]?.closedAt || "";
+  // this session's window = everything recorded since the last confirmed close
+  const win = (await allExpenses()).filter((e) => {
+    const at = e.createdAt || "";
+    return !!at && at <= now && (!prevClose || at > prevClose);
+  });
+  const opening = await openingCarry();
+  if (!win.length && opening <= 0) return null;
+  const wt = dayTotals(win); // cash + UPI (for the session summary)
+  const ct = dayTotals(win.filter((e) => !isUpi(e))); // cash only (drives the handover)
+  const { given: give, carried } = splitHandover(opening, ct.net, given);
   const session: DaybookSession = {
     id: "SES-" + uid(),
     date: todayStr(),
     closedAt: now,
-    cashIn: t.cashIn,
-    upiIn: t.upiIn,
-    totalIn: t.totalIn,
-    spent: t.spent,
+    cashIn: ct.cashIn,
+    upiIn: wt.upiIn,
+    totalIn: wt.totalIn,
+    spent: ct.spent,
     opening,
     given: give,
     carried,
-    count: t.count,
+    count: win.length,
     by,
+    pending: true,
     createdAt: now,
     updatedAt: now,
     synced: false,
   };
   await put("sessions", session);
-  // tag every open entry with this session so it leaves the current view
-  for (const e of open) {
-    e.sessionId = session.id;
+  trySync();
+  return session;
+}
+
+/** Owner confirms a pending handover: archive its cash entries and finalise it ("it takes off"). */
+export async function confirmHandover(id: string, by: string): Promise<boolean> {
+  const ses = (await allSessions()).find((s) => s.id === id);
+  if (!ses || !ses.pending) return false;
+  const now = nowIso();
+  // tag the cash entries that were open at request time; later entries stay open for the next session
+  const openCash = (await openExpenses()).filter((e) => !isUpi(e) && (e.createdAt || "") <= ses.closedAt);
+  for (const e of openCash) {
+    e.sessionId = ses.id;
     e.updatedAt = now;
     e.synced = false;
     await put("expenses", e);
   }
+  ses.pending = false;
+  ses.confirmedBy = by;
+  ses.updatedAt = now;
+  ses.synced = false;
+  await put("sessions", ses);
   trySync();
-  return session;
+  return true;
+}
+
+/** Cancel a pending handover (owner declines or the manager withdraws) — nothing was archived. */
+export async function declineHandover(id: string): Promise<void> {
+  await delRec("sessions", id);
+  cloudDelete("sessions", id);
+  trySync();
 }

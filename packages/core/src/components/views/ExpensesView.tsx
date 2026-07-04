@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { allRec, delRec } from "@/lib/db";
 import { cloudDelete } from "@/lib/cloud";
 import { inr } from "@/lib/calc";
-import { addExpense, allExpenses, allSessions, closeSession, dayTotals, ENTRY_TYPES, isInflow, isUpi, typeLabel, upiAccounts } from "@/lib/expenses";
+import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, ENTRY_TYPES, isInflow, isUpi, requestHandover, typeLabel, upiAccounts } from "@/lib/expenses";
 import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
 import { isIOS, isStandalone } from "@/lib/pwa";
 import { USERS } from "@/lib/local-auth";
@@ -53,11 +53,14 @@ export default function ExpensesView() {
   // A running log of who took what, kept even after cash is handed over (UPI never enters handover).
   const recvList = all.filter((e) => isUpi(e) || (e.type === "sale" && e.mode === "cash" && !!e.sourceId));
   const recvTotal = Math.round(recvList.reduce((s, e) => s + (+e.amount || 0), 0) * 100) / 100;
+  // a handover awaiting the owner's confirmation (blocks a new one) vs finalised sessions (history)
+  const pending = sessions.find((s) => s.pending) || null;
+  const closed = sessions.filter((s) => !s.pending); // already newest-first
   // A closed session owns every entry recorded in its window (previous close, this close].
   // UPI receipts are never sessionId-tagged (they stay out of the cash handover), so we bound by
   // time instead — that keeps them in the right day's history without mis-tagging older entries.
   // ponytail: linear scan per open session; fine at this scale (a handful of sessions).
-  const sesAsc = [...sessions].sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
+  const sesAsc = [...closed].sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
   const sessionEntries = (id: string) => {
     const i = sesAsc.findIndex((s) => s.id === id);
     if (i < 0) return [] as Expense[];
@@ -128,7 +131,7 @@ export default function ExpensesView() {
   async function handOver() {
     const res = await formDialog({
       title: "Hand over to Owner",
-      message: `In hand ₹${inr(inHand)}. Enter how much you're giving — the rest carries to the next session.`,
+      message: `In hand ₹${inr(inHand)}. Enter how much you're giving — the Owner confirms it, then it closes. The rest carries to the next session.`,
       fields: [
         {
           name: "given",
@@ -139,22 +142,47 @@ export default function ExpensesView() {
           placeholder: "0",
         },
       ],
-      submitLabel: "Give & close",
+      submitLabel: "Send to Owner",
     });
     if (res === null) return;
     const give = Math.max(0, Math.min(inHand, +res.given || 0));
-    const s = await closeSession(user?.id || "unknown", give);
+    const s = await requestHandover(user?.id || "unknown", give);
     if (!s) return toast("Nothing to hand over");
     load();
     bumpData();
-    toast(
-      "Session closed · ₹" + inr(s.given) + " given" + ((s.carried || 0) > 0 ? " · ₹" + inr(s.carried || 0) + " carried over" : ""),
-    );
+    toast("₹" + inr(s.given) + " sent to Owner — waiting for confirmation");
+  }
+
+  async function onConfirm(s: DaybookSession) {
+    const ok = await confirmDialog({
+      title: "Confirm you received the cash?",
+      message: `${userName(s.by)} handed over ₹${inr(s.given)}${(s.carried || 0) > 0 ? " (₹" + inr(s.carried || 0) + " kept back)" : ""}. Confirming closes the session.`,
+      confirmLabel: "Yes, received",
+    });
+    if (!ok) return;
+    await confirmHandover(s.id, user?.id || "unknown");
+    load();
+    bumpData();
+    toast("Handover confirmed · ₹" + inr(s.given) + " received");
+  }
+
+  async function onDecline(s: DaybookSession) {
+    const ok = await confirmDialog({
+      title: isOwner ? "Decline this handover?" : "Cancel this handover?",
+      message: `₹${inr(s.given)} — nothing has been archived yet. The session stays open.`,
+      confirmLabel: isOwner ? "Decline" : "Cancel request",
+      danger: true,
+    });
+    if (!ok) return;
+    await declineHandover(s.id);
+    load();
+    bumpData();
+    toast(isOwner ? "Handover declined" : "Request cancelled");
   }
 
   const t = dayTotals(list);
-  // cash carried in from the last close = this session's opening balance
-  const carryIn = Math.round((sessions[0]?.carried || 0) * 100) / 100;
+  // cash carried in from the last confirmed close = this session's opening balance
+  const carryIn = Math.round((closed[0]?.carried || 0) * 100) / 100;
   const inHand = Math.round((carryIn + t.net) * 100) / 100;
   const flow = isInflow(type) ? "in" : "out";
   const setFlow = (f: "in" | "out") => setType(f === "in" ? "sale" : isInflow(type) ? "additional" : type);
@@ -169,6 +197,45 @@ export default function ExpensesView() {
         <div className="carry-bar">
           <span>↩ Carried over from last session</span>
           <b>₹ {inr(carryIn)}</b>
+        </div>
+      )}
+
+      {pending && (
+        <div className="panel-card" style={{ marginTop: 12, borderColor: "var(--ochre)" }}>
+          <div className="pc-head" style={{ justifyContent: "space-between" }}>
+            <span>{isOwner ? "⏳ Handover to confirm" : "⏳ Awaiting Owner confirmation"}</span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
+              by {userName(pending.by)} · {pending.date}
+            </span>
+          </div>
+          <div className="ses-trail">
+            <div className="ses-trow">
+              <span>Giving to Owner</span>
+              <b style={{ color: "var(--green)" }}>₹ {inr(pending.given)}</b>
+            </div>
+            {(pending.carried || 0) > 0 && (
+              <div className="ses-trow">
+                <span>Kept back (carries over)</span>
+                <b style={{ color: "var(--ochre-deep)" }}>₹ {inr(pending.carried || 0)}</b>
+              </div>
+            )}
+          </div>
+          <div className="rowbtns" style={{ padding: "10px 14px 14px", gap: 8 }}>
+            {isOwner ? (
+              <>
+                <button className="btn primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => onConfirm(pending)}>
+                  Confirm received
+                </button>
+                <button className="btn" style={{ justifyContent: "center" }} onClick={() => onDecline(pending)}>
+                  Decline
+                </button>
+              </>
+            ) : (
+              <button className="btn" style={{ flex: 1, justifyContent: "center" }} onClick={() => onDecline(pending)}>
+                Cancel request
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -288,10 +355,10 @@ export default function ExpensesView() {
         </div>
       )}
 
-      {!isOwner && (list.length > 0 || carryIn > 0) && (
+      {!isOwner && !pending && (list.length > 0 || carryIn > 0) && (
         <div className="rowbtns" style={{ marginTop: 14 }}>
           <button className="btn primary" onClick={handOver} style={{ width: "100%", justifyContent: "center", padding: "13px" }}>
-            Hand over to Owner &amp; close · ₹{inr(inHand)} in hand
+            Hand over to Owner · ₹{inr(inHand)} in hand
           </button>
         </div>
       )}
@@ -338,13 +405,13 @@ export default function ExpensesView() {
         </>
       )}
 
-      {sessions.length > 0 && (
+      {closed.length > 0 && (
         <>
           <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
-            Session history <small>— {sessions.length}</small>
+            Session history <small>— {closed.length}</small>
           </div>
           <p className="note" style={{ marginTop: -6 }}>Tap a day to see every transaction in it.</p>
-          {sessions.map((s) => {
+          {closed.map((s) => {
             const open = openSes === s.id;
             const entries = open
               ? sessionEntries(s.id).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))

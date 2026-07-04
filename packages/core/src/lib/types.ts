@@ -173,7 +173,11 @@ export interface DaybookSession {
   /** cash kept back = in-hand − given, carried forward to the next session. */
   carried?: number;
   count: number;
-  /** local user id who closed it */
+  /** true while the handover is awaiting the owner's confirmation (not yet final). */
+  pending?: boolean;
+  /** owner user id who confirmed the handover. */
+  confirmedBy?: string;
+  /** local user id who requested/closed it */
   by: string;
   createdAt: string;
   updatedAt: string;
