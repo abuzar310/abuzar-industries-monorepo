@@ -325,9 +325,10 @@ body{
    hole, and a box that is alone on the sheet spans the full width. The bill sits full width at the
    end, right below the boxes — never beside one. Verified in headless Chrome print. Height is set
    inline (283mm print / px for the PDF clone) by the print fit() and the PDF export so they match. */
-/* rows are a fixed THICK height (--sqrow, default 1.5cm) — static, never shrink, so 5 rows read
-   the same as 25; the fit() only scales the whole sheet down (zoom) if the content overruns a page. */
-#sheet.sq{--sqrow:1.5cm}
+/* rows are a fixed height (--sqrow, ≤1.75cm) — static on screen AND print, so 5 rows read the same
+   as 25; when a quote needs more than ~26 rows it flows onto the next page (a4multi), never shrinks. */
+#sheet.sq{--sqrow:1.75cm}
+#sheet.sq #sections .row.cf{height:var(--sqrow)}
 #sheet.sq.a4fill{display:flex; flex-direction:column}
 #sheet.sq.a4fill .mast{flex:0 0 auto}
 /* box flow: EXACTLY two columns (structured in Editor.tsx as two .scol stacks) — boxes fill the
@@ -337,7 +338,6 @@ body{
 #sheet.sq #sections .scol{display:flex; flex-direction:column; gap:10px; min-width:0}
 #sheet.sq.a4fill #sections{flex:0 1 auto; gap:8px 10px; min-height:0}
 #sheet.sq.a4fill #sections .scol{gap:8px}
-#sheet.sq.a4fill #sections .row.cf,#sheet.sq.a4multi #sections .row.cf{height:var(--sqrow)}
 /* multi-page: same thick rows, two columns at natural heights, boxes never split across a page break */
 #sheet.sq.a4multi #sections.twocol{align-items:start; gap:8px 10px}
 #sheet.sq.a4multi #sections .scol{gap:8px}
@@ -346,7 +346,7 @@ body{
 /* the bill sits at the BOTTOM of the right column — pushed down to align with the tallest column's
    bottom (below all boxes). No amount-in-words line. */
 #sheet.sq .words{display:none}
-#sheet.sq.a4fill #sections .totals{flex:0 0 auto; margin-top:auto}
+#sheet.sq #sections .totals{flex:0 0 auto; margin-top:auto}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);
