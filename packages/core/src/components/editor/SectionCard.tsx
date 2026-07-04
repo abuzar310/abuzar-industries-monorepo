@@ -34,6 +34,28 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
   const unit = rft ? "FT" : pcs ? "Pcs" : "CFT";
   const measure = (r: Section["rows"][number]) => (rft ? rftOf(r) : pcs ? pcsOf(r) : direct ? directOf(r) : cftOf(r));
   const totalText = pcs ? String(Math.round(cft)) : cft.toFixed(2);
+  const totalPcs = sec.rows.reduce((s, r) => s + (Math.round(+r.pcs) || 0), 0);
+
+  // header cells for the CFT-first table (# · CFT · L · W · T · Pcs)
+  const head = (
+    <>
+      <span>#</span>
+      {!pcs && <span>{unit}</span>}
+      <span>
+        L<i className="unit">feet</i>
+      </span>
+      <span>
+        W<i className="unit">inch</i>
+      </span>
+      <span>
+        T<i className="unit">inch</i>
+      </span>
+      <span>
+        Pcs<i className="unit">qty</i>
+      </span>
+      <span />
+    </>
+  );
 
   return (
     <div className={"section" + (single ? " direct" : "")}>
@@ -44,6 +66,11 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
           <i />
         </span>
         <input className="sec-name" list="woodtypes" value={sec.name} aria-label="Wood type name" onChange={(e) => onName(si, e.target.value)} />
+        {!single && (
+          <span className="sec-pcs">
+            Total Pcs <b>{totalPcs}</b>
+          </span>
+        )}
         <span className="mode-seg" role="group" aria-label="Entry mode">
           {modes.map((m) => (
             <button key={m} className={m === mode ? "on" : ""} onClick={() => onSetMode(si, m)} title={`Enter ${MODE_LABEL[m]}`}>
@@ -91,27 +118,12 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
         </>
       ) : (
         <>
-          <div className={"thead" + (pcs ? " pcstab" : "")}>
-            <span>#</span>
-            <span>
-              L<i className="unit">feet</i>
-            </span>
-            <span>
-              W<i className="unit">inch</i>
-            </span>
-            <span>
-              T<i className="unit">inch</i>
-            </span>
-            <span>
-              Pcs<i className="unit">qty</i>
-            </span>
-            {!pcs && <span>{unit}</span>}
-            <span />
-          </div>
+          <div className={"thead cf" + (pcs ? " pcstab" : "")}>{head}</div>
           <div className="rows">
             {sec.rows.map((r, ri) => (
-              <div className={"row" + (pcs ? " pcstab" : "")} key={ri}>
+              <div className={"row cf" + (pcs ? " pcstab" : "")} key={ri}>
                 <span className="sl">{ri + 1}</span>
+                {!pcs && <span className="cft">{measure(r).toFixed(2)}</span>}
                 {DIM.map((k) => (
                   <input
                     key={k}
@@ -127,7 +139,6 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
                     onChange={(e) => onCell(si, ri, k, e.target.value)}
                   />
                 ))}
-                {!pcs && <span className="cft">{measure(r).toFixed(2)}</span>}
                 <button className="x-row" title="Remove line" onClick={() => onDelRow(si, ri)}>
                   ×
                 </button>
@@ -141,24 +152,20 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
         <button className="add-row" onClick={() => onAddRow(si)}>
           + Add line
         </button>
-        <div className="sec-calc">
-          <div className="sc-total">
-            Total {unit} <b>{totalText}</b>
-          </div>
-          <div className="sc-row">
-            <span className="sc">
-              <i>Total {unit}</i>
-              <b>{totalText}</b>
-            </span>
-            <span className="sc">
-              <i>Rate ₹/{unit}</i>
-              <input type="number" inputMode="decimal" value={sec.rate} aria-label="Rate" onChange={(e) => onRate(si, e.target.value)} />
-            </span>
-            <span className="sc amt">
-              <i>Total Price</i>
-              <b>₹ {inr(amt)}</b>
-            </span>
-          </div>
+        {/* one row: Total CFT · Rate · Total Price */}
+        <div className="sec-calc oneline">
+          <span className="sc">
+            <i>Total {unit}</i>
+            <b>{totalText}</b>
+          </span>
+          <span className="sc">
+            <i>Rate ₹/{unit}</i>
+            <input type="number" inputMode="decimal" value={sec.rate} aria-label="Rate" onChange={(e) => onRate(si, e.target.value)} />
+          </span>
+          <span className="sc amt">
+            <i>Total Price</i>
+            <b>₹ {inr(amt)}</b>
+          </span>
         </div>
       </div>
     </div>

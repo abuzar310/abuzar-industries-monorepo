@@ -23,7 +23,6 @@ export default function PaymentsView() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<"all" | "due" | "settled">("all");
 
   const load = useCallback(() => {
     Promise.all([allRec<Doc>("quotations"), allRec<Expense>("expenses")]).then(([qs, es]) => {
@@ -38,8 +37,9 @@ export default function PaymentsView() {
   const { parties, totalBilled, totalPaid, totalPending } = partyLedger(quotes, expenses);
   const dueCount = parties.filter((p) => p.balance > 0.5).length;
   const term = q.trim().toLowerCase();
+  // only parties who still owe — settled / advance parties are hidden
   const shown = parties
-    .filter((p) => (filter === "due" ? p.balance > 0.5 : filter === "settled" ? p.balance <= 0.5 : true))
+    .filter((p) => p.balance > 0.5)
     .filter((p) => (term ? p.name.toLowerCase().includes(term) || p.phone.includes(term) : true));
 
   const balClass = (b: number) => (b < -0.5 ? "adv" : b <= 0.5 ? "ok" : "due");
@@ -49,7 +49,7 @@ export default function PaymentsView() {
   return (
     <div>
       <div className="sectitle">
-        Payments <small>— who owes what</small>
+        Balances <small>— who still owes</small>
       </div>
 
       {/* overall tracker */}
@@ -73,35 +73,32 @@ export default function PaymentsView() {
         </div>
       </div>
 
-      {/* search + filter */}
-      {parties.length > 0 && (
-        <>
-          <div className="searchbar" style={{ marginTop: 16 }}>
-            <span className="s-ic">⌕</span>
-            <input placeholder="Search a party by name or phone…" value={q} onChange={(e) => setQ(e.target.value)} />
-            {q && (
-              <button className="s-clear" onClick={() => setQ("")} title="Clear">
-                ×
-              </button>
-            )}
-            <span className="s-count">{shown.length}</span>
-          </div>
-          <div className="rowbtns" style={{ marginBottom: 4 }}>
-            {(["all", "due", "settled"] as const).map((f) => (
-              <button key={f} className={"btn sm" + (filter === f ? " primary" : "")} onClick={() => setFilter(f)}>
-                {f === "all" ? "All" : f === "due" ? `Due (${dueCount})` : "Settled"}
-              </button>
-            ))}
-          </div>
-        </>
+      {/* search — only shown when someone still owes */}
+      {dueCount > 0 && (
+        <div className="searchbar" style={{ marginTop: 16 }}>
+          <span className="s-ic">⌕</span>
+          <input placeholder="Search a party by name or phone…" value={q} onChange={(e) => setQ(e.target.value)} />
+          {q && (
+            <button className="s-clear" onClick={() => setQ("")} title="Clear">
+              ×
+            </button>
+          )}
+          <span className="s-count">{shown.length}</span>
+        </div>
       )}
 
       {shown.length === 0 ? (
         <div className="listwrap" style={{ marginTop: 12 }}>
           <div className="empty">
-            <div className="empty-icon">💰</div>
-            <div className="empty-title">{parties.length ? "No match" : "No billed quotes yet"}</div>
-            <div className="empty-note">Create a quote and record a payment — balances and statements show up here.</div>
+            <div className="empty-icon">{!parties.length ? "💰" : dueCount ? "🔍" : "🎉"}</div>
+            <div className="empty-title">{!parties.length ? "No billed quotes yet" : dueCount ? "No match" : "All settled"}</div>
+            <div className="empty-note">
+              {!parties.length
+                ? "Create a quote and record a payment — balances show up here."
+                : dueCount
+                  ? "No outstanding party matches your search."
+                  : "Everyone has paid up. Parties appear here only while they still owe."}
+            </div>
           </div>
         </div>
       ) : (

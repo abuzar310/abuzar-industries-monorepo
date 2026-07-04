@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/db";
 import { computeDoc, inr, pad, todayStr } from "@/lib/calc";
 import { dayTotals } from "@/lib/expenses";
+import { partyLedger } from "@/lib/payments";
+import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
 import type { Doc, Expense, Stock } from "@/lib/types";
 import { StatusBadge } from "./DocList";
@@ -47,13 +49,30 @@ export default function DashboardView() {
   const follow = quotes.filter((q) => q.status === "Follow-up Pending");
   const lowStock = stk.filter((s) => (+s.cft || 0) <= 0);
 
+  const feat = getFeatures();
+  // Cut Size (unofficial): overall outstanding balance + total wood sold, from created quotes
+  const ledger = feat.acceptPayment ? partyLedger(quotes, exp) : null;
+  const totalOutstanding = ledger ? ledger.totalPending : 0;
+  const dueCount = ledger ? ledger.parties.filter((p) => p.balance > 0.5).length : 0;
+  let totalCftSold = 0;
+  if (feat.simpleQuote) {
+    quotes.forEach((qd) => {
+      if (qd.status === "Created") totalCftSold += computeDoc(qd).secCft.reduce((s, c) => s + c, 0);
+    });
+  }
+
   const todayCards = [
     { k: "Cash In", v: "₹ " + inr(todayBook.cashIn), money: true },
     { k: "UPI In", v: "₹ " + inr(todayBook.upiIn), money: true },
     { k: "Spent", v: "₹ " + inr(todayBook.spent), danger: todayBook.spent > 0 },
     { k: "Net Today", v: "₹ " + inr(todayBook.net), tone: todayBook.net < 0 ? "danger" : "good" },
   ];
-  const overviewCards = [
+  type Card = { k: string; v: string; money?: boolean; danger?: boolean; sub?: string; onClick?: () => void };
+  const overviewCards: Card[] = [
+    ...(feat.acceptPayment
+      ? [{ k: "Outstanding", v: "₹ " + inr(totalOutstanding), money: true, sub: dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"}` : "all clear", onClick: () => router.push("/payments") }]
+      : []),
+    ...(feat.simpleQuote ? [{ k: "Total CFT Sold", v: totalCftSold.toFixed(2), sub: "cubic feet", onClick: () => router.push("/quotations") }] : []),
     { k: "This Month Sales", v: "₹ " + inr(monthRev), money: true, sub: ym, onClick: () => router.push("/invoices") },
     { k: "Follow-ups", v: String(follow.length), sub: "to chase", onClick: () => router.push("/quotations") },
     { k: "Low Stock", v: String(lowStock.length), danger: lowStock.length > 0, sub: "wood type(s)", onClick: () => router.push("/stock") },

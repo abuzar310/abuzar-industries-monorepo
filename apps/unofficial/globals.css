@@ -272,21 +272,16 @@ body{
 .row input.dim.muted{opacity:.38}
 /* direct-CFT entry columns: # | CFT | delete */
 .thead.dcols,.row.dcols{grid-template-columns:22px 1fr 20px}
-/* redesigned wood table: CFT is the first data column (# · CFT · L · W · T · Pcs), with big BOLD numbers */
-.thead.cf,.row.cf{grid-template-columns:26px 72px 1fr 1fr 1fr 1fr 20px}
+/* redesigned wood table: CFT is the first data column (# · CFT · L · W · T · Pcs) */
+.thead.cf,.row.cf{grid-template-columns:26px 70px 1fr 1fr 1fr 1fr 20px}
 .thead.cf.pcstab,.row.cf.pcstab{grid-template-columns:26px 1fr 1fr 1fr 1fr 20px}
-.row.cf .cft{text-align:left; padding:0 0 0 4px; font-size:17px; font-weight:800; color:var(--walnut); font-variant-numeric:tabular-nums}
-.row.cf .dim{font-size:16px; font-weight:800; text-align:center; color:var(--ink)}
-.row.cf .sl{font-size:14px; font-weight:700}
+.row.cf .cft{text-align:left; padding:0 0 0 3px; font-size:15px; font-weight:800; color:var(--walnut)}
 /* Total-Pcs shown at the top (in the section header bar) */
 .sec-pcs{margin-left:12px; font-family:var(--disp); font-size:9.5px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:#E9D6B4; white-space:nowrap; flex:0 0 auto}
 .sec-pcs b{font-family:var(--mono); font-size:14px; color:#fff; margin-left:5px}
-/* footer: Total CFT aligns under the CFT column (left); Rate + Total Price to the right */
-.sec-foot:has(.oneline){align-items:stretch}
-.sec-calc.oneline{flex:1 1 auto; flex-direction:row; align-items:center; justify-content:space-between; gap:16px}
-.sec-calc.oneline .sc{border:none; padding:0; text-align:left; align-items:flex-start}
-.sec-calc.oneline .sc:first-child{padding-left:26px; min-width:96px}
-.sec-calc.oneline .sc.amt{text-align:right; align-items:flex-end}
+/* footer totals on ONE row: Total CFT · Rate · Total Price */
+.sec-calc.oneline{flex-direction:row; align-items:center; gap:24px}
+.sec-calc.oneline .sc{border:none; padding:0}
 /* Per-price columns: # | L | W | T | Pcs | delete (no CFT measure column) */
 .thead.pcstab,.row.pcstab{grid-template-columns:22px 1fr 1fr 1fr 1fr 20px}
 /* GST % / flat toggle in the totals */
@@ -330,16 +325,14 @@ body{
 #sheet.sq{--sqrow:1.5cm}
 #sheet.sq.a4fill{display:flex; flex-direction:column}
 #sheet.sq.a4fill .mast,#sheet.sq.a4fill .totals{flex:0 0 auto}
-/* box flow: EXACTLY two columns (structured in Editor.tsx as two .scol stacks) — boxes fill the
-   left column, then the right. Never three columns. Each box is one column wide. */
-#sheet.sq #sections.twocol{display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:start}
-#sheet.sq #sections .scol{display:flex; flex-direction:column; gap:10px; min-width:0}
-#sheet.sq.a4fill #sections{flex:1 1 auto; gap:8px 10px; align-content:start; min-height:0}
-#sheet.sq.a4fill #sections .scol{gap:8px}
+#sheet.sq.a4fill #sections{flex:0 1 auto; display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:min-content;
+  align-items:start; gap:8px 10px; min-height:0}
+#sheet.sq.a4fill #sections .section{display:flex; flex-direction:column}
 #sheet.sq.a4fill #sections .row.cf{height:var(--sqrow)}
-/* totals sit in the RIGHT half only; no amount-in-words line */
-#sheet.sq .words{display:none}
-#sheet.sq.a4fill .totals{width:calc(50% - 5px); margin-left:auto}
+/* box flow: the first box holds the left column; the rest stack down the right column */
+#sheet.sq.a4fill #sections .section:first-child:not(:only-child){grid-column:1; grid-row:1 / span 99}
+#sheet.sq.a4fill #sections .section:not(:first-child){grid-column:2}
+#sheet.sq.a4fill #sections .section:only-child{grid-column:1 / -1}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);

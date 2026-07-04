@@ -45,9 +45,10 @@ export default function ExpensesView() {
   }, []);
   // cash daybook (current open session) = non-UPI entries not yet archived
   const list = all.filter((e) => !e.sessionId && !isUpi(e));
-  // UPI statements are tracked separately (Ajju doesn't owe UPI) — a running log, never archived
-  const upiList = all.filter(isUpi);
-  const upiTotal = Math.round(upiList.reduce((s, e) => s + (+e.amount || 0), 0) * 100) / 100;
+  // "Statements" = every payment a customer made — all UPI receipts + cash accepted against a quote.
+  // A running log of who took what, kept even after cash is handed over (UPI never enters handover).
+  const recvList = all.filter((e) => isUpi(e) || (e.type === "sale" && e.mode === "cash" && !!e.sourceId));
+  const recvTotal = Math.round(recvList.reduce((s, e) => s + (+e.amount || 0), 0) * 100) / 100;
   const sessionEntries = (id: string) => all.filter((e) => e.sessionId === id);
   useEffect(() => {
     load();
@@ -253,32 +254,32 @@ export default function ExpensesView() {
         </div>
       )}
 
-      {upiList.length > 0 && (
+      {recvList.length > 0 && (
         <>
           <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
-            UPI Statements <small>— ₹{inr(upiTotal)} received · {upiList.length}</small>
+            Statements <small>— ₹{inr(recvTotal)} received · {recvList.length}</small>
           </div>
           <p className="note" style={{ marginTop: -6 }}>
-            UPI paid straight into an account — not part of Ajju&apos;s cash handover.
+            Every payment a customer made — cash &amp; UPI — and who took it. (UPI stays out of Ajju&apos;s cash handover.)
           </p>
           <div className="panel-card">
             <div className="pc-head" style={{ justifyContent: "space-between" }}>
-              <span>Account · Quote · Date</span>
+              <span>Received · Note · Date</span>
               <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
-                Total ₹{inr(upiTotal)}
+                Total ₹{inr(recvTotal)}
               </span>
             </div>
-            {upiList.map((e) => (
+            {recvList.map((e) => (
               <div className="exprow" key={e.id}>
-                <span className="exptag in">UPI</span>
+                <span className="exptag in">{e.mode === "upi" ? "UPI" : "Cash"}</span>
                 <span className="expnote">
-                  {e.account || "—"}
+                  {e.mode === "upi" ? e.account || "UPI account" : "Cash in hand"}
                   <small>
-                    {e.note || "—"} · {e.date} · {userName(e.enteredBy)}
+                    {e.note ? e.note + " · " : ""}{e.date} · {userName(e.enteredBy)}
                   </small>
                 </span>
                 <span className="expamt in">+₹ {inr(e.amount)}</span>
-                {!isOwner && (
+                {!isOwner && !e.sessionId && (
                   <button className="x-row" title="Delete" onClick={() => remove(e)}>
                     ×
                   </button>

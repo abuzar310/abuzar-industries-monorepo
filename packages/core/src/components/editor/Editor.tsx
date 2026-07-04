@@ -456,16 +456,27 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         sheet.style.width = "";
         return;
       }
-      // quote: lock to one A4 and let the grid fill it (boxes + rows stretch, bill at the bottom).
-      // Small safety gap keeps the amount-in-words line off the paper edge; scale down on overflow.
+      // quote: thick fixed rows (~1.5cm), boxes flow down the left column then the right. Keep the
+      // rows at 1.5cm; only when the two columns won't fit one page do we thin the rows a little
+      // (never below ~0.85cm), and as a last resort scale the whole sheet down.
       sheet.classList.add("a4fill");
       sheet.style.height = pageH - 10 + "px";
-      if (sheet.scrollHeight > pageH + 2) sheet.style.zoom = (pageH / sheet.scrollHeight).toFixed(4);
+      const sections = sheet.querySelector("#sections") as HTMLElement | null;
+      const overflows = () =>
+        (!!sections && sections.scrollWidth > sections.clientWidth + 2) || sheet.scrollHeight > pageH + 2;
+      let rowCm = 1.5;
+      sheet.style.setProperty("--sqrow", rowCm + "cm");
+      while (rowCm > 0.85 && overflows()) {
+        rowCm = Math.round((rowCm - 0.05) * 100) / 100;
+        sheet.style.setProperty("--sqrow", rowCm + "cm");
+      }
+      if (overflows()) sheet.style.zoom = (pageH / sheet.scrollHeight).toFixed(4);
     };
     const unfit = () => {
       sheet.style.width = "";
       sheet.style.height = "";
       sheet.style.zoom = "1";
+      sheet.style.removeProperty("--sqrow");
       sheet.classList.remove("inv-tight");
       sheet.classList.remove("a4fill");
     };
@@ -697,28 +708,55 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
           </div>
         </div>
 
-        <div id="sections" ref={secRef} onKeyDown={onGridKeyDown}>
-          {doc.sections.map((sec, si) => {
-            const cft = totals.secCft[si] || 0;
-            const amt = Math.round(cft * (+sec.rate || 0) * 100) / 100;
+        <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} className={feat.simpleQuote ? "twocol" : ""}>
+          {(() => {
+            const card = (si: number) => {
+              const sec = doc.sections[si];
+              const cft = totals.secCft[si] || 0;
+              const amt = Math.round(cft * (+sec.rate || 0) * 100) / 100;
+              return (
+                <SectionCard
+                  key={si}
+                  sec={sec}
+                  si={si}
+                  cft={cft}
+                  amt={amt}
+                  modes={secModes}
+                  onName={onName}
+                  onRate={onRate}
+                  onSetMode={onSetMode}
+                  onCell={onCell}
+                  onAddRow={onAddRow}
+                  onDelRow={onDelRow}
+                  onDelSec={onDelSec}
+                />
+              );
+            };
+            // Cut Size quote: split the wood boxes into EXACTLY two columns — fill the left column
+            // (up to ~one page of thick rows) then start the right. Never more than two columns.
+            if (!feat.simpleQuote) return doc.sections.map((_, si) => card(si));
+            const CAP = 13; // rows that fill one column at the thick ~1.5cm height
+            const c1: number[] = [];
+            const c2: number[] = [];
+            let n1 = 0;
+            let filled = false;
+            doc.sections.forEach((sec, i) => {
+              const rows = sec.rows.length || 1;
+              if (!filled && (c1.length === 0 || n1 + rows <= CAP)) {
+                c1.push(i);
+                n1 += rows;
+              } else {
+                filled = true;
+                c2.push(i);
+              }
+            });
             return (
-              <SectionCard
-                key={si}
-                sec={sec}
-                si={si}
-                cft={cft}
-                amt={amt}
-                modes={secModes}
-                onName={onName}
-                onRate={onRate}
-                onSetMode={onSetMode}
-                onCell={onCell}
-                onAddRow={onAddRow}
-                onDelRow={onDelRow}
-                onDelSec={onDelSec}
-              />
+              <>
+                <div className="scol">{c1.map(card)}</div>
+                <div className="scol">{c2.map(card)}</div>
+              </>
             );
-          })}
+          })()}
         </div>
         <button className="add-sec" onClick={onAddSec}>
           + Add wood type
