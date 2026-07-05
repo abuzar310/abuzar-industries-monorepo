@@ -16,8 +16,9 @@ export const isInflow = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t)
 /** UPI money-in: kept OUT of the cash daybook (Manager only owes cash) and shown in its own section. */
 export const isUpi = (e: Expense) => isInflow(e.type) && e.mode === "upi";
 /** Does this entry belong in the manager's cash daybook? Excludes UPI, cash sent straight to owner,
- *  and customer dues/charges (a charge moves no cash). */
-export const inDaybook = (e: Expense) => !isUpi(e) && !e.toOwner && !e.charge;
+ *  cash assigned to a named account, and customer dues/charges (a charge moves no cash). */
+export const inDaybook = (e: Expense) =>
+  !isUpi(e) && !e.toOwner && !e.charge && !(e.mode === "cash" && !!(e.account || "").trim());
 
 export interface DayTotals {
   cashIn: number;
@@ -71,7 +72,7 @@ export async function addExpense(fields: {
     mode,
     amount: r2(fields.amount),
     note: fields.note || "",
-    account: mode === "upi" ? (fields.account || "").trim() : "",
+    account: (fields.account || "").trim(),
     toOwner: mode === "cash" ? !!fields.toOwner : false,
     enteredBy: fields.enteredBy,
     sourceId: fields.sourceId,
@@ -88,11 +89,8 @@ export async function addExpense(fields: {
 
 export const allExpenses = () => allRec<Expense>("expenses");
 
-/** Distinct UPI account names used so far (for the "to whom" quick-pick). */
-export async function upiAccounts(): Promise<string[]> {
-  const arr = await allExpenses();
-  return [...new Set(arr.filter(isUpi).map((e) => (e.account || "").trim()).filter(Boolean))].sort();
-}
+/** Distinct account names used so far (for the quick-pick). Re-exported from accounts.ts. */
+export { payAccounts as upiAccounts } from "./accounts";
 
 /** Delete (locally + cloud) every daybook entry auto-created from a given doc. Returns the count removed. */
 export async function deleteExpensesBySource(sourceId: string): Promise<number> {

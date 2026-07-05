@@ -177,6 +177,10 @@ export interface Expense {
   charge?: boolean;
   /** set once the entry is archived into a closed session; falsy = current open session */
   sessionId?: string;
+  /** Accounts tab: when this payment was physically collected from the account holder. */
+  collectedAt?: string;
+  /** who marked it collected */
+  collectedBy?: string;
   createdAt: string;
   updatedAt: string;
   synced: boolean;

@@ -69,11 +69,11 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
       type: "sale",
       amount: a,
       mode: isCash ? "cash" : "upi",
-      account: mode === "upi" ? acct.trim() : "",
+      account: mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "",
       toOwner,
       note: (doc.customerName || "Walk-in") + " · " + doc.number,
-      label: isCash ? note.trim() : "", // custom cash note → shows on the statement
-      date: payDate ? toDmy(payDate) : undefined, // optional custom date; else today
+      label: isCash ? note.trim() : "",
+      date: payDate ? toDmy(payDate) : undefined,
       enteredBy: by,
       sourceId: doc.id,
     });
@@ -84,8 +84,12 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     setPayDate("");
     reload();
     bumpData();
+    const acctLbl = acct.trim() ? " · " + acct.trim() : "";
     toast(
-      "₹" + inr(a) + " recorded" + (mode === "upi" ? " · " + acct.trim() : toOwner ? " · to owner" : " · cash → Daybook"),
+      "₹" +
+        inr(a) +
+        " recorded" +
+        (mode === "upi" ? acctLbl : toOwner ? " · to owner" : acct.trim() ? acctLbl + " (Accounts)" : " · cash → Daybook"),
     );
   }
 
@@ -128,7 +132,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     const isCash = mode !== "upi";
     e.amount = a;
     e.mode = isCash ? "cash" : "upi";
-    e.account = mode === "upi" ? acct.trim() : "";
+    e.account = mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "";
     e.toOwner = isCash ? mode === "owner" || isOwner : false;
     e.label = isCash ? note.trim() : "";
     e.date = payDate ? toDmy(payDate) : e.date;
@@ -173,7 +177,9 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
           <div className={"pb-r" + (editId === l.id ? " pb-editing" : "")} key={l.id}>
             <span className="pb-amt">₹ {inr(l.amount)}</span>
             <span className="pb-mode">{l.mode === "upi" ? "UPI" : l.toOwner ? "→ Owner" : "Cash"}</span>
-            <span className="pb-acct">{l.mode === "upi" ? l.account || "—" : l.note || "—"}</span>
+            <span className="pb-acct">
+              {l.mode === "upi" ? l.account || "—" : l.account ? l.account + (l.note ? " · " + l.note : "") : l.note || "Daybook"}
+            </span>
             <span className="pb-when">
               {l.synthetic ? "from quote record" : l.date + (hhmm(l.at) ? " " + hhmm(l.at) : "") + " · " + userName(l.by)}
             </span>
@@ -216,22 +222,10 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
               <option value="owner">Cash → Owner</option>
               <option value="upi">UPI</option>
             </select>
-            {mode === "upi" ? (
-              <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
+            {mode === "owner" ? (
+              <span className="pb-in" style={{ color: "var(--ink-faint)", fontSize: 13 }}>—</span>
             ) : (
-              <input
-                className="pb-in"
-                type="text"
-                placeholder="cash note (optional)"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addLine();
-                  }
-                }}
-              />
+              <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
             )}
             <input
               className="pb-in"
@@ -249,6 +243,18 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
             >
               {editId ? "✓" : "+"}
             </button>
+          </div>
+        )}
+        {(!settled || editId) && mode === "cash" && (
+          <div className="pb-r pb-note">
+            <input
+              className="pb-in"
+              type="text"
+              placeholder="Cash note (optional)"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              style={{ gridColumn: "1 / -1" }}
+            />
           </div>
         )}
 
