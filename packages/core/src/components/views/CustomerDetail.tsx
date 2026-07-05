@@ -46,11 +46,12 @@ export default function CustomerDetail({ id }: { id: string }) {
       </div>
     );
 
-  const f = customerFinancials(cust.id, quotes, invs);
+  const f = customerFinancials(cust.id, quotes, invs, cust.opening || 0);
   const stats = [
     { k: "Quoted", v: "₹ " + inr(f.quotedTotal) },
     { k: "Invoiced", v: "₹ " + inr(f.invoicedTotal), money: true },
     { k: "Paid", v: "₹ " + inr(f.paid) },
+    ...(f.opening ? [{ k: "Opening dues", v: "₹ " + inr(f.opening) }] : []),
     { k: "Outstanding", v: "₹ " + inr(f.outstanding), danger: f.outstanding > 0 },
   ];
 

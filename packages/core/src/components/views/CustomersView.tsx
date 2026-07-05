@@ -89,7 +89,7 @@ export default function CustomersView() {
       <div className="custgrid">
         {shown.length ? (
           shown.map((c) => {
-            const f = customerFinancials(c.id, quotes, invs);
+            const f = customerFinancials(c.id, quotes, invs, c.opening || 0);
             return (
               <div className="custcard" key={c.id} onClick={() => router.push("/customers/" + c.id)} style={{ cursor: "pointer" }}>
                 <h3>{c.name}</h3>
@@ -98,6 +98,12 @@ export default function CustomersView() {
                   {c.site && <>Carpenter: {c.site}<br /></>}
                   <b>{f.quoteCount}</b> quote{f.quoteCount === 1 ? "" : "s"} · <b>{f.invoiceCount}</b> invoice
                   {f.invoiceCount === 1 ? "" : "s"}
+                  {f.opening > 0 && (
+                    <>
+                      <br />
+                      <span style={{ color: "var(--ink-faint)" }}>Opening dues ₹ {inr(f.opening)}</span>
+                    </>
+                  )}
                   {f.outstanding > 0 && (
                     <>
                       <br />

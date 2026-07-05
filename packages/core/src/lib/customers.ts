@@ -8,11 +8,14 @@ export interface CustomerFinancials {
   quotedTotal: number;
   invoicedTotal: number;
   paid: number;
+  /** old dues carried in before the app (from the customer record). */
+  opening: number;
   outstanding: number;
 }
 
-/** Roll up a customer's business across their quotations and invoices. */
-export function customerFinancials(custId: string, quotes: Doc[], invoices: Doc[]): CustomerFinancials {
+/** Roll up a customer's business across their quotations and invoices.
+ *  `opening` = old dues carried in before the app; it adds to what they still owe. */
+export function customerFinancials(custId: string, quotes: Doc[], invoices: Doc[], opening = 0): CustomerFinancials {
   const q = quotes.filter((d) => d.customerId === custId);
   const inv = invoices.filter((d) => d.customerId === custId);
   let quotedTotal = 0;
@@ -23,13 +26,15 @@ export function customerFinancials(custId: string, quotes: Doc[], invoices: Doc[
     invoicedTotal += computeDoc(d).grand;
     paid += +d.amountPaid || 0;
   });
+  const op = Math.round((+opening || 0) * 100) / 100;
   return {
     quoteCount: q.length,
     invoiceCount: inv.length,
     quotedTotal: Math.round(quotedTotal * 100) / 100,
     invoicedTotal: Math.round(invoicedTotal * 100) / 100,
     paid: Math.round(paid * 100) / 100,
-    outstanding: Math.round((invoicedTotal - paid) * 100) / 100,
+    opening: op,
+    outstanding: Math.round((invoicedTotal - paid + op) * 100) / 100,
   };
 }
 
