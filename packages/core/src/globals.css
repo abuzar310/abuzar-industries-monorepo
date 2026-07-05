@@ -1320,7 +1320,13 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 
 /* Quote payments — Excel-like advance/payment ledger (autosaves per line) */
 .paybook{border:1px solid var(--line-2); border-radius:var(--radius-md); overflow-x:auto; background:var(--panel)}
-.pb-r{display:grid; grid-template-columns:minmax(92px,1fr) 82px minmax(88px,1.2fr) minmax(110px,1.4fr) 28px; gap:8px; align-items:center; padding:9px 12px; border-bottom:1px solid var(--line); min-width:470px}
+.pb-r{display:grid; grid-template-columns:minmax(92px,1fr) 82px minmax(88px,1.2fr) minmax(110px,1.4fr) 46px; gap:8px; align-items:center; padding:9px 12px; border-bottom:1px solid var(--line); min-width:490px}
+.pb-rowacts{display:flex; gap:1px; justify-content:flex-end; align-items:center}
+.pb-rowacts .pb-x{width:20px}
+.pb-editing{opacity:.4}
+.pb-editbar{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 12px; background:rgba(176,124,40,.09); border-bottom:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--ochre-deep)}
+.pb-editbar button{border:1px solid var(--line-2); background:#fff; color:var(--ochre-deep); font-family:var(--disp); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:5px 10px; border-radius:7px; cursor:pointer}
+.pb-editbar button:hover{border-color:var(--ochre)}
 .pb-r:last-child{border-bottom:none}
 .pb-h{background:var(--panel-2); font-family:var(--disp); text-transform:uppercase; letter-spacing:.06em; font-size:9px; font-weight:700; color:var(--ink-faint)}
 .pb-amt{font-family:var(--mono); font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap}

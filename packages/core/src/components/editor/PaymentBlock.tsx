@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import { inr } from "@/lib/calc";
-import { addExpense, allExpenses } from "@/lib/expenses";
-import { delRec } from "@/lib/db";
+import { inr, nowIso } from "@/lib/calc";
+import { addExpense } from "@/lib/expenses";
+import { delRec, getRec, put } from "@/lib/db";
 import { cloudDelete } from "@/lib/cloud";
 import { statementsForQuote, type PartyStatement } from "@/lib/payments";
 import { USERS } from "@/lib/local-auth";
@@ -20,6 +20,11 @@ const hhmm = (iso: string) => {
 const toDmy = (v: string) => {
   const [y, m, d] = (v || "").split("-");
   return d && m && y ? `${d}-${m}-${y.slice(2)}` : "";
+};
+// app's "dd-mm-yy" → html date input value "yyyy-mm-dd" (for pre-filling the picker on edit)
+const fromDmy = (v: string) => {
+  const [d, m, y] = (v || "").split("-");
+  return d && m && y ? `20${y}-${m}-${d}` : "";
 };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -45,6 +50,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
   const [acct, setAcct] = useState("");
   const [note, setNote] = useState(""); // free-text note on a cash payment (shown in Statements)
   const [payDate, setPayDate] = useState(""); // optional: when the payment actually happened (yyyy-mm-dd)
+  const [editId, setEditId] = useState<string | null>(null); // a recorded payment being edited (its expense id)
 
   const finalPrice = doc.finalPrice != null && doc.finalPrice > 0 ? doc.finalPrice : quoteGrand;
   const lines = statementsForQuote(doc, expenses); // this quote's payments, newest first (incl. legacy)
@@ -94,6 +100,51 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     bumpData();
   }
 
+  // load a recorded payment into the row form for editing
+  function startEdit(l: PartyStatement) {
+    setEditId(l.id);
+    setAmt(String(l.amount));
+    setMode(l.mode === "upi" ? "upi" : l.toOwner ? "owner" : "cash");
+    setAcct(l.account || "");
+    setNote(l.note || "");
+    setPayDate(l.date ? fromDmy(l.date) : "");
+  }
+  function cancelEdit() {
+    setEditId(null);
+    setAmt("");
+    setAcct("");
+    setNote("");
+    setPayDate("");
+    setMode("cash");
+  }
+  async function saveEdit() {
+    const old = lines.find((l) => l.id === editId);
+    if (!old) return cancelEdit();
+    const a = Math.max(0, +amt || 0);
+    if (a <= 0) return;
+    if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
+    const e = await getRec<Expense>("expenses", old.id);
+    if (!e) return cancelEdit();
+    const isCash = mode !== "upi";
+    e.amount = a;
+    e.mode = isCash ? "cash" : "upi";
+    e.account = mode === "upi" ? acct.trim() : "";
+    e.toOwner = isCash ? mode === "owner" || isOwner : false;
+    e.label = isCash ? note.trim() : "";
+    e.date = payDate ? toDmy(payDate) : e.date;
+    e.updatedAt = nowIso();
+    e.synced = false;
+    await put("expenses", e);
+    // aggregate delta: drop the old contribution, add the new
+    const nextCash = Math.max(0, r2((doc.payCash || 0) - (old.mode === "cash" ? old.amount : 0) + (isCash ? a : 0)));
+    const nextUpi = Math.max(0, r2((doc.payUpi || 0) - (old.mode === "upi" ? old.amount : 0) + (mode === "upi" ? a : 0)));
+    setAggregates(nextCash, nextUpi);
+    cancelEdit();
+    reload();
+    bumpData();
+    toast("Payment updated");
+  }
+
   return (
     <div className="panel-card no-print" style={{ marginTop: 12, padding: 14 }}>
       <label className="modal-field" style={{ marginBottom: 12 }}>
@@ -119,7 +170,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
         </div>
 
         {lines.map((l) => (
-          <div className="pb-r" key={l.id}>
+          <div className={"pb-r" + (editId === l.id ? " pb-editing" : "")} key={l.id}>
             <span className="pb-amt">₹ {inr(l.amount)}</span>
             <span className="pb-mode">{l.mode === "upi" ? "UPI" : l.toOwner ? "→ Owner" : "Cash"}</span>
             <span className="pb-acct">{l.mode === "upi" ? l.account || "—" : l.note || "—"}</span>
@@ -129,14 +180,22 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
             {l.synthetic ? (
               <span />
             ) : (
-              <button className="pb-x" title="Delete payment" onClick={() => delLine(l)}>
-                ×
-              </button>
+              <span className="pb-rowacts">
+                <button className="pb-x" title="Edit payment" onClick={() => startEdit(l)}>✎</button>
+                <button className="pb-x" title="Delete payment" onClick={() => delLine(l)}>×</button>
+              </span>
             )}
           </div>
         ))}
 
-        {!settled && (
+        {editId && (
+          <div className="pb-editbar no-print">
+            <span>Editing this payment</span>
+            <button type="button" onClick={cancelEdit}>Cancel</button>
+          </div>
+        )}
+
+        {(!settled || editId) && (
           <div className="pb-r pb-add">
             <input
               className="pb-in"
@@ -148,7 +207,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  addLine();
+                  editId ? saveEdit() : addLine();
                 }
               }}
             />
@@ -181,8 +240,14 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
               value={payDate}
               onChange={(e) => setPayDate(e.target.value)}
             />
-            <button className="pb-plus" type="button" title="Add payment" onClick={addLine} disabled={!(+amt > 0)}>
-              +
+            <button
+              className="pb-plus"
+              type="button"
+              title={editId ? "Save changes" : "Add payment"}
+              onClick={editId ? saveEdit : addLine}
+              disabled={!(+amt > 0)}
+            >
+              {editId ? "✓" : "+"}
             </button>
           </div>
         )}
