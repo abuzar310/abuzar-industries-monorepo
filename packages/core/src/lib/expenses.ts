@@ -15,8 +15,9 @@ export const typeLabel = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t
 export const isInflow = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t)?.flow === "in";
 /** UPI money-in: kept OUT of the cash daybook (Manager only owes cash) and shown in its own section. */
 export const isUpi = (e: Expense) => isInflow(e.type) && e.mode === "upi";
-/** Does this entry belong in the manager's cash daybook? Excludes UPI and cash sent straight to owner. */
-export const inDaybook = (e: Expense) => !isUpi(e) && !e.toOwner;
+/** Does this entry belong in the manager's cash daybook? Excludes UPI, cash sent straight to owner,
+ *  and customer dues/charges (a charge moves no cash). */
+export const inDaybook = (e: Expense) => !isUpi(e) && !e.toOwner && !e.charge;
 
 export interface DayTotals {
   cashIn: number;
@@ -59,8 +60,9 @@ export async function addExpense(fields: {
   date?: string;
   sourceId?: string;
   custId?: string;
+  charge?: boolean;
 }): Promise<Expense> {
-  const mode = isInflow(fields.type) ? fields.mode || "cash" : "";
+  const mode = fields.charge ? "" : isInflow(fields.type) ? fields.mode || "cash" : "";
   const e: Expense = {
     id: "EXP-" + uid(),
     date: fields.date || todayStr(),
@@ -74,6 +76,7 @@ export async function addExpense(fields: {
     enteredBy: fields.enteredBy,
     sourceId: fields.sourceId,
     custId: fields.custId,
+    charge: !!fields.charge,
     createdAt: nowIso(),
     updatedAt: nowIso(),
     synced: false,

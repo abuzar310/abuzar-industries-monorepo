@@ -61,18 +61,21 @@ export default function StatementsView() {
   // summary reflects the active filter, so the numbers always match what's on screen
   const shownReceived = shown.reduce((s, r) => s + r.statements.reduce((t, x) => t + x.amount, 0), 0);
   const shownPayCount = shown.reduce((s, r) => s + r.statements.length, 0);
-  // direct receipts (Receipts tab: a payment credited to a customer, no quote) — respect the same filters
+  // direct receipts/dues (Receipts tab: credited/debited to a customer, no quote) — respect the same filters
   const custName = (id?: string) => custs.find((c) => c.id === id)?.name || "—";
-  const receipts = expenses
+  const directFilter = (e: Expense) => {
+    const { mm, yy } = parts(e.date);
+    if (month && mm !== month) return false;
+    if (year && yy !== year) return false;
+    if (term && !custName(e.custId).toLowerCase().includes(term)) return false;
+    return true;
+  };
+  const direct = expenses
     .filter((e) => e.type === "sale" && !!e.custId)
-    .filter((e) => {
-      const { mm, yy } = parts(e.date);
-      if (month && mm !== month) return false;
-      if (year && yy !== year) return false;
-      if (term && !custName(e.custId).toLowerCase().includes(term)) return false;
-      return true;
-    })
+    .filter(directFilter)
     .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  const receipts = direct.filter((e) => !e.charge);
+  const dues = direct.filter((e) => e.charge);
   const filtered = !!(month || year || onlyPaid || term);
   const clearAll = () => {
     setQ("");
@@ -235,11 +238,34 @@ export default function StatementsView() {
                 <div className="stmt-main">
                   <div className="stmt-to">{custName(e.custId)}</div>
                   <div className="stmt-sub">
-                    {e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : "Cash"} · {e.date}
+                    {e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : e.label || "Cash"} · {e.date}
                     {hhmm(e.createdAt) ? " · " + hhmm(e.createdAt) : ""} · by {userName(e.enteredBy)}
                   </div>
                 </div>
                 <div className="stmt-amt">+₹{inr(e.amount)}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {dues.length > 0 && (
+        <>
+          <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+            Direct dues <small>— added from Receipts tab · {dues.length}</small>
+          </div>
+          <div className="panel-card">
+            {dues.map((e) => (
+              <div className="stmt" key={e.id}>
+                <div className="stmt-ic due">Due</div>
+                <div className="stmt-main">
+                  <div className="stmt-to">{custName(e.custId)}</div>
+                  <div className="stmt-sub">
+                    {e.note || "Due added"} · {e.date}
+                    {hhmm(e.createdAt) ? " · " + hhmm(e.createdAt) : ""} · by {userName(e.enteredBy)}
+                  </div>
+                </div>
+                <div className="stmt-amt due">₹{inr(e.amount)}</div>
               </div>
             ))}
           </div>
