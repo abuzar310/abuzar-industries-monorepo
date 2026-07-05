@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { clone, delRec, metaSet, put } from "@/lib/db";
+import { allRec, clone, delRec, metaSet, put } from "@/lib/db";
 import { computeDoc, inr, nowIso } from "@/lib/calc";
 import { STATUSES } from "@/lib/constants";
 import { brandFor } from "@/lib/brand";
@@ -20,12 +20,13 @@ import { generatePdf } from "@/lib/pdf";
 import { folderConnected, saveCopyToFolder, writeDbSnapshot } from "@/lib/backup";
 import { bumpData, setSyncState, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
-import type { BoxRect, Doc, Expense } from "@/lib/types";
+import type { BoxRect, Customer, Doc, Expense } from "@/lib/types";
 import SectionCard from "./SectionCard";
 import Totals from "./Totals";
 import QuoteCanvas from "./QuoteCanvas";
 import MoreMenu from "./MoreMenu";
 import PaymentBlock from "./PaymentBlock";
+import CustomerPicker from "./CustomerPicker";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 
@@ -54,6 +55,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const [editingNo, setEditingNo] = useState(false);
   const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
   const [expenses, setExpenses] = useState<Expense[]>([]); // this quote's recorded payments (for the mini statements)
+  const [customers, setCustomers] = useState<Customer[]>([]); // for the searchable customer picker (avoid duplicates)
 
   const feat = getFeatures();
   const isInv = doc.kind === "invoice";
@@ -86,6 +88,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   useEffect(() => {
     loadExpenses();
   }, [loadExpenses, doc.id]);
+
+  // load existing customers for the searchable name picker
+  useEffect(() => {
+    allRec<Customer>("customers").then(setCustomers);
+  }, []);
 
   // apply queued focus after a row is added / re-rendered
   useEffect(() => {
@@ -125,6 +132,21 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   // ---- field handlers ----
   const setField = (k: keyof Doc, v: string) =>
     update((d) => ((d as unknown as Record<string, unknown>)[k] = v));
+  // customer picker: typing a name unlinks (treat as new/edited); picking links to the existing record
+  const onCustomerType = (v: string) =>
+    update((d) => {
+      d.customerName = v;
+      d.customerId = "";
+    });
+  const pickCustomer = (c: Customer) =>
+    update((d) => {
+      d.customerId = c.id;
+      d.customerName = c.name;
+      d.phone = c.phone || "";
+      d.site = c.site || "";
+      d.address = c.address || "";
+      d.custGstin = c.gstin || "";
+    });
   const onName = (si: number, v: string) =>
     update((d) => {
       d.sections[si].name = v;
@@ -539,7 +561,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       <div className="cust-block">
         <div className="f">
           <label>Customer Name</label>
-          <input placeholder="—" value={doc.customerName} onChange={(e) => setField("customerName", e.target.value)} />
+          <CustomerPicker value={doc.customerName} customers={customers} onType={onCustomerType} onPick={pickCustomer} />
         </div>
         <div className="f">
           <label>Phone</label>
@@ -739,11 +761,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
           <div className="cust-block">
             <div className="f">
               <label>{isBuy ? "Supplier Name" : "Customer Name"}</label>
-              <input
-                placeholder="—"
-                value={doc.customerName}
-                onChange={(e) => setField("customerName", e.target.value)}
-              />
+              <CustomerPicker value={doc.customerName} customers={customers} onType={onCustomerType} onPick={pickCustomer} />
             </div>
             <div className="f">
               <label>Phone</label>

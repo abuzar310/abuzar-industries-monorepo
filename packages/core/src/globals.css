@@ -173,6 +173,18 @@ body{
 .cust-block input:focus, .cust-block select:focus{outline:none; box-shadow:0 2px 0 var(--ochre)}
 @media(max-width:560px){ .cust-block{grid-template-columns:1fr 1fr} }
 
+/* searchable customer name picker (avoids duplicate customers) */
+.custpick{position:relative; width:100%}
+.custpick > input{width:100%}
+.custpick-list{position:absolute; top:100%; left:0; right:0; z-index:50; margin-top:3px; background:#fff;
+  border:1px solid var(--line-2); border-radius:10px; box-shadow:var(--shadow-card); max-height:230px; overflow-y:auto; padding:3px}
+.custpick-item{display:flex; align-items:baseline; gap:6px; width:100%; text-align:left; border:none; background:transparent;
+  cursor:pointer; padding:8px 10px; border-radius:7px; font-size:14px; color:var(--ink)}
+.custpick-item:hover{background:var(--panel-2)}
+.custpick-item b{font-weight:600}
+.custpick-item small{color:var(--ink-faint); font-family:var(--mono); font-size:12px}
+.custpick-item .cp-due{margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--danger)}
+
 /* ---------- sections (wood types) ---------- */
 #sections{display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; margin-top:14px}
 #sections .section{margin-top:0}
