@@ -914,7 +914,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             <button onClick={onPdf}>Download PDF</button>
             {!isInv && <button onClick={onWaRemind}>WhatsApp reminder</button>}
             <button onClick={onFolder}>Save copy to folder</button>
-            {user?.role === "owner" && (
+            {(user?.role === "owner" || !isInv) && (
               <>
                 <div className="moremenu-sep" />
                 <button className="danger" onClick={onDelete}>

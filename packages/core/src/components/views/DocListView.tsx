@@ -32,7 +32,9 @@ function applySearch(arr: Doc[], q: string) {
 
 export default function DocListView({ store, title, sub, statusCol, empty, showNew }: Props) {
   const { dataVersion, searchTerm, user } = useApp();
-  const canDelete = user?.role === "owner"; // only the owner (Owner) may delete
+  // manager can delete quotations too (soft-delete → Recycle bin; owner controls restore/purge);
+  // invoices stay owner-only
+  const canDelete = user?.role === "owner" || store === "quotations";
   const router = useRouter();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [q, setQ] = useState("");
