@@ -558,7 +558,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       <div className="mast-top sq-head">
         <div className="mh-side mh-no">
           <label>Quotation No.</label>
-          <input className="ro" value={doc.number} readOnly onClick={() => setEditingNo(true)} />
+          <input key="numro" className="ro" value={doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
         </div>
         <div className="co-name">Wood Quotation</div>
         <div className="mh-side mh-date">
@@ -686,7 +686,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                     }}
                   />
                 ) : (
-                  <input className="ro" value={doc.number} readOnly onClick={() => setEditingNo(true)} />
+                  <input key="numro" className="ro" value={doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
                 )}
               </div>
               <div className="co-name">Wood Quotation</div>
@@ -751,7 +751,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                   }}
                 />
               ) : (
-                <input className="ro" value={doc.number} readOnly onClick={() => setEditingNo(true)} />
+                <input key="numro" className="ro" value={doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
               )}
             </div>
             <div className="f">
