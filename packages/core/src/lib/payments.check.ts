@@ -119,8 +119,26 @@ export function demoReceipts() {
   console.log(`payments.check receipts OK (${n} assertions)`);
 }
 
+/** A charge (due added from Receipts tab) increases what the customer owes; not a payment statement. */
+export function demoCharge() {
+  const quotes = [Q("q1", "Ramesh", "SF-1", 1000, 0, 0, 0)];
+  const charge = {
+    id: "c1", type: "sale", custId: "Ramesh", amount: 500, charge: true, mode: "", date: "02-07-26", createdAt: "c1", enteredBy: "ajju",
+  } as unknown as Expense;
+  const receipt = {
+    id: "r1", type: "sale", custId: "Ramesh", amount: 200, mode: "cash", date: "03-07-26", createdAt: "r1", enteredBy: "ajju",
+  } as unknown as Expense;
+  const p = partyLedger(quotes, [charge, receipt]).parties.find((x) => x.custId === "Ramesh")!;
+  ok(p.billed === 1500, "charge adds to billed (1000 quote + 500 due)");
+  ok(p.paid === 200, "receipt credited to paid");
+  ok(p.balance === 1300, "balance = 1500 − 200");
+  ok(p.statements.length === 1, "only the receipt is a statement, not the charge");
+  console.log(`payments.check charge OK (${n} assertions)`);
+}
+
 demo();
 demoQuotes();
 demoReconcile();
 demoTrash();
 demoReceipts();
+demoCharge();

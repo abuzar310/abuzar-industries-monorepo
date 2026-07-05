@@ -148,16 +148,20 @@ export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Custo
     (map.get(c.id) || newParty(c.id)).billed += op;
   }
 
-  // standalone receipts (Receipts tab: a payment credited to a customer, not a quote) — reduce their
-  // balance and show as statements
+  // standalone Receipts-tab entries against a customer (no quote): a charge adds to what they owe,
+  // a receipt reduces it (and shows as a statement)
   for (const e of expenses) {
     if (e.type !== "sale" || !e.custId) continue;
     const p = map.get(e.custId) || newParty(e.custId);
     const amt = +e.amount || 0;
-    p.paid += amt;
-    if (e.mode === "upi") p.upiPaid += amt;
-    else p.cashPaid += amt;
-    p.statements.push(mkStatement(e, ""));
+    if (e.charge) {
+      p.billed += amt;
+    } else {
+      p.paid += amt;
+      if (e.mode === "upi") p.upiPaid += amt;
+      else p.cashPaid += amt;
+      p.statements.push(mkStatement(e, ""));
+    }
   }
 
   const parties = [...map.values()].map((p) => ({

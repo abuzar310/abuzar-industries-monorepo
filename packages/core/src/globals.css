@@ -1282,10 +1282,13 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .stmt-ic{flex:0 0 auto; width:36px; height:36px; border-radius:10px; display:grid; place-items:center; font-family:var(--mono); font-weight:700; font-size:13px}
 .stmt-ic.upi{background:rgba(54,90,107,.13); color:var(--blue)}
 .stmt-ic.cash{background:rgba(86,107,59,.15); color:var(--green)}
+.stmt-ic.due{background:rgba(176,64,64,.12); color:var(--danger); font-size:11px}
 .stmt-main{flex:1 1 auto; min-width:0}
 .stmt-to{font-family:var(--disp); font-weight:700; font-size:14px; color:var(--ink)}
 .stmt-sub{font-family:var(--mono); font-size:11px; color:var(--ink-faint); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .stmt-amt{flex:0 0 auto; font-family:var(--mono); font-weight:700; font-size:15px; color:var(--green)}
+.stmt-amt.due{color:var(--danger)}
+.stmt .pb-rowacts{flex:0 0 auto; margin-left:4px}
 .pbd-q{display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--line); cursor:pointer; transition:background var(--t-fast)}
 .pbd-q:last-child{border-bottom:none}
 .pbd-q:hover{background:var(--panel-2)}
@@ -1298,7 +1301,8 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 /* Statements tab — responsive filter bar + light quote header */
 /* Receipts form: amount · mode · date on a roomy row */
 .rec-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px}
-@media(max-width:560px){ .rec-grid{grid-template-columns:1fr 1fr} }
+.rec-grid-due{grid-template-columns:1fr 1fr}
+@media(max-width:560px){ .rec-grid{grid-template-columns:1fr 1fr} .rec-grid-due{grid-template-columns:1fr} }
 
 .stmt-filters{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:10px}
 .stmt-filters .paysel{flex:0 1 auto}
