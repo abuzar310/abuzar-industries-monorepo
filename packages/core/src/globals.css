@@ -278,6 +278,11 @@ body{
 .row.cf .cft{text-align:left; padding:0 0 0 4px; font-size:17px; font-weight:800; color:var(--walnut); font-variant-numeric:tabular-nums}
 .row.cf .dim{font-size:16px; font-weight:800; text-align:center; color:var(--ink)}
 .row.cf .sl{font-size:14px; font-weight:700}
+/* Cut Size quote: a full-height vertical divider to the RIGHT of the CFT column, separating the
+   computed CFT from the L·W·T·Pcs measurement inputs. Only in cft mode (the .cft cell exists there). */
+#sheet.sq .thead.cf:not(.pcstab) > span:nth-child(2),
+#sheet.sq .row.cf .cft{align-self:stretch; display:flex; align-items:center; border-right:1.5px solid var(--line-2); margin-right:4px; padding-right:8px}
+#sheet.sq .thead.cf:not(.pcstab) > span:nth-child(2){justify-content:center}
 /* Total-Pcs shown at the top (in the section header bar) */
 .sec-pcs{margin-left:12px; font-family:var(--disp); font-size:9.5px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:#E9D6B4; white-space:nowrap; flex:0 0 auto}
 .sec-pcs b{font-family:var(--mono); font-size:14px; color:#fff; margin-left:5px}
@@ -340,11 +345,13 @@ body{
 #sheet.sq #sections .scol{display:flex; flex-direction:column; gap:10px; min-width:0}
 #sheet.sq.a4fill #sections{flex:0 1 auto; gap:8px 10px; min-height:0}
 #sheet.sq.a4fill #sections .scol{gap:8px}
-/* multi-page: same thick rows, two columns at natural heights, boxes never split across a page break */
-#sheet.sq.a4multi #sections.twocol{align-items:start; gap:8px 10px}
+/* multi-page: two columns, boxes never split across a page break. Keep align-items:stretch (from the
+   base rule) + the bill's margin-top:auto so the grand total ALWAYS pins to the bottom of the right
+   column — fit() can pick a4multi even for a one-page quote (beforeprint measures inflated SCREEN box
+   chrome), and the user needs the bill at the bottom in print exactly like on screen. */
+#sheet.sq.a4multi #sections.twocol{gap:8px 10px}
 #sheet.sq.a4multi #sections .scol{gap:8px}
 #sheet.sq.a4multi #sections .section{break-inside:avoid; page-break-inside:avoid}
-#sheet.sq.a4multi #sections .totals{margin-top:8px}
 /* the bill sits at the BOTTOM of the right column, level with the bottom of the taller (left) column's
    last row — margin-top:auto pushes it down; align-items:stretch makes the right column that tall. No
    amount-in-words line. */
