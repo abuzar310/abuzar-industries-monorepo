@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, clone, delRec, metaSet, put } from "@/lib/db";
+import { allRec, clone, delRec, getRec, metaSet, put } from "@/lib/db";
 import { computeDoc, inr, nowIso } from "@/lib/calc";
 import { STATUSES } from "@/lib/constants";
 import { brandFor } from "@/lib/brand";
@@ -253,21 +253,27 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const onTradeType = (v: string) => update((d) => (d.tradeType = v === "buy" ? "buy" : "sell"));
 
   // ---- document number inline edit ----
-  function commitNumber(raw: string) {
-    setEditingNo(false);
+  async function commitNumber(raw: string) {
     const v = raw.trim();
-    if (!v || v === doc.number) return;
-    const oldStore = docStore(docRef.current);
+    setEditingNo(false);
+    if (!v || v === doc.number) return; // unchanged / empty → keep the current number
+    // validate so a rename can never break the flow or overwrite another document
+    if (/[/\\?#%]/.test(v)) return toast("A number can't contain / \\ ? # or %");
+    const store = docStore(docRef.current);
+    if (await getRec(store, v)) return toast("Number " + v + " is already used — pick a free one");
+    await snapshotBefore(); // safety restore point before we change the id
     const oldId = docRef.current.id;
     const next = clone(docRef.current);
     next.number = v;
     next.id = v;
-    delRec(oldStore, oldId);
+    await delRec(store, oldId);
+    cloudDelete(store, oldId); // drop the old id from the cloud too, so it can't re-sync as a duplicate
     persist(next);
     docRef.current = next;
     setDoc(next);
-    metaSet("lastOpen", { store: docStore(next), id: v });
+    await metaSet("lastOpen", { store: docStore(next), id: v });
     router.replace("/editor/" + v);
+    toast("Number changed to " + v);
   }
 
   // ---- App A: single-source save (Draft / Create) + accept payment ----
