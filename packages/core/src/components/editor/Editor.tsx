@@ -290,7 +290,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     toast(msg);
   }
   const onSaveDraft = () => setStatusAndSave("Draft", "Saved as draft");
-  const onCreate = () => setStatusAndSave("Created", "Quotation " + docRef.current.number + " created ✓");
+  const onCreate = () => setStatusAndSave("Created", "Quotation " + docRef.current.number + " saved ✓");
 
   // final accepted price override (round figure); autosaved, doesn't change the itemised total
   const onFinalPrice = (v: string) =>
@@ -923,7 +923,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               Save draft
             </button>
             <button className="btn primary" onClick={onCreate}>
-              Create quotation
+              Save quotation
             </button>
           </>
         ) : (
