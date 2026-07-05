@@ -1,7 +1,7 @@
 "use client";
 
-/** Tap-to-pick UPI account: chips for accounts used before + an inline field for a new one.
- *  `value` is the chosen account name (a chip value, or whatever is typed). */
+/** Tap-to-pick payment account: chips for accounts used before + an inline field for a new one.
+ *  Used for UPI (required) and cash assigned to a named holder (optional). */
 export default function AccountPicker({
   value,
   onChange,

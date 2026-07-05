@@ -238,7 +238,7 @@ export default function StatementsView() {
                 <div className="stmt-main">
                   <div className="stmt-to">{custName(e.custId)}</div>
                   <div className="stmt-sub">
-                    {e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : e.label || "Cash"} · {e.date}
+                    {e.mode === "upi" ? e.account || "UPI" : e.account ? e.account : e.toOwner ? "Cash → Owner" : e.label || "Cash"} · {e.date}
                     {hhmm(e.createdAt) ? " · " + hhmm(e.createdAt) : ""} · by {userName(e.enteredBy)}
                   </div>
                 </div>

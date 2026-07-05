@@ -1367,3 +1367,71 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .pb-bal{font-family:var(--mono); font-weight:700; font-size:13px; text-align:right}
 .pb-bal.due{color:var(--danger)} .pb-bal.ok{color:var(--green)}
 .paybook .acct-field{min-width:0}
+.pb-note{padding-top:0}
+
+/* ===== Accounts tab — per-account UPI + cash totals ===== */
+.acct-add-row{display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end}
+.acct-head{align-items:center; flex-wrap:wrap; gap:8px}
+.acct-head-totals{display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; text-transform:none; letter-spacing:0}
+.acct-tag{padding:3px 8px; border-radius:999px; font-weight:700; white-space:nowrap}
+.acct-tag.upi{background:rgba(54,90,107,.12); color:var(--blue)}
+.acct-tag.cash{background:rgba(86,107,59,.14); color:var(--green)}
+.acct-tag.total{background:rgba(176,124,40,.14); color:var(--ochre-deep)}
+.acct-count{color:var(--ink-faint); font-weight:600}
+.acct-rm{border:none; background:transparent; color:rgba(255,255,255,.75); cursor:pointer; font-size:16px; line-height:1; padding:0 2px}
+.acct-rm:hover{color:#fff}
+.acct-filters{margin-top:12px; align-items:flex-end}
+.acct-date-pick{flex:0 1 auto; min-width:0}
+.acct-date-pick span{font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint)}
+.acct-date-pick input{padding:9px 12px; border:1px solid var(--line-2); border-radius:9px; background:var(--panel-2); font:inherit; color:var(--ink)}
+.acct-collect-btn{flex:0 0 auto; white-space:nowrap}
+.acct-collected-badge{margin-left:8px; font-family:var(--mono); font-size:11px; font-weight:700; color:var(--green); letter-spacing:0; text-transform:none}
+.acct-collected-badge.sm{margin-left:4px; font-size:10px}
+.acct-tag.pending{background:rgba(176,64,64,.12); color:var(--danger)}
+.acct-tag.ok{background:rgba(86,107,59,.14); color:var(--green)}
+.acct-done{opacity:.88}
+.acct-stmt-done{opacity:.65}
+.stmt-amt.muted{color:var(--ink-faint)}
+.ph-v.ok{color:var(--green)}
+
+/* Accounts — overall summary + date navigator */
+.acct-overall{padding:14px 16px; margin-top:12px}
+.acct-overall-h{font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:10px}
+.acct-overall-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px}
+.acct-stat{background:var(--panel-2); border-radius:10px; padding:10px 12px}
+.acct-stat .k{display:block; font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-faint)}
+.acct-stat .v{display:block; font-family:var(--mono); font-size:18px; font-weight:700; color:var(--ink); margin-top:3px}
+.acct-stat .v.due{color:var(--danger)} .acct-stat .v.ok{color:var(--green)}
+.acct-stat .sub{display:block; font-family:var(--mono); font-size:10px; color:var(--ink-faint); margin-top:2px}
+.acct-due-row{margin-top:12px; padding-top:12px; border-top:1px solid var(--line)}
+.acct-due-row .lbl{display:block; font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:6px}
+.acct-date-nav{padding:12px 14px; margin-top:12px}
+.acct-date-row{display:flex; align-items:center; gap:8px}
+.acct-nav-btn{flex:0 0 auto; width:40px; height:40px; border:1px solid var(--line-2); border-radius:10px; background:var(--panel-2); font-size:18px; cursor:pointer; color:var(--walnut); transition:all var(--t-fast)}
+.acct-nav-btn:hover{border-color:var(--ochre); background:rgba(176,124,40,.08)}
+.acct-date-center{flex:1 1 auto; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; min-width:0}
+.acct-view-date{font-family:var(--mono); font-weight:700; font-size:15px; color:var(--ochre-deep)}
+.acct-date-input{padding:7px 10px; border:1px solid var(--line-2); border-radius:8px; background:var(--panel-2); font:inherit; font-size:13px; color:var(--ink)}
+.acct-day-strip{display:flex; gap:6px; overflow-x:auto; padding:12px 2px 4px; margin-top:4px; -webkit-overflow-scrolling:touch}
+.acct-day-chip{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:2px; min-width:72px; padding:8px 10px; border:1px solid var(--line-2); border-radius:10px; background:var(--panel-2); cursor:pointer; transition:all var(--t-fast); font:inherit}
+.acct-day-chip .d{font-family:var(--mono); font-size:11px; font-weight:700; color:var(--ink-soft)}
+.acct-day-chip .amt{font-family:var(--mono); font-size:12px; font-weight:700; color:var(--danger)}
+.acct-day-chip .amt.ok{color:var(--green); font-size:13px}
+.acct-day-chip.on{border-color:var(--ochre-deep); background:rgba(176,124,40,.12); box-shadow:0 0 0 2px rgba(176,124,40,.15)}
+.acct-day-chip.due:not(.on){border-color:rgba(176,64,64,.25)}
+.acct-jump-overdue{display:block; width:100%; margin-top:10px; padding:9px 12px; border:1px dashed var(--ochre); border-radius:9px; background:rgba(176,124,40,.06); font-family:var(--mono); font-size:12px; font-weight:600; color:var(--ochre-deep); cursor:pointer; text-align:left}
+.acct-jump-overdue:hover{background:rgba(176,124,40,.12)}
+.acct-day-label{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:18px; margin-bottom:4px}
+.acct-day-label>span{flex:1 1 auto; font-family:var(--disp); font-size:18px; font-weight:700; color:var(--walnut)}
+.acct-overall-hint{font-family:var(--mono); font-size:11px; font-weight:600; color:var(--ochre-deep); margin-left:4px}
+@media(max-width:640px){
+  .acct-overall-grid{grid-template-columns:1fr}
+  .acct-date-center{flex-direction:column}
+  .acct-day-label .btn{width:100%; justify-content:center}
+}
+@media(max-width:560px){
+  .acct-head-totals{width:100%; margin-top:4px}
+  .acct-add-row .btn{width:100%; justify-content:center}
+  .acct-collect-btn{width:100%; justify-content:center; margin-top:6px}
+  .acct-filters .btn.primary.sm{flex:1 1 100%}
+}

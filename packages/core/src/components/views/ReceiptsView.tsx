@@ -98,7 +98,7 @@ export default function ReceiptsView() {
         const isCash = mode !== "upi";
         e.amount = a;
         e.mode = isCash ? "cash" : "upi";
-        e.account = mode === "upi" ? acct.trim() : "";
+        e.account = mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "";
         e.toOwner = isCash && (mode === "owner" || isOwner);
         e.label = isCash ? note.trim() : "";
         e.date = date ? toDmy(date) : e.date;
@@ -136,7 +136,7 @@ export default function ReceiptsView() {
       type: "sale",
       amount: a,
       mode: isCash ? "cash" : "upi",
-      account: mode === "upi" ? acct.trim() : "",
+      account: mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "",
       toOwner,
       custId: picked.id,
       note: picked.name,
@@ -147,12 +147,19 @@ export default function ReceiptsView() {
     resetForm();
     load();
     bumpData();
+    const acctLbl = acct.trim() ? " · " + acct.trim() : "";
     toast(
       "₹" +
         inr(a) +
         " received from " +
         picked.name +
-        (mode === "upi" ? " · " + acct.trim() : toOwner ? " · to owner" : " · cash → Daybook"),
+        (mode === "upi"
+          ? acctLbl
+          : toOwner
+            ? " · to owner"
+            : acct.trim()
+              ? acctLbl + " (Accounts)"
+              : " · cash → Daybook"),
     );
   }
 
@@ -282,10 +289,22 @@ export default function ReceiptsView() {
             <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
           </div>
         )}
-        {showReceivedFields && mode !== "upi" && (
+        {showReceivedFields && mode === "cash" && (
+          <>
+            <div className="modal-field acct-field" style={{ marginTop: 12, width: "100%" }}>
+              <span>Cash held by which account? <small style={{ color: "var(--ink-faint)" }}>(optional — blank = manager daybook)</small></span>
+              <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
+            </div>
+            <label className="modal-field" style={{ marginTop: 12, width: "100%" }}>
+              <span>Cash note (optional)</span>
+              <input type="text" placeholder="e.g. partial payment" value={note} onChange={(e) => setNote(e.target.value)} />
+            </label>
+          </>
+        )}
+        {showReceivedFields && mode === "owner" && (
           <label className="modal-field" style={{ marginTop: 12, width: "100%" }}>
-            <span>Cash note (optional)</span>
-            <input type="text" placeholder="e.g. partial payment" value={note} onChange={(e) => setNote(e.target.value)} />
+            <span>Note (optional)</span>
+            <input type="text" placeholder="e.g. handed to owner" value={note} onChange={(e) => setNote(e.target.value)} />
           </label>
         )}
 
@@ -336,7 +355,15 @@ export default function ReceiptsView() {
                     <div className={"stmt-ic " + (e.charge ? "due" : e.mode === "upi" ? "upi" : "cash")}>{e.charge ? "Due" : e.mode === "upi" ? "UPI" : "₹"}</div>
                     <div className="stmt-main">
                       <div className="stmt-to">
-                        {e.charge ? e.note || "Due added" : e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : e.label || "Cash"}
+                        {e.charge
+                          ? e.note || "Due added"
+                          : e.mode === "upi"
+                            ? e.account || "UPI"
+                            : e.account
+                              ? e.account + (e.label ? " · " + e.label : "")
+                              : e.toOwner
+                                ? "Cash → Owner"
+                                : e.label || "Cash · Daybook"}
                       </div>
                       <div className="stmt-sub">
                         {e.date} · by {userName(e.enteredBy)}

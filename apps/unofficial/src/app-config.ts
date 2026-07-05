@@ -12,6 +12,7 @@ export const TABS: Tab[] = [
   { label: "Balances", href: "/payments" },
   { label: "Receipts", href: "/receipts" },
   { label: "Statements", href: "/statements" },
+  { label: "Accounts", href: "/accounts" },
   { label: "Quotation", href: "/editor" },
   { label: "Quotations", href: "/quotations" },
   { label: "Customers", href: "/customers" },

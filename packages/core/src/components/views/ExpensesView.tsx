@@ -296,6 +296,14 @@ export default function ExpensesView() {
                   <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
                 </div>
               )}
+              {mode === "cash" && (
+                <div className="acct-field">
+                  <span style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 600 }}>
+                    Cash held by which account? <small style={{ fontWeight: 500 }}>(optional)</small>
+                  </span>
+                  <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
+                </div>
+              )}
             </>
           ) : (
             <label className="db-cat">
