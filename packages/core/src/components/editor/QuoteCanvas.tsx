@@ -76,15 +76,19 @@ export default function QuoteCanvas({
               position={{ x: b.x, y: b.y }}
               size={{ width: b.w, height: "auto" }}
               minWidth={220}
-              onDragStop={(_e, d) => onBox(si, { x: Math.round(d.x), y: Math.round(d.y), w: b.w, h: (d.node as HTMLElement).offsetHeight })}
+              onDragStop={(_e, d) => onBox(si, { x: Math.round(d.x), y: Math.max(MAST_H, Math.round(d.y)), w: b.w, h: (d.node as HTMLElement).offsetHeight })}
               onResizeStop={(_e, _dir, ref, _delta, pos) =>
-                onBox(si, { x: Math.round(pos.x), y: Math.round(pos.y), w: ref.offsetWidth, h: ref.offsetHeight })
+                onBox(si, { x: Math.round(pos.x), y: Math.max(MAST_H, Math.round(pos.y)), w: ref.offsetWidth, h: ref.offsetHeight })
               }
             >
               <div className="qc-drag no-print" title="Drag to move this box">
                 <span>⠿</span>
               </div>
               <div className="qc-boxinner">{renderCard(si)}</div>
+              {/* second handle at the bottom — a box dragged up under the masthead keeps a grabbable spot */}
+              <div className="qc-drag qc-drag-b no-print" title="Drag to move this box">
+                <span>⠿</span>
+              </div>
             </Rnd>
           );
         })}
@@ -103,15 +107,18 @@ export default function QuoteCanvas({
               position={{ x: b.x, y: b.y }}
               size={{ width: b.w, height: "auto" }}
               minWidth={240}
-              onDragStop={(_e, d) => onBillBox({ x: Math.round(d.x), y: Math.round(d.y), w: b.w, h: (d.node as HTMLElement).offsetHeight })}
+              onDragStop={(_e, d) => onBillBox({ x: Math.round(d.x), y: Math.max(MAST_H, Math.round(d.y)), w: b.w, h: (d.node as HTMLElement).offsetHeight })}
               onResizeStop={(_e, _dir, ref, _delta, pos) =>
-                onBillBox({ x: Math.round(pos.x), y: Math.round(pos.y), w: ref.offsetWidth, h: ref.offsetHeight })
+                onBillBox({ x: Math.round(pos.x), y: Math.max(MAST_H, Math.round(pos.y)), w: ref.offsetWidth, h: ref.offsetHeight })
               }
             >
               <div className="qc-drag no-print" title="Drag the grand total">
                 <span>⠿</span>
               </div>
               <div className="qc-boxinner">{renderBill()}</div>
+              <div className="qc-drag qc-drag-b no-print" title="Drag the grand total">
+                <span>⠿</span>
+              </div>
             </Rnd>
           );
         })()}
