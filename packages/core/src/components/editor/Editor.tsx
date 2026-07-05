@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clone, delRec, metaSet, put } from "@/lib/db";
 import { computeDoc, inr, nowIso } from "@/lib/calc";
@@ -12,14 +12,16 @@ import { cloudDelete, setOpenDoc, trySync } from "@/lib/cloud";
 import { upsertCustomerFromDoc } from "@/lib/customers";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { getFeatures } from "@/lib/features";
-import { addExpense, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
+import { addExpense, allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
+import { statementsForQuote } from "@/lib/payments";
+import { USERS } from "@/lib/local-auth";
 import { postInvoice, unpostInvoice } from "@/lib/ledger-autopost";
 import { quoteMessage, reminderMessage, waLink } from "@/lib/whatsapp";
 import { generatePdf } from "@/lib/pdf";
 import { folderConnected, saveCopyToFolder, writeDbSnapshot } from "@/lib/backup";
 import { bumpData, setSyncState, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
-import type { Doc } from "@/lib/types";
+import type { Doc, Expense } from "@/lib/types";
 import SectionCard from "./SectionCard";
 import Totals from "./Totals";
 import MoreMenu from "./MoreMenu";
@@ -35,6 +37,13 @@ const STATUS_BADGE: Record<string, string> = {
   Confirmed: "b-confirm",
   Rejected: "b-reject",
   "Converted to Invoice": "b-conv",
+};
+
+const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
+const hhmm = (iso: string) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return isNaN(+d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
 // Default per-CFT rates for common woods (auto-filled when a wood is chosen and the rate is still a default).
@@ -54,6 +63,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const [payUpi, setPayUpi] = useState("");
   const [payUpiAcct, setPayUpiAcct] = useState(""); // which account the UPI landed in
   const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
+  const [expenses, setExpenses] = useState<Expense[]>([]); // this quote's recorded payments (for the mini statements)
 
   const feat = getFeatures();
   const isInv = doc.kind === "invoice";
@@ -69,6 +79,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const paidSoFar = Math.round(((doc.payCash || 0) + (doc.payUpi || 0)) * 100) / 100;
   const payBalance = Math.round((finalPrice - paidSoFar) * 100) / 100;
   const settled = payBalance <= 0.5;
+  // mini statements — this quote's own payments, internal only (never printed)
+  const statements = feat.acceptPayment && !isInv ? statementsForQuote(doc, expenses) : [];
   const { brandMode, user } = useApp();
   const brand = brandFor(brandMode);
   const invBank = brand.banks?.[doc.bankIdx ?? 0] || brand.bank; // chosen bank for this invoice
@@ -83,6 +95,14 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   useEffect(() => {
     if (feat.acceptPayment) upiAccounts().then(setUpiAccts);
   }, [feat.acceptPayment]);
+
+  // accept-payment: load this quote's recorded payments for the mini statements
+  const loadExpenses = useCallback(() => {
+    if (feat.acceptPayment) allExpenses().then(setExpenses);
+  }, [feat.acceptPayment]);
+  useEffect(() => {
+    loadExpenses();
+  }, [loadExpenses, doc.id]);
 
   // apply queued focus after a row is added / re-rendered
   useEffect(() => {
@@ -285,6 +305,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     setPayCash("");
     setPayUpi("");
     setPayUpiAcct("");
+    loadExpenses();
     toast("Payment recorded" + (cash > 0 ? " · cash → Daybook" : "") + (upi > 0 ? " · UPI → " + acct : ""));
   }
 
@@ -410,6 +431,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     next.paymentStatus = "Pending";
     commit(next, true);
     bumpData();
+    loadExpenses();
     toast("Payments cleared");
   }
   async function onNewQuote() {
@@ -456,26 +478,26 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         sheet.style.width = "";
         return;
       }
-      // quote: rows are as thick as ~1.75cm. Fit everything on ONE page — thin the rows down (to no
-      // less than 1.2cm) so all the boxes still fit; only when even 1.2cm can't hold it do we flow
-      // onto the next page (a4multi) with full 1.75cm rows.
+      // quote: compact ~0.85cm rows (~26 per column, like the legacy print). Try to fit on ONE page —
+      // thin a touch (to no less than 0.7cm) if it's a hair over; when even 0.7cm can't hold it, flow
+      // onto the next page (a4multi) at the normal 0.85cm rows. Never balloon the rows.
       sheet.classList.add("a4fill");
       sheet.style.height = pageH - 10 + "px";
       const sections = sheet.querySelector("#sections") as HTMLElement | null;
       const overflows = () =>
         (!!sections && sections.scrollWidth > sections.clientWidth + 2) || sheet.scrollHeight > pageH + 2;
-      let rowCm = 1.75;
+      let rowCm = 0.85;
       sheet.style.setProperty("--sqrow", rowCm + "cm");
-      while (rowCm > 1.1 && overflows()) {
+      while (rowCm > 0.7 && overflows()) {
         rowCm = Math.round((rowCm - 0.05) * 100) / 100;
         sheet.style.setProperty("--sqrow", rowCm + "cm");
       }
       if (overflows()) {
-        // won't fit one page even at the thinnest allowed row → paginate at full thick rows
+        // won't fit one page even at the thinnest allowed row → paginate at normal compact rows
         sheet.classList.remove("a4fill");
         sheet.classList.add("a4multi");
         sheet.style.height = "";
-        sheet.style.setProperty("--sqrow", "1.75cm");
+        sheet.style.setProperty("--sqrow", "0.85cm");
       }
     };
     const unfit = () => {
@@ -742,11 +764,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             // Cut Size quote: split the wood boxes into EXACTLY two columns — fill the left column
             // (up to ~one page of thick rows) then start the right. Never more than two columns.
             if (!feat.simpleQuote) return doc.sections.map((_, si) => card(si));
-            // Fill the left column by real height (each box ≈ header/footer + rows×1.75cm) up to a
+            // Fill the left column by real height (each box ≈ header/footer + rows×0.85cm) up to a
             // printable column (~24cm); the box that no longer fits starts the right column. fit()
             // thins the rows a touch if the whole thing is a hair over one page.
             const COL_CM = 24;
-            const boxCm = (sec: (typeof doc.sections)[number]) => 3 + (sec.rows.length || 1) * 1.75;
+            const boxCm = (sec: (typeof doc.sections)[number]) => 3 + (sec.rows.length || 1) * 0.85;
             const c1: number[] = [];
             const c2: number[] = [];
             let h1 = 0;
@@ -947,6 +969,43 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               </button>
             </div>
           )}
+          {statements.length > 0 && (
+            <div style={{ flexBasis: "100%" }}>
+              <div className="pbd-lbl" style={{ marginTop: 4 }}>
+                Statements · {statements.length} <small style={{ color: "var(--ink-faint)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>— only for us</small>
+              </div>
+              {statements.map((s) => (
+                <div className="stmt" key={s.id}>
+                  <div className={"stmt-ic " + (s.mode === "upi" ? "upi" : "cash")}>{s.mode === "upi" ? "UPI" : "₹"}</div>
+                  <div className="stmt-main">
+                    <div className="stmt-to">{s.mode === "upi" ? s.account || "UPI account" : "Cash in hand"}</div>
+                    <div className="stmt-sub">
+                      {s.date}
+                      {hhmm(s.at) ? " · " + hhmm(s.at) : ""}
+                      {s.by ? " · by " + userName(s.by) : ""}
+                    </div>
+                  </div>
+                  <div className="stmt-amt">+₹{inr(s.amount)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* internal note — only for us, never printed */}
+      {feat.simpleQuote && !isInv && (
+        <div className="panel-card no-print" style={{ marginTop: 12 }}>
+          <label className="modal-field" style={{ flexBasis: "100%", width: "100%" }}>
+            <span>Internal note <small style={{ color: "var(--ink-faint)" }}>— only for us, never printed</small></span>
+            <textarea
+              rows={2}
+              placeholder="e.g. deliver by Friday, rate negotiated, balance promised next week…"
+              value={doc.notes || ""}
+              onChange={(e) => setField("notes", e.target.value)}
+              style={{ resize: "vertical", width: "100%", fontFamily: "var(--body)", fontSize: 14, padding: "8px 10px" }}
+            />
+          </label>
         </div>
       )}
 

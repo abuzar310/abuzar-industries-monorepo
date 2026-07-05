@@ -45,6 +45,13 @@ export function reconcileStatements(d: Doc, statements: PartyStatement[]): Party
   return out;
 }
 
+/** This one quote's recorded payments as statement lines (newest first), including any legacy
+ *  payCash/payUpi never itemised as its own expense. Same rollup quoteLedger does, for a single quote. */
+export function statementsForQuote(d: Doc, expenses: Expense[]): PartyStatement[] {
+  const lines = expenses.filter((e) => e.type === "sale" && e.sourceId === d.id).map((e) => mkStatement(e, d.number));
+  return reconcileStatements(d, lines).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+}
+
 export interface PartyQuote {
   id: string;
   number: string;
