@@ -181,7 +181,6 @@ export interface QuoteLedger {
 
 /** Roll each created quote up with its own recorded payments — the per-quotation statement view. */
 export function quoteLedger(quotes: Doc[], expenses: Expense[]): QuoteLedger {
-  const created = quotes.filter((d) => d.status === "Created");
   const byQuote = new Map<string, PartyStatement[]>();
   const quoteNoById = new Map(quotes.map((d) => [d.id, d.number] as const));
   for (const e of expenses) {
@@ -190,8 +189,12 @@ export function quoteLedger(quotes: Doc[], expenses: Expense[]): QuoteLedger {
     list.push(mkStatement(e, quoteNoById.get(e.sourceId) || ""));
     byQuote.set(e.sourceId, list);
   }
+  // show a quote if it's Created OR carries any payment — an advance on a still-Draft quote appears too
+  const shown = quotes.filter(
+    (d) => d.status === "Created" || byQuote.has(d.id) || (+(d.payCash || 0)) > 0 || (+(d.payUpi || 0)) > 0,
+  );
 
-  const rows: QuoteStatements[] = created
+  const rows: QuoteStatements[] = shown
     .map((d) => {
       const bill = quoteBill(d);
       const paid = +d.amountPaid || 0;

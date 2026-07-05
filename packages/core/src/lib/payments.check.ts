@@ -52,19 +52,22 @@ export function demoQuotes() {
     Q("q1", "Ramesh", "SF-1", 200000, 140000, 90000, 50000),
     Q("q2", "Suresh", "SF-2", 80000, 80000, 80000, 0),
     Q("q3", "Ramesh", "SF-3", 50000, 0, 0, 0), // created, no payment yet
-    Q("q4", "Draft Co", "SF-4", 99999, 0, 0, 0, "Draft"), // draft = not billed, excluded
+    Q("q4", "Draft Co", "SF-4", 99999, 0, 0, 0, "Draft"), // draft, but has an advance → still shows
+    Q("q5", "Empty Draft", "SF-5", 5000, 0, 0, 0, "Draft"), // draft, no payment → hidden
   ];
   const expenses = [
     E("e1", "q1", 50000, "upi", "Afsar GPay"),
     E("e2", "q1", 90000, "cash"),
     E("e3", "q2", 80000, "cash"),
-    E("ex", "q4", 100, "cash"), // against a draft → ignored
+    E("ex", "q4", 100, "cash"), // advance on a draft → shows under its quote
   ];
   const { quotes: rows, quoteCount, payCount, totalReceived } = quoteLedger(quotes, expenses);
 
-  ok(quoteCount === 3, "drafts excluded → 3 created quotations");
-  ok(payCount === 3, "3 payments counted (draft's ignored)");
-  ok(totalReceived === 220000, "total received = 50000 + 90000 + 80000");
+  ok(quoteCount === 4, "3 created + 1 draft-with-payment shown (empty draft hidden)");
+  ok(payCount === 4, "every recorded payment counted, incl. the draft's advance");
+  ok(totalReceived === 220100, "total received = 50000 + 90000 + 80000 + 100");
+  ok(!!rows.find((r) => r.number === "SF-4"), "a draft quote with an advance appears in the ledger");
+  ok(!rows.find((r) => r.number === "SF-5"), "a draft with no payment stays out");
 
   const r1 = rows.find((r) => r.number === "SF-1")!;
   ok(r1.bill === 200000 && r1.paid === 140000 && r1.balance === 60000, "SF-1 bill/paid/balance");
