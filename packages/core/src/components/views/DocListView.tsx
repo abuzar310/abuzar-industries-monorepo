@@ -5,6 +5,7 @@ import { allRec } from "@/lib/db";
 import { computeDoc, inr } from "@/lib/calc";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { trashDoc } from "@/lib/trash";
+import { snapshotBefore } from "@/lib/autobackup";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -92,6 +93,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       confirmLabel: "Move " + ids.length + " to bin",
     });
     if (!ok) return;
+    await snapshotBefore(); // fresh restore point captured just before the bulk delete
     toast("Moving to bin…");
     // soft-delete only — nothing is hard-removed, so a mis-select is always recoverable
     for (const id of ids) await trashDoc(store, id);

@@ -17,8 +17,9 @@ const SNAP_STORES: StoreName[] = [
   "ledgers",
   "vouchers",
 ];
-const MAX_SNAPS = 8;
-const MIN_GAP_MS = 6 * 3600 * 1000; // auto-snapshot at most once every 6 hours
+const MAX_SNAPS = 30; // keep a deep history
+const MIN_GAP_MS = 60 * 60 * 1000; // time-based auto-snapshot at most once an hour (on load)
+const MIN_BEFORE_GAP_MS = 2 * 60 * 1000; // before a risky op: snapshot unless one was taken in the last 2 min
 
 export interface Snapshot {
   at: string;
@@ -50,6 +51,15 @@ export async function maybeAutoSnapshot(): Promise<void> {
   const list = await loadList();
   const last = list[0]?.at;
   if (last && Date.now() - new Date(last).getTime() < MIN_GAP_MS) return;
+  await autoSnapshot().catch(() => {});
+}
+
+/** Take a snapshot right before a risky/destructive action, unless one was just taken (dedup) — so
+ *  there's always a fresh restore point captured moments before a delete. */
+export async function snapshotBefore(): Promise<void> {
+  const list = await loadList();
+  const last = list[0]?.at;
+  if (last && Date.now() - new Date(last).getTime() < MIN_BEFORE_GAP_MS) return;
   await autoSnapshot().catch(() => {});
 }
 

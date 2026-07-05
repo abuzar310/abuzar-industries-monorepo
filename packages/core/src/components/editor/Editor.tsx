@@ -12,6 +12,7 @@ import { cloudDelete, setOpenDoc, trySync } from "@/lib/cloud";
 import { upsertCustomerFromDoc } from "@/lib/customers";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { trashDoc } from "@/lib/trash";
+import { snapshotBefore } from "@/lib/autobackup";
 import { getFeatures } from "@/lib/features";
 import { addExpense, allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
 import { postInvoice, unpostInvoice } from "@/lib/ledger-autopost";
@@ -393,6 +394,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       confirmLabel: "Move to bin",
     });
     if (!ok) return;
+    await snapshotBefore(); // fresh restore point captured just before the delete
     const st = docStore(docRef.current);
     await trashDoc(st, docRef.current.id); // soft-delete: kept locally + in the cloud, always recoverable
     await metaSet("lastOpen", null);
