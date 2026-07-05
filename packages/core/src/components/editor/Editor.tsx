@@ -761,18 +761,17 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                 />
               );
             };
-            // Cut Size quote: split the wood boxes into EXACTLY two columns — fill the left column
-            // (up to ~one page of thick rows) then start the right. Never more than two columns.
+            // Cut Size quote: split the wood boxes into EXACTLY two columns — FILL THE LEFT COLUMN
+            // first (each box stacks directly below the previous one), and only start the right column
+            // once the left is full (~one page of compact 0.85cm rows ≈ 26 lines). Never three columns.
             if (!feat.simpleQuote) return doc.sections.map((_, si) => card(si));
-            // Fill the left column by real height (each box ≈ header/footer + rows×0.85cm) up to a
-            // printable column (~24cm); the box that no longer fits starts the right column. fit()
-            // thins the rows a touch if the whole thing is a hair over one page.
-            const COL_CM = 24;
+            // box height ≈ header/footer chrome + rows×0.85cm; a printable column is ~25cm tall.
+            const COL_CM = 25;
             const boxCm = (sec: (typeof doc.sections)[number]) => 3 + (sec.rows.length || 1) * 0.85;
             const c1: number[] = [];
             const c2: number[] = [];
             let h1 = 0;
-            let filled = false;
+            let filled = false; // once the left column is full, everything else goes to the right
             doc.sections.forEach((sec, i) => {
               const bc = boxCm(sec);
               if (!filled && (c1.length === 0 || h1 + bc <= COL_CM)) {
