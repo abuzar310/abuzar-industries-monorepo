@@ -46,6 +46,10 @@ export const TABLE = {
   vouchers: "vouchers",
 } as const;
 
+// Supabase REST returns at most this many rows for an unbounded select. A response at/above this
+// count is assumed truncated, so we never treat it as a complete set for convergence-deletes.
+const CLOUD_PAGE = 1000;
+
 // Per-app cloud namespace so the two apps never share tables (e.g. "sf_" for Safa).
 let cloudPrefix = "";
 export const setCloudPrefix = (p: string) => {
@@ -355,6 +359,7 @@ export async function mirrorFromCloud(): Promise<boolean> {
       const r = await fetch(supa.url + "/rest/v1/" + tableName(s) + "?select=*", { headers: supaHeaders() });
       if (!r.ok) continue;
       const rows = await r.json();
+      if (!Array.isArray(rows)) continue;
       const cloudIds = new Set<string>();
       for (const row of rows) {
         const rec = row && row.data;
@@ -366,13 +371,21 @@ export async function mirrorFromCloud(): Promise<boolean> {
         rec.synced = true;
         await put(s, rec);
       }
-      const local = await allRec<{ id?: string; key?: string; synced?: boolean }>(s);
-      for (const rec of local) {
-        const key = s === "stock" ? rec.key : rec.id;
-        if (!key) continue;
-        // drop only records that came from the cloud but are gone now (keep unsynced local writes)
-        if (rec.synced && !cloudIds.has(String(key)) && !(_openId === key && _openStore === s)) {
-          await delRec(s, key);
+      // SAFETY: never converge-delete on an empty or page-capped response. A transient/partial fetch
+      // (blip, RLS hiccup, or >1000 rows hitting Supabase's default cap) would otherwise silently wipe
+      // every synced local document — the "a quote just vanished" data-loss bug. Only drop when the
+      // cloud clearly returned a complete, non-empty set. A stale local record is recoverable; a
+      // deleted one is not. ponytail: paginate the fetch if a store ever legitimately exceeds CLOUD_PAGE.
+      const complete = cloudIds.size > 0 && rows.length < CLOUD_PAGE;
+      if (complete) {
+        const local = await allRec<{ id?: string; key?: string; synced?: boolean }>(s);
+        for (const rec of local) {
+          const key = s === "stock" ? rec.key : rec.id;
+          if (!key) continue;
+          // drop only records that came from the cloud but are gone now (keep unsynced local writes)
+          if (rec.synced && !cloudIds.has(String(key)) && !(_openId === key && _openStore === s)) {
+            await delRec(s, key);
+          }
         }
       }
       ok = true;
