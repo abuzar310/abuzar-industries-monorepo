@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { getSupa, pullFromCloud, testConnection, trySync } from "@/lib/cloud";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { purgeDoc, restoreDoc, trashedDocs } from "@/lib/trash";
+import { autoSnapshot, downloadSnapshot, listSnapshots, restoreSnapshot } from "@/lib/autobackup";
 import { docStore } from "@/lib/doc";
 import type { Doc } from "@/lib/types";
 import { canInstall, promptInstall } from "@/lib/pwa";
@@ -17,16 +18,37 @@ export default function SettingsView() {
   const [cloud, setCloud] = useState("Checking cloud…");
   const [autoPost, setAutoPostUI] = useState(false);
   const [trash, setTrash] = useState<Doc[]>([]);
+  const [snaps, setSnaps] = useState<{ at: string; total: number }[]>([]);
   const ledgerOn = getFeatures().ledger;
 
   const loadTrash = () => trashedDocs().then(setTrash);
+  const loadSnaps = () => listSnapshots().then(setSnaps);
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
     setCloud(getSupa().url && getSupa().key ? "Connected to cloud" : "Local only (no cloud configured)");
     /* eslint-enable react-hooks/set-state-in-effect */
     autoPostEnabled().then(setAutoPostUI);
     loadTrash();
+    loadSnaps();
   }, []);
+
+  async function onBackupNow() {
+    const s = await autoSnapshot();
+    loadSnaps();
+    toast(s ? "Backed up " + s.total + " records" : "Nothing to back up yet");
+  }
+  async function onRestoreSnap(at: string, total: number) {
+    const ok = await confirmDialog({
+      title: "Restore this backup?",
+      message: `Brings back all ${total} records from this snapshot (recovers anything deleted or overwritten since). Newer items are kept.`,
+      confirmLabel: "Restore",
+    });
+    if (!ok) return;
+    const n = await restoreSnapshot(at);
+    bumpData();
+    loadTrash();
+    toast(n + " records restored");
+  }
 
   async function onRestore(d: Doc) {
     await restoreDoc(docStore(d), d.id);
@@ -154,6 +176,31 @@ export default function SettingsView() {
           <button className="btn sm" onClick={exportBackup}>Export backup (.json)</button>
           <button className="btn sm" onClick={importFile}>Import backup</button>
         </div>
+      </div>
+
+      <div className="setbox">
+        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Auto-backups</div>
+        <p className="note">
+          Your data is snapshotted on this device automatically (a few times a day). If anything ever goes
+          missing, restore it here — no cloud needed.
+        </p>
+        <div className="rowbtns">
+          <button className="btn primary sm" onClick={onBackupNow}>Back up now</button>
+        </div>
+        {snaps.length === 0 ? (
+          <p className="note" style={{ opacity: 0.6, marginTop: 6 }}>No snapshots yet.</p>
+        ) : (
+          snaps.map((s) => (
+            <div className="exprow" key={s.at}>
+              <span className="expnote">
+                {new Date(s.at).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                <small>{s.total} records</small>
+              </span>
+              <button className="btn sm" onClick={() => onRestoreSnap(s.at, s.total)}>Restore</button>
+              <button className="btn sm" onClick={() => downloadSnapshot(s.at)}>Download</button>
+            </div>
+          ))
+        )}
       </div>
 
       <div className="setbox">

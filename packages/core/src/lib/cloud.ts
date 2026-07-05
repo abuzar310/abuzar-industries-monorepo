@@ -269,6 +269,12 @@ async function addTombstone(s: string, id: string) {
   tombstones[tombKey(s, id)] = Date.now();
   await metaSet("tombstones", tombstones);
 }
+/** Forget a tombstone so a restored/re-created record isn't blocked from syncing back. */
+export async function clearTombstone(s: string, id: string) {
+  if (tombstones[tombKey(s, id)] === undefined) return;
+  delete tombstones[tombKey(s, id)];
+  await metaSet("tombstones", tombstones);
+}
 
 /** Pull others' changes without disturbing the open document. */
 export async function bgPull(openDocId: string = _openId, openDocStore: string = _openStore) {

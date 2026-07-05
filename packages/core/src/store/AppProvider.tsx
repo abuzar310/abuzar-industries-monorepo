@@ -22,6 +22,7 @@ import {
   signOut,
   trySync,
 } from "@/lib/cloud";
+import { maybeAutoSnapshot } from "@/lib/autobackup";
 import {
   bumpData,
   setReady,
@@ -144,6 +145,7 @@ export default function AppProvider({
       }
 
       setReady(true);
+      maybeAutoSnapshot(); // rolling local safety-net backup (fire-and-forget)
       await checkOwnerNotifications();
 
       // instant updates via realtime; the interval is just a safety-net fallback
