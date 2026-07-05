@@ -357,6 +357,28 @@ body{
    amount-in-words line. */
 #sheet.sq .words{display:none}
 #sheet.sq #sections .totals{flex:0 0 auto; margin-top:auto}
+/* ---- Cut Size quote — MOBILE data entry (screen only). `@media screen` + max-width keeps this
+   OUT of print (A4 ≈ 794px > 760px) and off desktop screens, so it NEVER changes the quote/print
+   sizing — it only makes the phone form usable: one full-width column with tap-friendly rows. ---- */
+@media screen and (max-width:760px){
+  /* stack the two box columns into one full-width column so L·W·T·Pcs inputs get real width */
+  #sheet.sq #sections.twocol{grid-template-columns:1fr; gap:14px; align-items:start}
+  #sheet.sq #sections .scol{gap:14px}
+  /* rows grow to a comfortable tap height (desktop & print keep the fixed 0.85cm rows) */
+  #sheet.sq #sections .row.cf{height:auto}
+  #sheet.sq .row.cf .dim{padding:10px 2px; font-size:17px}
+  /* tighten the table so all 7 columns (#·CFT·L·W·T·Pcs·×) fit a phone with no clip */
+  #sheet.sq .thead.cf, #sheet.sq .row.cf{grid-template-columns:18px 46px 1fr 1fr 1fr 1fr 16px; gap:2px; padding:0 6px}
+  #sheet.sq .row.cf .cft{padding-right:4px; margin-right:2px; font-size:14px}
+  #sheet.sq .thead.cf:not(.pcstab) > span:nth-child(2){padding-right:4px; margin-right:2px}
+  /* grand total sits after the boxes on a phone (not pinned to a column bottom) */
+  #sheet.sq #sections .totals{margin-top:14px}
+  /* masthead: title on its own row above No./Date so nothing overlaps */
+  #sheet.sq .sq-head{grid-template-columns:1fr 1fr; row-gap:6px}
+  #sheet.sq .sq-head .co-name{grid-column:1 / -1; grid-row:1; font-size:20px}
+  #sheet.sq .mh-no{grid-column:1; grid-row:2}
+  #sheet.sq .mh-date{grid-column:2; grid-row:2}
+}
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
   text-transform:uppercase; font-weight:700; font-size:12.5px; color:var(--ochre-deep);
