@@ -333,6 +333,9 @@ body{
 /* box flow: EXACTLY two columns (structured in Editor.tsx as two .scol stacks) — boxes fill the
    left column, then the right. Never three columns. Each box is one column wide. */
 /* two equal-height columns; each is a flex stack of its boxes */
+/* two equal-height columns (align-items:stretch): the shorter column stretches to match the taller,
+   so the bill's margin-top:auto pins it to the BOTTOM of the right column, aligned with the bottom of
+   the taller column — never floating in the middle. The balanced split keeps the columns near-equal. */
 #sheet.sq #sections.twocol{display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:stretch}
 #sheet.sq #sections .scol{display:flex; flex-direction:column; gap:10px; min-width:0}
 #sheet.sq.a4fill #sections{flex:0 1 auto; gap:8px 10px; min-height:0}
@@ -342,8 +345,9 @@ body{
 #sheet.sq.a4multi #sections .scol{gap:8px}
 #sheet.sq.a4multi #sections .section{break-inside:avoid; page-break-inside:avoid}
 #sheet.sq.a4multi #sections .totals{margin-top:8px}
-/* the bill sits at the BOTTOM of the right column — pushed down to align with the tallest column's
-   bottom (below all boxes). No amount-in-words line. */
+/* the bill sits at the BOTTOM of the right column, level with the bottom of the taller (left) column's
+   last row — margin-top:auto pushes it down; align-items:stretch makes the right column that tall. No
+   amount-in-words line. */
 #sheet.sq .words{display:none}
 #sheet.sq #sections .totals{flex:0 0 auto; margin-top:auto}
 .add-sec{
