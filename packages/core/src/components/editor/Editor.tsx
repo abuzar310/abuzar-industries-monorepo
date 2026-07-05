@@ -775,6 +775,18 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                     <option>Credit</option>
                   </select>
                 </div>
+                {!isBuy && (
+                  <>
+                    <div className="f">
+                      <label>Ship To (address)</label>
+                      <input placeholder="—" value={doc.shipTo || ""} onChange={(e) => setField("shipTo", e.target.value)} />
+                    </div>
+                    <div className="f">
+                      <label>Vehicle No.</label>
+                      <input placeholder="—" value={doc.vehicleNo || ""} onChange={(e) => setField("vehicleNo", e.target.value)} />
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
