@@ -43,8 +43,9 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
   useEffect(() => {
     let live = true;
     allRec<Doc>(store).then((arr) => {
-      arr.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-      if (live) setDocs(arr);
+      const active = arr.filter((d) => !d.deletedAt); // trashed docs live in the Recycle bin (Settings)
+      active.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+      if (live) setDocs(active);
     });
     return () => {
       live = false;

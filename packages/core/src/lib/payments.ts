@@ -15,6 +15,8 @@ export interface PartyStatement {
   at: string; // createdAt ISO — used for the time + newest-first sort
   by: string; // enteredBy (local user id)
   quoteNo: string;
+  /** free-text note on the payment (e.g. a cash note) — stored on the expense's label. */
+  note?: string;
   /** derived from the quote's own payCash/payUpi (legacy payment never itemised as its own expense). */
   synthetic?: boolean;
 }
@@ -29,6 +31,7 @@ const mkStatement = (e: Expense, quoteNo: string): PartyStatement => ({
   at: e.createdAt || "",
   by: e.enteredBy,
   quoteNo,
+  note: e.label || "",
 });
 
 /** Surface any paid amount recorded on the quote itself (payCash/payUpi) that was never written
@@ -85,8 +88,8 @@ export interface PartyLedger {
 
 /** Roll every created quote + its recorded payments up into per-customer balances + statements. */
 export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Customer[] = []): PartyLedger {
-  // a quote is a "bill" once it's Created (drafts aren't owed yet)
-  const created = quotes.filter((d) => d.status === "Created");
+  // a quote is a "bill" once it's Created (drafts aren't owed yet); trashed quotes are excluded
+  const created = quotes.filter((d) => d.status === "Created" && !d.deletedAt);
   const key = (d: Doc) => d.customerId || "name:" + (d.customerName || "").trim().toLowerCase() + "|" + (d.phone || "");
   const quoteNoById = new Map(quotes.map((d) => [d.id, d.number] as const));
 
@@ -189,9 +192,10 @@ export function quoteLedger(quotes: Doc[], expenses: Expense[]): QuoteLedger {
     list.push(mkStatement(e, quoteNoById.get(e.sourceId) || ""));
     byQuote.set(e.sourceId, list);
   }
-  // show a quote if it's Created OR carries any payment — an advance on a still-Draft quote appears too
+  // show a quote if it's Created OR carries any payment — an advance on a still-Draft quote appears too;
+  // trashed quotes are excluded (they live in the Recycle bin)
   const shown = quotes.filter(
-    (d) => d.status === "Created" || byQuote.has(d.id) || (+(d.payCash || 0)) > 0 || (+(d.payUpi || 0)) > 0,
+    (d) => !d.deletedAt && (d.status === "Created" || byQuote.has(d.id) || (+(d.payCash || 0)) > 0 || (+(d.payUpi || 0)) > 0),
   );
 
   const rows: QuoteStatements[] = shown

@@ -13,6 +13,14 @@ export interface Row {
   cft?: string | number;
 }
 
+/** Free-arrange placement on the A4 canvas (logical px in a 794×1123 = A4@96dpi page). */
+export interface BoxRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface Section {
   name: string;
   rate: string | number;
@@ -20,6 +28,8 @@ export interface Section {
   /** "cft" (L×W×T×Pcs÷144 × rate), "direct" (type CFT directly × rate),
    *  or "rft" (running feet Σ(L×Pcs) × rate). Default cft. */
   calcMode?: "cft" | "direct" | "rft" | "pcs";
+  /** free-arrange: where/how big this box sits on the A4 page (unset = auto-placed). */
+  box?: BoxRect;
 }
 
 export interface Doc {
@@ -35,6 +45,10 @@ export interface Doc {
   notes: string;
   date: string;
   sections: Section[];
+  /** free-arrange mode: boxes are placed/sized by hand on the A4 canvas (see Section.box). */
+  freeLayout?: boolean;
+  /** free-arrange: placement of the grand-total (bill) box on the A4 page. */
+  billBox?: BoxRect;
   gst: string | number;
   /** "percent" (gst is a %) or "flat" (gst is a ₹ amount). Default percent. */
   gstMode?: "percent" | "flat";
@@ -61,6 +75,9 @@ export interface Doc {
   updatedAt: string;
   synced: boolean;
   stockDeducted: boolean;
+  /** soft-delete: ISO time it was moved to the Recycle bin. Hidden from lists, restorable from Settings.
+   *  Kept in the cloud too (not hard-deleted), so a delete is always recoverable on any device. */
+  deletedAt?: string;
 }
 
 /** Per-app feature switches (each app sets these via its layout/app-config). */

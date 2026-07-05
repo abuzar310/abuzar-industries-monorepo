@@ -11,21 +11,21 @@ import { nextNumber } from "@/lib/numbering";
 import { cloudDelete, setOpenDoc, trySync } from "@/lib/cloud";
 import { upsertCustomerFromDoc } from "@/lib/customers";
 import { createInvoice, createQuotation } from "@/lib/create";
+import { trashDoc } from "@/lib/trash";
 import { getFeatures } from "@/lib/features";
 import { addExpense, allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
-import { statementsForQuote } from "@/lib/payments";
-import { USERS } from "@/lib/local-auth";
 import { postInvoice, unpostInvoice } from "@/lib/ledger-autopost";
 import { quoteMessage, reminderMessage, waLink } from "@/lib/whatsapp";
 import { generatePdf } from "@/lib/pdf";
 import { folderConnected, saveCopyToFolder, writeDbSnapshot } from "@/lib/backup";
 import { bumpData, setSyncState, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
-import type { Doc, Expense } from "@/lib/types";
+import type { BoxRect, Doc, Expense } from "@/lib/types";
 import SectionCard from "./SectionCard";
 import Totals from "./Totals";
+import QuoteCanvas from "./QuoteCanvas";
 import MoreMenu from "./MoreMenu";
-import AccountPicker from "@/components/AccountPicker";
+import PaymentBlock from "./PaymentBlock";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 
@@ -37,13 +37,6 @@ const STATUS_BADGE: Record<string, string> = {
   Confirmed: "b-confirm",
   Rejected: "b-reject",
   "Converted to Invoice": "b-conv",
-};
-
-const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
-const hhmm = (iso: string) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return isNaN(+d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
 // Default per-CFT rates for common woods (auto-filled when a wood is chosen and the rate is still a default).
@@ -59,9 +52,6 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const secRef = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<{ si: number; ri: number; k: string } | null>(null);
   const [editingNo, setEditingNo] = useState(false);
-  const [payCash, setPayCash] = useState("");
-  const [payUpi, setPayUpi] = useState("");
-  const [payUpiAcct, setPayUpiAcct] = useState(""); // which account the UPI landed in
   const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
   const [expenses, setExpenses] = useState<Expense[]>([]); // this quote's recorded payments (for the mini statements)
 
@@ -74,13 +64,6 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     isInv ? ["cft", "direct"] : feat.simpleQuote ? ["cft", "pcs"] : ["cft", "direct", "rft"];
   const totals = useMemo(() => computeDoc(doc), [doc]);
   const totalCft = totals.secCft.reduce((s, c) => s + c, 0);
-  // accept-payment: final = round-figure override or the computed grand; balance clears over time
-  const finalPrice = doc.finalPrice != null && doc.finalPrice > 0 ? doc.finalPrice : totals.grand;
-  const paidSoFar = Math.round(((doc.payCash || 0) + (doc.payUpi || 0)) * 100) / 100;
-  const payBalance = Math.round((finalPrice - paidSoFar) * 100) / 100;
-  const settled = payBalance <= 0.5;
-  // mini statements — this quote's own payments, internal only (never printed)
-  const statements = feat.acceptPayment && !isInv ? statementsForQuote(doc, expenses) : [];
   const { brandMode, user } = useApp();
   const brand = brandFor(brandMode);
   const invBank = brand.banks?.[doc.bankIdx ?? 0] || brand.bank; // chosen bank for this invoice
@@ -168,6 +151,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     update((d) =>
       d.sections.push({ name: "White Teak", rate: WOOD_PRICES["white teak"], rows: [{ l: "", w: "", t: "", pcs: "" }] }),
     );
+
+  // ---- free-arrange (A4 canvas): drag/resize boxes + the grand total, persisted per-box ----
+  const onBox = (si: number, r: BoxRect) => update((d) => (d.sections[si].box = r));
+  const onBillBox = (r: BoxRect) => update((d) => (d.billBox = r));
+  const toggleFree = () => update((d) => (d.freeLayout = !d.freeLayout));
 
   // ---- arrow-key grid navigation (identical behaviour to legacy) ----
   function findDim(si: number, ri: number, k: string) {
@@ -279,34 +267,16 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const onFinalPrice = (v: string) =>
     update((d) => (d.finalPrice = v.trim() === "" ? undefined : Math.max(0, +v || 0)));
 
-  async function onAcceptPayment() {
-    const d0 = docRef.current;
-    const grand = computeDoc(d0).grand;
-    const finalP = d0.finalPrice != null && d0.finalPrice > 0 ? d0.finalPrice : grand;
-    const cash = Math.max(0, +payCash || 0);
-    const upi = Math.max(0, +payUpi || 0);
-    if (cash + upi <= 0) return toast("Enter a cash or UPI amount");
-    const acct = payUpiAcct.trim();
-    if (upi > 0 && !acct) return toast("Enter the UPI account (to whom it came)");
-    const cust = (d0.customerName || "").trim() || "Walk-in";
-    const note = cust + " · " + d0.number;
-    const by = user?.id || "unknown";
-    if (cash > 0) await addExpense({ type: "sale", amount: cash, mode: "cash", note, enteredBy: by, sourceId: d0.id });
-    if (upi > 0) await addExpense({ type: "sale", amount: upi, mode: "upi", note, account: acct, enteredBy: by, sourceId: d0.id });
-    if (upi > 0 && !upiAccts.includes(acct)) setUpiAccts((a) => [...a, acct].sort());
-    const next = clone(d0);
-    next.finalPrice = finalP;
-    next.payCash = Math.round(((next.payCash || 0) + cash) * 100) / 100; // cumulative — clear over time
-    next.payUpi = Math.round(((next.payUpi || 0) + upi) * 100) / 100;
+  // persist the running cash/UPI totals onto the doc after PaymentBlock adds/removes a payment line
+  function setPayAggregates(payCash: number, payUpi: number) {
+    const next = clone(docRef.current);
+    next.payCash = Math.round(payCash * 100) / 100;
+    next.payUpi = Math.round(payUpi * 100) / 100;
     next.amountPaid = Math.round((next.payCash + next.payUpi) * 100) / 100;
-    next.paidLogged = true;
-    next.paymentStatus = next.amountPaid + 0.001 >= finalP ? "Paid" : "Partial";
+    const fp = next.finalPrice != null && next.finalPrice > 0 ? next.finalPrice : computeDoc(next).grand;
+    next.paymentStatus = next.amountPaid <= 0 ? "Pending" : next.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
+    next.paidLogged = next.amountPaid > 0;
     commit(next, true);
-    setPayCash("");
-    setPayUpi("");
-    setPayUpiAcct("");
-    loadExpenses();
-    toast("Payment recorded" + (cash > 0 ? " · cash → Daybook" : "") + (upi > 0 ? " · UPI → " + acct : ""));
   }
 
   // ---- actions ----
@@ -396,22 +366,16 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   }
   async function onDelete() {
     const ok = await confirmDialog({
-      title: "Delete " + doc.number + "?",
-      message: "This permanently removes it from this device and the cloud. This cannot be undone.",
-      confirmLabel: "Delete",
-      danger: true,
+      title: "Move " + doc.number + " to Recycle bin?",
+      message: "It leaves your lists but isn't lost — restore it anytime from Settings → Recycle bin.",
+      confirmLabel: "Move to bin",
     });
     if (!ok) return;
     const st = docStore(docRef.current);
-    const id = docRef.current.id;
-    await delRec(st, id);
-    await cloudDelete(st, id);
-    // cascade: remove any daybook entries this doc's payments created
-    const n = await deleteExpensesBySource(id);
-    if (st === "invoices") await unpostInvoice(id); // remove any auto-posted ledger vouchers
+    await trashDoc(st, docRef.current.id); // soft-delete: kept locally + in the cloud, always recoverable
     await metaSet("lastOpen", null);
     bumpData();
-    toast(doc.number + " deleted" + (n ? " · " + n + " daybook entr" + (n === 1 ? "y" : "ies") + " removed" : ""));
+    toast(doc.number + " moved to Recycle bin");
     router.push(st === "invoices" ? "/invoices" : "/quotations");
   }
   async function onClearPayments() {
@@ -460,6 +424,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     const sheet = sheetRef.current;
     if (!sheet) return;
     const fit = () => {
+      // free-arrange mode places boxes by hand on the A4 canvas — never auto-fit/thin/paginate.
+      if (docRef.current.freeLayout) return;
       const probe = document.createElement("div");
       // printable A4 area for a 6mm @page margin (210-12 × 297-12) — near-full-bleed so the
       // sheet uses almost all of the paper left-to-right
@@ -486,7 +452,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       const sections = sheet.querySelector("#sections") as HTMLElement | null;
       const overflows = () =>
         (!!sections && sections.scrollWidth > sections.clientWidth + 2) || sheet.scrollHeight > pageH + 2;
-      let rowCm = 0.85;
+      let rowCm = 0.72;
       sheet.style.setProperty("--sqrow", rowCm + "cm");
       while (rowCm > 0.7 && overflows()) {
         rowCm = Math.round((rowCm - 0.05) * 100) / 100;
@@ -497,7 +463,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         sheet.classList.remove("a4fill");
         sheet.classList.add("a4multi");
         sheet.style.height = "";
-        sheet.style.setProperty("--sqrow", "0.85cm");
+        sheet.style.setProperty("--sqrow", "0.72cm");
       }
     };
     const unfit = () => {
@@ -520,6 +486,72 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const badgeCls = isInv ? "b-conv" : STATUS_BADGE[doc.status] || "b-draft";
   const badgeText = isInv ? (isBuy ? "Purchase Invoice" : "Invoice") : doc.status;
   const showLink = isInv && !!doc.quotationId;
+  const freeMode = feat.simpleQuote && !!doc.freeLayout;
+
+  // one wood box (shared by the auto-layout and the free-arrange canvas)
+  const renderCard = (si: number) => {
+    const sec = doc.sections[si];
+    const cft = totals.secCft[si] || 0;
+    const amt = Math.round(cft * (+sec.rate || 0) * 100) / 100;
+    return (
+      <SectionCard
+        key={si}
+        sec={sec}
+        si={si}
+        cft={cft}
+        amt={amt}
+        modes={secModes}
+        onName={onName}
+        onRate={onRate}
+        onSetMode={onSetMode}
+        onCell={onCell}
+        onAddRow={onAddRow}
+        onDelRow={onDelRow}
+        onDelSec={onDelSec}
+      />
+    );
+  };
+  const billNode = (
+    <Totals
+      doc={doc}
+      sub={totals.sub}
+      gstAmt={totals.gstAmt}
+      grand={totals.grand}
+      totalCft={totalCft}
+      onGst={(v) => setField("gst", v)}
+      onGstMode={(m) => setField("gstMode", m)}
+    />
+  );
+  // compact masthead rendered inside the A4 canvas in free-arrange mode
+  const sqHeader = (
+    <>
+      <div className="mast-top sq-head">
+        <div className="mh-side mh-no">
+          <label>Quotation No.</label>
+          <input className="ro" value={doc.number} readOnly onClick={() => setEditingNo(true)} />
+        </div>
+        <div className="co-name">Wood Quotation</div>
+        <div className="mh-side mh-date">
+          <label>Date</label>
+          <input value={doc.date} onChange={(e) => setField("date", e.target.value)} />
+        </div>
+      </div>
+      <div className="cust-block">
+        <div className="f">
+          <label>Customer Name</label>
+          <input placeholder="—" value={doc.customerName} onChange={(e) => setField("customerName", e.target.value)} />
+        </div>
+        <div className="f">
+          <label>Phone</label>
+          <input placeholder="—" value={doc.phone} onChange={(e) => setField("phone", e.target.value)} />
+        </div>
+        <div className="f">
+          <label>Carpenter</label>
+          <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <div className="view active" id="v-editor">
@@ -584,7 +616,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       </div>
 
       {/* printable sheet */}
-      <div id="sheet" className={isInv ? "inv" : feat.simpleQuote ? "sq" : ""} ref={sheetRef}>
+      <div id="sheet" className={(isInv ? "inv" : feat.simpleQuote ? "sq" : "") + (freeMode ? " free" : "")} ref={sheetRef}>
         {isInv && !isBuy && (
           <div className="wmark" aria-hidden="true">
             <span>{brand.name}</span>
@@ -595,6 +627,17 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             <span>Tax Invoice</span>
           </div>
         )}
+        {freeMode ? (
+          <QuoteCanvas
+            doc={doc}
+            header={sqHeader}
+            renderCard={renderCard}
+            renderBill={() => billNode}
+            onBox={onBox}
+            onBillBox={onBillBox}
+          />
+        ) : (
+          <>
         <div className={"mast" + (isInv && !isBuy ? " mast-c" : "")}>
           {feat.simpleQuote ? (
             // Cut Size quote: No. on the left, "Wood Quotation" centered, Date on the right — one line
@@ -739,35 +782,13 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
 
         <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} className={feat.simpleQuote ? "twocol" : ""}>
           {(() => {
-            const card = (si: number) => {
-              const sec = doc.sections[si];
-              const cft = totals.secCft[si] || 0;
-              const amt = Math.round(cft * (+sec.rate || 0) * 100) / 100;
-              return (
-                <SectionCard
-                  key={si}
-                  sec={sec}
-                  si={si}
-                  cft={cft}
-                  amt={amt}
-                  modes={secModes}
-                  onName={onName}
-                  onRate={onRate}
-                  onSetMode={onSetMode}
-                  onCell={onCell}
-                  onAddRow={onAddRow}
-                  onDelRow={onDelRow}
-                  onDelSec={onDelSec}
-                />
-              );
-            };
             // Cut Size quote: split the wood boxes into EXACTLY two columns — FILL THE LEFT COLUMN
             // first (each box stacks directly below the previous one), and only start the right column
-            // once the left is full (~one page of compact 0.85cm rows ≈ 26 lines). Never three columns.
-            if (!feat.simpleQuote) return doc.sections.map((_, si) => card(si));
-            // box height ≈ header/footer chrome + rows×0.85cm; a printable column is ~25cm tall.
+            // once the left is full (~one page of compact 0.72cm rows ≈ 30 lines). Never three columns.
+            if (!feat.simpleQuote) return doc.sections.map((_, si) => renderCard(si));
+            // box height ≈ header/footer chrome + rows×0.72cm; a printable column is ~25cm tall.
             const COL_CM = 25;
-            const boxCm = (sec: (typeof doc.sections)[number]) => 3 + (sec.rows.length || 1) * 0.85;
+            const boxCm = (sec: (typeof doc.sections)[number]) => 3 + (sec.rows.length || 1) * 0.72;
             const c1: number[] = [];
             const c2: number[] = [];
             let h1 = 0;
@@ -782,30 +803,20 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                 c2.push(i);
               }
             });
-            // the bill sits at the BOTTOM of the right column (pushed down, aligned with the
-            // bottom of the taller column) — see .scol .totals{margin-top:auto}
-            const bill = (
-              <Totals
-                doc={doc}
-                sub={totals.sub}
-                gstAmt={totals.gstAmt}
-                grand={totals.grand}
-                totalCft={totalCft}
-                onGst={(v) => setField("gst", v)}
-                onGstMode={(m) => setField("gstMode", m)}
-              />
-            );
+            // the bill sits at the BOTTOM of the right column (aligned with the taller column's bottom)
             return (
               <>
-                <div className="scol">{c1.map(card)}</div>
+                <div className="scol">{c1.map(renderCard)}</div>
                 <div className="scol">
-                  {c2.map(card)}
-                  {bill}
+                  {c2.map(renderCard)}
+                  {billNode}
                 </div>
               </>
             );
           })()}
         </div>
+          </>
+        )}
         <button className="add-sec" onClick={onAddSec}>
           + Add wood type
         </button>
@@ -888,6 +899,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         <button className="btn go" onClick={onPrint}>
           Print
         </button>
+        {feat.simpleQuote && (
+          <button className={"btn" + (freeMode ? " primary" : "")} onClick={toggleFree} title="Drag & resize the boxes freely on the A4 page">
+            {freeMode ? "✓ Free arrange" : "Free arrange"}
+          </button>
+        )}
         {feat.invoices && !isInv && (
           <button className="btn" onClick={onConvert}>
             Convert to Invoice
@@ -912,84 +928,17 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
 
       {/* App A: accept payment on a created quotation → final price + cash/UPI → Daybook */}
       {feat.acceptPayment && !isInv && (
-        <div className="panel-card daybook-entry no-print" style={{ marginTop: 12 }}>
-          <label className="modal-field">
-            <span>Final price ₹ <small style={{ color: "var(--ink-faint)" }}>(quote ₹{inr(totals.grand)})</small></span>
-            <input
-              type="number"
-              inputMode="decimal"
-              placeholder={inr(totals.grand)}
-              value={doc.finalPrice != null ? doc.finalPrice : ""}
-              onChange={(e) => onFinalPrice(e.target.value)}
-            />
-          </label>
-          <div style={{ flexBasis: "100%", fontFamily: "var(--mono)", fontSize: 13 }}>
-            Received ₹{inr(paidSoFar)} of ₹{inr(finalPrice)} ·{" "}
-            {settled ? (
-              <b style={{ color: "var(--green)" }}>Settled ✓</b>
-            ) : (
-              <b style={{ color: "var(--danger)" }}>Balance ₹{inr(payBalance)}</b>
-            )}
-          </div>
-          {!settled && (
-            <>
-              <label className="modal-field">
-                <span>Cash now</span>
-                <input type="number" inputMode="decimal" placeholder="0" value={payCash} onChange={(e) => setPayCash(e.target.value)} />
-              </label>
-              <label className="modal-field">
-                <span>UPI now</span>
-                <input type="number" inputMode="decimal" placeholder="0" value={payUpi} onChange={(e) => setPayUpi(e.target.value)} />
-              </label>
-              {+payUpi > 0 && (
-                <div className="modal-field acct-field">
-                  <span>UPI to which account?</span>
-                  <AccountPicker value={payUpiAcct} onChange={setPayUpiAcct} accounts={upiAccts} />
-                </div>
-              )}
-              <button className="btn sm" type="button" onClick={() => { setPayCash(String(payBalance)); setPayUpi(""); }}>
-                Full → Cash
-              </button>
-              <button className="btn sm" type="button" onClick={() => { setPayUpi(String(payBalance)); setPayCash(""); }}>
-                Full → UPI
-              </button>
-              <button className="btn primary" type="button" onClick={onAcceptPayment}>
-                Record payment
-              </button>
-            </>
-          )}
-          {paidSoFar > 0 && (
-            <div style={{ flexBasis: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, color: "var(--ink-faint)", fontFamily: "var(--mono)" }}>
-                Paid so far: ₹{inr(doc.payCash || 0)} cash + ₹{inr(doc.payUpi || 0)} UPI
-              </span>
-              <button className="btn warn sm" type="button" onClick={onClearPayments}>
-                Clear payments
-              </button>
-            </div>
-          )}
-          {statements.length > 0 && (
-            <div style={{ flexBasis: "100%" }}>
-              <div className="pbd-lbl" style={{ marginTop: 4 }}>
-                Statements · {statements.length} <small style={{ color: "var(--ink-faint)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>— only for us</small>
-              </div>
-              {statements.map((s) => (
-                <div className="stmt" key={s.id}>
-                  <div className={"stmt-ic " + (s.mode === "upi" ? "upi" : "cash")}>{s.mode === "upi" ? "UPI" : "₹"}</div>
-                  <div className="stmt-main">
-                    <div className="stmt-to">{s.mode === "upi" ? s.account || "UPI account" : "Cash in hand"}</div>
-                    <div className="stmt-sub">
-                      {s.date}
-                      {hhmm(s.at) ? " · " + hhmm(s.at) : ""}
-                      {s.by ? " · by " + userName(s.by) : ""}
-                    </div>
-                  </div>
-                  <div className="stmt-amt">+₹{inr(s.amount)}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <PaymentBlock
+          doc={doc}
+          quoteGrand={totals.grand}
+          expenses={expenses}
+          upiAccts={upiAccts}
+          by={user?.id || "unknown"}
+          onFinalPrice={onFinalPrice}
+          setAggregates={setPayAggregates}
+          onClearAll={onClearPayments}
+          reload={loadExpenses}
+        />
       )}
 
       {/* internal note — only for us, never printed */}

@@ -183,3 +183,25 @@ export async function declineHandover(id: string): Promise<void> {
   cloudDelete("sessions", id);
   trySync();
 }
+
+/** Delete a confirmed session record AND every entry it archived (its (prevClose, thisClose] window —
+ *  the same set the history card lists). Owner-only. Carry-forward on later sessions is a stored
+ *  snapshot and is left as-is. */
+export async function deleteSession(id: string): Promise<void> {
+  const asc = (await confirmedSessions()).sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
+  const i = asc.findIndex((s) => s.id === id);
+  if (i < 0) return;
+  const from = i > 0 ? asc[i - 1].closedAt || "" : "";
+  const to = asc[i].closedAt || "";
+  const entries = (await allExpenses()).filter((e) => {
+    const at = e.createdAt || "";
+    return !!at && at <= to && (!from || at > from);
+  });
+  for (const e of entries) {
+    await delRec("expenses", e.id);
+    cloudDelete("expenses", e.id);
+  }
+  await delRec("sessions", id);
+  cloudDelete("sessions", id);
+  trySync();
+}

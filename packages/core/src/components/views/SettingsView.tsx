@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupa, pullFromCloud, testConnection, trySync } from "@/lib/cloud";
 import { exportBackup, importBackup } from "@/lib/backup";
+import { purgeDoc, restoreDoc, trashedDocs } from "@/lib/trash";
+import { docStore } from "@/lib/doc";
+import type { Doc } from "@/lib/types";
 import { canInstall, promptInstall } from "@/lib/pwa";
 import { getFeatures } from "@/lib/features";
 import { autoPostEnabled, setAutoPost } from "@/lib/ledger-autopost";
@@ -13,14 +16,37 @@ export default function SettingsView() {
   const router = useRouter();
   const [cloud, setCloud] = useState("Checking cloud…");
   const [autoPost, setAutoPostUI] = useState(false);
+  const [trash, setTrash] = useState<Doc[]>([]);
   const ledgerOn = getFeatures().ledger;
 
+  const loadTrash = () => trashedDocs().then(setTrash);
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
     setCloud(getSupa().url && getSupa().key ? "Connected to cloud" : "Local only (no cloud configured)");
     /* eslint-enable react-hooks/set-state-in-effect */
     autoPostEnabled().then(setAutoPostUI);
+    loadTrash();
   }, []);
+
+  async function onRestore(d: Doc) {
+    await restoreDoc(docStore(d), d.id);
+    loadTrash();
+    bumpData();
+    toast(d.number + " restored");
+  }
+  async function onPurge(d: Doc) {
+    const ok = await confirmDialog({
+      title: "Delete " + d.number + " forever?",
+      message: "This permanently removes it and its payments. This cannot be undone.",
+      confirmLabel: "Delete forever",
+      danger: true,
+    });
+    if (!ok) return;
+    await purgeDoc(docStore(d), d.id);
+    loadTrash();
+    bumpData();
+    toast(d.number + " permanently deleted");
+  }
 
   async function toggleAutoPost(v: boolean) {
     setAutoPostUI(v);
@@ -128,6 +154,33 @@ export default function SettingsView() {
           <button className="btn sm" onClick={exportBackup}>Export backup (.json)</button>
           <button className="btn sm" onClick={importFile}>Import backup</button>
         </div>
+      </div>
+
+      <div className="setbox">
+        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Recycle bin</div>
+        <p className="note">
+          Deleted quotations &amp; invoices are kept here — never really removed. Restore anytime, or delete forever.
+        </p>
+        {trash.length === 0 ? (
+          <p className="note" style={{ opacity: 0.6, marginTop: 4 }}>Nothing deleted.</p>
+        ) : (
+          trash.map((d) => (
+            <div className="exprow" key={d.id}>
+              <span className="expnote">
+                {d.number} — {d.customerName || "—"}
+                <small>
+                  {d.kind === "invoice" ? "Invoice" : "Quotation"}
+                  {d.deletedAt
+                    ? " · deleted " +
+                      new Date(d.deletedAt).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+                    : ""}
+                </small>
+              </span>
+              <button className="btn sm" onClick={() => onRestore(d)}>Restore</button>
+              <button className="btn warn sm" onClick={() => onPurge(d)}>Delete forever</button>
+            </div>
+          ))
+        )}
       </div>
 
       <div className="setbox">

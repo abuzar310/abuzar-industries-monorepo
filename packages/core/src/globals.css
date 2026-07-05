@@ -313,6 +313,20 @@ body{
 #sheet.sq .mh-date input{text-align:right}
 #sheet.sq .cust-block .f{padding:3px 20px}
 #sheet.sq .cust-block label{margin-bottom:0}
+/* Cut Size quote: LIGHT box title bar (soft, like the footer) — not the bold dark walnut bar.
+   The wood name reads in soft walnut; Total Pcs muted like the "Total CFT" label. */
+#sheet.sq .sec-head{background:var(--panel); color:var(--ink-soft); border-bottom:1px solid var(--line-2)}
+#sheet.sq .sec-name{color:var(--walnut)}
+#sheet.sq .sec-name:focus{outline-color:var(--ochre)}
+#sheet.sq .grain i{background:var(--line-2); opacity:1}
+#sheet.sq .sec-pcs{color:var(--ink-faint)}
+#sheet.sq .sec-pcs b{color:var(--ink)}
+#sheet.sq .sec-head .mode-seg{border-color:var(--line-2); background:var(--panel-2)}
+#sheet.sq .sec-head .mode-seg button{color:var(--ink-soft)}
+#sheet.sq .sec-head .mode-seg button:hover{color:var(--ink)}
+#sheet.sq .sec-head .mode-seg button.on{background:var(--walnut); color:#F4E9D8}
+#sheet.sq .x-sec{background:var(--panel-2); border-color:var(--line-2); color:var(--ink-soft)}
+#sheet.sq .x-sec:hover{background:var(--danger); border-color:var(--danger); color:#fff}
 /* party values in bold so they read clearly */
 #sheet.sq .cust-block input{font-weight:700}
 #sheet.sq #sections{margin-top:6px}
@@ -328,11 +342,17 @@ body{
    with few rows stays short instead of ballooning. The bill sits at the bottom of the right column.
    Verified in headless Chrome print. Height is set inline (285mm print / px for the PDF clone) by the
    print fit() and the PDF export so they match. */
-/* rows are a fixed, COMPACT height (--sqrow ≈ 0.85cm, like the legacy print) — static on screen AND
-   print, so ~26 rows fit in one column (≈52 per A4). When a quote overruns, thin a touch then flow
-   onto the next page (a4multi) — never balloon the rows. */
-#sheet.sq{--sqrow:0.85cm}
-#sheet.sq #sections .row.cf{height:var(--sqrow)}
+/* Row height is COMPACT (--sqrow ≈ 0.72cm → ~30 rows/column) ONLY when printing / exporting (the
+   a4fill & a4multi print modes, the @page render, and the free-arrange WYSIWYG canvas). The plain
+   EDITING screen gets natural, tap-comfortable rows so data entry never looks collapsed. */
+#sheet.sq{--sqrow:0.72cm}
+#sheet.sq.a4fill #sections .row.cf,
+#sheet.sq.a4multi #sections .row.cf{height:var(--sqrow)}
+#sheet.sq:not(.a4fill):not(.a4multi) #sections .row.cf .dim{padding:9px 2px}
+@media print{
+  #sheet.sq #sections .row.cf{height:var(--sqrow)}
+  #sheet.sq #sections .row.cf .dim{padding:1px}
+}
 #sheet.sq.a4fill{display:flex; flex-direction:column}
 #sheet.sq.a4fill .mast{flex:0 0 auto}
 /* box flow: EXACTLY two columns (structured in Editor.tsx as two .scol stacks) — boxes fill the
@@ -378,6 +398,70 @@ body{
   #sheet.sq .sq-head .co-name{grid-column:1 / -1; grid-row:1; font-size:20px}
   #sheet.sq .mh-no{grid-column:1; grid-row:2}
   #sheet.sq .mh-date{grid-column:2; grid-row:2}
+}
+/* ===== Free-arrange A4 canvas (Cut Size quote): drag + resize the wood boxes and the grand total.
+   The canvas is the printable A4 area (748×1077px ≈ 198×285mm @96dpi); on screen it's scaled to fit,
+   and it prints 1:1 inside the @page 6mm margins. ===== */
+#sheet.sq.free{background:transparent; box-shadow:none; border:none; padding:0}
+.qcanvas-wrap{position:relative; width:100%; overflow:visible}
+.qcanvas{position:relative; transform-origin:top left; background:#fff;
+  border:1.5px dashed var(--line-2); box-shadow:var(--shadow-card); border-radius:2px;
+  /* subtle Excel-like grid: the empty page reads as a canvas and boxes align to it */
+  background-image:linear-gradient(rgba(176,124,40,.06) 1px, transparent 1px),
+                   linear-gradient(90deg, rgba(176,124,40,.06) 1px, transparent 1px);
+  background-size:32px 32px}
+.qc-mast{position:absolute; inset:0 0 auto 0; z-index:2; background:var(--panel-2); border-bottom:1px solid var(--line-2)}
+.qc-mast .sq-head{padding:8px 20px 4px}
+.qc-mast .cust-block .f{padding:3px 20px}
+/* boxes AUTO-FIT their content (never clip); the user drags to move + resizes width from the right edge */
+.qc-box{box-sizing:border-box; background:#fff; border-radius:var(--radius-md); overflow:visible;
+  box-shadow:0 1px 4px rgba(51,36,26,.10); outline:1.5px solid transparent; outline-offset:1px; transition:outline-color var(--t-fast), box-shadow var(--t-fast)}
+.qc-box:hover{outline-color:rgba(176,124,40,.55); box-shadow:0 4px 16px rgba(51,36,26,.16)}
+.qc-boxinner{width:100%; border-radius:var(--radius-md); overflow:hidden}
+.qc-box .section, .qc-bill .totals{margin:0; box-shadow:none}
+.qcanvas .row.cf{height:var(--sqrow)}
+/* compact the table + footer so a box's content fits a ~360px canvas column with no clip */
+.qcanvas .thead.cf, .qcanvas .row.cf{grid-template-columns:22px 54px 1fr 1fr 1fr 1fr 15px; gap:3px}
+.qcanvas .row.cf .cft{margin-right:2px; padding-right:5px}
+.qcanvas .thead.cf:not(.pcstab) > span:nth-child(2){margin-right:2px; padding-right:5px}
+.qcanvas .sec-foot{padding:6px 9px}
+.qcanvas .sec-calc.oneline{gap:10px}
+.qcanvas .sec-calc.oneline .sc:first-child{min-width:56px; padding-left:14px}
+.qcanvas .sec-foot .sc i{font-size:8px}
+.qcanvas .sec-foot .sc b, .qcanvas .sec-foot .sc input{font-size:13px}
+/* wood box: the drag grip replaces the decorative header icon, top-left inside the dark header.
+   The dark header is also the natural "title bar" — keep it uncluttered: the mode toggle + delete
+   appear on hover so the resting box reads clean (name · total pcs only). */
+.qcanvas .sec-head .grain{display:none}
+.qcanvas .sec-head .mode-seg, .qcanvas .sec-head .x-sec, .qcanvas .x-row{opacity:0; transition:opacity var(--t-fast)}
+.qc-box:hover .sec-head .mode-seg, .qc-box:hover .sec-head .x-sec, .qc-box:hover .x-row{opacity:1}
+/* make room in the header for the drag button so it never sits on top of the wood name */
+.qcanvas .sec-head{padding-left:50px}
+/* clear, obvious DRAG button — a solid walnut chip on the light header, always visible */
+.qc-drag{position:absolute; top:8px; left:10px; z-index:6; display:flex; align-items:center; justify-content:center;
+  width:32px; height:32px; border-radius:9px; cursor:grab; user-select:none; touch-action:none;
+  background:var(--walnut); color:#F4E9D8; box-shadow:0 2px 5px rgba(0,0,0,.22); transition:background var(--t-fast), transform var(--t-fast)}
+.qc-drag span{font-size:17px; line-height:1}
+.qc-drag:hover{background:var(--ochre-deep); transform:scale(1.06)}
+.qc-drag:active{cursor:grabbing; transform:scale(.96)}
+/* grand-total box has no header → its drag button is a labelled tab just above the top-left corner */
+.qc-bill .qc-drag{top:-14px; left:8px; width:auto; height:24px; padding:0 11px; border-radius:12px}
+.qc-bill .qc-drag::after{content:'MOVE'; font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.12em; margin-left:5px}
+/* right-edge width-resize grip (only shows the box is resizable; the whole right edge is the handle) */
+.qc-box::after{content:''; position:absolute; top:50%; right:-1px; transform:translateY(-50%);
+  width:4px; height:34px; border-radius:3px; background:var(--line-2); opacity:0; transition:opacity var(--t-fast); pointer-events:none; z-index:3}
+.qc-box:hover::after{opacity:1; background:var(--ochre)}
+/* print: exact printable A4 — no grid, no dashed frame, no handles, no editing chrome */
+@media print{
+  #sheet.sq.free{padding:0}
+  .qcanvas-wrap{height:auto !important; overflow:visible}
+  .qcanvas{transform:none !important; border:none; box-shadow:none; background:#fff; background-image:none;
+    width:748px !important; height:1077px !important}
+  .qc-mast{background:#fff}
+  .qc-drag, .qc-box::after{display:none !important}
+  .qcanvas .sec-head{padding-left:10px}  /* no drag button in print → reclaim the name's left space */
+  .qc-box{box-shadow:none; outline:none}
+  .qc-boxinner{overflow:visible}
 }
 .add-sec{
   margin-top:18px; width:100%; font-family:var(--disp); letter-spacing:.1em;
@@ -909,6 +993,9 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   #sections{margin-top:4px; gap:6px 10px; grid-template-columns:1fr 1fr}
   #sections .section{margin-top:0; break-inside:avoid; page-break-inside:avoid}
   .sec-head{padding:5px 10px; background:var(--walnut) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact}
+  /* Cut Size quote prints the LIGHT title bar too */
+  #sheet.sq .sec-head{background:var(--panel) !important; color:var(--ink-soft)}
+  #sheet.sq .sec-name{color:var(--walnut)}
   .sec-name{font-size:15px}
   .rate-box{font-size:9px}
   .rate-box input{font-size:11px}
@@ -1228,3 +1315,27 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .ses-trow > span{font-size:13px; color:var(--ink-soft)}
 .ses-trow small{display:block; font-family:var(--mono); font-size:10px; color:var(--ink-faint); margin-top:1px}
 .ses-trow b{font-family:var(--mono); font-weight:700; font-size:15px; font-variant-numeric:tabular-nums}
+
+/* Quote payments — Excel-like advance/payment ledger (autosaves per line) */
+.paybook{border:1px solid var(--line-2); border-radius:var(--radius-md); overflow-x:auto; background:var(--panel)}
+.pb-r{display:grid; grid-template-columns:minmax(92px,1fr) 82px minmax(88px,1.2fr) minmax(110px,1.4fr) 28px; gap:8px; align-items:center; padding:9px 12px; border-bottom:1px solid var(--line); min-width:470px}
+.pb-r:last-child{border-bottom:none}
+.pb-h{background:var(--panel-2); font-family:var(--disp); text-transform:uppercase; letter-spacing:.06em; font-size:9px; font-weight:700; color:var(--ink-faint)}
+.pb-amt{font-family:var(--mono); font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap}
+.pb-mode{font-family:var(--mono); font-size:12px; color:var(--ink-soft)}
+.pb-acct{font-family:var(--mono); font-size:12px; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+.pb-when{font-family:var(--mono); font-size:11px; color:var(--ink-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+.pb-x{border:none; background:transparent; color:var(--line-2); cursor:pointer; font-size:18px; line-height:1; padding:0; transition:color var(--t-fast); justify-self:center}
+.pb-x:hover{color:var(--danger)}
+.pb-add{background:rgba(176,124,40,.05)}
+.pb-in,.pb-sel{width:100%; font-family:var(--mono); font-size:13px; padding:7px 8px; border:1px solid var(--line-2); border-radius:7px; background:#fff; color:var(--ink); min-width:0}
+.pb-in:focus,.pb-sel:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}
+.pb-sel{cursor:pointer}
+.pb-fill{border:1px dashed var(--line-2); background:transparent; color:var(--ochre-deep); font-family:var(--mono); font-size:11px; padding:6px 8px; border-radius:7px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.pb-fill:hover{border-color:var(--ochre); background:rgba(176,124,40,.07)}
+.pb-plus{border:none; background:var(--ochre-deep); color:#fff; width:28px; height:28px; border-radius:7px; font-size:18px; line-height:1; cursor:pointer; font-weight:700; justify-self:center}
+.pb-plus:disabled{opacity:.4; cursor:default}
+.pb-foot{background:var(--panel-2)}
+.pb-bal{font-family:var(--mono); font-weight:700; font-size:13px; text-align:right}
+.pb-bal.due{color:var(--danger)} .pb-bal.ok{color:var(--green)}
+.paybook .acct-field{min-width:0}

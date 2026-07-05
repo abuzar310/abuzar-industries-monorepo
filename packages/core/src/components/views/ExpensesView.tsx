@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { allRec, delRec } from "@/lib/db";
 import { cloudDelete } from "@/lib/cloud";
 import { inr } from "@/lib/calc";
-import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, ENTRY_TYPES, isInflow, isUpi, requestHandover, typeLabel, upiAccounts } from "@/lib/expenses";
+import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, ENTRY_TYPES, isInflow, isUpi, requestHandover, typeLabel, upiAccounts } from "@/lib/expenses";
 import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
 import { isIOS, isStandalone } from "@/lib/pwa";
 import { USERS } from "@/lib/local-auth";
@@ -17,7 +17,7 @@ const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id;
 
 export default function ExpensesView() {
   const { dataVersion, user } = useApp();
-  const isOwner = user?.role === "owner"; // Owner: clean read-only view
+  const isOwner = user?.role === "owner"; // Owner: reviews + can delete entries; Manager: enters only, cannot delete
   const [all, setAll] = useState<Expense[]>([]);
   const [sessions, setSessions] = useState<DaybookSession[]>([]);
   const [quotes, setQuotes] = useState<Doc[]>([]); // for the customer name + phone on each statement
@@ -164,6 +164,21 @@ export default function ExpensesView() {
     load();
     bumpData();
     toast("Handover confirmed · ₹" + inr(s.given) + " received");
+  }
+
+  async function onDeleteSession(s: DaybookSession) {
+    const ok = await confirmDialog({
+      title: "Delete this session record?",
+      message: `${s.date} — removes the handover record and all ${s.count} ${s.count === 1 ? "entry" : "entries"} archived in it. This can't be undone.`,
+      confirmLabel: "Delete session",
+      danger: true,
+    });
+    if (!ok) return;
+    await deleteSession(s.id);
+    if (openSes === s.id) setOpenSes(null);
+    load();
+    bumpData();
+    toast("Session record deleted");
   }
 
   async function onDecline(s: DaybookSession) {
@@ -345,7 +360,7 @@ export default function ExpensesView() {
               <span className={"expamt " + (isInflow(e.type) ? "in" : "out")}>
                 {isInflow(e.type) ? "+" : "−"}₹ {inr(e.amount)}
               </span>
-              {!isOwner && (
+              {isOwner && (
                 <button className="x-row" title="Delete" onClick={() => remove(e)}>
                   ×
                 </button>
@@ -393,7 +408,7 @@ export default function ExpensesView() {
                     </small>
                   </span>
                   <span className="expamt in">+₹ {inr(e.amount)}</span>
-                  {!isOwner && !e.sessionId && (
+                  {isOwner && !e.sessionId && (
                     <button className="x-row" title="Delete" onClick={() => remove(e)}>
                       ×
                     </button>
@@ -442,8 +457,20 @@ export default function ExpensesView() {
                     {s.date} · Given ₹{inr(s.given)}
                     {carried > 0 ? " · ₹" + inr(carried) + " carried" : ""}
                   </span>
-                  <span style={{ fontFamily: "var(--mono)", fontSize: 12, letterSpacing: 0, textTransform: "none" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "var(--mono)", fontSize: 12, letterSpacing: 0, textTransform: "none" }}>
                     In ₹{inr(s.totalIn)} · Spent ₹{inr(s.spent)} · {s.count} entries · by {userName(s.by)}
+                    {isOwner && (
+                      <button
+                        className="x-row"
+                        title="Delete this day's record"
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          onDeleteSession(s);
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
                   </span>
                 </div>
                 {open && (
@@ -473,6 +500,11 @@ export default function ExpensesView() {
                         <span className={"expamt " + (isInflow(e.type) ? "in" : "out")}>
                           {isInflow(e.type) ? "+" : "−"}₹ {inr(e.amount)}
                         </span>
+                        {isOwner && (
+                          <button className="x-row" title="Delete" onClick={() => remove(e)}>
+                            ×
+                          </button>
+                        )}
                       </div>
                     ))}
                   </>

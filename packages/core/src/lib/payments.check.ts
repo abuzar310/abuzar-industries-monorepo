@@ -96,6 +96,17 @@ export function demoReconcile() {
   console.log(`payments.check reconcile OK (${n} assertions)`);
 }
 
+/** Trashed (soft-deleted) quotes must not appear in the Statements ledger. */
+export function demoTrash() {
+  const live = Q("qa", "Live", "SF-A", 1000, 0, 0, 0);
+  const gone = Q("qb", "Gone", "SF-B", 1000, 0, 0, 0);
+  (gone as unknown as { deletedAt?: string }).deletedAt = "2026-07-05T00:00:00Z";
+  const { quotes: rows } = quoteLedger([live, gone], []);
+  ok(rows.length === 1 && rows[0].number === "SF-A", "a trashed quote is excluded from the ledger");
+  console.log(`payments.check trash OK (${n} assertions)`);
+}
+
 demo();
 demoQuotes();
 demoReconcile();
+demoTrash();
