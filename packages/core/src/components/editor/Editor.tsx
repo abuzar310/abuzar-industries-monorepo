@@ -934,6 +934,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
           expenses={expenses}
           upiAccts={upiAccts}
           by={user?.id || "unknown"}
+          isOwner={user?.role === "owner"}
           onFinalPrice={onFinalPrice}
           setAggregates={setPayAggregates}
           onClearAll={onClearPayments}

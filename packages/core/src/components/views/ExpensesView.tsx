@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { allRec, delRec } from "@/lib/db";
 import { cloudDelete } from "@/lib/cloud";
 import { inr } from "@/lib/calc";
-import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, ENTRY_TYPES, isInflow, isUpi, requestHandover, typeLabel, upiAccounts } from "@/lib/expenses";
+import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, ENTRY_TYPES, inDaybook, isInflow, isUpi, requestHandover, typeLabel, upiAccounts } from "@/lib/expenses";
 import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
 import { isIOS, isStandalone } from "@/lib/pwa";
 import { USERS } from "@/lib/local-auth";
@@ -48,7 +48,7 @@ export default function ExpensesView() {
   // quote id → { name, phone } so each statement can show the customer + their phone
   const partyBySource = new Map(quotes.map((q) => [q.id, { name: q.customerName || "", phone: q.phone || "" }]));
   // cash daybook (current open session) = non-UPI entries not yet archived
-  const list = all.filter((e) => !e.sessionId && !isUpi(e));
+  const list = all.filter((e) => !e.sessionId && inDaybook(e));
   // "Statements" = every payment a customer made — all UPI receipts + cash accepted against a quote.
   // A running log of who took what, kept even after cash is handed over (UPI never enters handover).
   const recvList = all.filter((e) => isUpi(e) || (e.type === "sale" && e.mode === "cash" && !!e.sourceId));

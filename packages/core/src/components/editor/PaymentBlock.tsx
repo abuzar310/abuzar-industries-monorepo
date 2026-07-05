@@ -11,10 +11,15 @@ import { bumpData, toast } from "@/store/app-store";
 import type { Doc, Expense } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
-const when = (iso: string) => {
+const hhmm = (iso: string) => {
   if (!iso) return "";
   const d = new Date(iso);
-  return isNaN(+d) ? "" : d.toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return isNaN(+d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
+// html date input value "yyyy-mm-dd" → the app's "dd-mm-yy"
+const toDmy = (v: string) => {
+  const [y, m, d] = (v || "").split("-");
+  return d && m && y ? `${d}-${m}-${y.slice(2)}` : "";
 };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -25,6 +30,8 @@ interface Props {
   expenses: Expense[];
   upiAccts: string[];
   by: string;
+  /** current user is the owner — their cash never enters the manager's daybook */
+  isOwner: boolean;
   onFinalPrice: (v: string) => void;
   /** persist new cash/UPI running totals onto the doc */
   setAggregates: (payCash: number, payUpi: number) => void;
@@ -32,11 +39,12 @@ interface Props {
   reload: () => void;
 }
 
-export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, onFinalPrice, setAggregates, onClearAll, reload }: Props) {
+export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, isOwner, onFinalPrice, setAggregates, onClearAll, reload }: Props) {
   const [amt, setAmt] = useState("");
-  const [mode, setMode] = useState<"cash" | "upi">("cash");
+  const [mode, setMode] = useState<"cash" | "owner" | "upi">("cash");
   const [acct, setAcct] = useState("");
   const [note, setNote] = useState(""); // free-text note on a cash payment (shown in Statements)
+  const [payDate, setPayDate] = useState(""); // optional: when the payment actually happened (yyyy-mm-dd)
 
   const finalPrice = doc.finalPrice != null && doc.finalPrice > 0 ? doc.finalPrice : quoteGrand;
   const lines = statementsForQuote(doc, expenses); // this quote's payments, newest first (incl. legacy)
@@ -48,23 +56,31 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return;
     if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
+    const isCash = mode !== "upi";
+    // cash goes to owner (out of the manager's daybook) if it's the "Cash → Owner" mode, or the owner recorded it
+    const toOwner = isCash && (mode === "owner" || isOwner);
     await addExpense({
       type: "sale",
       amount: a,
-      mode,
+      mode: isCash ? "cash" : "upi",
       account: mode === "upi" ? acct.trim() : "",
+      toOwner,
       note: (doc.customerName || "Walk-in") + " · " + doc.number,
-      label: mode === "cash" ? note.trim() : "", // custom cash note → shows on the statement
+      label: isCash ? note.trim() : "", // custom cash note → shows on the statement
+      date: payDate ? toDmy(payDate) : undefined, // optional custom date; else today
       enteredBy: by,
       sourceId: doc.id,
     });
-    setAggregates(r2((doc.payCash || 0) + (mode === "cash" ? a : 0)), r2((doc.payUpi || 0) + (mode === "upi" ? a : 0)));
+    setAggregates(r2((doc.payCash || 0) + (isCash ? a : 0)), r2((doc.payUpi || 0) + (mode === "upi" ? a : 0)));
     setAmt("");
     setAcct("");
     setNote("");
+    setPayDate("");
     reload();
     bumpData();
-    toast("₹" + inr(a) + " recorded" + (mode === "upi" ? " · " + acct.trim() : " · cash → Daybook"));
+    toast(
+      "₹" + inr(a) + " recorded" + (mode === "upi" ? " · " + acct.trim() : toOwner ? " · to owner" : " · cash → Daybook"),
+    );
   }
 
   async function delLine(l: PartyStatement) {
@@ -105,9 +121,11 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
         {lines.map((l) => (
           <div className="pb-r" key={l.id}>
             <span className="pb-amt">₹ {inr(l.amount)}</span>
-            <span className="pb-mode">{l.mode === "upi" ? "UPI" : "Cash"}</span>
+            <span className="pb-mode">{l.mode === "upi" ? "UPI" : l.toOwner ? "→ Owner" : "Cash"}</span>
             <span className="pb-acct">{l.mode === "upi" ? l.account || "—" : l.note || "—"}</span>
-            <span className="pb-when">{l.synthetic ? "from quote record" : when(l.at) + " · " + userName(l.by)}</span>
+            <span className="pb-when">
+              {l.synthetic ? "from quote record" : l.date + (hhmm(l.at) ? " " + hhmm(l.at) : "") + " · " + userName(l.by)}
+            </span>
             {l.synthetic ? (
               <span />
             ) : (
@@ -134,8 +152,9 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
                 }
               }}
             />
-            <select className="pb-sel" value={mode} onChange={(e) => setMode(e.target.value === "upi" ? "upi" : "cash")}>
+            <select className="pb-sel" value={mode} onChange={(e) => setMode(e.target.value as "cash" | "owner" | "upi")}>
               <option value="cash">Cash</option>
+              <option value="owner">Cash → Owner</option>
               <option value="upi">UPI</option>
             </select>
             {mode === "upi" ? (
@@ -155,9 +174,13 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
                 }}
               />
             )}
-            <button className="pb-fill" type="button" title={"Fill balance ₹" + inr(balance)} onClick={() => setAmt(String(balance))}>
-              balance ₹{inr(balance)}
-            </button>
+            <input
+              className="pb-in"
+              type="date"
+              title="When did this payment happen? (optional — defaults to today)"
+              value={payDate}
+              onChange={(e) => setPayDate(e.target.value)}
+            />
             <button className="pb-plus" type="button" title="Add payment" onClick={addLine} disabled={!(+amt > 0)}>
               +
             </button>
@@ -169,7 +192,19 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
           <span className="pb-mode" style={{ gridColumn: "2 / 4", color: "var(--ink-faint)" }}>
             received of ₹{inr(finalPrice)}
           </span>
-          <span className={"pb-bal " + (settled ? "ok" : "due")}>{settled ? "Settled ✓" : "Bal ₹" + inr(balance)}</span>
+          {settled ? (
+            <span className="pb-bal ok">Settled ✓</span>
+          ) : (
+            <button
+              className="pb-bal due"
+              type="button"
+              title="Tap to fill this balance into the amount"
+              style={{ border: "none", background: "transparent", cursor: "pointer" }}
+              onClick={() => setAmt(String(balance))}
+            >
+              Bal ₹{inr(balance)}
+            </button>
+          )}
           {received > 0 ? (
             <button className="pb-x" title="Clear all payments" onClick={onClearAll}>
               ⌫

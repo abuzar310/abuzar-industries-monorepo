@@ -161,6 +161,9 @@ export interface Expense {
   note?: string;
   /** UPI recipient / account this money went to (only for mode "upi"); "" for cash. */
   account?: string;
+  /** cash that went straight to the owner (owner recorded it, or "Cash → Owner"): kept OUT of the
+   *  manager's cash daybook, but still a recorded payment. */
+  toOwner?: boolean;
   /** local user id who entered it */
   enteredBy: string;
   /** the quote/invoice id this entry was auto-created from (for cascade delete). */

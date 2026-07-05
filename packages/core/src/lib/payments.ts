@@ -17,6 +17,8 @@ export interface PartyStatement {
   quoteNo: string;
   /** free-text note on the payment (e.g. a cash note) — stored on the expense's label. */
   note?: string;
+  /** cash that went straight to the owner (not in the manager's daybook). */
+  toOwner?: boolean;
   /** derived from the quote's own payCash/payUpi (legacy payment never itemised as its own expense). */
   synthetic?: boolean;
 }
@@ -32,6 +34,7 @@ const mkStatement = (e: Expense, quoteNo: string): PartyStatement => ({
   by: e.enteredBy,
   quoteNo,
   note: e.label || "",
+  toOwner: !!e.toOwner,
 });
 
 /** Surface any paid amount recorded on the quote itself (payCash/payUpi) that was never written

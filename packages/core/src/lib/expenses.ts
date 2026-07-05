@@ -15,6 +15,8 @@ export const typeLabel = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t
 export const isInflow = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t)?.flow === "in";
 /** UPI money-in: kept OUT of the cash daybook (Manager only owes cash) and shown in its own section. */
 export const isUpi = (e: Expense) => isInflow(e.type) && e.mode === "upi";
+/** Does this entry belong in the manager's cash daybook? Excludes UPI and cash sent straight to owner. */
+export const inDaybook = (e: Expense) => !isUpi(e) && !e.toOwner;
 
 export interface DayTotals {
   cashIn: number;
@@ -52,6 +54,7 @@ export async function addExpense(fields: {
   note?: string;
   label?: string;
   account?: string;
+  toOwner?: boolean;
   enteredBy: string;
   date?: string;
   sourceId?: string;
@@ -66,6 +69,7 @@ export async function addExpense(fields: {
     amount: r2(fields.amount),
     note: fields.note || "",
     account: mode === "upi" ? (fields.account || "").trim() : "",
+    toOwner: mode === "cash" ? !!fields.toOwner : false,
     enteredBy: fields.enteredBy,
     sourceId: fields.sourceId,
     createdAt: nowIso(),
@@ -128,9 +132,10 @@ export async function requestHandover(by: string, given?: number): Promise<Daybo
     return !!at && at <= now && (!prevClose || at > prevClose);
   });
   const opening = await openingCarry();
-  if (!win.length && opening <= 0) return null;
-  const wt = dayTotals(win); // cash + UPI (for the session summary)
-  const ct = dayTotals(win.filter((e) => !isUpi(e))); // cash only (drives the handover)
+  const cashSide = win.filter(inDaybook); // manager's cash-in + spends (excludes UPI + cash-to-owner)
+  if (!cashSide.length && opening <= 0) return null;
+  const wt = dayTotals(win); // includes UPI (for the upiIn line)
+  const ct = dayTotals(cashSide); // manager's cash only — drives the handover
   const { given: give, carried } = splitHandover(opening, ct.net, given);
   const session: DaybookSession = {
     id: "SES-" + uid(),
@@ -138,12 +143,12 @@ export async function requestHandover(by: string, given?: number): Promise<Daybo
     closedAt: now,
     cashIn: ct.cashIn,
     upiIn: wt.upiIn,
-    totalIn: wt.totalIn,
+    totalIn: r2(ct.cashIn + wt.upiIn), // cash-to-owner is not the manager's money, so it's left out
     spent: ct.spent,
     opening,
     given: give,
     carried,
-    count: win.length,
+    count: cashSide.length,
     by,
     pending: true,
     createdAt: now,
@@ -160,8 +165,8 @@ export async function confirmHandover(id: string, by: string): Promise<boolean> 
   const ses = (await allSessions()).find((s) => s.id === id);
   if (!ses || !ses.pending) return false;
   const now = nowIso();
-  // tag the cash entries that were open at request time; later entries stay open for the next session
-  const openCash = (await openExpenses()).filter((e) => !isUpi(e) && (e.createdAt || "") <= ses.closedAt);
+  // tag the manager's cash entries that were open at request time; later entries stay open for the next session
+  const openCash = (await openExpenses()).filter((e) => inDaybook(e) && (e.createdAt || "") <= ses.closedAt);
   for (const e of openCash) {
     e.sessionId = ses.id;
     e.updatedAt = now;
