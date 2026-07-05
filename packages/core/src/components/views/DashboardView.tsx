@@ -1,14 +1,18 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/db";
-import { computeDoc, inr, pad, todayStr } from "@/lib/calc";
-import { dayTotals } from "@/lib/expenses";
+import { computeDoc, inr } from "@/lib/calc";
 import { partyLedger, quoteBill } from "@/lib/payments";
 import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense, Stock } from "@/lib/types";
 import { StatusBadge } from "./DocList";
+
+const MONTHS: [string, string][] = [
+  ["01", "Jan"], ["02", "Feb"], ["03", "Mar"], ["04", "Apr"], ["05", "May"], ["06", "Jun"],
+  ["07", "Jul"], ["08", "Aug"], ["09", "Sep"], ["10", "Oct"], ["11", "Nov"], ["12", "Dec"],
+];
 
 export default function DashboardView() {
   const { dataVersion, user } = useApp();
@@ -18,6 +22,8 @@ export default function DashboardView() {
   const [stk, setStk] = useState<Stock[]>([]);
   const [exp, setExp] = useState<Expense[]>([]);
   const [custs, setCusts] = useState<Customer[]>([]);
+  const [month, setMonth] = useState(""); // "" = all months
+  const [year, setYear] = useState(""); // "" = all years
 
   useEffect(() => {
     let live = true;
@@ -40,52 +46,62 @@ export default function DashboardView() {
     };
   }, [dataVersion]);
 
-  const today = todayStr();
-  const todayBook = dayTotals(exp.filter((e) => e.date === today));
-
-  const now = new Date();
-  const ym = now.getFullYear() + "-" + pad(now.getMonth() + 1);
   const feat = getFeatures();
-  // This month's sales: created quotes for Cut Size (which has no invoices), invoices for the official app
-  let monthRev = 0;
+
+  // period filter over createdAt (ISO "YYYY-MM-…")
+  const inPeriod = (createdAt?: string) => {
+    const d = createdAt || "";
+    if (year && d.slice(0, 4) !== year) return false;
+    if (month && d.slice(5, 7) !== month) return false;
+    return true;
+  };
+  const years = useMemo(() => {
+    const set = new Set<string>();
+    [...quotes, ...invs].forEach((d) => {
+      const y = (d.createdAt || "").slice(0, 4);
+      if (y) set.add(y);
+    });
+    return [...set].sort((a, b) => b.localeCompare(a));
+  }, [quotes, invs]);
+  const monthName = month ? MONTHS.find((m) => m[0] === month)?.[1] : "";
+  const periodLabel = !month && !year ? "all time" : [monthName, year].filter(Boolean).join(" ");
+
+  // period sales / count / CFT — Cut Size uses created quotes (no invoices); official uses invoices
+  let periodRev = 0;
+  let periodCft = 0;
+  let periodCount = 0;
   if (feat.simpleQuote) {
     quotes.forEach((qd) => {
-      if (qd.status === "Created" && (qd.createdAt || "").slice(0, 7) === ym) monthRev += quoteBill(qd);
+      if (qd.status !== "Created" || qd.deletedAt || !inPeriod(qd.createdAt)) return;
+      periodRev += quoteBill(qd);
+      periodCft += computeDoc(qd).secCft.reduce((s, c) => s + c, 0);
+      periodCount++;
     });
   } else {
     invs.forEach((i) => {
-      if ((i.createdAt || "").slice(0, 7) === ym) monthRev += computeDoc(i).grand;
+      if (i.deletedAt || !inPeriod(i.createdAt)) return;
+      periodRev += computeDoc(i).grand;
+      periodCount++;
     });
   }
-  const follow = quotes.filter((q) => q.status === "Follow-up Pending");
-  const lowStock = stk.filter((s) => (+s.cft || 0) <= 0);
+  periodRev = Math.round(periodRev * 100) / 100;
+  periodCft = Math.round(periodCft * 100) / 100;
 
-  // Cut Size (unofficial): overall outstanding balance + total wood sold, from created quotes
+  // running (not period-scoped) balances
   const ledger = feat.acceptPayment ? partyLedger(quotes, exp, custs) : null;
   const totalOutstanding = ledger ? ledger.totalPending : 0;
   const dueCount = ledger ? ledger.parties.filter((p) => p.balance > 0.5).length : 0;
-  let totalCftSold = 0;
-  if (feat.simpleQuote) {
-    quotes.forEach((qd) => {
-      if (qd.status === "Created") totalCftSold += computeDoc(qd).secCft.reduce((s, c) => s + c, 0);
-    });
-  }
+  const follow = quotes.filter((q) => q.status === "Follow-up Pending" && !q.deletedAt);
+  const lowStock = stk.filter((s) => (+s.cft || 0) <= 0);
 
-  const todayCards = [
-    { k: "Cash In", v: "₹ " + inr(todayBook.cashIn), money: true },
-    { k: "UPI In", v: "₹ " + inr(todayBook.upiIn), money: true },
-    { k: "Spent", v: "₹ " + inr(todayBook.spent), danger: todayBook.spent > 0 },
-    { k: "Net Today", v: "₹ " + inr(todayBook.net), tone: todayBook.net < 0 ? "danger" : "good" },
-  ];
   type Card = { k: string; v: string; money?: boolean; danger?: boolean; sub?: string; onClick?: () => void };
-  const overviewCards: Card[] = [
-    ...(feat.acceptPayment
-      ? [{ k: "Outstanding", v: "₹ " + inr(totalOutstanding), money: true, sub: dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"}` : "all clear", onClick: () => router.push("/payments") }]
-      : []),
-    ...(feat.simpleQuote ? [{ k: "Total CFT Sold", v: totalCftSold.toFixed(2), sub: "cubic feet", onClick: () => router.push("/quotations") }] : []),
-    { k: "This Month Sales", v: "₹ " + inr(monthRev), money: true, sub: ym, onClick: () => router.push(feat.simpleQuote ? "/quotations" : "/invoices") },
-    { k: "Follow-ups", v: String(follow.length), sub: "to chase", onClick: () => router.push("/quotations") },
-    { k: "Low Stock", v: String(lowStock.length), danger: lowStock.length > 0, sub: "wood type(s)", onClick: () => router.push("/stock") },
+  const cards: Card[] = [
+    { k: "Sales", v: "₹ " + inr(periodRev), money: true, sub: periodLabel, onClick: () => router.push(feat.simpleQuote ? "/quotations" : "/invoices") },
+    { k: feat.simpleQuote ? "Quotes" : "Invoices", v: String(periodCount), sub: periodLabel, onClick: () => router.push(feat.simpleQuote ? "/quotations" : "/invoices") },
+    ...(feat.simpleQuote ? [{ k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/quotations") }] : []),
+    ...(feat.acceptPayment ? [{ k: "Outstanding", v: "₹ " + inr(totalOutstanding), money: true, sub: dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"} · overall` : "all clear", onClick: () => router.push("/payments") }] : []),
+    ...(!feat.simpleQuote ? [{ k: "Follow-ups", v: String(follow.length), sub: "to chase", onClick: () => router.push("/quotations") }] : []),
+    ...(!feat.simpleQuote ? [{ k: "Low Stock", v: String(lowStock.length), danger: lowStock.length > 0, sub: "wood type(s)", onClick: () => router.push("/stock") }] : []),
   ];
 
   return (
@@ -94,37 +110,32 @@ export default function DashboardView() {
         Dashboard <small>{user ? `— welcome, ${user.name}` : "— business at a glance"}</small>
       </div>
 
-      <div className="dash-section">
-        Today <span>· {today}</span>
-        <button className="dash-link" onClick={() => router.push("/expenses")}>
-          Open Daybook →
-        </button>
+      <div className="dash-section" style={{ marginTop: 6 }}>
+        Overview <span>· {periodLabel}</span>
       </div>
-      <div className="dash-grid">
-        {todayCards.map((c) => (
-          <div className="stat" key={c.k}>
-            <div className="k">{c.k}</div>
-            <div
-              className={"v" + (c.money ? " money" : "")}
-              style={c.danger ? { color: "var(--danger)" } : c.tone === "good" ? { color: "var(--green)" } : c.tone === "danger" ? { color: "var(--danger)" } : undefined}
-            >
-              {c.v}
-            </div>
-          </div>
-        ))}
+      <div className="stmt-filters" style={{ marginBottom: 6 }}>
+        <select className="paysel" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Filter by month">
+          <option value="">All months</option>
+          {MONTHS.map(([v, l]) => (
+            <option key={v} value={v}>{l}</option>
+          ))}
+        </select>
+        <select className="paysel" value={year} onChange={(e) => setYear(e.target.value)} aria-label="Filter by year">
+          <option value="">All years</option>
+          {years.map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+        {(month || year) && (
+          <button type="button" className="stmt-clear" onClick={() => { setMonth(""); setYear(""); }}>
+            Clear
+          </button>
+        )}
       </div>
 
-      <div className="dash-section" style={{ marginTop: 22 }}>
-        Overview
-      </div>
       <div className="dash-grid">
-        {overviewCards.map((c) => (
-          <div
-            className="stat"
-            key={c.k}
-            onClick={c.onClick}
-            style={{ cursor: "pointer" }}
-          >
+        {cards.map((c) => (
+          <div className="stat" key={c.k} onClick={c.onClick} style={{ cursor: "pointer" }}>
             <div className="k">{c.k}</div>
             <div className={"v" + (c.money ? " money" : "")} style={c.danger ? { color: "var(--danger)" } : undefined}>
               {c.v}
@@ -134,25 +145,27 @@ export default function DashboardView() {
         ))}
       </div>
 
-      <div className="panel-card">
-        <div className="pc-head">Pending Follow-ups</div>
-        {follow.length ? (
-          follow.map((q) => (
-            <div className="lrow" key={q.id} style={{ cursor: "pointer" }} onClick={() => router.push("/editor/" + q.id)}>
-              <span className="id">{q.id}</span>
-              <span className="nm">{q.customerName || "—"}</span>
-              <span className="mut">{q.phone}</span>
-              <span className="mut col-date">{q.date}</span>
-              <span className="col-status">
-                <StatusBadge doc={q} />
-              </span>
-              <span className="amt">₹ {inr(computeDoc(q).grand)}</span>
-            </div>
-          ))
-        ) : (
-          <div className="empty">No pending follow-ups. 🎉</div>
-        )}
-      </div>
+      {!feat.simpleQuote && (
+        <div className="panel-card">
+          <div className="pc-head">Pending Follow-ups</div>
+          {follow.length ? (
+            follow.map((q) => (
+              <div className="lrow" key={q.id} style={{ cursor: "pointer" }} onClick={() => router.push("/editor/" + q.id)}>
+                <span className="id">{q.id}</span>
+                <span className="nm">{q.customerName || "—"}</span>
+                <span className="mut">{q.phone}</span>
+                <span className="mut col-date">{q.date}</span>
+                <span className="col-status">
+                  <StatusBadge doc={q} />
+                </span>
+                <span className="amt">₹ {inr(computeDoc(q).grand)}</span>
+              </div>
+            ))
+          ) : (
+            <div className="empty">No pending follow-ups. 🎉</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
