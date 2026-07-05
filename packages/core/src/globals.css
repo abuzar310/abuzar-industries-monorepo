@@ -1296,6 +1296,10 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   color:var(--ink-faint); padding:11px 14px 5px}
 
 /* Statements tab — responsive filter bar + light quote header */
+/* Receipts form: amount · mode · date on a roomy row */
+.rec-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px}
+@media(max-width:560px){ .rec-grid{grid-template-columns:1fr 1fr} }
+
 .stmt-filters{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:10px}
 .stmt-filters .paysel{flex:0 1 auto}
 .stmt-filters .db-seg.sm{flex:0 0 auto}

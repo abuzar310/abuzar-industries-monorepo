@@ -6,7 +6,7 @@ import { inr } from "@/lib/calc";
 import { quoteLedger } from "@/lib/payments";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
-import type { Doc, Expense } from "@/lib/types";
+import type { Customer, Doc, Expense } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
 const hhmm = (iso: string) => {
@@ -29,15 +29,17 @@ export default function StatementsView() {
   const router = useRouter();
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [custs, setCusts] = useState<Customer[]>([]);
   const [q, setQ] = useState("");
   const [month, setMonth] = useState("");
   const [year, setYear] = useState("");
   const [onlyPaid, setOnlyPaid] = useState(false);
 
   const load = useCallback(() => {
-    Promise.all([allRec<Doc>("quotations"), allRec<Expense>("expenses")]).then(([qs, es]) => {
+    Promise.all([allRec<Doc>("quotations"), allRec<Expense>("expenses"), allRec<Customer>("customers")]).then(([qs, es, cs]) => {
       setQuotes(qs);
       setExpenses(es);
+      setCusts(cs);
     });
   }, []);
   useEffect(() => {
@@ -59,6 +61,18 @@ export default function StatementsView() {
   // summary reflects the active filter, so the numbers always match what's on screen
   const shownReceived = shown.reduce((s, r) => s + r.statements.reduce((t, x) => t + x.amount, 0), 0);
   const shownPayCount = shown.reduce((s, r) => s + r.statements.length, 0);
+  // direct receipts (Receipts tab: a payment credited to a customer, no quote) — respect the same filters
+  const custName = (id?: string) => custs.find((c) => c.id === id)?.name || "—";
+  const receipts = expenses
+    .filter((e) => e.type === "sale" && !!e.custId)
+    .filter((e) => {
+      const { mm, yy } = parts(e.date);
+      if (month && mm !== month) return false;
+      if (year && yy !== year) return false;
+      if (term && !custName(e.custId).toLowerCase().includes(term)) return false;
+      return true;
+    })
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   const filtered = !!(month || year || onlyPaid || term);
   const clearAll = () => {
     setQ("");
@@ -207,6 +221,29 @@ export default function StatementsView() {
             )}
           </div>
         ))
+      )}
+
+      {receipts.length > 0 && (
+        <>
+          <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+            Direct receipts <small>— not tied to a quote · {receipts.length}</small>
+          </div>
+          <div className="panel-card">
+            {receipts.map((e) => (
+              <div className="stmt" key={e.id}>
+                <div className={"stmt-ic " + (e.mode === "upi" ? "upi" : "cash")}>{e.mode === "upi" ? "UPI" : "₹"}</div>
+                <div className="stmt-main">
+                  <div className="stmt-to">{custName(e.custId)}</div>
+                  <div className="stmt-sub">
+                    {e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : "Cash"} · {e.date}
+                    {hhmm(e.createdAt) ? " · " + hhmm(e.createdAt) : ""} · by {userName(e.enteredBy)}
+                  </div>
+                </div>
+                <div className="stmt-amt">+₹{inr(e.amount)}</div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
