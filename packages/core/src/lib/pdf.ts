@@ -35,11 +35,11 @@ export async function generatePdf(sheet: HTMLElement, fileBase: string) {
     const a4h = (width * 297) / 210;
     if (clone.scrollHeight > a4h + 4) clone.classList.add("inv-tight");
   }
-  // quote: lock to one A4 and let the .a4fill flexbox rules stretch the rows to fill it
-  // (same fill as the browser print — see #sheet.sq.a4fill in globals.css)
+  // quote: lock to one A4 with the .a4fill layout — rows stay a fixed 1.7cm (never taller)
+  // (same as the browser print — see #sheet.sq.a4fill in globals.css)
   if (clone.classList.contains("sq")) {
     const a4h = (width * 297) / 210;
-    // fits one page → stretch to fill it; taller than a page → leave it for the multi-page slicer
+    // fits one page → lock its height; taller than a page → leave it for the multi-page slicer
     if (clone.scrollHeight <= a4h + 4) {
       clone.classList.add("a4fill");
       clone.style.height = a4h + "px";

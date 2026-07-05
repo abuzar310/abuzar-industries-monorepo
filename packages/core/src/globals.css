@@ -317,17 +317,16 @@ body{
 #sheet.sq .grand{padding:2px 22px}
 #sheet.sq .grand .val{font-size:18px}
 #sheet.sq .words{padding:3px 22px 5px; line-height:1.3; white-space:normal; overflow:visible}
-/* Fill one A4 completely — bottom AND right: the sheet is a fixed-height flex column
-   (masthead · sections · bill). #sections takes the free space as a two-column grid whose rows
-   stretch (grid-auto-rows:1fr) so the wood boxes fill the page top-to-bottom, and inside each box
-   the data rows stretch (flex:1 1 auto — NOT basis 0, which collapses them). Every box stays ONE
-   column wide; with an ODD box count (≥3) the 2nd box spans two rows so the right column has no
-   hole, and a box that is alone on the sheet spans the full width. The bill sits full width at the
-   end, right below the boxes — never beside one. Verified in headless Chrome print. Height is set
-   inline (283mm print / px for the PDF clone) by the print fit() and the PDF export so they match. */
-/* rows are a fixed height (--sqrow, ≤1.75cm) — static on screen AND print, so 5 rows read the same
-   as 25; when a quote needs more than ~26 rows it flows onto the next page (a4multi), never shrinks. */
-#sheet.sq{--sqrow:1.75cm}
+/* Two-column A4 (masthead · sections · bill): the sheet is a fixed-height flex column and #sections
+   is a two-column grid of .scol stacks. Boxes fill the LEFT column top-to-bottom, then the right
+   (split in Editor.tsx by real box height). Data rows are a FIXED 1.7cm (never stretched), so a box
+   with few rows stays short instead of ballooning. The bill sits at the bottom of the right column.
+   Verified in headless Chrome print. Height is set inline (285mm print / px for the PDF clone) by the
+   print fit() and the PDF export so they match. */
+/* rows are a fixed, COMPACT height (--sqrow ≈ 0.85cm, like the legacy print) — static on screen AND
+   print, so ~26 rows fit in one column (≈52 per A4). When a quote overruns, thin a touch then flow
+   onto the next page (a4multi) — never balloon the rows. */
+#sheet.sq{--sqrow:0.85cm}
 #sheet.sq #sections .row.cf{height:var(--sqrow)}
 #sheet.sq.a4fill{display:flex; flex-direction:column}
 #sheet.sq.a4fill .mast{flex:0 0 auto}
@@ -888,9 +887,9 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   #sheet.sq .thead.cf{padding:3px 9px; font-size:9px; font-weight:700}
   #sheet.sq .thead.cf .unit{font-size:7px}
   #sheet.sq .row.cf{padding:0 9px; align-items:center}
-  #sheet.sq .row.cf .dim{font-size:18px; font-weight:800; padding:0 1px; text-align:center}
-  #sheet.sq .row.cf .cft{font-size:18px; font-weight:800; text-align:left; padding-left:4px}
-  #sheet.sq .row.cf .sl{font-size:15px; font-weight:700}
+  #sheet.sq .row.cf .dim{font-size:14px; font-weight:700; padding:0 1px; text-align:center}
+  #sheet.sq .row.cf .cft{font-size:14px; font-weight:700; text-align:left; padding-left:4px}
+  #sheet.sq .row.cf .sl{font-size:12px; font-weight:700}
   #sheet.sq .sec-pcs{display:inline; color:#F0E2C4}
   #sheet.sq .sec-pcs b{color:#fff}
   .sec-foot{padding:4px 10px}
