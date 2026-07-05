@@ -1,12 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, delRec } from "@/lib/db";
-import { cloudDelete } from "@/lib/cloud";
+import { allRec } from "@/lib/db";
 import { computeDoc, inr } from "@/lib/calc";
 import { createInvoice, createQuotation } from "@/lib/create";
-import { deleteExpensesBySource } from "@/lib/expenses";
-import { unpostInvoice } from "@/lib/ledger-autopost";
+import { trashDoc } from "@/lib/trash";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -62,6 +60,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
 
   useEffect(() => {
     setPage(0);
+    setSel(new Set()); // a search change hides rows; don't keep them silently selected
   }, [q, searchTerm]);
 
   const open = (id: string, suffix = "") => router.push("/editor/" + id + suffix);
@@ -88,22 +87,17 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     const ids = [...sel];
     if (!ids.length) return;
     const ok = await confirmDialog({
-      title: `Delete ${ids.length} ${isInv ? "invoice" : "quotation"}${ids.length === 1 ? "" : "s"}?`,
-      message: "This removes them from this device and the cloud. This cannot be undone.",
-      confirmLabel: "Delete " + ids.length,
-      danger: true,
+      title: `Move ${ids.length} ${isInv ? "invoice" : "quotation"}${ids.length === 1 ? "" : "s"} to Recycle bin?`,
+      message: "They leave your list but aren't lost — restore anytime from Settings → Recycle bin.",
+      confirmLabel: "Move " + ids.length + " to bin",
     });
     if (!ok) return;
-    toast("Deleting…");
-    for (const id of ids) {
-      await delRec(store, id);
-      await cloudDelete(store, id);
-      await deleteExpensesBySource(id);
-      if (isInv) await unpostInvoice(id);
-    }
+    toast("Moving to bin…");
+    // soft-delete only — nothing is hard-removed, so a mis-select is always recoverable
+    for (const id of ids) await trashDoc(store, id);
     setSel(new Set());
     bumpData();
-    toast(ids.length + " deleted");
+    toast(ids.length + " moved to Recycle bin");
   }
 
   return (
@@ -207,9 +201,9 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
 
       {pages > 1 && (
         <div className="pager">
-          <button className="btn sm" disabled={pageN === 0} onClick={() => setPage(pageN - 1)}>‹ Prev</button>
+          <button className="btn sm" disabled={pageN === 0} onClick={() => { setPage(pageN - 1); setSel(new Set()); }}>‹ Prev</button>
           <span>Page {pageN + 1} of {pages}</span>
-          <button className="btn sm" disabled={pageN >= pages - 1} onClick={() => setPage(pageN + 1)}>Next ›</button>
+          <button className="btn sm" disabled={pageN >= pages - 1} onClick={() => { setPage(pageN + 1); setSel(new Set()); }}>Next ›</button>
         </div>
       )}
     </>
