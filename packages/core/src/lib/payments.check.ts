@@ -106,7 +106,21 @@ export function demoTrash() {
   console.log(`payments.check trash OK (${n} assertions)`);
 }
 
+/** A standalone receipt (Receipts tab) credited to a customer reduces their balance. */
+export function demoReceipts() {
+  const quotes = [Q("q1", "Ramesh", "SF-1", 1000, 0, 0, 0)]; // Ramesh owes 1000
+  const receipt = {
+    id: "r1", type: "sale", custId: "Ramesh", amount: 400, mode: "cash", date: "01-07-26", createdAt: "r1", enteredBy: "ajju",
+  } as unknown as Expense;
+  const p = partyLedger(quotes, [receipt]).parties.find((x) => x.custId === "Ramesh")!;
+  ok(p.paid === 400, "receipt credited to paid");
+  ok(p.balance === 600, "receipt reduces the balance to 600");
+  ok(p.statements.length === 1, "receipt shows as a statement");
+  console.log(`payments.check receipts OK (${n} assertions)`);
+}
+
 demo();
 demoQuotes();
 demoReconcile();
 demoTrash();
+demoReceipts();

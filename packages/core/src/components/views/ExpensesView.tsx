@@ -51,7 +51,7 @@ export default function ExpensesView() {
   const list = all.filter((e) => !e.sessionId && inDaybook(e));
   // "Statements" = every payment a customer made — all UPI receipts + cash accepted against a quote.
   // A running log of who took what, kept even after cash is handed over (UPI never enters handover).
-  const recvList = all.filter((e) => isUpi(e) || (e.type === "sale" && e.mode === "cash" && !!e.sourceId));
+  const recvList = all.filter((e) => isUpi(e) || (e.type === "sale" && e.mode === "cash" && (!!e.sourceId || !!e.custId)));
   const recvTotal = Math.round(recvList.reduce((s, e) => s + (+e.amount || 0), 0) * 100) / 100;
   // a handover awaiting the owner's confirmation (blocks a new one) vs finalised sessions (history)
   const pending = sessions.find((s) => s.pending) || null;

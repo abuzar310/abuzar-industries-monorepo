@@ -171,6 +171,8 @@ export interface Expense {
   enteredBy: string;
   /** the quote/invoice id this entry was auto-created from (for cascade delete). */
   sourceId?: string;
+  /** a standalone receipt: the customer id this payment is credited to (no source quote). */
+  custId?: string;
   /** set once the entry is archived into a closed session; falsy = current open session */
   sessionId?: string;
   createdAt: string;

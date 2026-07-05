@@ -58,6 +58,7 @@ export async function addExpense(fields: {
   enteredBy: string;
   date?: string;
   sourceId?: string;
+  custId?: string;
 }): Promise<Expense> {
   const mode = isInflow(fields.type) ? fields.mode || "cash" : "";
   const e: Expense = {
@@ -72,6 +73,7 @@ export async function addExpense(fields: {
     toOwner: mode === "cash" ? !!fields.toOwner : false,
     enteredBy: fields.enteredBy,
     sourceId: fields.sourceId,
+    custId: fields.custId,
     createdAt: nowIso(),
     updatedAt: nowIso(),
     synced: false,

@@ -10,6 +10,7 @@ export const CLOUD_PREFIX = "sf_";
 export const TABS: Tab[] = [
   { label: "Dashboard", href: "/" },
   { label: "Balances", href: "/payments" },
+  { label: "Receipts", href: "/receipts" },
   { label: "Statements", href: "/statements" },
   { label: "Quotation", href: "/editor" },
   { label: "Quotations", href: "/quotations" },

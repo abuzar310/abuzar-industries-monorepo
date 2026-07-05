@@ -132,16 +132,32 @@ export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Custo
   }
 
   // fold in each customer's opening balance (old dues before the app) — adds to what they owe
+  const custById = new Map(customers.map((c) => [c.id, c] as const));
+  const newParty = (id: string) => {
+    const c = custById.get(id);
+    const p: Party = {
+      custId: id, name: c?.name || "Walk-in", phone: c?.phone || "",
+      billed: 0, paid: 0, cashPaid: 0, upiPaid: 0, balance: 0, quoteCount: 0, quotes: [], statements: [],
+    };
+    map.set(id, p);
+    return p;
+  };
   for (const c of customers) {
     const op = +(c.opening || 0) || 0;
     if (Math.abs(op) < 0.005) continue;
-    let p = map.get(c.id);
-    if (!p) {
-      p = { custId: c.id, name: c.name || "Walk-in", phone: c.phone || "",
-        billed: 0, paid: 0, cashPaid: 0, upiPaid: 0, balance: 0, quoteCount: 0, quotes: [], statements: [] };
-      map.set(c.id, p);
-    }
-    p.billed += op;
+    (map.get(c.id) || newParty(c.id)).billed += op;
+  }
+
+  // standalone receipts (Receipts tab: a payment credited to a customer, not a quote) — reduce their
+  // balance and show as statements
+  for (const e of expenses) {
+    if (e.type !== "sale" || !e.custId) continue;
+    const p = map.get(e.custId) || newParty(e.custId);
+    const amt = +e.amount || 0;
+    p.paid += amt;
+    if (e.mode === "upi") p.upiPaid += amt;
+    else p.cashPaid += amt;
+    p.statements.push(mkStatement(e, ""));
   }
 
   const parties = [...map.values()].map((p) => ({
