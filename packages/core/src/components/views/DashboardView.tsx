@@ -94,6 +94,13 @@ export default function DashboardView() {
   const follow = quotes.filter((q) => q.status === "Follow-up Pending" && !q.deletedAt);
   const lowStock = stk.filter((s) => (+s.cft || 0) <= 0);
 
+  // mini statements: the latest few payments received (full list lives in the Statements tab)
+  const quoteById = new Map(quotes.map((q) => [q.id, q] as const));
+  const recentPays = exp
+    .filter((e) => e.type === "sale" && !!e.sourceId)
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))
+    .slice(0, 5);
+
   type Card = { k: string; v: string; money?: boolean; danger?: boolean; sub?: string; onClick?: () => void };
   const cards: Card[] = [
     { k: "Sales", v: "₹ " + inr(periodRev), money: true, sub: periodLabel, onClick: () => router.push(feat.simpleQuote ? "/quotations" : "/invoices") },
@@ -144,6 +151,33 @@ export default function DashboardView() {
           </div>
         ))}
       </div>
+
+      {feat.acceptPayment && (
+        <>
+          <div className="dash-section" style={{ marginTop: 22 }}>
+            Statements
+            <button className="dash-link" onClick={() => router.push("/statements")}>View all →</button>
+          </div>
+          <div className="panel-card">
+            {recentPays.length ? (
+              recentPays.map((e) => (
+                <div className="stmt" key={e.id}>
+                  <div className={"stmt-ic " + (e.mode === "upi" ? "upi" : "cash")}>{e.mode === "upi" ? "UPI" : "₹"}</div>
+                  <div className="stmt-main">
+                    <div className="stmt-to">{quoteById.get(e.sourceId || "")?.customerName || "Payment"}</div>
+                    <div className="stmt-sub">
+                      {e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : "Cash"} · {e.date}
+                    </div>
+                  </div>
+                  <div className="stmt-amt">+₹{inr(e.amount)}</div>
+                </div>
+              ))
+            ) : (
+              <div className="empty">No payments recorded yet.</div>
+            )}
+          </div>
+        </>
+      )}
 
       {!feat.simpleQuote && (
         <div className="panel-card">
