@@ -447,9 +447,15 @@ body{
 /* grand-total box has no header → its drag button is a labelled tab just above the top-left corner */
 .qc-bill .qc-drag{top:-14px; left:8px; width:auto; height:24px; padding:0 11px; border-radius:12px}
 .qc-bill .qc-drag::after{content:'MOVE'; font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.12em; margin-left:5px}
-/* second drag handle pinned to the box bottom — always reachable even if the top slid under the masthead */
-.qc-drag-b{top:auto; bottom:8px}
-.qc-bill .qc-drag-b{top:auto; bottom:-14px}
+/* arrow nudge-pad beside the drag handle — always reachable even if the box slid under the masthead */
+.qc-nudge{position:absolute; top:10px; left:48px; z-index:6; display:flex; gap:2px; opacity:0; transition:opacity var(--t-fast)}
+.qc-box:hover .qc-nudge, .qc-nudge:hover{opacity:1}
+.qc-nudge button{width:22px; height:22px; border:none; border-radius:6px; background:var(--walnut); color:#F4E9D8;
+  font-size:12px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  box-shadow:0 1px 3px rgba(0,0,0,.2); transition:background var(--t-fast), transform var(--t-fast)}
+.qc-nudge button:hover{background:var(--ochre-deep)}
+.qc-nudge button:active{transform:scale(.9)}
+.qc-bill .qc-nudge{top:-14px; left:78px}
 /* right-edge width-resize grip (only shows the box is resizable; the whole right edge is the handle) */
 .qc-box::after{content:''; position:absolute; top:50%; right:-1px; transform:translateY(-50%);
   width:4px; height:34px; border-radius:3px; background:var(--line-2); opacity:0; transition:opacity var(--t-fast); pointer-events:none; z-index:3}

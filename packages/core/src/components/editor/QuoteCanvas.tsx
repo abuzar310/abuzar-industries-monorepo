@@ -15,6 +15,19 @@ const ROW_PX = 27; // one data row at --sqrow 0.72cm ≈ 27px
 const CHROME_PX = 128; // box header + column labels + footer
 
 const boxH = (rows: number) => CHROME_PX + Math.max(1, rows) * ROW_PX;
+const STEP = 16; // px a box moves per arrow tap (2 grid units)
+
+/** Arrow buttons to nudge a box — always reachable even if its drag handle slid under the masthead. */
+function NudgePad({ onMove }: { onMove: (dx: number, dy: number) => void }) {
+  return (
+    <div className="qc-nudge no-print">
+      <button type="button" title="Move left" onClick={() => onMove(-STEP, 0)}>←</button>
+      <button type="button" title="Move up" onClick={() => onMove(0, -STEP)}>↑</button>
+      <button type="button" title="Move down" onClick={() => onMove(0, STEP)}>↓</button>
+      <button type="button" title="Move right" onClick={() => onMove(STEP, 0)}>→</button>
+    </div>
+  );
+}
 
 export default function QuoteCanvas({
   doc,
@@ -63,6 +76,13 @@ export default function QuoteCanvas({
 
         {doc.sections.map((sec, si) => {
           const b = sec.box || defaultBox(si);
+          const move = (dx: number, dy: number) =>
+            onBox(si, {
+              x: Math.min(PAGE_W - b.w, Math.max(0, b.x + dx)),
+              y: Math.min(PAGE_H - (b.h || CHROME_PX), Math.max(MAST_H, b.y + dy)),
+              w: b.w,
+              h: b.h,
+            });
           return (
             <Rnd
               key={si}
@@ -84,17 +104,21 @@ export default function QuoteCanvas({
               <div className="qc-drag no-print" title="Drag to move this box">
                 <span>⠿</span>
               </div>
+              <NudgePad onMove={move} />
               <div className="qc-boxinner">{renderCard(si)}</div>
-              {/* second handle at the bottom — a box dragged up under the masthead keeps a grabbable spot */}
-              <div className="qc-drag qc-drag-b no-print" title="Drag to move this box">
-                <span>⠿</span>
-              </div>
             </Rnd>
           );
         })}
 
         {(() => {
           const b = doc.billBox || defaultBill();
+          const move = (dx: number, dy: number) =>
+            onBillBox({
+              x: Math.min(PAGE_W - b.w, Math.max(0, b.x + dx)),
+              y: Math.min(PAGE_H - (b.h || 100), Math.max(MAST_H, b.y + dy)),
+              w: b.w,
+              h: b.h,
+            });
           return (
             <Rnd
               className="qc-box qc-bill"
@@ -115,10 +139,8 @@ export default function QuoteCanvas({
               <div className="qc-drag no-print" title="Drag the grand total">
                 <span>⠿</span>
               </div>
+              <NudgePad onMove={move} />
               <div className="qc-boxinner">{renderBill()}</div>
-              <div className="qc-drag qc-drag-b no-print" title="Drag the grand total">
-                <span>⠿</span>
-              </div>
             </Rnd>
           );
         })()}
