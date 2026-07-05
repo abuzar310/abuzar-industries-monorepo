@@ -15,18 +15,21 @@ const ROW_PX = 27; // one data row at --sqrow 0.72cm ≈ 27px
 const CHROME_PX = 128; // box header + column labels + footer
 
 const boxH = (rows: number) => CHROME_PX + Math.max(1, rows) * ROW_PX;
-const STEP = 16; // px a box moves per arrow tap (2 grid units)
+const STEP = 16; // px a box moves per arrow-key press (2 grid units)
 
-/** Arrow buttons to nudge a box — always reachable even if its drag handle slid under the masthead. */
-function NudgePad({ onMove }: { onMove: (dx: number, dy: number) => void }) {
-  return (
-    <div className="qc-nudge no-print">
-      <button type="button" title="Move left" onClick={() => onMove(-STEP, 0)}>←</button>
-      <button type="button" title="Move up" onClick={() => onMove(0, -STEP)}>↑</button>
-      <button type="button" title="Move down" onClick={() => onMove(0, STEP)}>↓</button>
-      <button type="button" title="Move right" onClick={() => onMove(STEP, 0)}>→</button>
-    </div>
-  );
+/** Nudge a focused box with the keyboard arrow keys — reachable even if its handle slid under the masthead. */
+function onNudgeKey(e: React.KeyboardEvent, move: (dx: number, dy: number) => void) {
+  const m: Record<string, [number, number]> = {
+    ArrowUp: [0, -STEP],
+    ArrowDown: [0, STEP],
+    ArrowLeft: [-STEP, 0],
+    ArrowRight: [STEP, 0],
+  };
+  const d = m[e.key];
+  if (d) {
+    e.preventDefault();
+    move(d[0], d[1]);
+  }
 }
 
 export default function QuoteCanvas({
@@ -101,10 +104,14 @@ export default function QuoteCanvas({
                 onBox(si, { x: Math.round(pos.x), y: Math.max(MAST_H, Math.round(pos.y)), w: ref.offsetWidth, h: ref.offsetHeight })
               }
             >
-              <div className="qc-drag no-print" title="Drag to move this box">
+              <div
+                className="qc-drag no-print"
+                tabIndex={0}
+                title="Drag to move · click then use arrow keys to nudge"
+                onKeyDown={(e) => onNudgeKey(e, move)}
+              >
                 <span>⠿</span>
               </div>
-              <NudgePad onMove={move} />
               <div className="qc-boxinner">{renderCard(si)}</div>
             </Rnd>
           );
@@ -136,10 +143,14 @@ export default function QuoteCanvas({
                 onBillBox({ x: Math.round(pos.x), y: Math.max(MAST_H, Math.round(pos.y)), w: ref.offsetWidth, h: ref.offsetHeight })
               }
             >
-              <div className="qc-drag no-print" title="Drag the grand total">
+              <div
+                className="qc-drag no-print"
+                tabIndex={0}
+                title="Drag the grand total · click then use arrow keys to nudge"
+                onKeyDown={(e) => onNudgeKey(e, move)}
+              >
                 <span>⠿</span>
               </div>
-              <NudgePad onMove={move} />
               <div className="qc-boxinner">{renderBill()}</div>
             </Rnd>
           );
