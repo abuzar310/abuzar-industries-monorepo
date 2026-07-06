@@ -8,11 +8,12 @@ interface Props {
   gstAmt: number;
   grand: number;
   totalCft?: number;
+  totalCbm?: number;
   onGst: (v: string) => void;
   onGstMode: (m: "percent" | "flat") => void;
 }
 
-export default function Totals({ doc, sub, gstAmt, grand, totalCft, onGst, onGstMode }: Props) {
+export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, onGst, onGstMode }: Props) {
   const isInv = doc.kind === "invoice";
   const flat = doc.gstMode === "flat";
   const half = Math.round((+doc.gst || 0) * 50) / 100; // e.g. 18 -> 9
@@ -23,6 +24,12 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, onGst, onGst
         <div className="t-row">
           <span className="lab">Total CFT</span>
           <span className="val">{totalCft.toFixed(2)}</span>
+        </div>
+      ) : null}
+      {isInv && totalCbm ? (
+        <div className="t-row">
+          <span className="lab">Total CBM</span>
+          <span className="val">{totalCbm.toFixed(3)}</span>
         </div>
       ) : null}
       <div className="t-row">

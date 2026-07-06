@@ -28,6 +28,7 @@ import QuoteCanvas from "./QuoteCanvas";
 import MoreMenu from "./MoreMenu";
 import PaymentBlock from "./PaymentBlock";
 import CustomerPicker from "./CustomerPicker";
+import GstinField from "./GstinField";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 
@@ -62,11 +63,20 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const isInv = doc.kind === "invoice";
   const isBuy = isInv && doc.tradeType === "buy"; // purchase invoice
   // entry modes offered per section per app:
-  //  invoice → by-size + total-CFT; unofficial quote → by-size + per-price; official quote → by-size + total-CFT + running-ft
-  const secModes: ("cft" | "direct" | "rft" | "pcs")[] =
-    isInv ? ["cft", "direct"] : feat.simpleQuote ? ["cft", "pcs"] : ["cft", "direct", "rft"];
+  //  invoice → by-size + total-CFT + total-CBM; unofficial quote → by-size + per-price; official quote → by-size + total-CFT + running-ft
+  const secModes: ("cft" | "direct" | "rft" | "pcs" | "cbm")[] =
+    isInv ? ["cft", "direct", "cbm"] : feat.simpleQuote ? ["cft", "pcs"] : ["cft", "direct", "rft"];
   const totals = useMemo(() => computeDoc(doc), [doc]);
-  const totalCft = totals.secCft.reduce((s, c) => s + c, 0);
+  // CFT and CBM are different units, so keep their running totals separate for the bill summary.
+  const totalCft = doc.sections.reduce(
+    (s, sec, i) =>
+      sec.calcMode === "cbm" || sec.calcMode === "rft" || sec.calcMode === "pcs" ? s : s + (totals.secCft[i] || 0),
+    0,
+  );
+  const totalCbm = doc.sections.reduce(
+    (s, sec, i) => (sec.calcMode === "cbm" ? s + (totals.secCft[i] || 0) : s),
+    0,
+  );
   const { brandMode, user } = useApp();
   const brand = brandFor(brandMode);
   const invBank = brand.banks?.[doc.bankIdx ?? 0] || brand.bank; // chosen bank for this invoice
@@ -157,7 +167,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       if (price && (cur === 0 || DEFAULT_RATES.has(cur))) d.sections[si].rate = String(price);
     });
   const onRate = (si: number, v: string) => update((d) => (d.sections[si].rate = v));
-  const onSetMode = (si: number, mode: "cft" | "direct" | "rft" | "pcs") =>
+  const onSetMode = (si: number, mode: "cft" | "direct" | "rft" | "pcs" | "cbm") =>
     update((d) => (d.sections[si].calcMode = mode));
   const onCell = (si: number, ri: number, k: "l" | "w" | "t" | "pcs" | "cft", v: string) => {
     const clean = v.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
@@ -548,6 +558,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       gstAmt={totals.gstAmt}
       grand={totals.grand}
       totalCft={totalCft}
+      totalCbm={totalCbm}
       onGst={(v) => setField("gst", v)}
       onGstMode={(m) => setField("gstMode", m)}
     />
@@ -783,13 +794,20 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             )}
             {isInv && (
               <>
-                <div className="f">
+                <GstinField
+                  label={isBuy ? "Supplier GSTIN" : "Customer GSTIN"}
+                  value={doc.custGstin || ""}
+                  onChange={(v) => setField("custGstin", v)}
+                  onUseName={(name) => update((d) => (d.customerName = name))}
+                  onUseAddress={(addr) => update((d) => (d.address = addr))}
+                />
+                <div className="f" style={{ gridColumn: "1 / -1" }}>
                   <label>{isBuy ? "Supplier Address" : "Address"}</label>
                   <input placeholder="—" value={doc.address} onChange={(e) => setField("address", e.target.value)} />
                 </div>
                 <div className="f">
-                  <label>{isBuy ? "Supplier GSTIN" : "Customer GSTIN"}</label>
-                  <input placeholder="—" value={doc.custGstin || ""} onChange={(e) => setField("custGstin", e.target.value)} />
+                  <label>HSN Code</label>
+                  <input placeholder="—" value={doc.hsn || ""} onChange={(e) => setField("hsn", e.target.value)} />
                 </div>
                 <div className="f">
                   <label>Payment</label>
@@ -871,6 +889,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             gstAmt={totals.gstAmt}
             grand={totals.grand}
             totalCft={totalCft}
+            totalCbm={totalCbm}
             onGst={(v) => setField("gst", v)}
             onGstMode={(m) => setField("gstMode", m)}
           />

@@ -26,8 +26,8 @@ export interface Section {
   rate: string | number;
   rows: Row[];
   /** "cft" (L×W×T×Pcs÷144 × rate), "direct" (type CFT directly × rate),
-   *  or "rft" (running feet Σ(L×Pcs) × rate). Default cft. */
-  calcMode?: "cft" | "direct" | "rft" | "pcs";
+   *  "cbm" (type CBM directly × ₹/CBM rate), or "rft" (running feet Σ(L×Pcs) × rate). Default cft. */
+  calcMode?: "cft" | "direct" | "rft" | "pcs" | "cbm";
   /** free-arrange: where/how big this box sits on the A4 page (unset = auto-placed). */
   box?: BoxRect;
 }
@@ -64,6 +64,8 @@ export interface Doc {
   /** invoice: customer GSTIN + payment type (shown on the tax invoice). */
   custGstin?: string;
   payType?: string;
+  /** invoice: HSN/SAC code for the goods (short code shown on the tax invoice). */
+  hsn?: string;
   /** selling invoice: consignee "Ship To" address + transport vehicle number (shown on the invoice). */
   shipTo?: string;
   vehicleNo?: string;

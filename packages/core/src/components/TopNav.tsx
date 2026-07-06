@@ -5,14 +5,17 @@ import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/store/useApp";
 import { setSearch, toast } from "@/store/app-store";
 import { brandFor } from "@/lib/brand";
+import { isInvoiceId } from "@/lib/doc";
 import { changePassword, lockApp } from "@/lib/local-auth";
 import { formDialog } from "@/store/dialog-store";
 import type { Tab } from "@/lib/types";
 
 function isActive(href: string, path: string) {
   if (href === "/") return path === "/";
-  // Editing an invoice (/editor/INV-…) belongs to the Invoices tab, not Quotation.
-  const editingInvoice = /^\/editor\/INV/i.test(path);
+  // Editing an invoice belongs to the Invoices tab, not Quotation. Invoice ids are short
+  // numbers (or legacy "INV-…"); quotations are FY-sequence ids — see isInvoiceId.
+  const m = path.match(/^\/editor\/(.+)$/);
+  const editingInvoice = m ? isInvoiceId(decodeURIComponent(m[1])) : false;
   if (href === "/editor") return path === "/editor" || (path.startsWith("/editor/") && !editingInvoice);
   if (href === "/invoices") return path === "/invoices" || path.startsWith("/invoices/") || editingInvoice;
   return path === href || path.startsWith(href + "/");

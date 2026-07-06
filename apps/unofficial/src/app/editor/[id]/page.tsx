@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { getRec } from "@/lib/db";
-import { storeForId } from "@/lib/doc";
+import { loadDoc } from "@/lib/doc";
 import { useApp } from "@/store/useApp";
 import { toast } from "@/store/app-store";
 import Editor from "@/components/editor/Editor";
@@ -19,7 +18,7 @@ export default function Page() {
   useEffect(() => {
     if (!ready) return;
     let live = true;
-    getRec<Doc>(storeForId(id), id).then((d) => {
+    loadDoc(id).then((d) => {
       if (!live) return;
       if (!d) {
         toast("Not found");

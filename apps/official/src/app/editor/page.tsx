@@ -15,8 +15,9 @@ export default function Page() {
     let live = true;
     metaGet<{ store: string; id: string } | null>("lastOpen", null).then((last) => {
       if (!live) return;
-      // The Quotation tab resumes quotations only — never an invoice.
-      if (last && last.id && !last.id.startsWith("INV")) router.replace("/editor/" + last.id);
+      // The Quotation tab resumes quotations only — never an invoice (checked by store,
+      // since invoice ids are now plain numbers with no "INV" prefix to detect them by).
+      if (last && last.id && last.store === "quotations") router.replace("/editor/" + last.id);
       else setChecked(true);
     });
     return () => {

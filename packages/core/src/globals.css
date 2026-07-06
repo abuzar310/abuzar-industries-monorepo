@@ -1435,3 +1435,94 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .acct-collect-btn{width:100%; justify-content:center; margin-top:6px}
   .acct-filters .btn.primary.sm{flex:1 1 100%}
 }
+
+/* customer-detail printable quotations report: only rendered on print */
+.cd-print{display:none}
+@media print{
+  .cd-screen{display:none !important}
+  .cd-print{display:block !important}
+}
+
+/* ===== Reports ===== */
+.rep-controls{display:flex; flex-direction:column; gap:10px; margin-bottom:16px}
+.rep-presets{display:flex; flex-wrap:wrap; gap:8px}
+.rep-range{display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px}
+.rep-range>label{display:flex; flex-direction:column; gap:4px; font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft)}
+.rep-range input[type=date]{font-family:var(--mono); font-size:13px; padding:8px 10px; border:1px solid var(--line-2); border-radius:8px; background:var(--panel-2); color:var(--ink)}
+.rep-seg{display:inline-flex; border:1px solid var(--line-2); border-radius:8px; overflow:hidden}
+.rep-seg button{border:0; background:var(--panel-2); padding:8px 14px; font-family:var(--disp); font-size:13px; font-weight:600; color:var(--ink-soft); cursor:pointer; border-left:1px solid var(--line-2)}
+.rep-seg button:first-child{border-left:0}
+.rep-seg button.on{background:linear-gradient(180deg,var(--brass),var(--ochre)); color:#fff}
+.rep-print{margin-left:auto}
+
+.rep-doc{background:#fff; border:1px solid var(--line-2); border-radius:12px; padding:24px 26px; box-shadow:var(--shadow-md,0 6px 22px -12px rgba(50,36,20,.35))}
+.rep-head{display:flex; justify-content:space-between; align-items:flex-start; gap:16px; border-bottom:2px solid var(--walnut); padding-bottom:10px; margin-bottom:14px}
+.rep-brand h1{font-family:var(--disp); font-size:22px; font-weight:800; letter-spacing:.02em; color:var(--walnut); margin:0 0 4px}
+.rep-brand div{font-size:11.5px; color:var(--ink-soft); line-height:1.4}
+.rep-meta{text-align:right; flex:0 0 auto}
+.rep-title{font-family:var(--disp); font-size:15px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--ochre-deep)}
+.rep-period{font-family:var(--mono); font-size:12px; color:var(--ink); margin-top:4px}
+
+.rep-summary{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:14px}
+.rep-summary.cols3{grid-template-columns:repeat(3,1fr)}
+.rep-summary>div{border:1px solid var(--line); border-radius:8px; background:var(--paper-2); padding:8px 10px; text-align:center}
+.rep-summary b{display:block; font-family:var(--disp); font-size:16px; font-weight:800; color:var(--walnut)}
+.rep-summary span{display:block; font-size:9.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint); margin-top:2px}
+
+/* fixed layout so nothing spills off the page; columns get explicit widths via <colgroup>. */
+.rep-table{width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px}
+.rep-table th,.rep-table td{border:1px solid var(--line-2); padding:5px 7px; text-align:left; vertical-align:top; overflow:hidden}
+.rep-table thead th{background:var(--panel); font-family:var(--disp); font-size:10.5px; letter-spacing:.03em; text-transform:uppercase; color:var(--walnut); white-space:nowrap}
+.rep-table td.amt,.rep-table th.amt{text-align:right; font-family:var(--mono); white-space:nowrap}
+.rep-table td.c-n,.rep-table th.c-n{text-align:right; color:var(--ink-faint)}
+.rep-table td.c-date{white-space:nowrap}
+.rep-table td.c-no{font-family:var(--mono); font-size:11px; white-space:nowrap}
+.rep-table td.c-gst{font-family:var(--mono); font-size:11px; white-space:nowrap}
+.rep-table td.c-cust{word-break:break-word}
+.rep-table col.w-n{width:3.5%}
+.rep-table col.w-date{width:8.5%}
+.rep-table col.w-no{width:14%}
+.rep-table col.w-cust{width:20%}
+.rep-table col.w-gst{width:13%}
+.rep-table col.w-cft{width:8%}
+.rep-table col.w-net{width:11%}
+.rep-table col.w-gstamt{width:10%}
+.rep-table col.w-total{width:12%}
+.rep-table tbody tr:nth-child(even){background:var(--panel-2)}
+.rep-table .rep-tot td{background:var(--ochre-soft); font-weight:800; color:var(--walnut); border-color:var(--line-2)}
+.rep-table .rep-tot td{break-inside:avoid}
+.rep-empty{text-align:center; color:var(--ink-faint); padding:26px 0}
+.rep-foot{margin-top:12px; font-size:11px; color:var(--ink-faint); text-align:right}
+
+@media(max-width:720px){
+  .rep-doc{padding:14px 12px; overflow-x:auto}
+  .rep-table{min-width:680px}
+}
+
+@media print{
+  .wrap{padding:0 !important}
+  .rep-doc{border:none; border-radius:0; box-shadow:none; padding:0}
+  .rep-doc,.rep-table,.rep-summary>div,.rep-table thead th,
+  .rep-table tbody tr:nth-child(even),.rep-table tfoot .rep-tot td{
+    -webkit-print-color-adjust:exact; print-color-adjust:exact}
+  /* keep the summary on one compact row when printing */
+  .rep-summary{grid-template-columns:repeat(5,1fr) !important; gap:6px; margin-bottom:10px}
+  .rep-summary.cols3{grid-template-columns:repeat(3,1fr) !important}
+  .rep-summary>div{padding:5px 6px}
+  .rep-summary b{font-size:12.5px}
+  .rep-summary span{font-size:8px}
+  .rep-brand h1{font-size:18px}
+  .rep-head{padding-bottom:8px; margin-bottom:10px}
+  /* airy rows via padding (not oversized text, so nothing clips) — 30 per page */
+  .rep-table{font-size:10px}
+  .rep-table th,.rep-table td{padding:5px 5px}
+  .rep-table thead th{font-size:9px}
+  .rep-table td.amt,.rep-table th.amt,.rep-table td.c-no,.rep-table td.c-gst,.rep-table td.c-date{font-size:9px}
+  .rep-table thead{display:table-header-group}
+  .rep-table tr{break-inside:avoid}
+  /* hard page break after every 30th data row (skip if it's the very last row,
+     so a count that's a multiple of 30 doesn't leave a trailing blank page). */
+  .rep-table tbody tr:nth-child(30n){break-after:page; page-break-after:always}
+  .rep-table tbody tr:nth-child(30n):last-child{break-after:auto; page-break-after:auto}
+  @page{margin:10mm}
+}

@@ -7,7 +7,13 @@ import type { Customer, Doc, Kind, Section } from "./types";
  *  over (and overwrite) an existing one, even if numbering ever hands back a taken id. */
 async function freeId(store: "quotations" | "invoices", kind: Kind): Promise<string> {
   let id = await nextNumber(kind);
-  for (let i = 0; i < 5 && (await getRec(store, id)); i++) id = await nextNumber(kind);
+  // A number owned only by a TRASHED doc is reusable (we intentionally reuse deleted invoice
+  // numbers — the new doc replaces the binned one). Only keep searching past a LIVE doc.
+  for (let i = 0; i < 5; i++) {
+    const ex = await getRec<Doc>(store, id);
+    if (!ex || ex.deletedAt) break;
+    id = await nextNumber(kind);
+  }
   return id;
 }
 

@@ -12,7 +12,7 @@ import { customerFollowupMessage, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
-import type { Customer, Doc } from "@/lib/types";
+import type { Customer, Doc, Expense } from "@/lib/types";
 
 function applySearch(list: Customer[], q: string) {
   q = (q || "").trim().toLowerCase();
@@ -26,16 +26,21 @@ export default function CustomersView() {
   const [list, setList] = useState<Customer[]>([]);
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [invs, setInvs] = useState<Doc[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   const load = useCallback(() => {
-    Promise.all([allRec<Customer>("customers"), allRec<Doc>("quotations"), allRec<Doc>("invoices")]).then(
-      ([c, q, i]) => {
-        c.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-        setList(c);
-        setQuotes(q);
-        setInvs(i);
-      },
-    );
+    Promise.all([
+      allRec<Customer>("customers"),
+      allRec<Doc>("quotations"),
+      allRec<Doc>("invoices"),
+      allRec<Expense>("expenses"),
+    ]).then(([c, q, i, e]) => {
+      c.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      setList(c);
+      setQuotes(q);
+      setInvs(i);
+      setExpenses(e);
+    });
   }, []);
   useEffect(() => {
     load();
@@ -49,6 +54,8 @@ export default function CustomersView() {
     }
   }
   const invoiceMode = getFeatures().invoices;
+  // quote-only app (unofficial): a Created quotation is the sale, so it counts toward dues.
+  const quotesAsBills = !invoiceMode;
   async function newDoc(e: React.MouseEvent, id: string) {
     e.stopPropagation();
     const c = await getRec<Customer>("customers", id);
@@ -89,22 +96,30 @@ export default function CustomersView() {
       <div className="custgrid">
         {shown.length ? (
           shown.map((c) => {
-            const f = customerFinancials(c.id, quotes, invs, c.opening || 0);
+            const f = customerFinancials(c.id, quotes, invs, c.opening || 0, expenses, quotesAsBills);
             return (
               <div className="custcard" key={c.id} onClick={() => router.push("/customers/" + c.id)} style={{ cursor: "pointer" }}>
                 <h3>{c.name}</h3>
                 <div className="ph">{c.phone || "—"}</div>
                 <div className="meta2">
                   {c.site && <>Carpenter: {c.site}<br /></>}
-                  <b>{f.quoteCount}</b> quote{f.quoteCount === 1 ? "" : "s"} · <b>{f.invoiceCount}</b> invoice
-                  {f.invoiceCount === 1 ? "" : "s"}
+                  <b>{f.quoteCount}</b> quote{f.quoteCount === 1 ? "" : "s"}
+                  {invoiceMode && (
+                    <> · <b>{f.invoiceCount}</b> invoice{f.invoiceCount === 1 ? "" : "s"}</>
+                  )}
+                  {f.paid > 0 && (
+                    <>
+                      <br />
+                      <span style={{ color: "var(--ink-faint)" }}>Paid ₹ {inr(f.paid)}</span>
+                    </>
+                  )}
                   {f.opening > 0 && (
                     <>
                       <br />
                       <span style={{ color: "var(--ink-faint)" }}>Opening dues ₹ {inr(f.opening)}</span>
                     </>
                   )}
-                  {f.outstanding > 0 && (
+                  {f.outstanding > 0.5 && (
                     <>
                       <br />
                       <span style={{ color: "var(--danger)" }}>₹ {inr(f.outstanding)} outstanding</span>

@@ -1,6 +1,9 @@
 import { allRec, getRec, put } from "./db";
 import { computeDoc, nowIso, uid } from "./calc";
-import type { Customer, Doc } from "./types";
+import { quoteBill } from "./payments";
+import type { Customer, Doc, Expense } from "./types";
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export interface CustomerFinancials {
   quoteCount: number;
@@ -10,32 +13,73 @@ export interface CustomerFinancials {
   paid: number;
   /** old dues carried in before the app (from the customer record). */
   opening: number;
+  /** total that counts toward dues: opening + (invoices, or quotes-as-bills) + standalone charges. */
+  billed: number;
   outstanding: number;
 }
 
 /** Roll up a customer's business across their quotations and invoices.
- *  `opening` = old dues carried in before the app; it adds to what they still owe. */
-export function customerFinancials(custId: string, quotes: Doc[], invoices: Doc[], opening = 0): CustomerFinancials {
-  const q = quotes.filter((d) => d.customerId === custId);
-  const inv = invoices.filter((d) => d.customerId === custId);
+ *  `opening` = old dues carried in before the app; it adds to what they still owe.
+ *
+ *  Two dues models — kept in step with `partyLedger` (the Balances tab):
+ *  - Invoice apps (official): invoices are the dues; quotations are only estimates.
+ *  - Quote apps (unofficial, `quotesAsBills`): a **Created** quotation IS the sale, so it
+ *    counts toward outstanding, less its recorded payments (amountPaid + standalone receipts),
+ *    plus any standalone charges. This is why the Customers tab now matches Balances. */
+export function customerFinancials(
+  custId: string,
+  quotes: Doc[],
+  invoices: Doc[],
+  opening = 0,
+  expenses: Expense[] = [],
+  quotesAsBills = false,
+): CustomerFinancials {
+  const q = quotes.filter((d) => d.customerId === custId && !d.deletedAt);
+  const inv = invoices.filter((d) => d.customerId === custId && !d.deletedAt);
   let quotedTotal = 0;
-  q.forEach((d) => (quotedTotal += computeDoc(d).grand));
+  q.forEach((d) => (quotedTotal += quoteBill(d)));
   let invoicedTotal = 0;
-  let paid = 0;
+  let invPaid = 0;
   inv.forEach((d) => {
     invoicedTotal += computeDoc(d).grand;
-    paid += +d.amountPaid || 0;
+    invPaid += +d.amountPaid || 0;
   });
-  const op = Math.round((+opening || 0) * 100) / 100;
-  return {
+  const op = r2(+opening || 0);
+
+  // standalone Receipts-tab entries booked straight to a customer (no source quote):
+  // a charge adds to dues, a receipt reduces them.
+  let charges = 0;
+  let receipts = 0;
+  for (const e of expenses) {
+    if (e.type !== "sale" || e.custId !== custId) continue;
+    if (e.charge) charges += +e.amount || 0;
+    else receipts += +e.amount || 0;
+  }
+
+  const base = {
     quoteCount: q.length,
     invoiceCount: inv.length,
-    quotedTotal: Math.round(quotedTotal * 100) / 100,
-    invoicedTotal: Math.round(invoicedTotal * 100) / 100,
-    paid: Math.round(paid * 100) / 100,
+    quotedTotal: r2(quotedTotal),
+    invoicedTotal: r2(invoicedTotal),
     opening: op,
-    outstanding: Math.round((invoicedTotal - paid + op) * 100) / 100,
   };
+
+  if (quotesAsBills) {
+    // a quote is a bill once it's Created (drafts aren't owed yet), same rule as partyLedger.
+    let billedQ = 0;
+    let paidQ = 0;
+    q.filter((d) => d.status === "Created").forEach((d) => {
+      billedQ += quoteBill(d);
+      paidQ += +d.amountPaid || 0;
+    });
+    const billed = r2(op + billedQ + charges);
+    const paid = r2(paidQ + receipts);
+    return { ...base, paid, billed, outstanding: r2(billed - paid) };
+  }
+
+  const billed = r2(op + invoicedTotal + charges);
+  const paid = r2(invPaid + receipts);
+  return { ...base, paid, billed, outstanding: r2(billed - paid) };
 }
 
 /** Create or update a customer from a plain field map (used by the add/edit form). */
