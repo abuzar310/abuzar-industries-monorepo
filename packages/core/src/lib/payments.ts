@@ -91,14 +91,28 @@ export interface PartyLedger {
 
 /** Roll every created quote + its recorded payments up into per-customer balances + statements. */
 export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Customer[] = []): PartyLedger {
-  // a quote is a "bill" once it's Created (drafts aren't owed yet); trashed quotes are excluded
-  const created = quotes.filter((d) => d.status === "Created" && !d.deletedAt);
+  // A quote counts as a bill once it's Created — OR once any money has been recorded against it
+  // (an advance on a still-Draft quote). This mirrors the Statements ledger (quoteLedger) exactly,
+  // so the two views always reconcile: money shown in Statements can never go missing from Balances.
+  // Trashed quotes are excluded.
+  const paidSrc = new Set(
+    expenses.filter((e) => e.type === "sale" && !!e.sourceId).map((e) => e.sourceId as string),
+  );
+  const billable = quotes.filter(
+    (d) =>
+      !d.deletedAt &&
+      (d.status === "Created" ||
+        paidSrc.has(d.id) ||
+        (+(d.payCash || 0)) > 0 ||
+        (+(d.payUpi || 0)) > 0 ||
+        (+(d.amountPaid || 0)) > 0),
+  );
   const key = (d: Doc) => d.customerId || "name:" + (d.customerName || "").trim().toLowerCase() + "|" + (d.phone || "");
   const quoteNoById = new Map(quotes.map((d) => [d.id, d.number] as const));
 
   const map = new Map<string, Party>();
   const quoteOwner = new Map<string, string>(); // quoteId → party key (for linking statements)
-  for (const d of created) {
+  for (const d of billable) {
     const k = key(d);
     let p = map.get(k);
     if (!p) {

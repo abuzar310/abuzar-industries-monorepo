@@ -1,4 +1,4 @@
-import type { Doc, Row } from "./types";
+import type { Doc, Row, Section } from "./types";
 
 // ---- tiny formatting helpers (identical to legacy) ----
 
@@ -47,6 +47,12 @@ export const directOf = (r: Row) => +(r.cft ?? 0) || 0;
 /** Per-piece pricing: just the piece count (amount = Pcs × rate). */
 export const pcsOf = (r: Row) => +r.pcs || 0;
 
+/** A section's Total Price (₹): the hand-typed override if set, else measure × rate. */
+export const amountOf = (sec: Section, measure: number): number =>
+  sec.amtOverride != null && isFinite(+sec.amtOverride)
+    ? Math.round((+sec.amtOverride || 0) * 100) / 100
+    : Math.round(measure * (+sec.rate || 0) * 100) / 100;
+
 export function computeDoc(d: Doc): DocTotals {
   let sub = 0;
   const secCft: number[] = [];
@@ -62,7 +68,7 @@ export function computeDoc(d: Doc): DocTotals {
     let m = 0;
     sec.rows.forEach((r) => (m += measureOf(r)));
     secCft.push(m);
-    sub += Math.round(m * (+sec.rate || 0) * 100) / 100;
+    sub += amountOf(sec, m);
   });
   sub = Math.round(sub * 100) / 100;
   // flat: gst is a rupee amount; percent: gst is a % of the sub-total.

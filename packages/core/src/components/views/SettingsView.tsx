@@ -9,6 +9,8 @@ import { docStore } from "@/lib/doc";
 import type { Doc } from "@/lib/types";
 import { canInstall, promptInstall } from "@/lib/pwa";
 import { getFeatures } from "@/lib/features";
+import { inr } from "@/lib/calc";
+import { migrateAccountReceiptsToQuotes } from "@/lib/receipts";
 import { autoPostEnabled, setAutoPost } from "@/lib/ledger-autopost";
 import { bumpData, setSyncState, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -20,6 +22,7 @@ export default function SettingsView() {
   const [trash, setTrash] = useState<Doc[]>([]);
   const [snaps, setSnaps] = useState<{ at: string; total: number }[]>([]);
   const ledgerOn = getFeatures().ledger;
+  const receiptsApp = getFeatures().acceptPayment;
 
   const loadTrash = () => trashedDocs().then(setTrash);
   const loadSnaps = () => listSnapshots().then(setSnaps);
@@ -68,6 +71,29 @@ export default function SettingsView() {
     loadTrash();
     bumpData();
     toast(d.number + " permanently deleted");
+  }
+
+  async function onMigrateReceipts() {
+    const ok = await confirmDialog({
+      title: "Apply account receipts to quotations?",
+      message:
+        "Re-applies past Receipts-tab payments onto each customer's open quotations, so their quotes and Statements update. Money totals don't change, a backup is taken first, and it's safe to run again.",
+      confirmLabel: "Apply now",
+    });
+    if (!ok) return;
+    await autoSnapshot(); // restore point before touching anything
+    loadSnaps();
+    toast("Applying…");
+    const r = await migrateAccountReceiptsToQuotes();
+    bumpData();
+    if (r.receiptsConverted === 0) {
+      toast(r.scanned ? "Nothing to apply — receipts already on quotes" : "No account receipts found");
+    } else {
+      toast(
+        `Applied ${r.receiptsConverted} receipt${r.receiptsConverted === 1 ? "" : "s"} to ${r.quotesUpdated} quote${r.quotesUpdated === 1 ? "" : "s"}` +
+          (r.leftover > 0.5 ? ` · ₹${inr(r.leftover)} kept as account credit` : ""),
+      );
+    }
   }
 
   async function toggleAutoPost(v: boolean) {
@@ -177,6 +203,19 @@ export default function SettingsView() {
           <button className="btn sm" onClick={importFile}>Import backup</button>
         </div>
       </div>
+
+      {receiptsApp && (
+        <div className="setbox">
+          <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Apply receipts to quotations</div>
+          <p className="note">
+            Re-applies past <b>Receipts</b> payments onto each customer&apos;s open quotations, so their quotes and
+            Statements show as paid. Totals don&apos;t change, a backup is taken first, and it&apos;s safe to run again.
+          </p>
+          <div className="rowbtns">
+            <button className="btn primary sm" onClick={onMigrateReceipts}>Apply receipts to quotations</button>
+          </div>
+        </div>
+      )}
 
       <div className="setbox">
         <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Auto-backups</div>

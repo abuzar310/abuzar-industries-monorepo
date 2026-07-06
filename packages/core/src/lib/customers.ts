@@ -65,10 +65,17 @@ export function customerFinancials(
   };
 
   if (quotesAsBills) {
-    // a quote is a bill once it's Created (drafts aren't owed yet), same rule as partyLedger.
+    // a quote is a bill once it's Created — or once any money is recorded against it (an advance on
+    // a still-Draft quote). Same rule as partyLedger, so Customers/Balances/Statements all reconcile.
     let billedQ = 0;
     let paidQ = 0;
-    q.filter((d) => d.status === "Created").forEach((d) => {
+    q.filter(
+      (d) =>
+        d.status === "Created" ||
+        (+(d.payCash || 0)) > 0 ||
+        (+(d.payUpi || 0)) > 0 ||
+        (+(d.amountPaid || 0)) > 0,
+    ).forEach((d) => {
       billedQ += quoteBill(d);
       paidQ += +d.amountPaid || 0;
     });

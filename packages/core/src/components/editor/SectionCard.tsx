@@ -9,12 +9,12 @@ interface Props {
   sec: Section;
   si: number;
   cft: number;
-  amt: number;
   modes: Mode[]; // which entry modes to offer
   onName: (si: number, v: string) => void;
   onRate: (si: number, v: string) => void;
   onSetMode: (si: number, mode: Mode) => void;
   onCell: (si: number, ri: number, k: CellKey, v: string) => void;
+  onAmt: (si: number, v: string) => void; // override the section Total Price directly
   onAddRow: (si: number) => void;
   onDelRow: (si: number, ri: number) => void;
   onDelSec: (si: number) => void;
@@ -23,7 +23,7 @@ interface Props {
 const DIM: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 const MODE_LABEL: Record<Mode, string> = { cft: "By size", direct: "Total CFT", cbm: "Total CBM", rft: "Running ft", pcs: "Per price" };
 
-export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, onSetMode, onCell, onAddRow, onDelRow, onDelSec }: Props) {
+export default function SectionCard({ sec, si, cft, modes, onName, onRate, onSetMode, onCell, onAmt, onAddRow, onDelRow, onDelSec }: Props) {
   const mode: Mode =
     sec.calcMode === "rft"
       ? "rft"
@@ -45,6 +45,7 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
     rft ? rftOf(r) : pcs ? pcsOf(r) : direct || cbm ? directOf(r) : cftOf(r);
   const totalText = pcs ? String(Math.round(cft)) : cft.toFixed(2);
   const totalPcs = sec.rows.reduce((s, r) => s + (Math.round(+r.pcs) || 0), 0);
+  const baseAmt = Math.round(cft * (+sec.rate || 0) * 100) / 100; // qty × rate (before any manual override)
 
   // header cells for the CFT-first table (# · CFT · L · W · T · Pcs)
   const head = (
@@ -174,7 +175,18 @@ export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, 
           </span>
           <span className="sc amt">
             <i>Total Price</i>
-            <b>₹ {inr(amt)}</b>
+            <span className="amt-edit">
+              ₹{" "}
+              <input
+                type="number"
+                inputMode="decimal"
+                aria-label="Total price"
+                title="Type to set a custom total; clear to use quantity × rate"
+                value={sec.amtOverride ?? ""}
+                placeholder={inr(baseAmt)}
+                onChange={(e) => onAmt(si, e.target.value)}
+              />
+            </span>
           </span>
         </div>
       </div>

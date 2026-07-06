@@ -161,12 +161,16 @@ export default function CustomerDetail({ id }: { id: string }) {
         <DocList docs={quotes} empty="No quotations for this customer yet." />
       </div>
 
-      <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
-        Invoices <small>— {invs.length}</small>
-      </div>
-      <div className="listwrap">
-        <DocList docs={invs} empty="No invoices for this customer yet." />
-      </div>
+      {invoiceMode && (
+        <>
+          <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+            Invoices <small>— {invs.length}</small>
+          </div>
+          <div className="listwrap">
+            <DocList docs={invs} empty="No invoices for this customer yet." />
+          </div>
+        </>
+      )}
       </div>
 
       {quotes.length > 0 && (

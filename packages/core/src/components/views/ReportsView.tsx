@@ -10,6 +10,12 @@ import type { Doc } from "@/lib/types";
 const num = (n: number) =>
   (isFinite(n) ? n : 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** Trailing run of digits in an invoice number, for numeric sorting ("2694" → 2694). */
+const numOf = (s: unknown) => {
+  const m = String(s ?? "").match(/(\d+)\D*$/);
+  return m ? parseInt(m[1], 10) : 0;
+};
+
 type TradeFilter = "sell" | "buy" | "all";
 
 /** Invoice date (dd-mm-yy) → sortable ISO "yyyy-mm-dd"; falls back to createdAt. */
@@ -87,7 +93,7 @@ export default function ReportsView() {
           total: t.grand,
         };
       })
-      .sort((a, b) => a.iso.localeCompare(b.iso) || String(a.no).localeCompare(String(b.no)));
+      .sort((a, b) => numOf(b.no) - numOf(a.no) || b.iso.localeCompare(a.iso)); // latest invoice number first
   }, [invoices, from, to, type]);
 
   const totals = useMemo(

@@ -264,6 +264,10 @@ body{
 .sc input{width:96px; text-align:right; font-family:var(--mono); font-size:17px; font-weight:600; border:none;
   border-bottom:1.5px solid var(--line-2); background:transparent; color:var(--ink); padding:2px 2px}
 .sc input:focus{outline:none; border-color:var(--brass)}
+/* editable Total Price (override): reads like the walnut price value, a touch wider for big totals */
+.sc.amt .amt-edit{display:inline-flex; align-items:baseline; gap:2px; font-family:var(--mono); font-size:16px; font-weight:600; color:var(--walnut)}
+.sc.amt .amt-edit input{width:120px; color:var(--walnut)}
+.sc.amt .amt-edit input::-webkit-outer-spin-button,.sc.amt .amt-edit input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
 .formula{padding:7px 13px 10px; font-family:var(--mono); font-size:10.5px; color:var(--ink-faint); border-top:1px solid var(--line)}
 .formula b{color:var(--ochre-deep)}
 /* calc-mode toggle (By size ⇄ Total CFT ⇄ Running ft), in the dark section header */
@@ -985,6 +989,8 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .mast,.section,.totals{border-color:var(--line-2)}
   .row input.dim{border:none; background:transparent}
   .meta input,.co-name,.sec-name,.rate-box input,.gst-lab input,.cust-block input{box-shadow:none}
+  /* editable Total Price prints as plain text — no underline, no spinner */
+  .sc.amt .amt-edit input{border:none !important; padding:0; text-align:right}
   /* selects inside the printed sheet: drop the dropdown arrow, render as plain text */
   #sheet select{-webkit-appearance:none; -moz-appearance:none; appearance:none;
     background-image:none !important; background:transparent !important; border:none !important; padding-right:0 !important}
