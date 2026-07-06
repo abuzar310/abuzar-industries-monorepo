@@ -41,7 +41,7 @@ export default function ReceiptsView() {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<Kind>("received");
   const [amt, setAmt] = useState("");
-  const [mode, setMode] = useState<"cash" | "owner" | "upi">("cash");
+  const [mode, setMode] = useState<"cash" | "owner" | "upi" | "uowner">("cash");
   const [acct, setAcct] = useState("");
   const [note, setNote] = useState("");
   const [date, setDate] = useState("");
@@ -97,12 +97,13 @@ export default function ReceiptsView() {
         e.label = note.trim() || picked.name;
         e.date = date ? toDmy(date) : e.date;
       } else {
+        const isUpiMode = mode === "upi" || mode === "uowner";
         if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
-        const isCash = mode !== "upi";
+        const isCash = !isUpiMode;
         e.amount = a;
-        e.mode = isCash ? "cash" : "upi";
+        e.mode = isUpiMode ? "upi" : "cash";
         e.account = mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "";
-        e.toOwner = isCash && (mode === "owner" || isOwner);
+        e.toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
         e.label = isCash ? note.trim() : "";
         e.date = date ? toDmy(date) : e.date;
       }
@@ -132,15 +133,17 @@ export default function ReceiptsView() {
       return toast("₹" + inr(a) + " due added for " + picked.name);
     }
 
+    const isUpiMode = mode === "upi" || mode === "uowner";
     if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
-    const isCash = mode !== "upi";
-    const toOwner = isCash && (mode === "owner" || isOwner);
+    const isCash = !isUpiMode;
+    const toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
     // apply the receipt across the customer's open quotations (oldest first); leftover → account credit
     const { applied, leftover } = await applyCustomerReceipt({
       custId: picked.id,
       custName: picked.name,
       amount: a,
-      mode: isCash ? "cash" : "upi",
+      mode: isUpiMode ? "upi" : "cash",
+      // UPI → Owner needs no account (straight to the owner, not a collectable account)
       account: mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "",
       toOwner,
       note: isCash ? note.trim() : "",
@@ -156,7 +159,11 @@ export default function ReceiptsView() {
         ? "₹" + inr(a) + " received from " + picked.name + " · applied to " + nq + " quote" + (nq === 1 ? "" : "s") +
           (leftover > 0.5 ? " · ₹" + inr(leftover) + " to account" : "")
         : "₹" + inr(a) + " received from " + picked.name +
-          (mode === "upi" ? (acct.trim() ? " · " + acct.trim() : "") : toOwner ? " · to owner" : " · to account");
+          (isUpiMode
+            ? (acct.trim() ? " · " + acct.trim() : "") + (mode === "uowner" ? " · to owner" : "")
+            : toOwner
+              ? " · to owner"
+              : " · to account");
     toast(msg);
   }
 
@@ -182,7 +189,7 @@ export default function ReceiptsView() {
     setEditId(e.id);
     setKind(e.charge ? "due" : "received");
     setAmt(String(e.amount));
-    setMode(e.charge ? "cash" : e.mode === "upi" ? "upi" : e.toOwner ? "owner" : "cash");
+    setMode(e.charge ? "cash" : e.mode === "upi" ? (e.toOwner ? "uowner" : "upi") : e.toOwner ? "owner" : "cash");
     setAcct(e.account || "");
     setNote(e.charge ? e.note || "" : e.label || "");
     setDate(e.date ? fromDmy(e.date) : "");
@@ -283,10 +290,11 @@ export default function ReceiptsView() {
           {showReceivedFields ? (
             <label className="modal-field">
               <span>Mode</span>
-              <select value={mode} onChange={(e) => setMode(e.target.value as "cash" | "owner" | "upi")}>
+              <select value={mode} onChange={(e) => setMode(e.target.value as "cash" | "owner" | "upi" | "uowner")}>
                 <option value="cash">Cash</option>
                 <option value="owner">Cash → Owner</option>
                 <option value="upi">UPI</option>
+                <option value="uowner">UPI → Owner</option>
               </select>
             </label>
           ) : (

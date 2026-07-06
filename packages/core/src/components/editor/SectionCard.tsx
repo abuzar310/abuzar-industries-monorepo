@@ -10,11 +10,17 @@ interface Props {
   si: number;
   cft: number;
   modes: Mode[]; // which entry modes to offer
+  selRows: Set<number>; // selected line indices in this box (for Excel-style copy)
+  reorderable: boolean; // allow dragging this box by its header to reorder (auto layout)
   onName: (si: number, v: string) => void;
   onRate: (si: number, v: string) => void;
   onSetMode: (si: number, mode: Mode) => void;
   onCell: (si: number, ri: number, k: CellKey, v: string) => void;
   onAmt: (si: number, v: string) => void; // override the section Total Price directly
+  onSelRow: (si: number, ri: number) => void; // click a line number to (de)select it
+  onSelAll: (si: number) => void; // click the "#" header to select/clear the whole box
+  onDragStartSec: (si: number) => void;
+  onDropSec: (si: number) => void;
   onAddRow: (si: number) => void;
   onDelRow: (si: number, ri: number) => void;
   onDelSec: (si: number) => void;
@@ -23,7 +29,7 @@ interface Props {
 const DIM: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 const MODE_LABEL: Record<Mode, string> = { cft: "By size", direct: "Total CFT", cbm: "Total CBM", rft: "Running ft", pcs: "Per price" };
 
-export default function SectionCard({ sec, si, cft, modes, onName, onRate, onSetMode, onCell, onAmt, onAddRow, onDelRow, onDelSec }: Props) {
+export default function SectionCard({ sec, si, cft, modes, selRows, reorderable, onName, onRate, onSetMode, onCell, onAmt, onSelRow, onSelAll, onDragStartSec, onDropSec, onAddRow, onDelRow, onDelSec }: Props) {
   const mode: Mode =
     sec.calcMode === "rft"
       ? "rft"
@@ -46,11 +52,22 @@ export default function SectionCard({ sec, si, cft, modes, onName, onRate, onSet
   const totalText = pcs ? String(Math.round(cft)) : cft.toFixed(2);
   const totalPcs = sec.rows.reduce((s, r) => s + (Math.round(+r.pcs) || 0), 0);
   const baseAmt = Math.round(cft * (+sec.rate || 0) * 100) / 100; // qty × rate (before any manual override)
+  const allSel = sec.rows.length > 0 && selRows.size === sec.rows.length; // whole box selected
+
+  const numHead = (
+    <span
+      className={"selall" + (allSel ? " sel" : "")}
+      title="Select all lines in this box (then Ctrl/Cmd+C)"
+      onClick={() => onSelAll(si)}
+    >
+      #
+    </span>
+  );
 
   // header cells for the CFT-first table (# · CFT · L · W · T · Pcs)
   const head = (
     <>
-      <span>#</span>
+      {numHead}
       {!pcs && <span>{unit}</span>}
       <span>
         L<i className="unit">feet</i>
@@ -69,9 +86,18 @@ export default function SectionCard({ sec, si, cft, modes, onName, onRate, onSet
   );
 
   return (
-    <div className={"section" + (single ? " direct" : "")}>
+    <div
+      className={"section" + (single ? " direct" : "")}
+      onDragOver={reorderable ? (e) => e.preventDefault() : undefined}
+      onDrop={reorderable ? () => onDropSec(si) : undefined}
+    >
       <div className="sec-head">
-        <span className="grain">
+        <span
+          className={"grain" + (reorderable ? " draghandle" : "")}
+          draggable={reorderable}
+          onDragStart={reorderable ? () => onDragStartSec(si) : undefined}
+          title={reorderable ? "Drag to reorder this box" : undefined}
+        >
           <i />
           <i />
           <i />
@@ -97,7 +123,7 @@ export default function SectionCard({ sec, si, cft, modes, onName, onRate, onSet
       {single ? (
         <>
           <div className="thead dcols">
-            <span>#</span>
+            {numHead}
             <span>
               {unit}
               <i className="unit">qty</i>
@@ -106,8 +132,14 @@ export default function SectionCard({ sec, si, cft, modes, onName, onRate, onSet
           </div>
           <div className="rows">
             {sec.rows.map((r, ri) => (
-              <div className="row dcols" key={ri}>
-                <span className="sl">{ri + 1}</span>
+              <div className={"row dcols" + (selRows.has(ri) ? " selrow" : "")} key={ri}>
+                <span
+                  className={"sl selsl" + (selRows.has(ri) ? " sel" : "")}
+                  title="Click to select this line (copy with Ctrl/Cmd+C)"
+                  onClick={() => onSelRow(si, ri)}
+                >
+                  {ri + 1}
+                </span>
                 <input
                   className="dim"
                   type="text"
@@ -132,8 +164,14 @@ export default function SectionCard({ sec, si, cft, modes, onName, onRate, onSet
           <div className={"thead cf" + (pcs ? " pcstab" : "")}>{head}</div>
           <div className="rows">
             {sec.rows.map((r, ri) => (
-              <div className={"row cf" + (pcs ? " pcstab" : "")} key={ri}>
-                <span className="sl">{ri + 1}</span>
+              <div className={"row cf" + (pcs ? " pcstab" : "") + (selRows.has(ri) ? " selrow" : "")} key={ri}>
+                <span
+                  className={"sl selsl" + (selRows.has(ri) ? " sel" : "")}
+                  title="Click to select this line (copy with Ctrl/Cmd+C)"
+                  onClick={() => onSelRow(si, ri)}
+                >
+                  {ri + 1}
+                </span>
                 {!pcs && <span className="cft">{measure(r).toFixed(2)}</span>}
                 {DIM.map((k) => (
                   <input

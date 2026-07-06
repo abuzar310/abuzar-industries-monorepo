@@ -242,6 +242,18 @@ body{
 .cft{font-family:var(--mono); font-weight:600; text-align:right; font-size:13px; padding-right:3px; color:var(--walnut); font-variant-numeric:tabular-nums}
 .x-row{background:transparent; border:none; color:var(--line-2); cursor:pointer; font-size:17px; line-height:1; padding:0; transition:color var(--t-fast),transform var(--t-fast)}
 .x-row:hover{color:var(--danger); transform:scale(1.15)}
+/* drag-reorder handle (the grip in the box header) */
+.grain.draghandle{cursor:grab}
+.grain.draghandle:active{cursor:grabbing}
+/* Excel-style line selection: click the line number to select, then Ctrl/Cmd+C / +V */
+.selsl{cursor:pointer; border-radius:4px; transition:background var(--t-fast),color var(--t-fast)}
+.selsl:hover{background:var(--line-2)}
+.selsl.sel{background:var(--ochre); color:#fff; font-weight:800}
+.row.selrow{background:var(--ochre-soft)}
+/* "#" column header: click to select/clear the whole box */
+.selall{cursor:pointer; border-radius:4px; padding:0 2px; transition:background var(--t-fast),color var(--t-fast)}
+.selall:hover{background:var(--line-2)}
+.selall.sel{background:var(--ochre); color:#fff}
 .sec-foot{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 13px; border-top:1px solid var(--line-2); background:var(--panel)}
 .add-row{
   font-family:var(--disp); letter-spacing:.04em; text-transform:uppercase; font-size:11px; font-weight:700;
@@ -327,6 +339,14 @@ body{
 #sheet.sq .mh-side input{border:none; background:transparent; font-family:var(--mono); font-weight:700; font-size:14px; color:var(--ink); padding:1px 0; width:100%; min-width:0}
 #sheet.sq .mh-side input:focus{outline:none}
 #sheet.sq .mh-date input{text-align:right}
+/* lean date field: type a loose value (normalises on blur) or tap the calendar to pick a day */
+.datefield{display:inline-flex; align-items:center; gap:4px; width:100%; position:relative}
+.datefield .datefield-txt{flex:1 1 auto; min-width:0; width:auto}
+.datefield-cal{flex:0 0 auto; border:none; background:transparent; cursor:pointer; font-size:14px; line-height:1; padding:2px; opacity:.55}
+.datefield-cal:hover{opacity:1}
+/* keep the native <input type=date> reachable for showPicker() but visually out of the way */
+.datefield-native{position:absolute; right:0; bottom:0; width:1px; height:1px; padding:0; margin:0; border:0; opacity:0; pointer-events:none}
+#sheet.sq .mh-date .datefield{justify-content:flex-end}
 #sheet.sq .cust-block .f{padding:3px 20px}
 #sheet.sq .cust-block label{margin-bottom:0}
 /* Cut Size quote: LIGHT box title bar (soft, like the footer) — not the bold dark walnut bar.
@@ -984,6 +1004,9 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .wrap{padding:0; max-width:none}
   .topnav,#toast{display:none !important}
   .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint,.mode-btn,.mode-seg,.no-print{display:none !important}
+  /* line-selection highlight is a screen-only editing aid — never print it */
+  .row.selrow{background:transparent !important}
+  .selsl.sel,.selall.sel{background:transparent !important; color:inherit !important}
   .mast,.totals,.listwrap,.section{box-shadow:none}
   .mast::after,.stat::before,.grand::before{display:none}
   .mast,.section,.totals{border-color:var(--line-2)}

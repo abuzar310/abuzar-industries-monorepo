@@ -1,7 +1,7 @@
 // Named payment accounts (UPI + cash held by Tabrez, Afsar, etc.) — registry + rollup + daily collect.
-import { allRec, metaGet, metaSet, put } from "./db";
-import { nowIso, todayStr, uid } from "./calc";
-import { trySync } from "./cloud";
+import { allRec, delRec, getRec, metaGet, metaSet, put } from "./db";
+import { computeDoc, nowIso, todayStr, uid } from "./calc";
+import { cloudDelete, trySync } from "./cloud";
 import type { Customer, Doc, Expense } from "./types";
 
 const isUpi = (e: Expense) => e.type === "sale" && e.mode === "upi";
@@ -340,6 +340,200 @@ export function accountLedger(expenses: Expense[], quotes: Doc[] = [], customers
     totalCash: r2(accounts.reduce((s, a) => s + a.cashTotal, 0)),
     grandTotal: r2(accounts.reduce((s, a) => s + a.total, 0)),
     accountCount: accounts.length,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UPI account balances + partial hand-overs (collections)
+//
+// Each UPI account is a little ledger: customer UPI payments credit it, and a
+// "collection" (hand-over to the owner) debits it by any custom amount, leaving
+// the rest as a running balance. Money that went straight to the owner
+// (toOwner) is recorded but never counts toward the collectable balance.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A partial hand-over of money collected into a UPI account (a debit on that account). */
+export interface AccountCollection {
+  id: string; // "COL-" + uid
+  account: string;
+  amount: number;
+  date: string; // dd-mm-yy
+  by: string; // enteredBy
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+  synced: boolean;
+}
+
+/** A UPI credit into an account (customer payment). */
+const isUpiCredit = (e: Expense) => e.type === "sale" && !e.charge && e.mode === "upi" && !!(e.account || "").trim();
+
+export const listCollections = () => allRec<AccountCollection>("collections");
+
+export async function addCollection(fields: {
+  account: string;
+  amount: number;
+  date?: string;
+  by: string;
+  note?: string;
+}): Promise<AccountCollection | null> {
+  const account = (fields.account || "").trim();
+  const amount = r2(Math.max(0, +fields.amount || 0));
+  if (!account || amount <= 0) return null;
+  const now = nowIso();
+  const c: AccountCollection = {
+    id: "COL-" + uid(),
+    account,
+    amount,
+    date: fields.date || todayStr(),
+    by: fields.by,
+    note: (fields.note || "").trim(),
+    createdAt: now,
+    updatedAt: now,
+    synced: false,
+  };
+  await put("collections", c);
+  trySync();
+  return c;
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  await delRec("collections", id);
+  cloudDelete("collections", id);
+  trySync();
+}
+
+/** Delete a UPI credit shown under an account. If it's a quote payment (sourceId), the amount is
+ *  rolled back off that quotation's paid total so nothing desyncs; account receipts just delete. */
+export async function deleteAccountEntry(id: string): Promise<void> {
+  const e = await getRec<Expense>("expenses", id);
+  if (!e) return;
+  if (e.sourceId) {
+    const q = await getRec<Doc>("quotations", e.sourceId);
+    if (q) {
+      const amt = +e.amount || 0;
+      const payCash = r2(Math.max(0, (+(q.payCash || 0) || 0) - (e.mode === "cash" ? amt : 0)));
+      const payUpi = r2(Math.max(0, (+(q.payUpi || 0) || 0) - (e.mode === "upi" ? amt : 0)));
+      q.payCash = payCash;
+      q.payUpi = payUpi;
+      q.amountPaid = r2(payCash + payUpi);
+      const fp = q.finalPrice != null && q.finalPrice > 0 ? q.finalPrice : computeDoc(q).grand;
+      q.paymentStatus = q.amountPaid <= 0 ? "Pending" : q.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
+      q.paidLogged = q.amountPaid > 0;
+      q.updatedAt = nowIso();
+      q.synced = false;
+      await put("quotations", q);
+    }
+  }
+  await delRec("expenses", id);
+  cloudDelete("expenses", id);
+  trySync();
+}
+
+export type AcctLineKind = "in" | "collect";
+export interface AcctStmtLine {
+  id: string;
+  kind: AcctLineKind;
+  amount: number;
+  date: string;
+  at: string;
+  by: string;
+  customer?: string;
+  quoteNo?: string;
+  toOwner?: boolean;
+  note?: string;
+  /** legacy per-entry collect flag (money already handed over under the old system). */
+  legacyCollected?: boolean;
+}
+
+export interface AcctBalance {
+  name: string;
+  /** collectable UPI received (excludes to-owner). */
+  received: number;
+  /** UPI that went straight to the owner — recorded, not collectable. */
+  ownerReceived: number;
+  /** total handed over: new collections + legacy per-entry collected. */
+  collected: number;
+  /** received − collected. */
+  balance: number;
+  lines: AcctStmtLine[]; // newest first
+}
+
+export interface AcctLedger {
+  accounts: AcctBalance[]; // most balance first
+  totalReceived: number;
+  totalOwner: number;
+  totalCollected: number;
+  totalBalance: number;
+}
+
+/** Per-UPI-account balances + a merged (credits + collections) statement, newest first. */
+export function acctLedger(
+  expenses: Expense[],
+  collections: AccountCollection[],
+  quotes: Doc[] = [],
+  customers: Customer[] = [],
+): AcctLedger {
+  const map = new Map<string, AcctBalance>();
+  const get = (name: string) => {
+    let a = map.get(name);
+    if (!a) {
+      a = { name, received: 0, ownerReceived: 0, collected: 0, balance: 0, lines: [] };
+      map.set(name, a);
+    }
+    return a;
+  };
+
+  for (const e of expenses) {
+    if (!isUpiCredit(e)) continue;
+    const name = (e.account || "").trim();
+    const a = get(name);
+    const amt = +e.amount || 0;
+    const legacyCollected = !!e.collectedAt && !e.toOwner;
+    if (e.toOwner) a.ownerReceived += amt;
+    else {
+      a.received += amt;
+      if (legacyCollected) a.collected += amt;
+    }
+    a.lines.push({
+      id: e.id,
+      kind: "in",
+      amount: amt,
+      date: e.date,
+      at: e.createdAt || "",
+      by: e.enteredBy,
+      customer: partyName(e, quotes, customers),
+      quoteNo: quoteNo(e, quotes),
+      toOwner: !!e.toOwner,
+      legacyCollected,
+    });
+  }
+
+  for (const c of collections) {
+    const name = (c.account || "").trim();
+    if (!name) continue;
+    const a = get(name);
+    a.collected += +c.amount || 0;
+    a.lines.push({ id: c.id, kind: "collect", amount: +c.amount || 0, date: c.date, at: c.createdAt || "", by: c.by, note: c.note });
+  }
+
+  const accounts = [...map.values()]
+    .map((a) => ({
+      ...a,
+      received: r2(a.received),
+      ownerReceived: r2(a.ownerReceived),
+      collected: r2(a.collected),
+      balance: r2(a.received - a.collected),
+      lines: a.lines.sort((x, y) => (y.at || "").localeCompare(x.at || "")),
+    }))
+    .sort((a, b) => b.balance - a.balance || b.received - a.received);
+
+  return {
+    accounts,
+    totalReceived: r2(accounts.reduce((s, a) => s + a.received, 0)),
+    totalOwner: r2(accounts.reduce((s, a) => s + a.ownerReceived, 0)),
+    totalCollected: r2(accounts.reduce((s, a) => s + a.collected, 0)),
+    totalBalance: r2(accounts.reduce((s, a) => s + a.balance, 0)),
   };
 }
 
