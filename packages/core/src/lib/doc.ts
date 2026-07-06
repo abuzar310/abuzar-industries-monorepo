@@ -1,12 +1,25 @@
 import { nowIso, todayStr } from "./calc";
+import { getRec } from "./db";
 import type { Doc, DocStore } from "./types";
 
 export const docStore = (d: Doc): DocStore =>
   d.kind === "invoice" ? "invoices" : "quotations";
 
-/** Which IndexedDB store a document id belongs to, by prefix. */
+/** Quotations use FY-sequence ids ("2026-27-001"); everything else — a short invoice
+ *  number ("2695") or a legacy "INV-2026-27-…" id — is an invoice. Best-effort hint only;
+ *  prefer loadDoc() to actually open a doc (it checks both stores and never guesses wrong). */
+export const isInvoiceId = (id: string): boolean => !/^\d{4}-\d{2}-\d+$/.test(id);
+
+/** Best-guess store for an id (see isInvoiceId). */
 export const storeForId = (id: string): DocStore =>
-  id.startsWith("INV") ? "invoices" : "quotations";
+  isInvoiceId(id) ? "invoices" : "quotations";
+
+/** Load a document by id WITHOUT trusting the id format: checks invoices then quotations.
+ *  Invoice ids were shortened from "INV-2026-27-2661" to "2661", so a prefix check is no
+ *  longer reliable — this always finds the doc in whichever store actually holds it. */
+export async function loadDoc(id: string): Promise<Doc | undefined> {
+  return (await getRec<Doc>("invoices", id)) || (await getRec<Doc>("quotations", id));
+}
 
 export function blankDoc(id: string): Doc {
   return {

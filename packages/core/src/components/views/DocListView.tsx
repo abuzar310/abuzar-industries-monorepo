@@ -45,7 +45,16 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     let live = true;
     allRec<Doc>(store).then((arr) => {
       const active = arr.filter((d) => !d.deletedAt); // trashed docs live in the Recycle bin (Settings)
-      active.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+      if (store === "invoices") {
+        // invoices: newest number on top (falls back to createdAt when numbers tie / are non-numeric)
+        const num = (d: Doc) => {
+          const m = String(d.number || d.id || "").match(/(\d+)\D*$/);
+          return m ? parseInt(m[1], 10) : 0;
+        };
+        active.sort((a, b) => num(b) - num(a) || (b.createdAt || "").localeCompare(a.createdAt || ""));
+      } else {
+        active.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+      }
       if (live) setDocs(active);
     });
     return () => {

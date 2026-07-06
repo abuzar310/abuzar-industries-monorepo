@@ -25,6 +25,7 @@ export default function DocList({ docs, empty }: { docs: Doc[]; empty: string })
     <>
       {docs.map((d) => {
         const t = computeDoc(d);
+        const cft = t.secCft.reduce((s, c) => s + c, 0);
         const act = (e: React.MouseEvent, suffix: string) => {
           e.stopPropagation();
           open(d.id, suffix);
@@ -44,6 +45,7 @@ export default function DocList({ docs, empty }: { docs: Doc[]; empty: string })
             </span>
             <span>
               <div className="amt">₹ {inr(t.grand)}</div>
+              {cft > 0 && <div className="mut" style={{ fontSize: 12 }}>{inr(cft)} CFT</div>}
               <div className="acts">
                 <button className="btn sm" onClick={(e) => act(e, "")}>
                   Open

@@ -3,7 +3,7 @@ import { cftOf, directOf, inr, pcsOf, rftOf } from "@/lib/calc";
 import type { Section } from "@/lib/types";
 
 type CellKey = "l" | "w" | "t" | "pcs" | "cft";
-type Mode = "cft" | "direct" | "rft" | "pcs";
+type Mode = "cft" | "direct" | "rft" | "pcs" | "cbm";
 
 interface Props {
   sec: Section;
@@ -21,18 +21,28 @@ interface Props {
 }
 
 const DIM: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
-const MODE_LABEL: Record<Mode, string> = { cft: "By size", direct: "Total CFT", rft: "Running ft", pcs: "Per price" };
+const MODE_LABEL: Record<Mode, string> = { cft: "By size", direct: "Total CFT", cbm: "Total CBM", rft: "Running ft", pcs: "Per price" };
 
 export default function SectionCard({ sec, si, cft, amt, modes, onName, onRate, onSetMode, onCell, onAddRow, onDelRow, onDelSec }: Props) {
   const mode: Mode =
-    sec.calcMode === "rft" ? "rft" : sec.calcMode === "direct" ? "direct" : sec.calcMode === "pcs" ? "pcs" : "cft";
+    sec.calcMode === "rft"
+      ? "rft"
+      : sec.calcMode === "direct"
+        ? "direct"
+        : sec.calcMode === "cbm"
+          ? "cbm"
+          : sec.calcMode === "pcs"
+            ? "pcs"
+            : "cft";
   const direct = mode === "direct";
+  const cbm = mode === "cbm";
   const rft = mode === "rft";
   const pcs = mode === "pcs";
-  const single = direct; // only "Total CFT" uses a single input; "Per price" shows full dimensions
+  const single = direct || cbm; // "Total CFT" / "Total CBM" use a single input; "Per price" shows full dimensions
   const singleKey: CellKey = "cft";
-  const unit = rft ? "FT" : pcs ? "Pcs" : "CFT";
-  const measure = (r: Section["rows"][number]) => (rft ? rftOf(r) : pcs ? pcsOf(r) : direct ? directOf(r) : cftOf(r));
+  const unit = cbm ? "CBM" : rft ? "FT" : pcs ? "Pcs" : "CFT";
+  const measure = (r: Section["rows"][number]) =>
+    rft ? rftOf(r) : pcs ? pcsOf(r) : direct || cbm ? directOf(r) : cftOf(r);
   const totalText = pcs ? String(Math.round(cft)) : cft.toFixed(2);
   const totalPcs = sec.rows.reduce((s, r) => s + (Math.round(+r.pcs) || 0), 0);
 

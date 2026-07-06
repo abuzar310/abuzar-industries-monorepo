@@ -48,6 +48,7 @@ apps/*/out/
 # real business data — never commit
 Tally.ods
 reference/invoice-refs/
+scripts/backups/
 
 # nested workspace node_modules
 **/node_modules/

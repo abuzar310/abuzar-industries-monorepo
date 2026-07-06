@@ -42,7 +42,7 @@ export interface DocTotals {
 
 /** Running feet for one line: L (ft) × Pcs. */
 export const rftOf = (r: Row) => (+r.l || 0) * (+r.pcs || 0);
-/** Directly-entered CFT for one line. */
+/** Directly-entered CFT (or CBM) for one line — both use the single `cft` input field. */
 export const directOf = (r: Row) => +(r.cft ?? 0) || 0;
 /** Per-piece pricing: just the piece count (amount = Pcs × rate). */
 export const pcsOf = (r: Row) => +r.pcs || 0;
@@ -52,7 +52,13 @@ export function computeDoc(d: Doc): DocTotals {
   const secCft: number[] = [];
   d.sections.forEach((sec) => {
     const measureOf =
-      sec.calcMode === "rft" ? rftOf : sec.calcMode === "direct" ? directOf : sec.calcMode === "pcs" ? pcsOf : cftOf;
+      sec.calcMode === "rft"
+        ? rftOf
+        : sec.calcMode === "direct" || sec.calcMode === "cbm"
+          ? directOf
+          : sec.calcMode === "pcs"
+            ? pcsOf
+            : cftOf;
     let m = 0;
     sec.rows.forEach((r) => (m += measureOf(r)));
     secCft.push(m);

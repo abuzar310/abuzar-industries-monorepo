@@ -32,6 +32,11 @@ assert.deepEqual(t.secCft, [12]);
 const dd = { sections: [{ name: "Bulk", rate: 100, calcMode: "direct", rows: [{ l: "", w: "", t: "", pcs: "", cft: 5 }] }], gst: 0 } as unknown as Doc;
 assert.equal(computeDoc(dd).sub, 500);
 
+// CBM mode: type CBM directly (2.5) × ₹/CBM rate 40000 = 100000
+const dc = { sections: [{ name: "Logs", rate: 40000, calcMode: "cbm", rows: [{ l: "", w: "", t: "", pcs: "", cft: 2.5 }] }], gst: 0 } as unknown as Doc;
+assert.equal(computeDoc(dc).sub, 100000);
+assert.deepEqual(computeDoc(dc).secCft, [2.5]);
+
 // running-ft mode: L 7 × Pcs 3 = 21 ft × rate 10 = 210
 const dr = { sections: [{ name: "Ply", rate: 10, calcMode: "rft", rows: [{ l: 7, w: 0, t: 0, pcs: 3 }] }], gst: 0 } as unknown as Doc;
 assert.equal(computeDoc(dr).sub, 210);
