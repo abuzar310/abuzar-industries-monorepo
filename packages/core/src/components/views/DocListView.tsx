@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/db";
-import { computeDoc, inr } from "@/lib/calc";
+import { computeDoc, dateSortKey, inr } from "@/lib/calc";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { trashDoc } from "@/lib/trash";
 import { snapshotBefore } from "@/lib/autobackup";
@@ -53,7 +53,13 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
         };
         active.sort((a, b) => num(b) - num(a) || (b.createdAt || "").localeCompare(a.createdAt || ""));
       } else {
-        active.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+        // quotations: newest by their DOCUMENT date first, so a back-dated quote lands
+        // in the right place. Docs whose date can't be parsed fall back to createdAt, and
+        // createdAt breaks any ties between two quotes sharing the same day.
+        const key = (d: Doc) => dateSortKey(d.date) || (d.createdAt || "").slice(0, 10);
+        active.sort(
+          (a, b) => key(b).localeCompare(key(a)) || (b.createdAt || "").localeCompare(a.createdAt || ""),
+        );
       }
       if (live) setDocs(active);
     });

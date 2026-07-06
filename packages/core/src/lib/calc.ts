@@ -28,6 +28,47 @@ export const todayStr = () => {
 
 export const nowIso = () => new Date().toISOString();
 
+/** Normalise a loosely-typed date into the app's `dd-mm-yy` display format.
+ *  Accepts: "" (kept blank), "t"/"today", "5" (day this month), "5-7" / "5/7"
+ *  (day-month this year), "5-7-26" / "5.7.2026" (full), and ISO "2026-07-05".
+ *  Anything it can't make sense of is returned trimmed & unchanged, so the user
+ *  never loses what they typed. */
+export function normalizeDate(input: string): string {
+  const s = (input || "").trim();
+  if (!s) return "";
+  if (/^t(oday)?$/i.test(s)) return todayStr();
+  const parts = s.split(/[^0-9]+/).filter(Boolean).map(Number);
+  if (!parts.length || parts.some((n) => !isFinite(n))) return s;
+  const now = new Date();
+  let d: number, m: number, y: number;
+  if (parts.length >= 3) {
+    // a 4-digit / >31 leading number means it's ISO-style (yyyy-mm-dd)
+    if (parts[0] > 31) [y, m, d] = parts;
+    else [d, m, y] = parts;
+  } else if (parts.length === 2) {
+    [d, m] = parts;
+    y = now.getFullYear();
+  } else {
+    d = parts[0];
+    m = now.getMonth() + 1;
+    y = now.getFullYear();
+  }
+  if (y < 100) y = 2000 + y; // "26" → 2026
+  if (d < 1 || d > 31 || m < 1 || m > 12) return s; // clearly not a date — keep raw
+  return pad(d) + "-" + pad(m) + "-" + String(y).slice(2);
+}
+
+/** A sortable `yyyy-mm-dd` key from a `dd-mm-yy` display date; "" if unparseable
+ *  (callers fall back to createdAt for those). */
+export function dateSortKey(display: string): string {
+  const p = (display || "").trim().split(/[^0-9]+/).filter(Boolean).map(Number);
+  if (p.length < 3 || p.some((n) => !isFinite(n))) return "";
+  let [d, m, y] = p;
+  if (y < 100) y = 2000 + y;
+  if (d < 1 || d > 31 || m < 1 || m > 12) return "";
+  return String(y).padStart(4, "0") + "-" + pad(m) + "-" + pad(d);
+}
+
 export const uid = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 

@@ -135,7 +135,8 @@ export type StoreName =
   | "meta"
   | "sessions"
   | "ledgers"
-  | "vouchers";
+  | "vouchers"
+  | "collections";
 
 // ---- app navigation (each app supplies its own tab set) ----
 export interface Tab {

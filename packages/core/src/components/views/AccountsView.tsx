@@ -1,17 +1,19 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/db";
 import { inr } from "@/lib/calc";
 import {
-  accountDayLedger,
-  accountOverview,
+  acctLedger,
+  addCollection,
   addPayAccount,
-  collectAccountDay,
+  deleteAccountEntry,
+  deleteCollection,
+  listCollections,
   listPayAccounts,
-  oldestPendingDate,
-  payAccounts,
   removePayAccount,
-  todayStr,
+  type AccountCollection,
+  type AcctBalance,
   type PayAccount,
 } from "@/lib/accounts";
 import { USERS } from "@/lib/local-auth";
@@ -30,52 +32,104 @@ const toDmy = (v: string) => {
   const [y, m, d] = (v || "").split("-");
   return d && m && y ? `${d}-${m}-${y.slice(2)}` : "";
 };
-const fromDmy = (v: string) => {
-  const [d, m, y] = (v || "").split("-");
-  return d && m && y ? `20${y}-${m}-${d}` : "";
-};
-const shiftIso = (iso: string, days: number) => {
-  const d = new Date((iso || fromDmy(todayStr())) + "T12:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-};
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export default function AccountsView() {
   const { ready, dataVersion, user } = useApp();
-  const today = todayStr();
+  const router = useRouter();
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [collections, setCollections] = useState<AccountCollection[]>([]);
   const [registry, setRegistry] = useState<PayAccount[]>([]);
-  const [names, setNames] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
+  const [collectFor, setCollectFor] = useState<string | null>(null);
+  const [cAmt, setCAmt] = useState("");
+  const [cDate, setCDate] = useState("");
+  const [cNote, setCNote] = useState("");
   const [newName, setNewName] = useState("");
-  const [pickDate, setPickDate] = useState(fromDmy(today));
   const [showAdd, setShowAdd] = useState(false);
 
-  const viewDate = pickDate ? toDmy(pickDate) : today;
-  const isToday = viewDate === today;
-
   const load = useCallback(() => {
-    Promise.all([allRec<Doc>("quotations"), allRec<Expense>("expenses"), allRec<Customer>("customers")]).then(([qs, es, cs]) => {
+    Promise.all([
+      allRec<Doc>("quotations"),
+      allRec<Expense>("expenses"),
+      allRec<Customer>("customers"),
+      listCollections(),
+      listPayAccounts(),
+    ]).then(([qs, es, cs, cols, reg]) => {
       setQuotes(qs);
       setExpenses(es);
       setCustomers(cs);
+      setCollections(cols);
+      setRegistry(reg);
     });
-    listPayAccounts().then(setRegistry);
-    payAccounts().then(setNames);
   }, []);
   useEffect(() => {
     if (ready) load();
   }, [ready, dataVersion, load]);
 
-  const overview = accountOverview(expenses);
-  const day = accountDayLedger(expenses, viewDate, quotes, customers);
-  const oldestDue = oldestPendingDate(expenses);
-  const allClearDay = day.dayTotal > 0 && day.pendingTotal <= 0.5;
-  const dueAccounts = overview.byAccount.filter((a) => a.pending > 0.5);
+  const ledger = acctLedger(expenses, collections, quotes, customers);
+  // show every named account, even ones with no activity yet
+  const known = new Set(ledger.accounts.map((a) => a.name));
+  const empties: AcctBalance[] = registry
+    .filter((r) => !known.has(r.name))
+    .map((r) => ({ name: r.name, received: 0, ownerReceived: 0, collected: 0, balance: 0, lines: [] }));
+  const accounts = [...ledger.accounts, ...empties];
 
-  const goDate = (dmy: string) => setPickDate(fromDmy(dmy));
+  function startCollect(name: string, balance: number) {
+    setCollectFor(name);
+    setCAmt(balance > 0 ? String(r2(balance)) : "");
+    setCDate("");
+    setCNote("");
+    setOpen(name);
+  }
+  function cancelCollect() {
+    setCollectFor(null);
+    setCAmt("");
+    setCDate("");
+    setCNote("");
+  }
+  async function submitCollect(name: string, maxBal: number) {
+    const a = Math.max(0, +cAmt || 0);
+    if (a <= 0) return toast("Enter an amount");
+    if (a > maxBal + 0.5) return toast("That's more than the balance (₹" + inr(maxBal) + ")");
+    const c = await addCollection({ account: name, amount: a, date: cDate ? toDmy(cDate) : undefined, by: user?.id || "unknown", note: cNote.trim() });
+    if (!c) return toast("Could not record");
+    cancelCollect();
+    load();
+    bumpData();
+    toast("₹" + inr(a) + " collected from " + name + " ✓");
+  }
+  async function delCollection(id: string) {
+    const ok = await confirmDialog({
+      title: "Delete this collection?",
+      message: "Removes this hand-over record — the amount goes back into the account balance.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    await deleteCollection(id);
+    load();
+    bumpData();
+    toast("Collection removed");
+  }
+  async function delEntry(id: string, quoteNo?: string) {
+    const ok = await confirmDialog({
+      title: "Delete this UPI payment?",
+      message:
+        "Removes it from this account" +
+        (quoteNo ? " and takes ₹ back off quotation #" + quoteNo + "'s paid total" : "") +
+        ". Re-enter it if it was miscategorised.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    await deleteAccountEntry(id);
+    load();
+    bumpData();
+    toast("Payment removed");
+  }
 
   async function addAccount() {
     const n = newName.trim();
@@ -88,174 +142,56 @@ export default function AccountsView() {
     bumpData();
     toast("Account “" + n + "” added");
   }
-
-  async function remove(id: string, name: string) {
+  async function removeAccount(id: string, name: string) {
     await removePayAccount(id);
     load();
     bumpData();
     toast("Removed “" + name + "” from saved names");
   }
 
-  async function collect(name: string, pending: number) {
-    if (pending <= 0) return;
-    const ok = await confirmDialog({
-      title: "Collect from " + name + "?",
-      message: `Mark ₹${inr(pending)} collected on ${viewDate}?`,
-      confirmLabel: "Collected ✓",
-    });
-    if (!ok) return;
-    const amt = await collectAccountDay(name, viewDate, user?.id || "unknown");
-    if (amt <= 0) return toast("Nothing to collect");
-    load();
-    bumpData();
-    toast("₹" + inr(amt) + " collected from " + name + " ✓");
-  }
-
-  async function collectAll() {
-    const pending = day.accounts.filter((a) => a.pending > 0.5);
-    if (!pending.length) return;
-    const ok = await confirmDialog({
-      title: "Collect all on " + viewDate + "?",
-      message: `Mark ₹${inr(day.pendingTotal)} collected across ${pending.length} account${pending.length === 1 ? "" : "s"}?`,
-      confirmLabel: "Collect all",
-    });
-    if (!ok) return;
-    let sum = 0;
-    for (const a of pending) sum += await collectAccountDay(a.name, viewDate, user?.id || "unknown");
-    load();
-    bumpData();
-    toast("₹" + inr(sum) + " collected ✓");
-  }
-
   return (
     <div>
       <div className="sectitle">
-        Accounts <small>— overall & daily collect</small>
+        Accounts <small>— UPI accounts &amp; hand-overs</small>
       </div>
 
-      {/* ── OVERALL (all dates) ── */}
+      {/* overall */}
       <div className="panel-card acct-overall">
         <div className="acct-overall-h">Overall</div>
         <div className="acct-overall-grid">
           <div className="acct-stat">
-            <span className="k">Still to collect</span>
-            <span className={"v" + (overview.pendingTotal <= 0.5 ? " ok" : " due")}>₹ {inr(overview.pendingTotal)}</span>
-            <span className="sub">across all dates</span>
+            <span className="k">To collect</span>
+            <span className={"v" + (ledger.totalBalance <= 0.5 ? " ok" : " due")}>₹ {inr(ledger.totalBalance)}</span>
+            <span className="sub">still in accounts</span>
           </div>
           <div className="acct-stat">
-            <span className="k">Total received</span>
-            <span className="v">₹ {inr(overview.receivedTotal)}</span>
-            <span className="sub">
-              UPI ₹{inr(overview.upiTotal)} · Cash ₹{inr(overview.cashTotal)}
-            </span>
+            <span className="k">Received (UPI)</span>
+            <span className="v">₹ {inr(ledger.totalReceived)}</span>
+            <span className="sub">{ledger.totalOwner > 0.5 ? "+ ₹" + inr(ledger.totalOwner) + " to owner" : "collectable"}</span>
           </div>
           <div className="acct-stat">
-            <span className="k">Already collected</span>
-            <span className="v ok">₹ {inr(overview.collectedTotal)}</span>
-            <span className="sub">handed over / cleared</span>
+            <span className="k">Collected</span>
+            <span className="v ok">₹ {inr(ledger.totalCollected)}</span>
+            <span className="sub">handed over</span>
           </div>
         </div>
-        {dueAccounts.length > 0 && (
-          <div className="acct-due-row">
-            <span className="lbl">Due by account</span>
-            <div className="acct-pick">
-              {dueAccounts.map((a) => (
-                <button key={a.name} type="button" className="acct-chip" onClick={() => setOpen(a.name)}>
-                  {a.name} · ₹{inr(a.pending)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* ── DATE NAV ── */}
-      <div className="panel-card acct-date-nav">
-        <div className="acct-date-row">
-          <button className="acct-nav-btn" type="button" title="Previous day" onClick={() => setPickDate(shiftIso(pickDate, -1))}>
-            ←
-          </button>
-          <div className="acct-date-center">
-            <button className={"seg-btn sm" + (isToday ? " on" : "")} type="button" onClick={() => goDate(today)}>
-              Today
-            </button>
-            <span className="acct-view-date">{viewDate}{isToday ? " · today" : ""}</span>
-            <input className="acct-date-input" type="date" value={pickDate} onChange={(e) => setPickDate(e.target.value)} title="Pick a date" />
-          </div>
-          <button className="acct-nav-btn" type="button" title="Next day" onClick={() => setPickDate(shiftIso(pickDate, 1))}>
-            →
-          </button>
-        </div>
-
-        {overview.dates.length > 0 && (
-          <div className="acct-day-strip">
-            {overview.dates.slice(0, 14).map((d) => {
-              const active = d.date === viewDate;
-              const hasDue = d.pending > 0.5;
-              return (
-                <button
-                  key={d.date}
-                  type="button"
-                  className={"acct-day-chip" + (active ? " on" : "") + (hasDue ? " due" : " ok")}
-                  onClick={() => goDate(d.date)}
-                >
-                  <span className="d">{d.date}</span>
-                  {hasDue ? <span className="amt">₹{inr(d.pending)}</span> : <span className="amt ok">✓</span>}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {oldestDue && oldestDue !== viewDate && overview.pendingTotal > day.pendingTotal + 0.5 && (
-          <button type="button" className="acct-jump-overdue" onClick={() => goDate(oldestDue)}>
-            ↩ Older uncollected on {oldestDue} — tap to go there
-          </button>
-        )}
-      </div>
-
-      {/* ── THIS DAY ── */}
       <div className="acct-day-label">
-        <span>This day · {viewDate}</span>
-        {day.pendingTotal > 0.5 && (
-          <button className="btn primary sm" type="button" onClick={collectAll}>
-            Collect all · ₹{inr(day.pendingTotal)}
-          </button>
-        )}
-        <button className="btn sm" type="button" onClick={() => setShowAdd((v) => !v)}>
+        <span>Accounts · {accounts.length}</span>
+        <button className="btn sm" type="button" style={{ marginLeft: "auto" }} onClick={() => setShowAdd((v) => !v)}>
           {showAdd ? "Done" : "+ Account"}
         </button>
       </div>
 
-      <div className="pay-hero">
-        <div className="ph-main">
-          <span className="ph-k">{allClearDay ? "This day collected" : "To collect this day"}</span>
-          <span className={"ph-v" + (allClearDay ? " ok" : "")}>₹ {inr(day.pendingTotal)}</span>
-          <span className="ph-sub">
-            ₹{inr(day.dayTotal)} received · {day.accountCount} account{day.accountCount === 1 ? "" : "s"}
-            {day.collectedTotal > 0 ? " · ₹" + inr(day.collectedTotal) + " already collected" : ""}
-          </span>
-        </div>
-        <div className="ph-side">
-          <div className="ph-tile rec">
-            <small>UPI</small>
-            <b>₹ {inr(day.accounts.reduce((s, a) => s + a.upiTotal, 0))}</b>
-          </div>
-          <div className="ph-tile">
-            <small>Cash</small>
-            <b>₹ {inr(day.accounts.reduce((s, a) => s + a.cashTotal, 0))}</b>
-          </div>
-        </div>
-      </div>
-
       {showAdd && (
-        <div className="panel-card" style={{ padding: 14, marginTop: 12 }}>
+        <div className="panel-card" style={{ padding: 14, marginBottom: 12 }}>
           <div className="acct-add-row">
             <label className="modal-field" style={{ flex: 1, minWidth: 0 }}>
               <span>New account name</span>
               <input
                 type="text"
-                placeholder="e.g. Tabrez · Current A"
+                placeholder="e.g. Tabrez GPay"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addAccount()}
@@ -270,7 +206,7 @@ export default function AccountsView() {
               {registry.map((r) => (
                 <span key={r.id} className="acct-chip on" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   {r.name}
-                  <button type="button" className="acct-rm" title="Remove" onClick={() => remove(r.id, r.name)}>
+                  <button type="button" className="acct-rm" title="Remove name" onClick={() => removeAccount(r.id, r.name)}>
                     ×
                   </button>
                 </span>
@@ -280,59 +216,119 @@ export default function AccountsView() {
         </div>
       )}
 
-      {day.accounts.length ? (
-        day.accounts.map((a) => {
+      {accounts.length ? (
+        accounts.map((a) => {
           const isOpen = open === a.name;
-          const done = a.pending <= 0.5 && a.total > 0;
-          const overallDue = dueAccounts.find((x) => x.name === a.name)?.pending || 0;
+          const due = a.balance > 0.5;
+          const collecting = collectFor === a.name;
           return (
-            <div className={"panel-card" + (done ? " acct-done" : "")} key={a.name}>
+            <div className={"panel-card" + (!due && a.received > 0 ? " acct-done" : "")} key={a.name}>
               <div className="pc-head acct-head">
                 <span style={{ cursor: "pointer", flex: 1 }} onClick={() => setOpen(isOpen ? null : a.name)}>
                   <span className="um-caret" style={{ marginRight: 6 }}>
                     {isOpen ? "▾" : "▸"}
                   </span>
                   {a.name}
-                  {done && <span className="acct-collected-badge">Collected ✓</span>}
-                  {overallDue > a.pending + 0.5 && (
-                    <span className="acct-overall-hint" title="Total still due across all dates">
-                      · ₹{inr(overallDue)} overall due
-                    </span>
-                  )}
+                  {!due && a.received > 0 && <span className="acct-collected-badge">Cleared ✓</span>}
                 </span>
                 <span className="acct-head-totals">
-                  {a.upiTotal > 0 && <span className="acct-tag upi">UPI ₹{inr(a.upiTotal)}</span>}
-                  {a.cashTotal > 0 && <span className="acct-tag cash">Cash ₹{inr(a.cashTotal)}</span>}
-                  {a.pending > 0.5 ? (
-                    <span className="acct-tag pending">Due ₹{inr(a.pending)}</span>
+                  {a.received > 0 && <span className="acct-tag upi">In ₹{inr(a.received)}</span>}
+                  {a.ownerReceived > 0 && <span className="acct-tag">Owner ₹{inr(a.ownerReceived)}</span>}
+                  {due ? (
+                    <span className="acct-tag pending">Bal ₹{inr(a.balance)}</span>
                   ) : (
                     a.collected > 0 && <span className="acct-tag ok">₹{inr(a.collected)}</span>
                   )}
                 </span>
-                {a.pending > 0.5 && (
-                  <button className="btn primary sm acct-collect-btn" type="button" onClick={() => collect(a.name, a.pending)}>
-                    Collect ₹{inr(a.pending)}
+                {due && !collecting && (
+                  <button className="btn primary sm acct-collect-btn" type="button" onClick={() => startCollect(a.name, a.balance)}>
+                    Collect
                   </button>
                 )}
               </div>
-              {isOpen &&
-                a.entries.map((e) => (
-                  <div className={"stmt" + (e.collected ? " acct-stmt-done" : "")} key={e.id}>
-                    <div className={"stmt-ic " + (e.mode === "upi" ? "upi" : "cash")}>{e.mode === "upi" ? "UPI" : "₹"}</div>
-                    <div className="stmt-main">
-                      <div className="stmt-to">
-                        {e.customer}
-                        {e.quoteNo ? " · #" + e.quoteNo : ""}
-                        {e.collected && <span className="acct-collected-badge sm"> ✓</span>}
-                      </div>
-                      <div className="stmt-sub">
-                        {e.mode === "upi" ? "UPI" : "Cash"} · {e.date}
-                        {hhmm(e.at) ? " · " + hhmm(e.at) : ""} · by {userName(e.by)}
-                        {e.collected && e.collectedAt ? " · collected " + hhmm(e.collectedAt) : ""}
-                      </div>
-                    </div>
-                    <div className={"stmt-amt" + (e.collected ? " muted" : "")}>+₹{inr(e.amount)}</div>
+
+              {collecting && (
+                <div className="panel-card" style={{ padding: 12, margin: "0 0 4px" }}>
+                  <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+                    <label className="modal-field" style={{ flex: "1 1 120px", minWidth: 0 }}>
+                      <span>Collect ₹ <small style={{ color: "var(--ink-faint)" }}>(bal ₹{inr(a.balance)})</small></span>
+                      <input type="number" inputMode="decimal" placeholder={inr(a.balance)} value={cAmt} onChange={(e) => setCAmt(e.target.value)} autoFocus />
+                    </label>
+                    <label className="modal-field" style={{ flex: "1 1 120px", minWidth: 0 }}>
+                      <span>Date (optional)</span>
+                      <input type="date" value={cDate} onChange={(e) => setCDate(e.target.value)} />
+                    </label>
+                    <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
+                      <span>Note (optional)</span>
+                      <input type="text" placeholder="e.g. handed to Afsar" value={cNote} onChange={(e) => setCNote(e.target.value)} />
+                    </label>
                   </div>
+                  <div className="rowbtns" style={{ marginTop: 10 }}>
+                    <button className="btn primary sm" type="button" onClick={() => submitCollect(a.name, a.balance)}>
+                      Record collection
+                    </button>
+                    <button className="btn sm" type="button" onClick={cancelCollect}>
+                      Cancel
+                    </button>
+                    {a.balance > 0.5 && (
+                      <button className="btn sm" type="button" onClick={() => setCAmt(String(r2(a.balance)))}>
+                        Full ₹{inr(a.balance)}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {isOpen &&
+                (a.lines.length ? (
+                  a.lines.map((l) =>
+                    l.kind === "collect" ? (
+                      <div className="stmt acct-stmt-done" key={l.id}>
+                        <div className="stmt-ic ok">↑</div>
+                        <div className="stmt-main">
+                          <div className="stmt-to">Collected / handed over{l.note ? " · " + l.note : ""}</div>
+                          <div className="stmt-sub">
+                            {l.date}
+                            {hhmm(l.at) ? " · " + hhmm(l.at) : ""} · by {userName(l.by)}
+                          </div>
+                        </div>
+                        <div className="stmt-amt" style={{ color: "var(--green)" }}>−₹{inr(l.amount)}</div>
+                        <span className="pb-rowacts">
+                          <button className="pb-x" title="Delete collection" onClick={() => delCollection(l.id)}>
+                            ×
+                          </button>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className={"stmt" + (l.toOwner || l.legacyCollected ? " acct-stmt-done" : "")} key={l.id}>
+                        <div className="stmt-ic upi">UPI</div>
+                        <div
+                          className="stmt-main"
+                          style={{ cursor: l.quoteNo ? "pointer" : "default" }}
+                          onClick={() => l.quoteNo && router.push("/editor/" + (quotes.find((d) => d.number === l.quoteNo)?.id || ""))}
+                        >
+                          <div className="stmt-to">
+                            {l.customer}
+                            {l.quoteNo ? " · #" + l.quoteNo : ""}
+                            {l.toOwner && <span className="acct-overall-hint"> · to owner</span>}
+                            {l.legacyCollected && <span className="acct-collected-badge sm"> ✓</span>}
+                          </div>
+                          <div className="stmt-sub">
+                            UPI · {l.date}
+                            {hhmm(l.at) ? " · " + hhmm(l.at) : ""} · by {userName(l.by)}
+                          </div>
+                        </div>
+                        <div className="stmt-amt">+₹{inr(l.amount)}</div>
+                        <span className="pb-rowacts">
+                          <button className="pb-x" title="Delete this payment" onClick={() => delEntry(l.id, l.quoteNo)}>
+                            ×
+                          </button>
+                        </span>
+                      </div>
+                    ),
+                  )
+                ) : (
+                  <div className="stmt-sub" style={{ padding: "8px 12px", opacity: 0.7 }}>No UPI payments to this account yet.</div>
                 ))}
             </div>
           );
@@ -340,8 +336,7 @@ export default function AccountsView() {
       ) : (
         <div className="panel-card">
           <div className="empty">
-            No payments to any account on {viewDate}.
-            {overview.dates.length > 0 ? " Pick another day above, or record a payment with an account." : " Record a payment and pick an account."}
+            No UPI accounts yet. Add one above, or record a UPI payment and pick an account.
           </div>
         </div>
       )}

@@ -46,7 +46,7 @@ interface Props {
 
 export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, isOwner, onFinalPrice, setAggregates, onClearAll, reload }: Props) {
   const [amt, setAmt] = useState("");
-  const [mode, setMode] = useState<"cash" | "owner" | "upi">("cash");
+  const [mode, setMode] = useState<"cash" | "owner" | "upi" | "uowner">("cash");
   const [acct, setAcct] = useState("");
   const [note, setNote] = useState(""); // free-text note on a cash payment (shown in Statements)
   const [payDate, setPayDate] = useState(""); // optional: when the payment actually happened (yyyy-mm-dd)
@@ -61,14 +61,17 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
   async function addLine() {
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return;
+    const isUpiMode = mode === "upi" || mode === "uowner";
     if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
-    const isCash = mode !== "upi";
-    // cash goes to owner (out of the manager's daybook) if it's the "Cash → Owner" mode, or the owner recorded it
-    const toOwner = isCash && (mode === "owner" || isOwner);
+    const isCash = !isUpiMode;
+    // "to owner" = money that leaves the manager's daybook / collectable balance:
+    // Cash → Owner, UPI → Owner, or any cash the owner records themselves.
+    const toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
     await addExpense({
       type: "sale",
       amount: a,
-      mode: isCash ? "cash" : "upi",
+      mode: isUpiMode ? "upi" : "cash",
+      // UPI → Owner needs no account (goes straight to the owner, not a collectable account)
       account: mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "",
       toOwner,
       note: (doc.customerName || "Walk-in") + " · " + doc.number,
@@ -77,7 +80,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
       enteredBy: by,
       sourceId: doc.id,
     });
-    setAggregates(r2((doc.payCash || 0) + (isCash ? a : 0)), r2((doc.payUpi || 0) + (mode === "upi" ? a : 0)));
+    setAggregates(r2((doc.payCash || 0) + (isCash ? a : 0)), r2((doc.payUpi || 0) + (isUpiMode ? a : 0)));
     setAmt("");
     setAcct("");
     setNote("");
@@ -89,7 +92,13 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
       "₹" +
         inr(a) +
         " recorded" +
-        (mode === "upi" ? acctLbl : toOwner ? " · to owner" : acct.trim() ? acctLbl + " (Accounts)" : " · cash → Daybook"),
+        (isUpiMode
+          ? acctLbl + (mode === "uowner" ? " · to owner" : "")
+          : toOwner
+            ? " · to owner"
+            : acct.trim()
+              ? acctLbl + " (Accounts)"
+              : " · cash → Daybook"),
     );
   }
 
@@ -108,7 +117,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
   function startEdit(l: PartyStatement) {
     setEditId(l.id);
     setAmt(String(l.amount));
-    setMode(l.mode === "upi" ? "upi" : l.toOwner ? "owner" : "cash");
+    setMode(l.mode === "upi" ? (l.toOwner ? "uowner" : "upi") : l.toOwner ? "owner" : "cash");
     setAcct(l.account || "");
     setNote(l.note || "");
     setPayDate(l.date ? fromDmy(l.date) : "");
@@ -126,14 +135,15 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     if (!old) return cancelEdit();
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return;
+    const isUpiMode = mode === "upi" || mode === "uowner";
     if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
+    const isCash = !isUpiMode;
     const e = await getRec<Expense>("expenses", old.id);
     if (!e) return cancelEdit();
-    const isCash = mode !== "upi";
     e.amount = a;
-    e.mode = isCash ? "cash" : "upi";
+    e.mode = isUpiMode ? "upi" : "cash";
     e.account = mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "";
-    e.toOwner = isCash ? mode === "owner" || isOwner : false;
+    e.toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
     e.label = isCash ? note.trim() : "";
     e.date = payDate ? toDmy(payDate) : e.date;
     e.updatedAt = nowIso();
@@ -141,7 +151,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     await put("expenses", e);
     // aggregate delta: drop the old contribution, add the new
     const nextCash = Math.max(0, r2((doc.payCash || 0) - (old.mode === "cash" ? old.amount : 0) + (isCash ? a : 0)));
-    const nextUpi = Math.max(0, r2((doc.payUpi || 0) - (old.mode === "upi" ? old.amount : 0) + (mode === "upi" ? a : 0)));
+    const nextUpi = Math.max(0, r2((doc.payUpi || 0) - (old.mode === "upi" ? old.amount : 0) + (isUpiMode ? a : 0)));
     setAggregates(nextCash, nextUpi);
     cancelEdit();
     reload();
@@ -176,7 +186,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
         {lines.map((l) => (
           <div className={"pb-r" + (editId === l.id ? " pb-editing" : "")} key={l.id}>
             <span className="pb-amt">₹ {inr(l.amount)}</span>
-            <span className="pb-mode">{l.mode === "upi" ? "UPI" : l.toOwner ? "→ Owner" : "Cash"}</span>
+            <span className="pb-mode">{l.mode === "upi" ? (l.toOwner ? "UPI → Owner" : "UPI") : l.toOwner ? "Cash → Owner" : "Cash"}</span>
             <span className="pb-acct">
               {l.mode === "upi" ? l.account || "—" : l.account ? l.account + (l.note ? " · " + l.note : "") : l.note || "Daybook"}
             </span>
@@ -217,12 +227,13 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
                 }
               }}
             />
-            <select className="pb-sel" value={mode} onChange={(e) => setMode(e.target.value as "cash" | "owner" | "upi")}>
+            <select className="pb-sel" value={mode} onChange={(e) => setMode(e.target.value as "cash" | "owner" | "upi" | "uowner")}>
               <option value="cash">Cash</option>
               <option value="owner">Cash → Owner</option>
               <option value="upi">UPI</option>
+              <option value="uowner">UPI → Owner</option>
             </select>
-            {mode === "owner" ? (
+            {mode === "owner" || mode === "uowner" ? (
               <span className="pb-in" style={{ color: "var(--ink-faint)", fontSize: 13 }}>—</span>
             ) : (
               <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />

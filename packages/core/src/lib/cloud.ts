@@ -44,6 +44,7 @@ export const TABLE = {
   sessions: "sessions",
   ledgers: "ledgers",
   vouchers: "vouchers",
+  collections: "collections",
 } as const;
 
 // Supabase REST returns at most this many rows for an unbounded select. A response at/above this

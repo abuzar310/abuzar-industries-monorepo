@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, clone, delRec, getRec, metaSet, put } from "@/lib/db";
 import { computeDoc, inr, nowIso } from "@/lib/calc";
+import { getLineClip, setLineClip } from "@/lib/lineClipboard";
 import { STATUSES } from "@/lib/constants";
 import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
@@ -21,7 +22,7 @@ import { generatePdf } from "@/lib/pdf";
 import { folderConnected, saveCopyToFolder, writeDbSnapshot } from "@/lib/backup";
 import { bumpData, setSyncState, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
-import type { BoxRect, Customer, Doc, Expense } from "@/lib/types";
+import type { BoxRect, Customer, Doc, Expense, Row } from "@/lib/types";
 import SectionCard from "./SectionCard";
 import Totals from "./Totals";
 import QuoteCanvas from "./QuoteCanvas";
@@ -29,8 +30,10 @@ import MoreMenu from "./MoreMenu";
 import PaymentBlock from "./PaymentBlock";
 import CustomerPicker from "./CustomerPicker";
 import GstinField from "./GstinField";
+import DateField from "./DateField";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
+const NO_SEL: Set<number> = new Set(); // stable empty selection for non-active boxes
 
 const STATUS_BADGE: Record<string, string> = {
   Draft: "b-draft",
@@ -58,6 +61,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
   const [expenses, setExpenses] = useState<Expense[]>([]); // this quote's recorded payments (for the mini statements)
   const [customers, setCustomers] = useState<Customer[]>([]); // for the searchable customer picker (avoid duplicates)
+  // Excel-style line copy/paste (clipboard is GLOBAL — see lineClipboard — so it works across quotations)
+  const [selBox, setSelBox] = useState<number | null>(null); // box whose lines are selected
+  const [selRows, setSelRows] = useState<Set<number>>(() => new Set()); // selected row indices in selBox
+  const [activeSi, setActiveSi] = useState<number | null>(null); // box the user is in (paste target)
+  const dragSi = useRef<number | null>(null); // section index currently being dragged
 
   const feat = getFeatures();
   const isInv = doc.kind === "invoice";
@@ -180,6 +188,89 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       if (!d.sections[si].rows.length) d.sections[si].rows.push({ l: "", w: "", t: "", pcs: "" });
     });
   const onDelSec = (si: number) => update((d) => d.sections.length > 1 && d.sections.splice(si, 1));
+
+  // ---- line selection (click a line number) → Ctrl/Cmd+C to copy, Ctrl/Cmd+V into another box ----
+  const selectRow = (si: number, ri: number) => {
+    (document.activeElement as HTMLElement | null)?.blur?.(); // leave edit mode so copy/paste targets lines
+    setActiveSi(si);
+    if (selBox !== si) {
+      setSelBox(si);
+      setSelRows(new Set([ri]));
+    } else {
+      setSelRows((prev) => {
+        const n = new Set(prev);
+        n.has(ri) ? n.delete(ri) : n.add(ri);
+        return n;
+      });
+    }
+  };
+  // click the "#" header to select (or clear) every line in the box
+  const selectAllRows = (si: number) => {
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    setActiveSi(si);
+    const n = docRef.current.sections[si]?.rows.length || 0;
+    if (selBox === si && selRows.size === n && n > 0) {
+      setSelRows(new Set()); // all were selected → toggle off
+    } else {
+      setSelBox(si);
+      setSelRows(new Set(Array.from({ length: n }, (_, i) => i)));
+    }
+  };
+  // typing in a box makes it the paste target; switching boxes drops a stale selection
+  const onSecFocusIn = (e: React.FocusEvent) => {
+    const raw = (e.target as HTMLElement)?.dataset?.si;
+    if (raw == null) return;
+    const n = +raw;
+    setActiveSi(n);
+    if (selBox !== n) {
+      setSelBox(null);
+      setSelRows(new Set());
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k !== "c" && k !== "v") return;
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae && ae.tagName === "INPUT") return; // editing a field → let the browser copy/paste text
+      if (k === "c") {
+        if (selBox == null || selRows.size === 0) return;
+        const src = docRef.current.sections[selBox];
+        if (!src) return;
+        const rows = [...selRows].sort((a, b) => a - b).map((i) => src.rows[i]).filter(Boolean) as Row[];
+        if (!rows.length) return;
+        e.preventDefault();
+        setLineClip(rows); // global clipboard → pasteable in any quotation
+        toast(`Copied ${rows.length} line${rows.length === 1 ? "" : "s"} — open any quotation, click a line number, then paste`);
+      } else {
+        const rows = getLineClip();
+        if (!rows.length || activeSi == null) return;
+        e.preventDefault();
+        const si = activeSi;
+        update((d) => {
+          if (d.sections[si]) d.sections[si].rows.push(...rows);
+        });
+        toast(`Pasted ${rows.length} line${rows.length === 1 ? "" : "s"}`);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selBox, selRows, activeSi]);
+
+  // ---- drag a box by its header to reorder (auto layout only) ----
+  const onDragStartSec = (si: number) => {
+    dragSi.current = si;
+  };
+  const onDropSec = (si: number) => {
+    const from = dragSi.current;
+    dragSi.current = null;
+    if (from == null || from === si) return;
+    update((d) => {
+      const [moved] = d.sections.splice(from, 1);
+      d.sections.splice(si, 0, moved);
+    });
+  };
   const onAddSec = () =>
     update((d) =>
       d.sections.push({ name: "White Teak", rate: WOOD_PRICES["white teak"], rows: [{ l: "", w: "", t: "", pcs: "" }] }),
@@ -543,11 +634,17 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         si={si}
         cft={cft}
         modes={secModes}
+        selRows={selBox === si ? selRows : NO_SEL}
+        reorderable={!freeMode}
         onName={onName}
         onRate={onRate}
         onSetMode={onSetMode}
         onCell={onCell}
         onAmt={onSecAmt}
+        onSelRow={selectRow}
+        onSelAll={selectAllRows}
+        onDragStartSec={onDragStartSec}
+        onDropSec={onDropSec}
         onAddRow={onAddRow}
         onDelRow={onDelRow}
         onDelSec={onDelSec}
@@ -577,7 +674,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         <div className="co-name">Wood Quotation</div>
         <div className="mh-side mh-date">
           <label>Date</label>
-          <input value={doc.date} onChange={(e) => setField("date", e.target.value)} />
+          <DateField value={doc.date} onChange={(v) => setField("date", v)} />
         </div>
       </div>
       <div className="cust-block">
@@ -706,7 +803,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               <div className="co-name">Wood Quotation</div>
               <div className="mh-side mh-date">
                 <label>Date</label>
-                <input value={doc.date} onChange={(e) => setField("date", e.target.value)} />
+                <DateField value={doc.date} onChange={(v) => setField("date", v)} />
               </div>
             </div>
           ) : (
@@ -770,7 +867,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             </div>
             <div className="f">
               <label>{isBuy ? "Purchase Date" : "Date"}</label>
-              <input value={doc.date} onChange={(e) => setField("date", e.target.value)} />
+              <DateField value={doc.date} onChange={(v) => setField("date", v)} />
             </div>
             {showLink && (
               <div className="f">
@@ -839,7 +936,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
           </div>
         </div>
 
-        <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} className={feat.simpleQuote ? "twocol" : ""}>
+        <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} onFocus={onSecFocusIn} className={feat.simpleQuote ? "twocol" : ""}>
           {(() => {
             // Cut Size quote: split the wood boxes into EXACTLY two columns — FILL THE LEFT COLUMN
             // first (each box stacks directly below the previous one), and only start the right column

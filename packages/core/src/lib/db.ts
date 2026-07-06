@@ -4,10 +4,10 @@
 import type { StoreName } from "./types";
 
 const DB_BASE = "abuzar_industries";
-const DB_VER = 5;
+const DB_VER = 6;
 export const STORES: StoreName[] = [
   "customers", "quotations", "invoices", "stock", "expenses", "meta",
-  "sessions", "ledgers", "vouchers",
+  "sessions", "ledgers", "vouchers", "collections",
 ];
 
 // Per-app local database so the two apps never share IndexedDB data.
