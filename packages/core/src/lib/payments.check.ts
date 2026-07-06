@@ -19,7 +19,7 @@ export function demo() {
     Q("q1", "Ramesh", "SF-1", 200000, 140000, 90000, 50000), // 2L bill, paid 90k cash + 50k upi
     Q("q2", "Suresh", "SF-2", 80000, 80000, 80000, 0), // fully settled
     Q("q3", "Ramesh", "SF-3", 50000, 0, 0, 0), // another Ramesh quote, nothing paid
-    Q("q4", "Draft Co", "SF-4", 99999, 0, 0, 0, "Draft"), // draft = not a bill, ignored
+    Q("q4", "Draft Co", "SF-4", 99999, 0, 0, 0, "Draft"), // UNPAID draft = not a bill, ignored
   ];
   const expenses = [
     E("e1", "q1", 50000, "upi", "Afsar GPay"),
@@ -136,9 +136,26 @@ export function demoCharge() {
   console.log(`payments.check charge OK (${n} assertions)`);
 }
 
+/** A draft quote that already took an advance must appear in Balances too — otherwise money
+ *  shown in Statements would go missing from Balances (the bug this guards against). */
+export function demoPaidDraft() {
+  const quotes = [
+    Q("q1", "Ramesh", "SF-1", 50000, 10000, 10000, 0, "Draft"), // draft, but 10k advance taken
+    Q("q2", "Empty", "SF-2", 5000, 0, 0, 0, "Draft"), // draft, no money → still ignored
+  ];
+  const expenses = [E("e1", "q1", 10000, "cash")];
+  const { parties, totalBilled, totalPaid, totalPending } = partyLedger(quotes, expenses);
+  ok(parties.length === 1, "only the paid draft becomes a party (empty draft ignored)");
+  const p = parties.find((x) => x.name === "Ramesh")!;
+  ok(p.billed === 50000 && p.paid === 10000 && p.balance === 40000, "paid draft billed/paid/balance");
+  ok(totalBilled === 50000 && totalPaid === 10000 && totalPending === 40000, "paid draft counts in totals");
+  console.log(`payments.check paid-draft OK (${n} assertions)`);
+}
+
 demo();
 demoQuotes();
 demoReconcile();
 demoTrash();
 demoReceipts();
 demoCharge();
+demoPaidDraft();

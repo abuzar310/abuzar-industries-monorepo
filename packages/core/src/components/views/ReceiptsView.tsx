@@ -1,10 +1,12 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { allRec, delRec, getRec, put } from "@/lib/db";
 import { cloudDelete } from "@/lib/cloud";
 import { inr, nowIso } from "@/lib/calc";
 import { addExpense, upiAccounts } from "@/lib/expenses";
 import { partyLedger } from "@/lib/payments";
+import { applyCustomerReceipt } from "@/lib/receipts";
 import { snapshotBefore } from "@/lib/autobackup";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
@@ -29,6 +31,7 @@ type Kind = "received" | "due";
 
 export default function ReceiptsView() {
   const { ready, dataVersion, user } = useApp();
+  const router = useRouter();
   const isOwner = user?.role === "owner";
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [quotes, setQuotes] = useState<Doc[]>([]);
@@ -132,35 +135,29 @@ export default function ReceiptsView() {
     if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
     const isCash = mode !== "upi";
     const toOwner = isCash && (mode === "owner" || isOwner);
-    await addExpense({
-      type: "sale",
+    // apply the receipt across the customer's open quotations (oldest first); leftover → account credit
+    const { applied, leftover } = await applyCustomerReceipt({
+      custId: picked.id,
+      custName: picked.name,
       amount: a,
       mode: isCash ? "cash" : "upi",
       account: mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "",
       toOwner,
-      custId: picked.id,
-      note: picked.name,
-      label: isCash ? note.trim() : "",
+      note: isCash ? note.trim() : "",
       date: date ? toDmy(date) : undefined,
       enteredBy: user?.id || "unknown",
     });
     resetForm();
     load();
     bumpData();
-    const acctLbl = acct.trim() ? " · " + acct.trim() : "";
-    toast(
-      "₹" +
-        inr(a) +
-        " received from " +
-        picked.name +
-        (mode === "upi"
-          ? acctLbl
-          : toOwner
-            ? " · to owner"
-            : acct.trim()
-              ? acctLbl + " (Accounts)"
-              : " · cash → Daybook"),
-    );
+    const nq = applied.length;
+    const msg =
+      nq > 0
+        ? "₹" + inr(a) + " received from " + picked.name + " · applied to " + nq + " quote" + (nq === 1 ? "" : "s") +
+          (leftover > 0.5 ? " · ₹" + inr(leftover) + " to account" : "")
+        : "₹" + inr(a) + " received from " + picked.name +
+          (mode === "upi" ? (acct.trim() ? " · " + acct.trim() : "") : toOwner ? " · to owner" : " · to account");
+    toast(msg);
   }
 
   async function remove(e: Expense) {
@@ -196,25 +193,46 @@ export default function ReceiptsView() {
     }
   }
 
-  // group every receipt/charge under its customer
-  const byCust = new Map<string, Expense[]>();
+  // group every money event under its customer: account receipts/dues (custId, editable here)
+  // AND quote payments (sourceId → the quote's customer, shown read-only with a link to the quote,
+  // so a receipt applied to quotations still appears under the customer here).
+  const quoteById = new Map(quotes.map((q) => [q.id, q] as const));
+  interface Entry {
+    e: Expense;
+    quoteNo?: string;
+    quoteId?: string;
+    locked: boolean;
+  }
+  const byCust = new Map<string, Entry[]>();
   expenses
-    .filter((e) => e.type === "sale" && !!e.custId)
+    .filter((e) => e.type === "sale")
     .forEach((e) => {
-      const arr = byCust.get(e.custId!) || [];
-      arr.push(e);
-      byCust.set(e.custId!, arr);
+      let cid = e.custId || "";
+      let entry: Entry | null = null;
+      if (cid) {
+        entry = { e, locked: false };
+      } else if (e.sourceId) {
+        const q = quoteById.get(e.sourceId);
+        if (q && q.customerId) {
+          cid = q.customerId;
+          entry = { e, quoteNo: q.number, quoteId: q.id, locked: true };
+        }
+      }
+      if (!cid || !entry) return;
+      const arr = byCust.get(cid) || [];
+      arr.push(entry);
+      byCust.set(cid, arr);
     });
   const groups = [...byCust.entries()]
     .map(([cid, list]) => {
-      const sorted = list.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-      const received = sorted.filter((e) => !e.charge);
-      const dues = sorted.filter((e) => e.charge);
+      const sorted = list.sort((a, b) => (b.e.createdAt || "").localeCompare(a.e.createdAt || ""));
+      const received = sorted.filter((x) => !x.e.charge);
+      const dues = sorted.filter((x) => x.e.charge);
       return {
         cid,
         name: custName(cid),
-        received: r2(received.reduce((s, e) => s + (+e.amount || 0), 0)),
-        dueAdded: r2(dues.reduce((s, e) => s + (+e.amount || 0), 0)),
+        received: r2(received.reduce((s, x) => s + (+x.e.amount || 0), 0)),
+        dueAdded: r2(dues.reduce((s, x) => s + (+x.e.amount || 0), 0)),
         list: sorted,
       };
     })
@@ -350,20 +368,22 @@ export default function ReceiptsView() {
                 </span>
               </div>
               {open &&
-                g.list.map((e) => (
+                g.list.map(({ e, quoteNo, quoteId, locked }) => (
                   <div className={"stmt" + (editId === e.id ? " pb-editing" : "")} key={e.id}>
                     <div className={"stmt-ic " + (e.charge ? "due" : e.mode === "upi" ? "upi" : "cash")}>{e.charge ? "Due" : e.mode === "upi" ? "UPI" : "₹"}</div>
                     <div className="stmt-main">
                       <div className="stmt-to">
                         {e.charge
                           ? e.note || "Due added"
-                          : e.mode === "upi"
-                            ? e.account || "UPI"
-                            : e.account
-                              ? e.account + (e.label ? " · " + e.label : "")
-                              : e.toOwner
-                                ? "Cash → Owner"
-                                : e.label || "Cash · Daybook"}
+                          : locked
+                            ? "On quote #" + quoteNo + (e.mode === "upi" ? " · UPI" + (e.account ? " · " + e.account : "") : " · Cash")
+                            : e.mode === "upi"
+                              ? e.account || "UPI"
+                              : e.account
+                                ? e.account + (e.label ? " · " + e.label : "")
+                                : e.toOwner
+                                  ? "Cash → Owner"
+                                  : e.label || "Cash · Daybook"}
                       </div>
                       <div className="stmt-sub">
                         {e.date} · by {userName(e.enteredBy)}
@@ -371,12 +391,20 @@ export default function ReceiptsView() {
                     </div>
                     <div className={"stmt-amt" + (e.charge ? " due" : "")}>+₹{inr(e.amount)}</div>
                     <span className="pb-rowacts">
-                      <button className="pb-x" title="Edit" type="button" onClick={() => startEdit(e)}>
-                        ✎
-                      </button>
-                      <button className="pb-x" title="Delete" type="button" onClick={() => remove(e)}>
-                        ×
-                      </button>
+                      {locked ? (
+                        <button className="pb-x" title="Open quotation" type="button" onClick={() => router.push("/editor/" + quoteId)}>
+                          ↗
+                        </button>
+                      ) : (
+                        <>
+                          <button className="pb-x" title="Edit" type="button" onClick={() => startEdit(e)}>
+                            ✎
+                          </button>
+                          <button className="pb-x" title="Delete" type="button" onClick={() => remove(e)}>
+                            ×
+                          </button>
+                        </>
+                      )}
                     </span>
                   </div>
                 ))}

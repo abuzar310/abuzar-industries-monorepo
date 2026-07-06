@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/db";
 import { inr } from "@/lib/calc";
 import { quoteLedger } from "@/lib/payments";
+import { brandFor } from "@/lib/brand";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense } from "@/lib/types";
@@ -25,7 +26,8 @@ const MONTHS: [string, string][] = [
 ];
 
 export default function StatementsView() {
-  const { ready, dataVersion } = useApp();
+  const { ready, dataVersion, brandMode } = useApp();
+  const brand = brandFor(brandMode);
   const router = useRouter();
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -76,6 +78,11 @@ export default function StatementsView() {
     .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   const receipts = direct.filter((e) => !e.charge);
   const dues = direct.filter((e) => e.charge);
+  // headline "Received" = quote payments + direct receipts, so it reconciles with the Balances tab
+  // (which counts both). Direct receipts are still listed separately below.
+  const directReceived = receipts.reduce((s, e) => s + (+e.amount || 0), 0);
+  const totalReceived = shownReceived + directReceived;
+  const totalPayCount = shownPayCount + receipts.length;
   const filtered = !!(month || year || onlyPaid || term);
   const clearAll = () => {
     setQ("");
@@ -84,26 +91,43 @@ export default function StatementsView() {
     setOnlyPaid(false);
   };
 
+  // ---- printable statement (reflects the active filter) ----
+  const monthLabel = month ? MONTHS.find(([v]) => v === month)?.[1] || month : "";
+  const periodLabel = [monthLabel, year ? "20" + year : ""].filter(Boolean).join(" ") || "All time";
+  const filterNote = [onlyPaid ? "With payment only" : "", term ? `\u201C${q.trim()}\u201D` : ""].filter(Boolean).join(" · ");
+  const tBilled = shown.reduce((s, r) => s + r.bill, 0);
+  const tPaid = shown.reduce((s, r) => s + r.paid, 0);
+  const tBal = shown.reduce((s, r) => s + r.balance, 0);
+  const duesTotal = dues.reduce((s, e) => s + (+e.amount || 0), 0);
+  const gToday = new Date();
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  const genOn = `${p2(gToday.getDate())}-${p2(gToday.getMonth() + 1)}-${gToday.getFullYear()}`;
+
   return (
     <div>
-      <div className="sectitle">
-        Statements <small>— every payment, per quotation</small>
+      <div className="cd-screen">
+      <div className="sectitle" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <span>Statements <small>— every payment, per quotation</small></span>
+        <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => window.print()}>
+          Print / Save PDF
+        </button>
       </div>
 
       {/* summary — tracks the current filter */}
       <div className="pay-hero">
         <div className="ph-main">
           <span className="ph-k">Payments recorded</span>
-          <span className="ph-v">{shownPayCount}</span>
+          <span className="ph-v">{totalPayCount}</span>
           <span className="ph-sub">
-            across {shown.length} {shown.length === 1 ? "quotation" : "quotations"} · ₹{inr(shownReceived)} received
+            across {shown.length} {shown.length === 1 ? "quotation" : "quotations"}
+            {receipts.length > 0 ? " + " + receipts.length + " direct" : ""} · ₹{inr(totalReceived)} received
             {filtered ? " · filtered" : ""}
           </span>
         </div>
         <div className="ph-side">
           <div className="ph-tile rec">
             <small>Received</small>
-            <b>₹ {inr(shownReceived)}</b>
+            <b>₹ {inr(totalReceived)}</b>
           </div>
           <div className="ph-tile">
             <small>Quotations</small>
@@ -271,6 +295,162 @@ export default function StatementsView() {
           </div>
         </>
       )}
+      </div>
+
+      {/* clean printable statement — only rendered on print, reflects the active filter */}
+      <div className="cd-print rep-doc">
+        <div className="rep-head">
+          <div className="rep-brand">
+            <h1>{brand.name || "Statements"}</h1>
+            {brand.addr && <div>{brand.addr}</div>}
+            {brand.gstin && <div>GSTIN: {brand.gstin}</div>}
+          </div>
+          <div className="rep-meta">
+            <div className="rep-title">Statement</div>
+            <div className="rep-period">{periodLabel}</div>
+            {filterNote && <div className="rep-period">{filterNote}</div>}
+          </div>
+        </div>
+
+        <div className="rep-summary cols3">
+          <div><b>{shown.length}</b><span>Quotations</span></div>
+          <div><b>₹{inr(totalReceived)}</b><span>Received</span></div>
+          <div><b>₹{inr(tBal)}</b><span>Outstanding</span></div>
+        </div>
+
+        <table className="rep-table">
+          <colgroup>
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "23%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "11%" }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className="c-n">#</th>
+              <th>Date</th>
+              <th>Quote No</th>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th className="amt">Billed ₹</th>
+              <th className="amt">Paid ₹</th>
+              <th className="amt">Balance ₹</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.length ? (
+              <>
+                {shown.map((r, i) => (
+                  <tr key={r.id}>
+                    <td className="c-n">{i + 1}</td>
+                    <td className="c-date">{r.date}</td>
+                    <td className="c-no">{r.number}</td>
+                    <td className="c-cust">{r.name}</td>
+                    <td className="c-no">{r.phone || "—"}</td>
+                    <td className="amt">{inr(r.bill)}</td>
+                    <td className="amt">{inr(r.paid)}</td>
+                    <td className="amt">{inr(r.balance)}</td>
+                  </tr>
+                ))}
+                <tr className="rep-tot">
+                  <td colSpan={5}>Total — {shown.length} quotation{shown.length === 1 ? "" : "s"}</td>
+                  <td className="amt">{inr(tBilled)}</td>
+                  <td className="amt">{inr(tPaid)}</td>
+                  <td className="amt">{inr(tBal)}</td>
+                </tr>
+              </>
+            ) : (
+              <tr>
+                <td colSpan={8} className="rep-empty">No quotations match this filter.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {receipts.length > 0 && (
+          <>
+            <div className="rep-title" style={{ marginTop: 18, marginBottom: 8 }}>Direct receipts — {receipts.length}</div>
+            <table className="rep-table">
+              <colgroup>
+                <col style={{ width: "5%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "34%" }} />
+                <col style={{ width: "29%" }} />
+                <col style={{ width: "18%" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="c-n">#</th>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th>Via</th>
+                  <th className="amt">Amount ₹</th>
+                </tr>
+              </thead>
+              <tbody>
+                {receipts.map((e, i) => (
+                  <tr key={e.id}>
+                    <td className="c-n">{i + 1}</td>
+                    <td className="c-date">{e.date}</td>
+                    <td className="c-cust">{custName(e.custId)}</td>
+                    <td>{e.mode === "upi" ? e.account || "UPI" : e.account || (e.toOwner ? "Cash → Owner" : e.label || "Cash")}</td>
+                    <td className="amt">{inr(+e.amount || 0)}</td>
+                  </tr>
+                ))}
+                <tr className="rep-tot">
+                  <td colSpan={4}>Total direct receipts</td>
+                  <td className="amt">{inr(directReceived)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {dues.length > 0 && (
+          <>
+            <div className="rep-title" style={{ marginTop: 18, marginBottom: 8 }}>Direct dues — {dues.length}</div>
+            <table className="rep-table">
+              <colgroup>
+                <col style={{ width: "5%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "34%" }} />
+                <col style={{ width: "29%" }} />
+                <col style={{ width: "18%" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="c-n">#</th>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th>Note</th>
+                  <th className="amt">Amount ₹</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dues.map((e, i) => (
+                  <tr key={e.id}>
+                    <td className="c-n">{i + 1}</td>
+                    <td className="c-date">{e.date}</td>
+                    <td className="c-cust">{custName(e.custId)}</td>
+                    <td>{e.note || "Due added"}</td>
+                    <td className="amt">{inr(+e.amount || 0)}</td>
+                  </tr>
+                ))}
+                <tr className="rep-tot">
+                  <td colSpan={4}>Total dues</td>
+                  <td className="amt">{inr(duesTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </>
+        )}
+
+        <div className="rep-foot">Generated {genOn} · {brand.name}</div>
+      </div>
     </div>
   );
 }

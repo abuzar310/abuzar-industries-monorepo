@@ -306,6 +306,10 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const onFinalPrice = (v: string) =>
     update((d) => (d.finalPrice = v.trim() === "" ? undefined : Math.max(0, +v || 0)));
 
+  // per-section Total Price override (empty reverts to quantity × rate)
+  const onSecAmt = (si: number, v: string) =>
+    update((d) => (d.sections[si].amtOverride = v.trim() === "" ? undefined : Math.max(0, +v || 0)));
+
   // persist the running cash/UPI totals onto the doc after PaymentBlock adds/removes a payment line
   function setPayAggregates(payCash: number, payUpi: number) {
     const next = clone(docRef.current);
@@ -532,19 +536,18 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const renderCard = (si: number) => {
     const sec = doc.sections[si];
     const cft = totals.secCft[si] || 0;
-    const amt = Math.round(cft * (+sec.rate || 0) * 100) / 100;
     return (
       <SectionCard
         key={si}
         sec={sec}
         si={si}
         cft={cft}
-        amt={amt}
         modes={secModes}
         onName={onName}
         onRate={onRate}
         onSetMode={onSetMode}
         onCell={onCell}
+        onAmt={onSecAmt}
         onAddRow={onAddRow}
         onDelRow={onDelRow}
         onDelSec={onDelSec}

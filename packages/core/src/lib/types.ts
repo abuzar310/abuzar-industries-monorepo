@@ -24,6 +24,8 @@ export interface BoxRect {
 export interface Section {
   name: string;
   rate: string | number;
+  /** override this section's Total Price (₹) directly; unset = quantity × rate. */
+  amtOverride?: number;
   rows: Row[];
   /** "cft" (L×W×T×Pcs÷144 × rate), "direct" (type CFT directly × rate),
    *  "cbm" (type CBM directly × ₹/CBM rate), or "rft" (running feet Σ(L×Pcs) × rate). Default cft. */
