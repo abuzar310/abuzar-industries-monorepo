@@ -86,6 +86,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     (s, sec, i) => (sec.calcMode === "cbm" ? s + (totals.secCft[i] || 0) : s),
     0,
   );
+  // total pieces across the whole invoice (info line on the bill)
+  const totalPcs = doc.sections.reduce(
+    (s, sec) => s + sec.rows.reduce((p, r) => p + (Math.round(+r.pcs) || 0), 0),
+    0,
+  );
   const { brandMode, user } = useApp();
   const brand = brandFor(brandMode);
   const invBank = brand.banks?.[doc.bankIdx ?? 0] || brand.bank; // chosen bank for this invoice
@@ -660,6 +665,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       grand={totals.grand}
       totalCft={totalCft}
       totalCbm={totalCbm}
+      totalPcs={totalPcs}
       onGst={(v) => setField("gst", v)}
       onGstMode={(m) => setField("gstMode", m)}
     />
@@ -991,6 +997,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             grand={totals.grand}
             totalCft={totalCft}
             totalCbm={totalCbm}
+            totalPcs={totalPcs}
             onGst={(v) => setField("gst", v)}
             onGstMode={(m) => setField("gstMode", m)}
           />
