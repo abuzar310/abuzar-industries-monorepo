@@ -1099,6 +1099,13 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   /* compact wood boxes + tight gaps so 6–7 stacked boxes fit one page at full width */
   #sheet.inv #sections{margin-top:3px; gap:5px}
   #sheet.inv .totals{margin-top:8px}
+  /* the dark grand-total bar prints, but its light TEXT spans need their own color-adjust or the
+     browser darkens them → the amount goes invisible on the dark bar. Force them to stay light. */
+  #sheet.inv .grand, #sheet.inv .grand .lab, #sheet.inv .grand .val{
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+  #sheet.inv .grand .lab{color:#D8C2A4 !important}
+  #sheet.inv .grand .val{color:#FBF1E1 !important}
   #sheet.inv .sec-head{padding:3px 10px}
   #sheet.inv .thead, #sheet.inv .row{padding:1px 9px}
   #sheet.inv .sec-foot{padding:3px 12px}
