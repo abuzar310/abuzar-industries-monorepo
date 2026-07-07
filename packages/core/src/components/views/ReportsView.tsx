@@ -58,7 +58,7 @@ export default function ReportsView() {
   const [from, setFrom] = useState(fy.from);
   const [to, setTo] = useState(fy.to);
   const [type, setType] = useState<TradeFilter>("sell");
-  const [cls, setCls] = useState<"all" | "b2b" | "reg">("all"); // B2B (has GSTIN) vs Regular
+  const [cls, setCls] = useState<"all" | "b2b" | "reg" | "split">("all"); // All (merged) · B2B · Regular · Split (two tables)
 
   useEffect(() => {
     let live = true;
@@ -126,9 +126,11 @@ export default function ReportsView() {
     const t = sumOf(list);
     return (
       <div className="rep-block">
-        <div className="rep-title rep-subhead">
-          {heading} <span className="rep-subcount">· {list.length} invoice{list.length === 1 ? "" : "s"}</span>
-        </div>
+        {heading ? (
+          <div className="rep-title rep-subhead">
+            {heading} <span className="rep-subcount">· {list.length} invoice{list.length === 1 ? "" : "s"}</span>
+          </div>
+        ) : null}
         <table className="rep-table">
           <colgroup>
             <col className="w-n" />
@@ -190,7 +192,7 @@ export default function ReportsView() {
   };
 
   const typeLabel = type === "buy" ? "Purchase" : type === "all" ? "Invoice" : "Sales";
-  const clsLabel = cls === "b2b" ? " · B2B" : cls === "reg" ? " · Regular" : "";
+  const clsLabel = cls === "b2b" ? " · B2B" : cls === "reg" ? " · Regular" : cls === "split" ? " · B2B + Regular" : "";
   const periodLabel =
     from && to ? `${fmtISO(from)}  to  ${fmtISO(to)}` : from ? `From ${fmtISO(from)}` : to ? `Up to ${fmtISO(to)}` : "All time";
 
@@ -241,9 +243,22 @@ export default function ReportsView() {
             ))}
           </div>
           <div className="rep-seg" role="group" aria-label="B2B / Regular">
-            {(["all", "b2b", "reg"] as const).map((c) => (
-              <button key={c} className={cls === c ? "on" : ""} onClick={() => setCls(c)} title={c === "b2b" ? "GSTIN invoices (with GST)" : c === "reg" ? "Non-GSTIN invoices" : "Both tables"}>
-                {c === "all" ? "B2B + Regular" : c === "b2b" ? "B2B" : "Regular"}
+            {(["all", "b2b", "reg", "split"] as const).map((c) => (
+              <button
+                key={c}
+                className={cls === c ? "on" : ""}
+                onClick={() => setCls(c)}
+                title={
+                  c === "all"
+                    ? "All invoices in one table (normal)"
+                    : c === "b2b"
+                      ? "GSTIN invoices only (with GST)"
+                      : c === "reg"
+                        ? "Non-GSTIN invoices only"
+                        : "Two separate tables: B2B and Regular"
+                }
+              >
+                {c === "all" ? "All" : c === "b2b" ? "B2B" : c === "reg" ? "Regular" : "Split"}
               </button>
             ))}
           </div>
@@ -273,8 +288,11 @@ export default function ReportsView() {
           <div><b>₹{inr(shownTotals.total)}</b><span>Total</span></div>
         </div>
 
-        {(cls === "all" || cls === "b2b") && renderTable(b2bRows, true, "B2B — with GST")}
-        {(cls === "all" || cls === "reg") && renderTable(regRows, false, "Regular")}
+        {cls === "all" && renderTable(rows, true, "")}
+        {cls === "b2b" && renderTable(b2bRows, true, "")}
+        {cls === "reg" && renderTable(regRows, false, "")}
+        {cls === "split" && renderTable(b2bRows, true, "B2B — with GST")}
+        {cls === "split" && renderTable(regRows, false, "Regular")}
 
         <div className="rep-foot">Generated {fmtISO(isoOf(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()))} · {brand.name}</div>
       </div>
