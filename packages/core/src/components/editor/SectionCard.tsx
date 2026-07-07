@@ -51,6 +51,8 @@ export default function SectionCard({ sec, si, cft, modes, selRows, reorderable,
     rft ? rftOf(r) : pcs ? pcsOf(r) : direct || cbm ? directOf(r) : cftOf(r);
   const totalText = pcs ? String(Math.round(cft)) : cft.toFixed(2);
   const totalPcs = sec.rows.reduce((s, r) => s + (Math.round(+r.pcs) || 0), 0);
+  // per-price prices by piece, but the L·W·T·Pcs are entered — show the CFT for reference (pricing unchanged)
+  const pcsCft = pcs ? sec.rows.reduce((s, r) => s + cftOf(r), 0) : 0;
   const baseAmt = Math.round(cft * (+sec.rate || 0) * 100) / 100; // qty × rate (before any manual override)
   const allSel = sec.rows.length > 0 && selRows.size === sec.rows.length; // whole box selected
 
@@ -207,6 +209,12 @@ export default function SectionCard({ sec, si, cft, modes, selRows, reorderable,
             <i>Total {unit}</i>
             <b>{totalText}</b>
           </span>
+          {pcs && (
+            <span className="sc">
+              <i>Total CFT</i>
+              <b>{pcsCft.toFixed(2)}</b>
+            </span>
+          )}
           <span className="sc">
             <i>Rate ₹/{unit}</i>
             <input type="number" inputMode="decimal" value={sec.rate} aria-label="Rate" onChange={(e) => onRate(si, e.target.value)} />

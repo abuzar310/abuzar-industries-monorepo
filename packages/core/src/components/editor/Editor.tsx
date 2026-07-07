@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, clone, delRec, getRec, metaSet, put } from "@/lib/db";
-import { computeDoc, inr, nowIso } from "@/lib/calc";
+import { cftOf, computeDoc, inr, nowIso } from "@/lib/calc";
 import { getLineClip, setLineClip } from "@/lib/lineClipboard";
 import { STATUSES } from "@/lib/constants";
 import { brandFor } from "@/lib/brand";
@@ -76,11 +76,12 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     isInv ? ["cft", "direct", "cbm", "pcs"] : feat.simpleQuote ? ["cft", "pcs"] : ["cft", "direct", "rft"];
   const totals = useMemo(() => computeDoc(doc), [doc]);
   // CFT and CBM are different units, so keep their running totals separate for the bill summary.
-  const totalCft = doc.sections.reduce(
-    (s, sec, i) =>
-      sec.calcMode === "cbm" || sec.calcMode === "rft" || sec.calcMode === "pcs" ? s : s + (totals.secCft[i] || 0),
-    0,
-  );
+  // Per-price ("pcs") sections price by piece but their L·W·T·Pcs give real CFT — include it here.
+  const totalCft = doc.sections.reduce((s, sec, i) => {
+    if (sec.calcMode === "cbm" || sec.calcMode === "rft") return s;
+    if (sec.calcMode === "pcs") return s + sec.rows.reduce((c, r) => c + cftOf(r), 0);
+    return s + (totals.secCft[i] || 0);
+  }, 0);
   const totalCbm = doc.sections.reduce(
     (s, sec, i) => (sec.calcMode === "cbm" ? s + (totals.secCft[i] || 0) : s),
     0,
