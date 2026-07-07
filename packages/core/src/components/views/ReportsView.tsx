@@ -18,10 +18,16 @@ const numOf = (s: unknown) => {
 
 type TradeFilter = "sell" | "buy" | "all";
 
-/** Invoice date (dd-mm-yy) → sortable ISO "yyyy-mm-dd"; falls back to createdAt. */
+/** Any day-first invoice date → sortable ISO "yyyy-mm-dd". Tolerates "-" or "/" separators
+ *  and 2- or 4-digit years (e.g. "30/05/2026", "22-05-26", "7/4/26"). Falls back to createdAt. */
 function docISO(d: Doc): string {
-  const [dd, mm, yy] = (d.date || "").split("-");
-  if (dd && mm && yy) return `20${yy}-${pad(+mm)}-${pad(+dd)}`;
+  const m = (d.date || "").trim().match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (m) {
+    const dd = +m[1];
+    const mm = +m[2];
+    const yy = m[3].length <= 2 ? 2000 + +m[3] : +m[3];
+    if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) return `${yy}-${pad(mm)}-${pad(dd)}`;
+  }
   return (d.createdAt || "").slice(0, 10);
 }
 
@@ -79,11 +85,12 @@ export default function ReportsView() {
       })
       .map((d) => {
         const t = docTrade(d);
+        const iso = docISO(d);
         return {
           key: d.id,
           no: d.number || d.id,
-          date: d.date,
-          iso: docISO(d),
+          date: fmtISO(iso), // normalized dd-mm-yyyy (raw dates come in mixed formats)
+          iso,
           name: d.customerName || "—",
           gstin: d.custGstin || "",
           buy: t.buy,
