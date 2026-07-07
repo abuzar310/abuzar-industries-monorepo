@@ -23,6 +23,7 @@ import {
   trySync,
 } from "@/lib/cloud";
 import { maybeAutoSnapshot } from "@/lib/autobackup";
+import { initFolderMirror } from "@/lib/folderMirror";
 import {
   bumpData,
   setReady,
@@ -151,6 +152,7 @@ export default function AppProvider({
 
       setReady(true);
       maybeAutoSnapshot(); // rolling local safety-net backup (fire-and-forget)
+      initFolderMirror(); // restore the auto-save folder from a previous session (fire-and-forget)
       await checkOwnerNotifications();
 
       // instant updates via realtime; the interval is just a safety-net fallback

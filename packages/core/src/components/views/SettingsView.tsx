@@ -5,6 +5,7 @@ import { getSupa, pullFromCloud, testConnection, trySync } from "@/lib/cloud";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { purgeDoc, restoreDoc, trashedDocs } from "@/lib/trash";
 import { autoSnapshot, downloadSnapshot, listSnapshots, restoreSnapshot } from "@/lib/autobackup";
+import { connectFolder, disconnectFolder, folderActive, folderNeedsGrant, folderSupported } from "@/lib/folderMirror";
 import { docStore } from "@/lib/doc";
 import type { Doc } from "@/lib/types";
 import { canInstall, promptInstall } from "@/lib/pwa";
@@ -21,6 +22,7 @@ export default function SettingsView() {
   const [autoPost, setAutoPostUI] = useState(false);
   const [trash, setTrash] = useState<Doc[]>([]);
   const [snaps, setSnaps] = useState<{ at: string; total: number }[]>([]);
+  const [folder, setFolder] = useState<"off" | "on" | "regrant" | "unsupported">("off");
   const ledgerOn = getFeatures().ledger;
   const receiptsApp = getFeatures().acceptPayment;
 
@@ -33,7 +35,21 @@ export default function SettingsView() {
     autoPostEnabled().then(setAutoPostUI);
     loadTrash();
     loadSnaps();
+    refreshFolder();
   }, []);
+
+  const refreshFolder = () =>
+    setFolder(!folderSupported() ? "unsupported" : folderActive() ? "on" : folderNeedsGrant() ? "regrant" : "off");
+  async function onConnectFolder() {
+    const ok = await connectFolder();
+    refreshFolder();
+    toast(ok ? "Folder connected — all records mirrored to disk" : "No folder selected");
+  }
+  async function onDisconnectFolder() {
+    await disconnectFolder();
+    refreshFolder();
+    toast("Auto-save folder disconnected");
+  }
 
   async function onBackupNow() {
     const s = await autoSnapshot();
@@ -216,6 +232,31 @@ export default function SettingsView() {
           </div>
         </div>
       )}
+
+      <div className="setbox">
+        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Auto-save to a folder</div>
+        <p className="note">
+          Pick a folder on this computer and every invoice &amp; quotation is written there instantly — a
+          re-importable <b>.json</b> and a printable <b>.html</b>, plus a full database file. A permanent copy
+          on your disk that no bug or sync can ever touch. (Chrome/Edge on desktop.)
+        </p>
+        {folder === "unsupported" ? (
+          <p className="note" style={{ opacity: 0.7, marginTop: 6 }}>
+            This browser can&apos;t auto-save to a folder — use Chrome or Edge on a desktop.
+          </p>
+        ) : folder === "on" ? (
+          <div className="rowbtns" style={{ alignItems: "center", gap: 10 }}>
+            <span className="expnote" style={{ color: "var(--ok, #2e7d32)", fontWeight: 700 }}>✓ Connected — auto-saving every record</span>
+            <button className="btn sm" onClick={onDisconnectFolder}>Disconnect</button>
+          </div>
+        ) : (
+          <div className="rowbtns">
+            <button className="btn primary sm" onClick={onConnectFolder}>
+              {folder === "regrant" ? "Reconnect folder (grant access)" : "Choose backup folder"}
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="setbox">
         <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Auto-backups</div>

@@ -19,7 +19,7 @@ import { addExpense, allExpenses, deleteExpensesBySource, upiAccounts } from "@/
 import { postInvoice, unpostInvoice } from "@/lib/ledger-autopost";
 import { quoteMessage, reminderMessage, waLink } from "@/lib/whatsapp";
 import { generatePdf } from "@/lib/pdf";
-import { folderConnected, saveCopyToFolder, writeDbSnapshot } from "@/lib/backup";
+import { connectFolder, folderActive, mirrorDoc } from "@/lib/folderMirror";
 import { bumpData, setSyncState, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import type { BoxRect, Customer, Doc, Expense, Row } from "@/lib/types";
@@ -135,6 +135,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     put(docStore(d), clone(d));
     setSyncState("queue");
     trySync();
+    mirrorDoc(clone(d)).catch(() => {}); // write a durable copy to the chosen local folder (if connected)
     // optional: mirror this invoice into the Tally ledger (no-op unless the toggle is on)
     if (d.kind === "invoice") postInvoice(d).catch(() => {});
   }
@@ -398,12 +399,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     const next = clone(docRef.current);
     next.status = status;
     await upsertCustomerFromDoc(next);
-    commit(next, true);
-    if (folderConnected()) {
-      try {
-        await writeDbSnapshot();
-      } catch {}
-    }
+    commit(next, true); // commit → persist → mirrors a durable copy to the local folder too
     toast(msg);
   }
   const onSaveDraft = () => setStatusAndSave("Draft", "Saved as draft");
@@ -433,12 +429,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   async function onSaveClick() {
     const next = clone(docRef.current);
     await upsertCustomerFromDoc(next);
-    commit(next, true);
-    if (folderConnected()) {
-      try {
-        await writeDbSnapshot();
-      } catch {}
-    }
+    commit(next, true); // commit → persist → mirrors a durable copy to the local folder too
     toast(
       "Saved ✓  " + next.number + " — reopen from " + (next.kind === "invoice" ? "Invoices" : "Quotations") + " to edit",
     );
@@ -499,19 +490,21 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     router.push("/editor/" + invId);
   }
   async function onFolder() {
-    if (!folderConnected()) {
-      toast("Connect a data folder first (Settings)");
-      router.push("/settings");
-      return;
-    }
     const next = clone(docRef.current);
     await upsertCustomerFromDoc(next);
     commit(next, true);
+    // if no folder is connected yet, open the picker now (a click = a valid user gesture);
+    // otherwise this save already mirrored it via persist().
+    if (!folderActive()) {
+      const ok = await connectFolder();
+      toast(ok ? "Auto-save folder connected — everything mirrored" : "No folder chosen");
+      return;
+    }
     try {
-      const sub = await saveCopyToFolder(next);
-      toast("Saved " + next.number + ".html to " + sub + "/");
+      await mirrorDoc(next);
+      toast("Saved " + next.number + " to the backup folder");
     } catch {
-      toast("Could not write file");
+      toast("Could not write to the folder");
     }
   }
   async function onDelete() {

@@ -65,47 +65,5 @@ ${secRows}
 </body>`;
 }
 
-// ---- File System Access folder mirror (Chrome/Edge desktop) ----
-/* eslint-disable @typescript-eslint/no-explicit-any */
-let dirHandle: any = null;
-
-export const folderConnected = () => !!dirHandle;
-
-export async function connectFolder(): Promise<boolean> {
-  const picker = (window as any).showDirectoryPicker;
-  if (!picker) return false;
-  const root = await picker({ id: "abuzar", mode: "readwrite" });
-  const base = await root.getDirectoryHandle("Abuzar Industries", { create: true });
-  await base.getDirectoryHandle("Quotations", { create: true });
-  await base.getDirectoryHandle("Invoices", { create: true });
-  await base.getDirectoryHandle("Database", { create: true });
-  dirHandle = base;
-  await writeDbSnapshot();
-  return true;
-}
-
-export async function writeDbSnapshot() {
-  if (!dirHandle) return;
-  try {
-    const db = await dirHandle.getDirectoryHandle("Database", { create: true });
-    const fh = await db.getFileHandle("abuzar-data.json", { create: true });
-    const w = await fh.createWritable();
-    await w.write(JSON.stringify(await dumpAll(), null, 2));
-    await w.close();
-  } catch (err) {
-    console.warn(err);
-  }
-}
-
-/** Returns the subfolder name written to, or null if no folder is connected. */
-export async function saveCopyToFolder(doc: Doc): Promise<string | null> {
-  if (!dirHandle) return null;
-  const sub = doc.kind === "invoice" ? "Invoices" : "Quotations";
-  const dh = await dirHandle.getDirectoryHandle(sub, { create: true });
-  const fh = await dh.getFileHandle(doc.number + ".html", { create: true });
-  const w = await fh.createWritable();
-  await w.write(documentSnapshotHtml(doc));
-  await w.close();
-  await writeDbSnapshot();
-  return sub;
-}
+// The live folder-mirror (persistent handle, auto-write on every create/edit) lives in
+// ./folderMirror — kept separate so this module stays a pure serialise/format helper.
