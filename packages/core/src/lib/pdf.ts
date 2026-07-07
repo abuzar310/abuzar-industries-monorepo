@@ -7,9 +7,20 @@ export async function generatePdf(sheet: HTMLElement, fileBase: string) {
   const [{ jsPDF }, h2c] = await Promise.all([import("jspdf"), import("html2canvas")]);
   const html2canvas = h2c.default;
 
-  // Clone the sheet, strip editing chrome, freeze inputs/selects to plain text.
+  // Clone the sheet and make it match the PRINT output exactly: strip every element the print CSS
+  // hides (all editing chrome), reveal the print-only bits, and freeze inputs/selects to plain text.
   const clone = sheet.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll(".x-row,.x-sec,.add-row,.add-sec,.btn,.iconbtn").forEach((el) => el.remove());
+  // same set hidden by `@media print` in globals.css, plus the on-screen-only editing controls
+  clone
+    .querySelectorAll(
+      ".no-print,.doctool,.add-row,.add-sec,.x-row,.x-sec,.ic-row,.sec-tools,.mode-seg,.mode-btn,.formula,.hint,.btn,.iconbtn",
+    )
+    .forEach((el) => el.remove());
+  // print-only elements (e.g. the solid Total-Price value) are display:none on screen — show them
+  clone.querySelectorAll<HTMLElement>(".amt-print").forEach((el) => (el.style.display = "inline"));
+  // drop the screen-only selection highlight classes so nothing is tinted in the PDF
+  clone.querySelectorAll(".selrow").forEach((el) => el.classList.remove("selrow"));
+  clone.querySelectorAll(".sel").forEach((el) => el.classList.remove("sel"));
   const freeze = (el: HTMLInputElement | HTMLSelectElement, text: string) => {
     const sp = document.createElement("span");
     sp.textContent = text;
