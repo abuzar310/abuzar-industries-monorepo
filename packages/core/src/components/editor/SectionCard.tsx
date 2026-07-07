@@ -213,7 +213,7 @@ export default function SectionCard({ sec, si, cft, modes, selRows, reorderable,
           </span>
           <span className="sc amt">
             <i>Total Price</i>
-            <span className="amt-edit">
+            <span className="amt-edit no-print">
               ₹{" "}
               <input
                 type="number"
@@ -225,6 +225,8 @@ export default function SectionCard({ sec, si, cft, modes, selRows, reorderable,
                 onChange={(e) => onAmt(si, e.target.value)}
               />
             </span>
+            {/* solid value for print (the input's placeholder prints too faint) */}
+            <b className="amt-print">₹ {inr(sec.amtOverride != null ? +sec.amtOverride : baseAmt)}</b>
           </span>
         </div>
       </div>

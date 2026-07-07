@@ -71,9 +71,9 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const isInv = doc.kind === "invoice";
   const isBuy = isInv && doc.tradeType === "buy"; // purchase invoice
   // entry modes offered per section per app:
-  //  invoice → by-size + total-CFT + total-CBM; unofficial quote → by-size + per-price; official quote → by-size + total-CFT + running-ft
+  //  invoice → by-size + total-CFT + total-CBM + per-price; unofficial quote → by-size + per-price; official quote → by-size + total-CFT + running-ft
   const secModes: ("cft" | "direct" | "rft" | "pcs" | "cbm")[] =
-    isInv ? ["cft", "direct", "cbm"] : feat.simpleQuote ? ["cft", "pcs"] : ["cft", "direct", "rft"];
+    isInv ? ["cft", "direct", "cbm", "pcs"] : feat.simpleQuote ? ["cft", "pcs"] : ["cft", "direct", "rft"];
   const totals = useMemo(() => computeDoc(doc), [doc]);
   // CFT and CBM are different units, so keep their running totals separate for the bill summary.
   const totalCft = doc.sections.reduce(
