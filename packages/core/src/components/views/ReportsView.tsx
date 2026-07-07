@@ -58,6 +58,7 @@ export default function ReportsView() {
   const [from, setFrom] = useState(fy.from);
   const [to, setTo] = useState(fy.to);
   const [type, setType] = useState<TradeFilter>("sell");
+  const [cls, setCls] = useState<"all" | "b2b" | "reg">("all"); // B2B (has GSTIN) vs Regular
 
   useEffect(() => {
     let live = true;
@@ -103,22 +104,93 @@ export default function ReportsView() {
       .sort((a, b) => numOf(b.no) - numOf(a.no) || b.iso.localeCompare(a.iso)); // latest invoice number first
   }, [invoices, from, to, type]);
 
-  const totals = useMemo(
-    () =>
-      rows.reduce(
-        (s, r) => {
-          s.cft += r.cft;
-          s.net += r.net;
-          s.gst += r.gst;
-          s.total += r.total;
-          return s;
-        },
-        { cft: 0, net: 0, gst: 0, total: 0 },
-      ),
-    [rows],
-  );
+  const sumOf = (list: typeof rows) =>
+    list.reduce(
+      (s, r) => {
+        s.cft += r.cft;
+        s.net += r.net;
+        s.gst += r.gst;
+        s.total += r.total;
+        return s;
+      },
+      { cft: 0, net: 0, gst: 0, total: 0 },
+    );
+  // B2B = has a customer GSTIN; Regular = none
+  const b2bRows = useMemo(() => rows.filter((r) => (r.gstin || "").trim() !== ""), [rows]);
+  const regRows = useMemo(() => rows.filter((r) => (r.gstin || "").trim() === ""), [rows]);
+  const shownRows = cls === "b2b" ? b2bRows : cls === "reg" ? regRows : rows;
+  const shownTotals = sumOf(shownRows);
+
+  /** One invoice table. B2B tables show GSTIN + Net + GST columns; Regular tables omit GST. */
+  const renderTable = (list: typeof rows, withGst: boolean, heading: string) => {
+    const t = sumOf(list);
+    return (
+      <div className="rep-block">
+        <div className="rep-title rep-subhead">
+          {heading} <span className="rep-subcount">· {list.length} invoice{list.length === 1 ? "" : "s"}</span>
+        </div>
+        <table className="rep-table">
+          <colgroup>
+            <col className="w-n" />
+            <col className="w-date" />
+            <col className="w-no" />
+            <col className="w-cust" />
+            {withGst && <col className="w-gst" />}
+            <col className="w-cft" />
+            {withGst && <col className="w-net" />}
+            {withGst && <col className="w-gstamt" />}
+            <col className="w-total" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className="c-n">#</th>
+              <th>Date</th>
+              <th>Invoice No</th>
+              <th>Customer</th>
+              {withGst && <th>GSTIN</th>}
+              <th className="amt">CFT</th>
+              {withGst && <th className="amt">Net ₹</th>}
+              {withGst && <th className="amt">GST ₹</th>}
+              <th className="amt">Total ₹</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.length ? (
+              <>
+                {list.map((r, i) => (
+                  <tr key={r.key}>
+                    <td className="c-n">{i + 1}</td>
+                    <td className="c-date">{r.date}</td>
+                    <td className="c-no">{r.no}</td>
+                    <td className="c-cust">{r.name}</td>
+                    {withGst && <td className="c-gst">{r.gstin || "—"}</td>}
+                    <td className="amt">{num(r.cft)}</td>
+                    {withGst && <td className="amt">{inr(r.net)}</td>}
+                    {withGst && <td className="amt">{inr(r.gst)}</td>}
+                    <td className="amt">{inr(r.total)}</td>
+                  </tr>
+                ))}
+                <tr className="rep-tot">
+                  <td colSpan={withGst ? 5 : 4}>Total — {list.length} invoice{list.length === 1 ? "" : "s"}</td>
+                  <td className="amt">{num(t.cft)}</td>
+                  {withGst && <td className="amt">{inr(t.net)}</td>}
+                  {withGst && <td className="amt">{inr(t.gst)}</td>}
+                  <td className="amt">{inr(t.total)}</td>
+                </tr>
+              </>
+            ) : (
+              <tr>
+                <td colSpan={withGst ? 9 : 6} className="rep-empty">No invoices in this period.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   const typeLabel = type === "buy" ? "Purchase" : type === "all" ? "Invoice" : "Sales";
+  const clsLabel = cls === "b2b" ? " · B2B" : cls === "reg" ? " · Regular" : "";
   const periodLabel =
     from && to ? `${fmtISO(from)}  to  ${fmtISO(to)}` : from ? `From ${fmtISO(from)}` : to ? `Up to ${fmtISO(to)}` : "All time";
 
@@ -168,6 +240,13 @@ export default function ReportsView() {
               </button>
             ))}
           </div>
+          <div className="rep-seg" role="group" aria-label="B2B / Regular">
+            {(["all", "b2b", "reg"] as const).map((c) => (
+              <button key={c} className={cls === c ? "on" : ""} onClick={() => setCls(c)} title={c === "b2b" ? "GSTIN invoices (with GST)" : c === "reg" ? "Non-GSTIN invoices" : "Both tables"}>
+                {c === "all" ? "B2B + Regular" : c === "b2b" ? "B2B" : "Regular"}
+              </button>
+            ))}
+          </div>
           <button className="btn primary sm rep-print" onClick={() => window.print()}>Print / Save PDF</button>
         </div>
       </div>
@@ -181,75 +260,21 @@ export default function ReportsView() {
             {brand.gstin && <div>GSTIN: {brand.gstin}</div>}
           </div>
           <div className="rep-meta">
-            <div className="rep-title">{typeLabel} Report</div>
+            <div className="rep-title">{typeLabel} Report{clsLabel}</div>
             <div className="rep-period">{periodLabel}</div>
           </div>
         </div>
 
-        <div className="rep-summary">
-          <div><b>{rows.length}</b><span>Invoices</span></div>
-          <div><b>{num(totals.cft)}</b><span>CFT {type === "buy" ? "bought" : "sold"}</span></div>
-          <div><b>₹{inr(totals.net)}</b><span>Net amount</span></div>
-          <div><b>₹{inr(totals.gst)}</b><span>GST</span></div>
-          <div><b>₹{inr(totals.total)}</b><span>Total</span></div>
+        <div className={"rep-summary" + (cls === "reg" ? " cols3" : "")}>
+          <div><b>{shownRows.length}</b><span>Invoices</span></div>
+          <div><b>{num(shownTotals.cft)}</b><span>CFT {type === "buy" ? "bought" : "sold"}</span></div>
+          {cls !== "reg" && <div><b>₹{inr(shownTotals.net)}</b><span>Net amount</span></div>}
+          {cls !== "reg" && <div><b>₹{inr(shownTotals.gst)}</b><span>GST</span></div>}
+          <div><b>₹{inr(shownTotals.total)}</b><span>Total</span></div>
         </div>
 
-        <table className="rep-table">
-          <colgroup>
-            <col className="w-n" />
-            <col className="w-date" />
-            <col className="w-no" />
-            <col className="w-cust" />
-            <col className="w-gst" />
-            <col className="w-cft" />
-            <col className="w-net" />
-            <col className="w-gstamt" />
-            <col className="w-total" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th className="c-n">#</th>
-              <th>Date</th>
-              <th>Invoice No</th>
-              <th>Customer</th>
-              <th>GSTIN</th>
-              <th className="amt">CFT</th>
-              <th className="amt">Net ₹</th>
-              <th className="amt">GST ₹</th>
-              <th className="amt">Total ₹</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length ? (
-              <>
-                {rows.map((r, i) => (
-                  <tr key={r.key}>
-                    <td className="c-n">{i + 1}</td>
-                    <td className="c-date">{r.date}</td>
-                    <td className="c-no">{r.no}</td>
-                    <td className="c-cust">{r.name}</td>
-                    <td className="c-gst">{r.gstin || "—"}</td>
-                    <td className="amt">{num(r.cft)}</td>
-                    <td className="amt">{inr(r.net)}</td>
-                    <td className="amt">{inr(r.gst)}</td>
-                    <td className="amt">{inr(r.total)}</td>
-                  </tr>
-                ))}
-                <tr className="rep-tot">
-                  <td colSpan={5}>Total — {rows.length} invoice{rows.length === 1 ? "" : "s"}</td>
-                  <td className="amt">{num(totals.cft)}</td>
-                  <td className="amt">{inr(totals.net)}</td>
-                  <td className="amt">{inr(totals.gst)}</td>
-                  <td className="amt">{inr(totals.total)}</td>
-                </tr>
-              </>
-            ) : (
-              <tr>
-                <td colSpan={9} className="rep-empty">No invoices in this period.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {(cls === "all" || cls === "b2b") && renderTable(b2bRows, true, "B2B — with GST")}
+        {(cls === "all" || cls === "reg") && renderTable(regRows, false, "Regular")}
 
         <div className="rep-foot">Generated {fmtISO(isoOf(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()))} · {brand.name}</div>
       </div>

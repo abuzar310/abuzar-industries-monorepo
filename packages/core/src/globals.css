@@ -1488,6 +1488,10 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .rep-print{margin-left:auto}
 
 .rep-doc{background:#fff; border:1px solid var(--line-2); border-radius:12px; padding:24px 26px; box-shadow:var(--shadow-md,0 6px 22px -12px rgba(50,36,20,.35))}
+/* B2B / Regular split: each table is its own block with a sub-heading */
+.rep-block + .rep-block{margin-top:18px}
+.rep-subhead{margin-bottom:8px}
+.rep-subcount{font-family:var(--mono); font-size:11px; font-weight:600; color:var(--ink-faint); letter-spacing:0; text-transform:none}
 .rep-head{display:flex; justify-content:space-between; align-items:flex-start; gap:16px; border-bottom:2px solid var(--walnut); padding-bottom:10px; margin-bottom:14px}
 .rep-brand h1{font-family:var(--disp); font-size:22px; font-weight:800; letter-spacing:.02em; color:var(--walnut); margin:0 0 4px}
 .rep-brand div{font-size:11.5px; color:var(--ink-soft); line-height:1.4}
