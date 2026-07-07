@@ -58,7 +58,7 @@ export default function ReportsView() {
   const [from, setFrom] = useState(fy.from);
   const [to, setTo] = useState(fy.to);
   const [type, setType] = useState<TradeFilter>("sell");
-  const [cls, setCls] = useState<"all" | "b2b" | "b2c" | "rented" | "split">("all"); // All (merged) · B2B · B2C · Rented · Split
+  const [cls, setCls] = useState<"all" | "b2b" | "b2c" | "rented" | "igst" | "split">("all"); // All · B2B · B2C · Rented · IGST · Split
 
   useEffect(() => {
     let live = true;
@@ -95,6 +95,7 @@ export default function ReportsView() {
           name: d.customerName || "—",
           gstin: d.custGstin || "",
           rented: !!d.rented,
+          igst: d.gstKind === "igst",
           buy: t.buy,
           cft: t.cft,
           net: t.taxable,
@@ -120,7 +121,9 @@ export default function ReportsView() {
   const rentedRows = useMemo(() => rows.filter((r) => r.rented), [rows]);
   const b2bRows = useMemo(() => rows.filter((r) => !r.rented && (r.gstin || "").trim() !== ""), [rows]);
   const b2cRows = useMemo(() => rows.filter((r) => !r.rented && (r.gstin || "").trim() === ""), [rows]);
-  const shownRows = cls === "b2b" ? b2bRows : cls === "b2c" ? b2cRows : cls === "rented" ? rentedRows : rows;
+  const igstRows = useMemo(() => rows.filter((r) => r.igst), [rows]); // interstate (IGST) invoices
+  const shownRows =
+    cls === "b2b" ? b2bRows : cls === "b2c" ? b2cRows : cls === "rented" ? rentedRows : cls === "igst" ? igstRows : rows;
   const shownTotals = sumOf(shownRows);
 
   /** One invoice table. B2B tables show GSTIN + Net + GST columns; Regular tables omit GST. */
@@ -195,7 +198,7 @@ export default function ReportsView() {
 
   const typeLabel = type === "buy" ? "Purchase" : type === "all" ? "Invoice" : "Sales";
   const clsLabel =
-    cls === "b2b" ? " · B2B" : cls === "b2c" ? " · B2C" : cls === "rented" ? " · Rented" : cls === "split" ? " · B2B + B2C + Rented" : "";
+    cls === "b2b" ? " · B2B" : cls === "b2c" ? " · B2C" : cls === "rented" ? " · Rented" : cls === "igst" ? " · IGST" : cls === "split" ? " · B2B + B2C + Rented" : "";
   const periodLabel =
     from && to ? `${fmtISO(from)}  to  ${fmtISO(to)}` : from ? `From ${fmtISO(from)}` : to ? `Up to ${fmtISO(to)}` : "All time";
 
@@ -246,7 +249,7 @@ export default function ReportsView() {
             ))}
           </div>
           <div className="rep-seg" role="group" aria-label="Invoice class">
-            {(["all", "b2b", "b2c", "rented", "split"] as const).map((c) => (
+            {(["all", "b2b", "b2c", "rented", "igst", "split"] as const).map((c) => (
               <button
                 key={c}
                 className={cls === c ? "on" : ""}
@@ -260,10 +263,12 @@ export default function ReportsView() {
                         ? "Non-GSTIN invoices"
                         : c === "rented"
                           ? "Rental invoices (CGST + SGST)"
-                          : "Separate tables: B2B, B2C, Rented"
+                          : c === "igst"
+                            ? "Interstate IGST invoices"
+                            : "Separate tables: B2B, B2C, Rented"
                 }
               >
-                {c === "all" ? "All" : c === "b2b" ? "B2B" : c === "b2c" ? "B2C" : c === "rented" ? "Rented" : "Split"}
+                {c === "all" ? "All" : c === "b2b" ? "B2B" : c === "b2c" ? "B2C" : c === "rented" ? "Rented" : c === "igst" ? "IGST" : "Split"}
               </button>
             ))}
           </div>
@@ -297,6 +302,7 @@ export default function ReportsView() {
         {cls === "b2b" && renderTable(b2bRows, true, "")}
         {cls === "b2c" && renderTable(b2cRows, true, "")}
         {cls === "rented" && renderTable(rentedRows, true, "")}
+        {cls === "igst" && renderTable(igstRows, true, "")}
         {cls === "split" && renderTable(b2bRows, true, "B2B — with GST")}
         {cls === "split" && renderTable(b2cRows, true, "B2C")}
         {cls === "split" && renderTable(rentedRows, true, "Rented — CGST + SGST")}
