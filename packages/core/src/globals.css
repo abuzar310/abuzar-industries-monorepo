@@ -1086,11 +1086,16 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   #sheet.inv .mast-c .brand-row{min-height:1.35cm}
   #sheet.inv .inv-tag-top{margin-bottom:4px}
   #sheet.inv .inv-tag-top span{font-size:11px; padding:3px 12px}
-  #sheet.inv .inv-sign{padding:14px 22px 8px}
-  /* compress the bank details / terms box so two wood boxes still fit one page */
-  #sheet.inv .inv-bank, #sheet.inv .inv-terms{padding:8px 14px; line-height:1.45}
-  #sheet.inv .inv-terms li{margin:1px 0}
-  #sheet.inv .inv-thanks{padding:6px}
+  /* compress the footer (bank / terms / signatures / thanks) so it never spills to page 2 */
+  #sheet.inv .inv-sign{padding:8px 22px 5px; gap:16px}
+  #sheet.inv .sign-box{min-height:34px}
+  #sheet.inv .sign-line{margin-bottom:3px}
+  #sheet.inv .sign-for{font-size:12px}
+  #sheet.inv .sign-role{font-size:8.5px}
+  #sheet.inv .inv-bank, #sheet.inv .inv-terms{padding:5px 14px; line-height:1.3; font-size:10px}
+  #sheet.inv .inv-terms li{margin:0}
+  #sheet.inv .inv-thanks{padding:4px; font-size:11px}
+  #sheet.inv .words{padding:4px 22px; font-size:11px}
   /* compact wood boxes + tight gaps so 6–7 stacked boxes fit one page at full width */
   #sheet.inv #sections{margin-top:3px; gap:5px}
   #sheet.inv .totals{margin-top:8px}
