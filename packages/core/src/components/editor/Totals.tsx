@@ -20,6 +20,7 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
   const half = Math.round((+doc.gst || 0) * 50) / 100; // e.g. 18 -> 9
   const halfAmt = Math.round(gstAmt * 50) / 100;
   return (
+    <>
     <div className="totals">
       {isInv && totalCft ? (
         <div className="t-row">
@@ -78,9 +79,11 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
         <span className="lab">Grand total</span>
         <span className="val">₹ {inr(grand)}</span>
       </div>
+      </div>
+      {/* amount-in-words lives OUTSIDE the totals box (which clips overflow) so it can never be cut off */}
       <div className="words">
         Amount in words: <b>{rupeesInWords(grand)}</b>
       </div>
-    </div>
+    </>
   );
 }

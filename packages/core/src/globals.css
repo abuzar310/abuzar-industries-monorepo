@@ -534,7 +534,7 @@ body{
 .grand::before{content:''; position:absolute; left:0; right:0; top:0; height:2px; background:var(--brass)}
 .grand .lab{color:#D8C2A4; font-size:13px}
 .grand .val{font-family:var(--serif); font-weight:600; font-size:34px; letter-spacing:-.01em; color:#FBF1E1}
-.words{padding:13px 22px; font-family:var(--serif); font-size:14px; color:var(--ink-soft); font-style:italic; border-top:1px solid var(--line)}
+.words{margin-top:6px; padding:8px 22px; font-family:var(--serif); font-size:14px; color:var(--ink-soft); font-style:italic}
 .words b{color:var(--ink); font-style:italic; font-weight:600}
 
 /* ---------- official invoice: goods line, watermark, footer ---------- */
@@ -542,9 +542,6 @@ body{
 /* invoice sheet fills a full A4 page (screen preview + PDF).
    The totals + footer are pinned to the bottom; empty space grows above the totals. */
 #sheet.inv{position:relative; display:flex; flex-direction:column; aspect-ratio:210/297}
-/* keep every block at its natural height — no flex squish — so nothing (e.g. the amount-in-words
-   line) gets clipped when the sheet is locked to one page; overflow instead triggers scale-to-fit */
-#sheet.inv > *{flex-shrink:0}
 /* totals flow right under the items (no stretch); only the footer sits at the page bottom */
 #sheet.inv .totals{margin-top:16px}
 #sheet.inv .inv-foot{margin-top:auto}

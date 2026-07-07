@@ -589,20 +589,18 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       sheet.style.zoom = "1";
       sheet.style.width = pageW + "px";
       if (isInv) {
-        // Goal: one clean page. Fill the full page height so the footer (bank details + signatures)
-        // anchors to the bottom instead of leaving a big empty gap when there are only a few items.
-        sheet.style.height = pageH + "px";
+        // Goal: one clean full-A4 page. min-height (NOT a fixed height) fills the page so the footer
+        // anchors to the bottom, while every block keeps its natural size — nothing gets squished or
+        // clipped (e.g. the amount-in-words line). If the content genuinely overruns one page, compress
+        // (inv-tight) and, if still over, scale it down uniformly to fit exactly one page.
+        sheet.style.minHeight = pageH + "px";
         if (sheet.scrollHeight > pageH + 2) {
-          // content overruns the page → compress (inv-tight)…
           sheet.classList.add("inv-tight");
           if (sheet.scrollHeight > pageH + 2) {
-            // …still over: let the content define the height and scale it down to fit exactly one
-            // page (better than a near-empty 2nd sheet). Clamp so a genuinely huge invoice can flow.
-            sheet.style.height = "";
             sheet.style.zoom = String(Math.max(0.72, pageH / sheet.scrollHeight));
           }
         }
-        return; // keep width + height for print; unfit() restores them afterwards
+        return; // keep width + min-height for print; unfit() restores them afterwards
       }
       // quote: compact ~0.85cm rows (~26 per column, like the legacy print). Try to fit on ONE page —
       // thin a touch (to no less than 0.7cm) if it's a hair over; when even 0.7cm can't hold it, flow
@@ -629,6 +627,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     const unfit = () => {
       sheet.style.width = "";
       sheet.style.height = "";
+      sheet.style.minHeight = "";
       sheet.style.zoom = "1";
       sheet.style.removeProperty("--sqrow");
       sheet.classList.remove("inv-tight");
