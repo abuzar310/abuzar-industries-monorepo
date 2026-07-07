@@ -2,7 +2,7 @@
 import { useEffect, useRef } from "react";
 import type { AppFeatures, StoreName, Tab } from "@/lib/types";
 import { setFeatures } from "@/lib/features";
-import { allRec, delRec, metaGet, openDB, put, setDbSuffix } from "@/lib/db";
+import { allRec, delRec, getRec, metaGet, openDB, put, setDbSuffix } from "@/lib/db";
 import { nowIso } from "@/lib/calc";
 import {
   authRequired,
@@ -87,8 +87,13 @@ export default function AppProvider({
     let rtTimer: ReturnType<typeof setTimeout> | undefined;
     const onRealtime = (store: string, eventType: string, oldId?: string) => {
       if (eventType === "DELETE" && oldId) {
-        delRec(store as StoreName, oldId)
-          .then(() => bumpData())
+        // Only honour a remote delete for a record we actually hold AS SYNCED (i.e. it came from the
+        // cloud). NEVER wipe a freshly-created local record that hasn't synced yet — otherwise a DELETE
+        // broadcast for a recycled/reused number can auto-remove a brand-new invoice (data-loss bug).
+        getRec<{ synced?: boolean }>(store as StoreName, oldId)
+          .then((local) => {
+            if (local && local.synced) return delRec(store as StoreName, oldId).then(() => bumpData());
+          })
           .catch(() => {});
         return;
       }
