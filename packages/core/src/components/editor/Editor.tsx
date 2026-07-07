@@ -9,7 +9,7 @@ import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
 import { docStore } from "@/lib/doc";
 import { nextNumber } from "@/lib/numbering";
-import { cloudDelete, setOpenDoc, trySync } from "@/lib/cloud";
+import { clearTombstone, cloudDelete, setOpenDoc, trySync } from "@/lib/cloud";
 import { upsertCustomerFromDoc } from "@/lib/customers";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { trashDoc } from "@/lib/trash";
@@ -373,7 +373,10 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     // validate so a rename can never break the flow or overwrite another document
     if (/[/\\?#%]/.test(v)) return toast("A number can't contain / \\ ? # or %");
     const store = docStore(docRef.current);
-    if (await getRec(store, v)) return toast("Number " + v + " is already used — pick a free one");
+    // A number is only "taken" by a LIVE doc — one sitting in the Recycle bin is free to reuse
+    // (so old/back-dated numbers whose invoice was deleted can be entered again).
+    const existing = await getRec<Doc>(store, v);
+    if (existing && !existing.deletedAt) return toast("Number " + v + " is already used — pick a free one");
     await snapshotBefore(); // safety restore point before we change the id
     const oldId = docRef.current.id;
     const next = clone(docRef.current);
@@ -381,6 +384,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     next.id = v;
     await delRec(store, oldId);
     cloudDelete(store, oldId); // drop the old id from the cloud too, so it can't re-sync as a duplicate
+    await clearTombstone(store, v); // if this number was deleted before, let the reused doc sync again
     persist(next);
     docRef.current = next;
     setDoc(next);
