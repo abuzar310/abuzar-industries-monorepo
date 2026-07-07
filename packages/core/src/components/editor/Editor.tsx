@@ -19,7 +19,7 @@ import { addExpense, allExpenses, deleteExpensesBySource, upiAccounts } from "@/
 import { postInvoice, unpostInvoice } from "@/lib/ledger-autopost";
 import { quoteMessage, reminderMessage, waLink } from "@/lib/whatsapp";
 import { generatePdf } from "@/lib/pdf";
-import { connectFolder, folderActive, mirrorDoc } from "@/lib/folderMirror";
+import { connectFolder, folderActiveFor, mirrorDoc } from "@/lib/folderMirror";
 import { bumpData, setSyncState, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import type { BoxRect, Customer, Doc, Expense, Row } from "@/lib/types";
@@ -492,20 +492,17 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   async function onFolder() {
     const next = clone(docRef.current);
     await upsertCustomerFromDoc(next);
-    commit(next, true);
-    // if no folder is connected yet, open the picker now (a click = a valid user gesture);
-    // otherwise this save already mirrored it via persist().
-    if (!folderActive()) {
-      const ok = await connectFolder();
-      toast(ok ? "Auto-save folder connected — everything mirrored" : "No folder chosen");
+    commit(next, true); // persist → mirror to any already-connected folders
+    const label = isInv ? "invoices" : "quotations";
+    // a folder covering this kind is already connected → this save already mirrored it
+    if (folderActiveFor(next.kind)) {
+      await mirrorDoc(next).catch(() => {});
+      toast("Saved " + next.number + " to the " + label + " backup folder");
       return;
     }
-    try {
-      await mirrorDoc(next);
-      toast("Saved " + next.number + " to the backup folder");
-    } catch {
-      toast("Could not write to the folder");
-    }
+    // otherwise open the picker now (a click = a valid user gesture) — scoped to this kind
+    const name = await connectFolder(isInv ? "invoices" : "quotations");
+    toast(name ? `Auto-saving ${label} to "${name}"` : "No folder chosen");
   }
   async function onDelete() {
     const ok = await confirmDialog({

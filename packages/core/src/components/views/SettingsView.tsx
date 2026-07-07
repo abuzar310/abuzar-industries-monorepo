@@ -5,7 +5,7 @@ import { getSupa, pullFromCloud, testConnection, trySync } from "@/lib/cloud";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { purgeDoc, restoreDoc, trashedDocs } from "@/lib/trash";
 import { autoSnapshot, downloadSnapshot, listSnapshots, restoreSnapshot } from "@/lib/autobackup";
-import { connectFolder, disconnectFolder, folderList, folderSupported, grantFolder, type FolderInfo } from "@/lib/folderMirror";
+import { connectFolder, disconnectFolder, folderList, folderSupported, grantFolder, type FolderInfo, type FolderScope } from "@/lib/folderMirror";
 import { docStore } from "@/lib/doc";
 import type { Doc } from "@/lib/types";
 import { canInstall, promptInstall } from "@/lib/pwa";
@@ -38,11 +38,12 @@ export default function SettingsView() {
     refreshFolder();
   }, []);
 
+  const scopeLabel = (s: FolderScope) => (s === "invoices" ? "Invoices only" : s === "quotations" ? "Quotations only" : "Invoices + Quotations");
   const refreshFolder = () => setFolders(folderList());
-  async function onAddFolder() {
-    const name = await connectFolder();
+  async function onAddFolder(scope: FolderScope) {
+    const name = await connectFolder(scope);
     refreshFolder();
-    toast(name ? `Folder "${name}" connected — all records mirrored` : "No folder selected");
+    toast(name ? `Folder "${name}" connected (${scopeLabel(scope)})` : "No folder selected");
   }
   async function onGrantFolder(i: number) {
     const ok = await grantFolder(i);
@@ -254,7 +255,7 @@ export default function SettingsView() {
             {folders.map((f) => (
               <div className="exprow" key={f.i}>
                 <span className="expnote">
-                  {f.name}
+                  {f.name} <small style={{ opacity: 0.8 }}>· {scopeLabel(f.scope)}</small>
                   <small style={{ color: f.granted ? "var(--ok, #2e7d32)" : "var(--danger)" }}>
                     {f.granted ? "✓ auto-saving" : "needs access — click Reconnect"}
                   </small>
@@ -265,8 +266,10 @@ export default function SettingsView() {
                 <button className="btn sm" onClick={() => onDisconnectFolder(f.i)}>Remove</button>
               </div>
             ))}
-            <div className="rowbtns" style={{ marginTop: 6 }}>
-              <button className="btn primary sm" onClick={onAddFolder}>+ Add a folder</button>
+            <div className="rowbtns" style={{ marginTop: 6, flexWrap: "wrap" }}>
+              <button className="btn primary sm" onClick={() => onAddFolder("both")}>+ Folder (invoices + quotations)</button>
+              <button className="btn sm" onClick={() => onAddFolder("invoices")}>+ Invoices-only folder</button>
+              <button className="btn sm" onClick={() => onAddFolder("quotations")}>+ Quotations-only folder</button>
             </div>
           </>
         )}
