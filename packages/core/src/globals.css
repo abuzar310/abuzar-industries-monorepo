@@ -542,6 +542,9 @@ body{
 /* invoice sheet fills a full A4 page (screen preview + PDF).
    The totals + footer are pinned to the bottom; empty space grows above the totals. */
 #sheet.inv{position:relative; display:flex; flex-direction:column; aspect-ratio:210/297}
+/* keep every block at its natural height — no flex squish — so nothing (e.g. the amount-in-words
+   line) gets clipped when the sheet is locked to one page; overflow instead triggers scale-to-fit */
+#sheet.inv > *{flex-shrink:0}
 /* totals flow right under the items (no stretch); only the footer sits at the page bottom */
 #sheet.inv .totals{margin-top:16px}
 #sheet.inv .inv-foot{margin-top:auto}
