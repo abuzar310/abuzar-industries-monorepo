@@ -486,6 +486,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     await put("quotations", clone(cur));
     await metaSet("lastOpen", { store: "invoices", id: invId });
     trySync();
+    mirrorDoc(clone(inv)).catch(() => {}); // write the new invoice to the folder immediately too
+    mirrorDoc(clone(cur)).catch(() => {}); // and the updated quotation
     toast("Invoice " + invId + " created · prices locked");
     router.push("/editor/" + invId);
   }
