@@ -5,7 +5,7 @@ import { getSupa, pullFromCloud, testConnection, trySync } from "@/lib/cloud";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { purgeDoc, restoreDoc, trashedDocs } from "@/lib/trash";
 import { autoSnapshot, downloadSnapshot, listSnapshots, restoreSnapshot } from "@/lib/autobackup";
-import { connectFolder, disconnectFolder, folderList, folderSupported, grantFolder, type FolderInfo, type FolderScope } from "@/lib/folderMirror";
+import { connectFolder, disconnectFolder, folderList, folderSupported, grantAll, grantFolder, type FolderInfo, type FolderScope } from "@/lib/folderMirror";
 import { docStore } from "@/lib/doc";
 import type { Doc } from "@/lib/types";
 import { canInstall, promptInstall } from "@/lib/pwa";
@@ -49,6 +49,11 @@ export default function SettingsView() {
     const ok = await grantFolder(i);
     refreshFolder();
     toast(ok ? "Folder reconnected — auto-saving" : "Access not granted");
+  }
+  async function onGrantAll() {
+    const n = await grantAll();
+    refreshFolder();
+    toast(n ? `Reconnected ${n} folder${n === 1 ? "" : "s"}` : "Access not granted");
   }
   async function onDisconnectFolder(i: number) {
     await disconnectFolder(i);
@@ -266,11 +271,27 @@ export default function SettingsView() {
                 <button className="btn sm" onClick={() => onDisconnectFolder(f.i)}>Remove</button>
               </div>
             ))}
+            {folders.some((f) => !f.granted) && (
+              <div className="rowbtns" style={{ marginTop: 6 }}>
+                <button className="btn primary sm" onClick={onGrantAll}>Reconnect all folders</button>
+              </div>
+            )}
             <div className="rowbtns" style={{ marginTop: 6, flexWrap: "wrap" }}>
               <button className="btn primary sm" onClick={() => onAddFolder("both")}>+ Folder (invoices + quotations)</button>
               <button className="btn sm" onClick={() => onAddFolder("invoices")}>+ Invoices-only folder</button>
               <button className="btn sm" onClick={() => onAddFolder("quotations")}>+ Quotations-only folder</button>
             </div>
+            <p className="note" style={{ marginTop: 8, background: "var(--paper-2,#fbf6ea)", padding: "8px 10px", borderRadius: 8 }}>
+              <b>Never be asked again:</b> browsers only remember folder access for an <b>installed app</b>.
+              Install this app (button below, or your browser menu → Install) and folder access stays
+              granted across open/close — nothing to click each time.
+              {canInstall() && (
+                <>
+                  {" "}
+                  <button className="btn sm" style={{ marginTop: 6 }} onClick={installApp}>Install now</button>
+                </>
+              )}
+            </p>
           </>
         )}
       </div>

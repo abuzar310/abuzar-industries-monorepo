@@ -109,6 +109,24 @@ export async function connectFolder(scope: FolderScope = "both"): Promise<string
   return (h && h.name) || "folder";
 }
 
+/** Re-grant permission for EVERY folder that needs it (one user gesture → one prompt per folder).
+ *  Returns how many folders became active. */
+export async function grantAll(): Promise<number> {
+  let n = 0;
+  for (const e of entries) {
+    if (granted.has(e.h)) continue;
+    if (await perm(e.h, true)) {
+      granted.add(e.h);
+      try {
+        await ensureTree(e.h);
+        await mirrorAllTo(e.h, e.scope);
+      } catch {}
+      n++;
+    }
+  }
+  return n;
+}
+
 /** Re-grant permission for a folder already in the list (by index). From a user gesture. */
 export async function grantFolder(i: number): Promise<boolean> {
   const e = entries[i];
