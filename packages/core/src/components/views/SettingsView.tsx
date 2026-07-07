@@ -262,7 +262,7 @@ export default function SettingsView() {
                 <span className="expnote">
                   {f.name} <small style={{ opacity: 0.8 }}>· {scopeLabel(f.scope)}</small>
                   <small style={{ color: f.granted ? "var(--ok, #2e7d32)" : "var(--danger)" }}>
-                    {f.granted ? "✓ auto-saving" : "needs access — click Reconnect"}
+                    {f.granted ? "✓ auto-saving" : "reconnects on your next click"}
                   </small>
                 </span>
                 {!f.granted && (
@@ -282,9 +282,9 @@ export default function SettingsView() {
               <button className="btn sm" onClick={() => onAddFolder("quotations")}>+ Quotations-only folder</button>
             </div>
             <p className="note" style={{ marginTop: 8, background: "var(--paper-2,#fbf6ea)", padding: "8px 10px", borderRadius: 8 }}>
-              <b>Never be asked again:</b> browsers only remember folder access for an <b>installed app</b>.
-              Install this app (button below, or your browser menu → Install) and folder access stays
-              granted across open/close — nothing to click each time.
+              <b>No button to hunt for:</b> browsers drop folder access between sessions, so this app
+              re-grants your connected folders <b>automatically on your first click</b> after opening —
+              nothing to do. Installing the app (below) can make some browsers keep the grant permanently.
               {canInstall() && (
                 <>
                   {" "}

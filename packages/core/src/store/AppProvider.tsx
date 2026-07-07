@@ -23,7 +23,7 @@ import {
   trySync,
 } from "@/lib/cloud";
 import { maybeAutoSnapshot } from "@/lib/autobackup";
-import { initFolderMirror } from "@/lib/folderMirror";
+import { folderNeedsGrant, grantAll, initFolderMirror } from "@/lib/folderMirror";
 import {
   bumpData,
   setReady,
@@ -152,7 +152,25 @@ export default function AppProvider({
 
       setReady(true);
       maybeAutoSnapshot(); // rolling local safety-net backup (fire-and-forget)
-      initFolderMirror(); // restore the auto-save folder from a previous session (fire-and-forget)
+      // Restore the auto-save folder from a previous session. Browsers drop folder write-permission
+      // between sessions (even installed PWAs, inconsistently), so if it needs re-granting we re-grant
+      // it automatically on the user's FIRST click/keypress — no button to hunt for.
+      initFolderMirror().then(() => {
+        if (typeof document === "undefined" || !folderNeedsGrant()) return;
+        const reGrant = () => {
+          grantAll()
+            .then((n) => {
+              if (n > 0) bumpData();
+              if (!folderNeedsGrant()) {
+                document.removeEventListener("pointerdown", reGrant);
+                document.removeEventListener("keydown", reGrant);
+              }
+            })
+            .catch(() => {});
+        };
+        document.addEventListener("pointerdown", reGrant);
+        document.addEventListener("keydown", reGrant);
+      });
       await checkOwnerNotifications();
 
       // instant updates via realtime; the interval is just a safety-net fallback
