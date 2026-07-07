@@ -45,11 +45,7 @@ export const TABLE = {
   ledgers: "ledgers",
   vouchers: "vouchers",
   collections: "collections",
-  // Account holders ride on the pre-existing (empty, unused) generic "settings" table —
-  // creating a brand-new cloud table needs DB admin access the browser key doesn't have,
-  // and no other store maps to "settings", so there is no collision. Holder ids ("HLD-…")
-  // are self-namespaced. This makes holder grouping sync cross-device with zero manual SQL.
-  payHolders: "settings",
+  payHolders: "payHolders",
 } as const;
 
 // Per-app cloud namespace so the two apps never share tables (e.g. "sf_" for Safa).
