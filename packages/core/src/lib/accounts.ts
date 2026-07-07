@@ -15,6 +15,21 @@ export interface PayAccount {
   createdAt: string;
 }
 
+/**
+ * An account holder (a person who receives UPI on the company's behalf, e.g. "Tabrez").
+ * Groups one or more named sub-accounts. The money itself still lives on `expenses`
+ * (UPI credits) and `collections` (hand-over debits), keyed by the sub-account *name* —
+ * a holder is just a grouping layer over those names, so no transaction data ever moves.
+ */
+export interface PayHolder {
+  id: string; // "HLD-" + uid
+  name: string;
+  accounts: string[]; // sub-account names belonging to this holder
+  createdAt: string;
+  updatedAt: string;
+  synced: boolean;
+}
+
 /** One payment credited to a named account. */
 export interface AccountEntry {
   id: string;
@@ -135,11 +150,16 @@ const mkEntry = (e: Expense, quotes: Doc[], customers: Customer[]): AccountEntry
   collectedAt: e.collectedAt,
 });
 
-/** All known account names — registry + any used on past payments. */
+/** All known account names — holder sub-accounts + legacy registry + any used on past payments. */
 export async function payAccounts(): Promise<string[]> {
-  const [registry, expenses] = await Promise.all([loadRegistry(), allRec<Expense>("expenses")]);
+  const [registry, holders, expenses] = await Promise.all([
+    loadRegistry(),
+    listHolders(),
+    allRec<Expense>("expenses"),
+  ]);
   const used = expenses.filter(isAccountPayment).map((e) => (e.account || "").trim()).filter(Boolean);
-  return [...new Set([...registry.map((a) => a.name), ...used])].sort();
+  const sub = holders.flatMap((h) => h.accounts);
+  return [...new Set([...sub, ...registry.map((a) => a.name), ...used])].sort();
 }
 
 /** @deprecated use payAccounts */
@@ -165,6 +185,82 @@ export async function removePayAccount(id: string): Promise<void> {
     META_KEY,
     list.filter((a) => a.id !== id),
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Account holders — a grouping layer over sub-account names (see PayHolder above).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const normName = (s: string) => (s || "").trim();
+const sameName = (a: string, b: string) => normName(a).toLowerCase() === normName(b).toLowerCase();
+
+export const listHolders = () => allRec<PayHolder>("payHolders");
+
+async function saveHolder(h: PayHolder): Promise<PayHolder> {
+  h.updatedAt = nowIso();
+  h.synced = false;
+  await put("payHolders", h);
+  trySync();
+  return h;
+}
+
+export async function addHolder(name: string): Promise<PayHolder | null> {
+  const n = normName(name);
+  if (!n) return null;
+  const list = await listHolders();
+  if (list.some((h) => sameName(h.name, n))) return null;
+  const now = nowIso();
+  return saveHolder({ id: "HLD-" + uid(), name: n, accounts: [], createdAt: now, updatedAt: now, synced: false });
+}
+
+export async function renameHolder(id: string, name: string): Promise<PayHolder | null> {
+  const n = normName(name);
+  if (!n) return null;
+  const list = await listHolders();
+  if (list.some((h) => h.id !== id && sameName(h.name, n))) return null;
+  const h = list.find((x) => x.id === id);
+  if (!h) return null;
+  h.name = n;
+  return saveHolder(h);
+}
+
+/** Delete a holder. Its sub-accounts (and all their money) stay — they just become ungrouped. */
+export async function removeHolder(id: string): Promise<void> {
+  await delRec("payHolders", id);
+  cloudDelete("payHolders", id);
+  trySync();
+}
+
+/**
+ * Attach a sub-account name to a holder. Creates the name if new; if the name already
+ * lives under another holder it is *moved* here (a name maps to exactly one holder).
+ */
+export async function addHolderAccount(holderId: string, accName: string): Promise<PayHolder | null> {
+  const n = normName(accName);
+  if (!n) return null;
+  const list = await listHolders();
+  const target = list.find((h) => h.id === holderId);
+  if (!target) return null;
+  // remove the name from any other holder so it belongs to exactly one
+  for (const h of list) {
+    if (h.id === holderId) continue;
+    const next = h.accounts.filter((a) => !sameName(a, n));
+    if (next.length !== h.accounts.length) {
+      h.accounts = next;
+      await saveHolder(h);
+    }
+  }
+  if (!target.accounts.some((a) => sameName(a, n))) target.accounts = [...target.accounts, n];
+  return saveHolder(target);
+}
+
+/** Detach a sub-account name from a holder (money stays; the name becomes ungrouped). */
+export async function removeHolderAccount(holderId: string, accName: string): Promise<PayHolder | null> {
+  const list = await listHolders();
+  const h = list.find((x) => x.id === holderId);
+  if (!h) return null;
+  h.accounts = h.accounts.filter((a) => !sameName(a, accName));
+  return saveHolder(h);
 }
 
 /** Per-account rollup for one day — pending vs already collected. */
@@ -352,10 +448,12 @@ export function accountLedger(expenses: Expense[], quotes: Doc[] = [], customers
 // (toOwner) is recorded but never counts toward the collectable balance.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** A partial hand-over of money collected into a UPI account (a debit on that account). */
+/** A partial hand-over of money (a debit). Keyed either to a holder (new: collect from the
+ *  whole holder) or to a single account name (legacy / ungrouped accounts with no holder). */
 export interface AccountCollection {
   id: string; // "COL-" + uid
-  account: string;
+  account: string; // account name (ungrouped) OR the holder name for display when holderId is set
+  holderId?: string; // when set, this is a holder-level hand-over (not tied to one account)
   amount: number;
   date: string; // dd-mm-yy
   by: string; // enteredBy
@@ -372,6 +470,7 @@ export const listCollections = () => allRec<AccountCollection>("collections");
 
 export async function addCollection(fields: {
   account: string;
+  holderId?: string;
   amount: number;
   date?: string;
   by: string;
@@ -384,6 +483,7 @@ export async function addCollection(fields: {
   const c: AccountCollection = {
     id: "COL-" + uid(),
     account,
+    holderId: fields.holderId || undefined,
     amount,
     date: fields.date || todayStr(),
     by: fields.by,
@@ -395,6 +495,20 @@ export async function addCollection(fields: {
   await put("collections", c);
   trySync();
   return c;
+}
+
+/** Move a UPI payment to a different account name (re-categorise, everywhere it shows). */
+export async function moveEntryAccount(id: string, toAccount: string): Promise<boolean> {
+  const n = normName(toAccount);
+  if (!n) return false;
+  const e = await getRec<Expense>("expenses", id);
+  if (!e) return false;
+  e.account = n;
+  e.updatedAt = nowIso();
+  e.synced = false;
+  await put("expenses", e);
+  trySync();
+  return true;
 }
 
 export async function deleteCollection(id: string): Promise<void> {
@@ -510,6 +624,7 @@ export function acctLedger(
   }
 
   for (const c of collections) {
+    if (c.holderId) continue; // holder-level hand-over — handled per-holder, not per-account
     const name = (c.account || "").trim();
     if (!name) continue;
     const a = get(name);

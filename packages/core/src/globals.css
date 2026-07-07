@@ -1491,6 +1491,27 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .acct-filters .btn.primary.sm{flex:1 1 100%}
 }
 
+/* account holders → sub-accounts */
+.acct-holder{padding:12px 14px; border-left:3px solid var(--brass)}
+.acct-holder-head{align-items:center}
+.acct-holder-count{font-family:var(--mono); font-size:11px; font-weight:600; color:rgba(244,233,216,.65); text-transform:none; letter-spacing:0}
+.acct-holder-body{margin-top:8px; padding-left:12px; border-left:1px dashed var(--line-2); display:flex; flex-direction:column; gap:8px}
+.acct-sub{padding:10px 12px; background:var(--panel-2)}
+.acct-holder-actions{margin-top:2px; gap:8px}
+.btn.danger{color:var(--danger); border-color:var(--danger)}
+.btn.danger:hover{background:rgba(165,61,41,.1)}
+
+/* readable amount tags on the dark (walnut) card headers */
+.pc-head .acct-tag{background:rgba(255,255,255,.14); color:#F4E9D8}
+.pc-head .acct-tag.upi{background:rgba(140,196,224,.24); color:#cfe9f7}
+.pc-head .acct-tag.pending{background:rgba(232,138,120,.28); color:#ffd2c6}
+.pc-head .acct-tag.ok{background:rgba(168,206,120,.24); color:#e0f3c4}
+.pc-head .acct-collected-badge{color:#e0f3c4}
+
+/* move a payment to another account */
+.acct-move{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px; background:var(--panel-2); border-top:1px solid var(--line)}
+.acct-move-lbl{font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft)}
+
 /* customer-detail printable quotations report: only rendered on print */
 .cd-print{display:none}
 @media print{

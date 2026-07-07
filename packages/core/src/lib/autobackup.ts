@@ -17,6 +17,7 @@ const SNAP_STORES: StoreName[] = [
   "ledgers",
   "vouchers",
   "collections",
+  "payHolders",
 ];
 const MAX_SNAPS = 60; // keep a deep history
 const MIN_GAP_MS = 60 * 60 * 1000; // time-based auto-snapshot at most once an hour (on load)

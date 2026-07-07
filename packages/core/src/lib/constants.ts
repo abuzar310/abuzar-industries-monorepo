@@ -78,6 +78,7 @@ create table if not exists accounts   (id text primary key, data jsonb, updated_
 create table if not exists ledger     (id text primary key, data jsonb, updated_at timestamptz default now());
 create table if not exists sessions   (id text primary key, data jsonb, updated_at timestamptz default now());
 create table if not exists collections(id text primary key, data jsonb, updated_at timestamptz default now());
+create table if not exists "payHolders"(id text primary key, data jsonb, updated_at timestamptz default now());
 
 alter table customers  enable row level security;
 alter table quotations enable row level security;
@@ -90,6 +91,7 @@ alter table accounts   enable row level security;
 alter table ledger     enable row level security;
 alter table sessions   enable row level security;
 alter table collections enable row level security;
+alter table "payHolders" enable row level security;
 
 drop policy if exists "abuzar all" on customers;
 drop policy if exists "abuzar all" on quotations;
@@ -102,6 +104,7 @@ drop policy if exists "abuzar all" on accounts;
 drop policy if exists "abuzar all" on ledger;
 drop policy if exists "abuzar all" on sessions;
 drop policy if exists "abuzar all" on collections;
+drop policy if exists "abuzar all" on "payHolders";
 
 create policy "abuzar all" on customers  for all to anon, authenticated using (true) with check (true);
 create policy "abuzar all" on quotations for all to anon, authenticated using (true) with check (true);
@@ -113,7 +116,8 @@ create policy "abuzar all" on vendors    for all to anon, authenticated using (t
 create policy "abuzar all" on accounts   for all to anon, authenticated using (true) with check (true);
 create policy "abuzar all" on ledger     for all to anon, authenticated using (true) with check (true);
 create policy "abuzar all" on sessions   for all to anon, authenticated using (true) with check (true);
-create policy "abuzar all" on collections for all to anon, authenticated using (true) with check (true);`;
+create policy "abuzar all" on collections for all to anon, authenticated using (true) with check (true);
+create policy "abuzar all" on "payHolders" for all to anon, authenticated using (true) with check (true);`;
 
 export const LOCK_SQL = `-- Lock the database: only logged-in users can read/write
 drop policy if exists "abuzar all"  on customers;

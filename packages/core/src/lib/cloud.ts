@@ -45,6 +45,7 @@ export const TABLE = {
   ledgers: "ledgers",
   vouchers: "vouchers",
   collections: "collections",
+  payHolders: "payHolders",
 } as const;
 
 // Per-app cloud namespace so the two apps never share tables (e.g. "sf_" for Safa).
@@ -217,7 +218,6 @@ export async function trySync(force?: boolean) {
     const arr = await allRec<Doc & { key?: string }>(s);
     for (const rec of arr) {
       if (rec.synced && !force) continue;
-      pending++;
       try {
         const body = JSON.stringify([
           { id: rec.id || rec.key, data: rec, updated_at: rec.updatedAt || nowIso() },
@@ -231,9 +231,19 @@ export async function trySync(force?: boolean) {
           rec.synced = true;
           await put(s, rec);
           ok++;
-        } else if (r.status === 401 || r.status === 403) authErr = true;
+        } else if (r.status === 404) {
+          // Cloud table not set up yet (a newer store on an older DB). Skip the whole
+          // store this round so a missing table never wedges the sync indicator — these
+          // records stay local and sync automatically once the table exists.
+          break;
+        } else if (r.status === 401 || r.status === 403) {
+          authErr = true;
+          pending++;
+        } else {
+          pending++;
+        }
       } catch {
-        /* stay queued */
+        pending++; // network hiccup — stay queued
       }
     }
   }
