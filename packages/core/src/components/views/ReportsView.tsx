@@ -122,6 +122,10 @@ export default function ReportsView() {
   const b2bRows = useMemo(() => rows.filter((r) => !r.rented && (r.gstin || "").trim() !== ""), [rows]);
   const b2cRows = useMemo(() => rows.filter((r) => !r.rented && (r.gstin || "").trim() === ""), [rows]);
   const igstRows = useMemo(() => rows.filter((r) => r.igst), [rows]); // interstate (IGST) invoices
+  // Split view = a clean partition (each invoice in exactly one table): Rented → IGST → B2B → B2C
+  const splitIgst = useMemo(() => rows.filter((r) => !r.rented && r.igst), [rows]);
+  const splitB2b = useMemo(() => rows.filter((r) => !r.rented && !r.igst && (r.gstin || "").trim() !== ""), [rows]);
+  const splitB2c = useMemo(() => rows.filter((r) => !r.rented && !r.igst && (r.gstin || "").trim() === ""), [rows]);
   const shownRows =
     cls === "b2b" ? b2bRows : cls === "b2c" ? b2cRows : cls === "rented" ? rentedRows : cls === "igst" ? igstRows : rows;
   const shownTotals = sumOf(shownRows);
@@ -198,7 +202,7 @@ export default function ReportsView() {
 
   const typeLabel = type === "buy" ? "Purchase" : type === "all" ? "Invoice" : "Sales";
   const clsLabel =
-    cls === "b2b" ? " · B2B" : cls === "b2c" ? " · B2C" : cls === "rented" ? " · Rented" : cls === "igst" ? " · IGST" : cls === "split" ? " · B2B + B2C + Rented" : "";
+    cls === "b2b" ? " · B2B" : cls === "b2c" ? " · B2C" : cls === "rented" ? " · Rented" : cls === "igst" ? " · IGST" : cls === "split" ? " · B2B + B2C + IGST + Rented" : "";
   const periodLabel =
     from && to ? `${fmtISO(from)}  to  ${fmtISO(to)}` : from ? `From ${fmtISO(from)}` : to ? `Up to ${fmtISO(to)}` : "All time";
 
@@ -265,7 +269,7 @@ export default function ReportsView() {
                           ? "Rental invoices (CGST + SGST)"
                           : c === "igst"
                             ? "Interstate IGST invoices"
-                            : "Separate tables: B2B, B2C, Rented"
+                            : "Separate tables: B2B, B2C, IGST, Rented"
                 }
               >
                 {c === "all" ? "All" : c === "b2b" ? "B2B" : c === "b2c" ? "B2C" : c === "rented" ? "Rented" : c === "igst" ? "IGST" : "Split"}
@@ -303,8 +307,9 @@ export default function ReportsView() {
         {cls === "b2c" && renderTable(b2cRows, true, "")}
         {cls === "rented" && renderTable(rentedRows, true, "")}
         {cls === "igst" && renderTable(igstRows, true, "")}
-        {cls === "split" && renderTable(b2bRows, true, "B2B — with GST")}
-        {cls === "split" && renderTable(b2cRows, true, "B2C")}
+        {cls === "split" && renderTable(splitB2b, true, "B2B — CGST + SGST")}
+        {cls === "split" && renderTable(splitB2c, true, "B2C")}
+        {cls === "split" && renderTable(splitIgst, true, "IGST — interstate")}
         {cls === "split" && renderTable(rentedRows, true, "Rented — CGST + SGST")}
 
         <div className="rep-foot">Generated {fmtISO(isoOf(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()))} · {brand.name}</div>
