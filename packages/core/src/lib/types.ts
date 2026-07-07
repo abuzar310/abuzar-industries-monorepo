@@ -56,6 +56,8 @@ export interface Doc {
   gstMode?: "percent" | "flat";
   /** invoice tax split: "split" = SGST+CGST (intrastate), "igst" = single IGST (interstate). Default split. */
   gstKind?: "split" | "igst";
+  /** invoice: a rental invoice — always CGST+SGST, printed as "Rented Invoice" and grouped separately in Reports. */
+  rented?: boolean;
   /** accepted round-figure price override; falls back to the computed grand total. */
   finalPrice?: number;
   quotationId: string;

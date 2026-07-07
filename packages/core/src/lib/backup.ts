@@ -57,7 +57,7 @@ export function documentSnapshotHtml(d: Doc): string {
   return `<!doctype html><meta charset="utf-8"><title>${d.number}</title>
 <body style="font-family:Inter,Arial,sans-serif;max-width:760px;margin:24px auto;color:#241B12">
 <h1 style="margin:0">${b.name}</h1><p>${idline}</p>
-<h2>${d.kind === "invoice" ? "TAX INVOICE" : "QUOTATION"} ${d.number} — ${d.date}</h2>
+<h2>${d.kind === "invoice" ? (d.rented ? "RENTED INVOICE" : "TAX INVOICE") : "QUOTATION"} ${d.number} — ${d.date}</h2>
 <p><b>Customer:</b> ${esc(d.customerName)} · ${esc(d.phone)}<br>${esc(d.site)} ${esc(d.address)}</p>
 ${secRows}
 <p style="text-align:right;font-size:16px">Sub-total: ₹${inr(t.sub)}<br>GST ${d.gst}%: ₹${inr(t.gstAmt)}<br><b>Grand Total: ₹${inr(t.grand)}</b></p>

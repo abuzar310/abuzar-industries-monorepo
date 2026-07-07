@@ -58,7 +58,7 @@ export default function ReportsView() {
   const [from, setFrom] = useState(fy.from);
   const [to, setTo] = useState(fy.to);
   const [type, setType] = useState<TradeFilter>("sell");
-  const [cls, setCls] = useState<"all" | "b2b" | "reg" | "split">("all"); // All (merged) · B2B · Regular · Split (two tables)
+  const [cls, setCls] = useState<"all" | "b2b" | "b2c" | "rented" | "split">("all"); // All (merged) · B2B · B2C · Rented · Split
 
   useEffect(() => {
     let live = true;
@@ -94,6 +94,7 @@ export default function ReportsView() {
           iso,
           name: d.customerName || "—",
           gstin: d.custGstin || "",
+          rented: !!d.rented,
           buy: t.buy,
           cft: t.cft,
           net: t.taxable,
@@ -115,10 +116,11 @@ export default function ReportsView() {
       },
       { cft: 0, net: 0, gst: 0, total: 0 },
     );
-  // B2B = has a customer GSTIN; Regular = none
-  const b2bRows = useMemo(() => rows.filter((r) => (r.gstin || "").trim() !== ""), [rows]);
-  const regRows = useMemo(() => rows.filter((r) => (r.gstin || "").trim() === ""), [rows]);
-  const shownRows = cls === "b2b" ? b2bRows : cls === "reg" ? regRows : rows;
+  // Rented (rental invoices) · B2B (has GSTIN) · B2C (no GSTIN) — rented is its own class
+  const rentedRows = useMemo(() => rows.filter((r) => r.rented), [rows]);
+  const b2bRows = useMemo(() => rows.filter((r) => !r.rented && (r.gstin || "").trim() !== ""), [rows]);
+  const b2cRows = useMemo(() => rows.filter((r) => !r.rented && (r.gstin || "").trim() === ""), [rows]);
+  const shownRows = cls === "b2b" ? b2bRows : cls === "b2c" ? b2cRows : cls === "rented" ? rentedRows : rows;
   const shownTotals = sumOf(shownRows);
 
   /** One invoice table. B2B tables show GSTIN + Net + GST columns; Regular tables omit GST. */
@@ -192,7 +194,8 @@ export default function ReportsView() {
   };
 
   const typeLabel = type === "buy" ? "Purchase" : type === "all" ? "Invoice" : "Sales";
-  const clsLabel = cls === "b2b" ? " · B2B" : cls === "reg" ? " · Regular" : cls === "split" ? " · B2B + Regular" : "";
+  const clsLabel =
+    cls === "b2b" ? " · B2B" : cls === "b2c" ? " · B2C" : cls === "rented" ? " · Rented" : cls === "split" ? " · B2B + B2C + Rented" : "";
   const periodLabel =
     from && to ? `${fmtISO(from)}  to  ${fmtISO(to)}` : from ? `From ${fmtISO(from)}` : to ? `Up to ${fmtISO(to)}` : "All time";
 
@@ -242,8 +245,8 @@ export default function ReportsView() {
               </button>
             ))}
           </div>
-          <div className="rep-seg" role="group" aria-label="B2B / Regular">
-            {(["all", "b2b", "reg", "split"] as const).map((c) => (
+          <div className="rep-seg" role="group" aria-label="Invoice class">
+            {(["all", "b2b", "b2c", "rented", "split"] as const).map((c) => (
               <button
                 key={c}
                 className={cls === c ? "on" : ""}
@@ -252,13 +255,15 @@ export default function ReportsView() {
                   c === "all"
                     ? "All invoices in one table (normal)"
                     : c === "b2b"
-                      ? "GSTIN invoices only (with GST)"
-                      : c === "reg"
-                        ? "Non-GSTIN invoices only"
-                        : "Two separate tables: B2B and Regular"
+                      ? "GSTIN invoices (with GST)"
+                      : c === "b2c"
+                        ? "Non-GSTIN invoices"
+                        : c === "rented"
+                          ? "Rental invoices (CGST + SGST)"
+                          : "Separate tables: B2B, B2C, Rented"
                 }
               >
-                {c === "all" ? "All" : c === "b2b" ? "B2B" : c === "reg" ? "Regular" : "Split"}
+                {c === "all" ? "All" : c === "b2b" ? "B2B" : c === "b2c" ? "B2C" : c === "rented" ? "Rented" : "Split"}
               </button>
             ))}
           </div>
@@ -280,19 +285,21 @@ export default function ReportsView() {
           </div>
         </div>
 
-        <div className={"rep-summary" + (cls === "reg" ? " cols3" : "")}>
+        <div className={"rep-summary" + (cls === "b2c" ? " cols3" : "")}>
           <div><b>{shownRows.length}</b><span>Invoices</span></div>
           <div><b>{num(shownTotals.cft)}</b><span>CFT {type === "buy" ? "bought" : "sold"}</span></div>
-          {cls !== "reg" && <div><b>₹{inr(shownTotals.net)}</b><span>Net amount</span></div>}
-          {cls !== "reg" && <div><b>₹{inr(shownTotals.gst)}</b><span>GST</span></div>}
+          {cls !== "b2c" && <div><b>₹{inr(shownTotals.net)}</b><span>Net amount</span></div>}
+          {cls !== "b2c" && <div><b>₹{inr(shownTotals.gst)}</b><span>GST</span></div>}
           <div><b>₹{inr(shownTotals.total)}</b><span>Total</span></div>
         </div>
 
         {cls === "all" && renderTable(rows, true, "")}
         {cls === "b2b" && renderTable(b2bRows, true, "")}
-        {cls === "reg" && renderTable(regRows, false, "")}
+        {cls === "b2c" && renderTable(b2cRows, false, "")}
+        {cls === "rented" && renderTable(rentedRows, true, "")}
         {cls === "split" && renderTable(b2bRows, true, "B2B — with GST")}
-        {cls === "split" && renderTable(regRows, false, "Regular")}
+        {cls === "split" && renderTable(b2cRows, false, "B2C")}
+        {cls === "split" && renderTable(rentedRows, true, "Rented — CGST + SGST")}
 
         <div className="rep-foot">Generated {fmtISO(isoOf(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()))} · {brand.name}</div>
       </div>

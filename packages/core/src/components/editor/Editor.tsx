@@ -358,6 +358,12 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   // ---- status / payment ----
   const onStatus = (v: string) => update((d) => (d.status = v));
   const onTradeType = (v: string) => update((d) => (d.tradeType = v === "buy" ? "buy" : "sell"));
+  // rental invoice: always CGST+SGST (never IGST), printed as "Rented Invoice"
+  const onRented = (v: boolean) =>
+    update((d) => {
+      d.rented = v;
+      if (v) d.gstKind = "split";
+    });
 
   // ---- document number inline edit ----
   async function commitNumber(raw: string) {
@@ -625,7 +631,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   }, [isInv]);
 
   const badgeCls = isInv ? "b-conv" : STATUS_BADGE[doc.status] || "b-draft";
-  const badgeText = isInv ? (isBuy ? "Purchase Invoice" : "Invoice") : doc.status;
+  const badgeText = isInv ? (isBuy ? "Purchase Invoice" : doc.rented ? "Rented Invoice" : "Invoice") : doc.status;
   const showLink = isInv && !!doc.quotationId;
   const freeMode = feat.simpleQuote && !!doc.freeLayout;
 
@@ -723,13 +729,23 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
               <option value="sell">Selling</option>
               <option value="buy">Buying</option>
             </select>
-            <span className="lab" style={{ marginLeft: 8 }}>
-              Tax
-            </span>
-            <select className="paysel" value={doc.gstKind || "split"} onChange={(e) => setField("gstKind", e.target.value)}>
-              <option value="split">SGST + CGST</option>
-              <option value="igst">IGST (interstate)</option>
-            </select>
+            {!doc.rented && (
+              <>
+                <span className="lab" style={{ marginLeft: 8 }}>
+                  Tax
+                </span>
+                <select className="paysel" value={doc.gstKind || "split"} onChange={(e) => setField("gstKind", e.target.value)}>
+                  <option value="split">SGST + CGST</option>
+                  <option value="igst">IGST (interstate)</option>
+                </select>
+              </>
+            )}
+            {!isBuy && (
+              <label className="rentchk" style={{ marginLeft: 8 }} title="Rental invoice — always CGST+SGST, printed as “Rented Invoice”">
+                <input type="checkbox" checked={!!doc.rented} onChange={(e) => onRented(e.target.checked)} />
+                Rented
+              </label>
+            )}
             {!isBuy && (brand.banks?.length || 0) > 1 && (
               <>
                 <span className="lab" style={{ marginLeft: 8 }}>
@@ -772,7 +788,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         )}
         {isInv && !isBuy && (
           <div className="inv-tag-top">
-            <span>Tax Invoice</span>
+            <span>{doc.rented ? "Rented Invoice" : "Tax Invoice"}</span>
           </div>
         )}
         {freeMode ? (

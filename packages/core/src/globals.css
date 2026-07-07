@@ -664,6 +664,9 @@ select.statussel, select.paysel{
   transition:border-color var(--t-fast),box-shadow var(--t-fast);
 }
 select.statussel:hover, select.paysel:hover{border-color:var(--ink-faint)}
+/* "Rented" invoice toggle in the doc toolbar */
+.rentchk{display:inline-flex; align-items:center; gap:5px; font-family:var(--disp); font-size:13px; font-weight:600; color:var(--ink-soft); cursor:pointer; white-space:nowrap}
+.rentchk input{cursor:pointer; accent-color:var(--walnut)}
 select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}
 
 /* badges */
