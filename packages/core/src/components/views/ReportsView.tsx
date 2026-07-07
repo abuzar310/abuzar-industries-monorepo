@@ -285,20 +285,20 @@ export default function ReportsView() {
           </div>
         </div>
 
-        <div className={"rep-summary" + (cls === "b2c" ? " cols3" : "")}>
+        <div className="rep-summary">
           <div><b>{shownRows.length}</b><span>Invoices</span></div>
           <div><b>{num(shownTotals.cft)}</b><span>CFT {type === "buy" ? "bought" : "sold"}</span></div>
-          {cls !== "b2c" && <div><b>₹{inr(shownTotals.net)}</b><span>Net amount</span></div>}
-          {cls !== "b2c" && <div><b>₹{inr(shownTotals.gst)}</b><span>GST</span></div>}
+          <div><b>₹{inr(shownTotals.net)}</b><span>Net amount</span></div>
+          <div><b>₹{inr(shownTotals.gst)}</b><span>GST</span></div>
           <div><b>₹{inr(shownTotals.total)}</b><span>Total</span></div>
         </div>
 
         {cls === "all" && renderTable(rows, true, "")}
         {cls === "b2b" && renderTable(b2bRows, true, "")}
-        {cls === "b2c" && renderTable(b2cRows, false, "")}
+        {cls === "b2c" && renderTable(b2cRows, true, "")}
         {cls === "rented" && renderTable(rentedRows, true, "")}
         {cls === "split" && renderTable(b2bRows, true, "B2B — with GST")}
-        {cls === "split" && renderTable(b2cRows, false, "B2C")}
+        {cls === "split" && renderTable(b2cRows, true, "B2C")}
         {cls === "split" && renderTable(rentedRows, true, "Rented — CGST + SGST")}
 
         <div className="rep-foot">Generated {fmtISO(isoOf(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()))} · {brand.name}</div>
