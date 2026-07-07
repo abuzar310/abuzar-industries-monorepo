@@ -1,23 +1,33 @@
 // Robust local-folder mirror (Chrome/Edge desktop, File System Access API).
 //
-// Once you pick a folder, EVERY invoice/quotation is written to disk the moment it's created or
-// edited — as a re-importable `.json` PLUS a readable `.html` — and the whole database is snapshotted
-// alongside. The chosen folder handle is PERSISTED in IndexedDB, so it survives reloads; on load we
-// re-check the OS permission and, if it needs one click to re-grant, we surface that. This is a
-// durable copy independent of the cloud and IndexedDB, so nothing is ever lost.
+// Connect ONE OR MANY folders (e.g. this Mac's folder + a personal/Dropbox folder). Every
+// invoice/quotation is written to ALL connected folders the instant it's created or edited — as a
+// re-importable `.json` PLUS a readable `.html` — with a full database snapshot alongside. Handles are
+// PERSISTED in IndexedDB (per device) and restored on load with a permission re-check. A durable copy
+// independent of the cloud + IndexedDB, so nothing is ever lost.
 import { allRec, metaGet, metaSet } from "./db";
 import { documentSnapshotHtml, dumpAll } from "./backup";
 import type { Doc } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const KEY = "folderHandle";
-let dirHandle: any = null; // active, permission-granted handle
-let savedHandle: any = null; // persisted handle that still needs a permission re-grant (one click)
+const KEY = "folderHandles";
+let handles: any[] = []; // every folder connected on THIS device
+const granted = new Set<any>(); // the subset with live read-write permission this session
 let lastSnap = 0;
 
-export const folderActive = () => !!dirHandle;
-export const folderNeedsGrant = () => !dirHandle && !!savedHandle;
 export const folderSupported = () => typeof (globalThis as any).showDirectoryPicker === "function";
+export const folderActive = () => granted.size > 0;
+export const folderNeedsGrant = () => handles.some((h) => !granted.has(h));
+
+export interface FolderInfo {
+  i: number;
+  name: string;
+  granted: boolean;
+}
+/** The folders connected on this device, for the Settings list. */
+export function folderList(): FolderInfo[] {
+  return handles.map((h, i) => ({ i, name: (h && h.name) || "folder", granted: granted.has(h) }));
+}
 
 async function perm(handle: any, request: boolean): Promise<boolean> {
   try {
@@ -29,56 +39,78 @@ async function perm(handle: any, request: boolean): Promise<boolean> {
   return false;
 }
 
-async function ensureTree() {
-  if (!dirHandle) return;
-  for (const d of ["Quotations", "Invoices", "Database"]) await dirHandle.getDirectoryHandle(d, { create: true });
+async function ensureTree(h: any) {
+  for (const d of ["Quotations", "Invoices", "Database"]) await h.getDirectoryHandle(d, { create: true });
 }
 
-/** Restore the saved folder on app load. Passive (no user gesture) — only queries permission. */
+/** Restore all saved folders on app load. Passive (no user gesture) — only queries permission. */
 export async function initFolderMirror(): Promise<void> {
   try {
-    const saved = await metaGet<any>(KEY, null);
-    if (!saved) return;
-    savedHandle = saved;
-    if (await perm(saved, false)) {
-      dirHandle = saved;
-      savedHandle = null;
-      await ensureTree();
+    handles = (await metaGet<any[]>(KEY, [])) || [];
+    granted.clear();
+    for (const h of handles) {
+      if (await perm(h, false)) {
+        granted.add(h);
+        try {
+          await ensureTree(h);
+        } catch {}
+      }
     }
   } catch {}
 }
 
-/** Pick a new folder OR re-authorize the saved one. MUST be called from a user gesture (a click). */
-export async function connectFolder(): Promise<boolean> {
-  // re-grant the previously chosen folder without re-picking it
-  if (savedHandle && (await perm(savedHandle, true))) {
-    dirHandle = savedHandle;
-    savedHandle = null;
-    await ensureTree();
-    await mirrorAll();
-    return true;
-  }
+/** Add a NEW folder (or re-grant one already picked). MUST be from a user gesture. Returns its name. */
+export async function connectFolder(): Promise<string | null> {
   const picker = (globalThis as any).showDirectoryPicker;
-  if (!picker) return false;
+  if (!picker) return null;
   let base: any;
   try {
     const root = await picker({ id: "abuzar-mirror", mode: "readwrite" });
     base = await root.getDirectoryHandle("Abuzar Industries", { create: true });
   } catch {
-    return false; // user cancelled the picker
+    return null; // user cancelled the picker
   }
-  dirHandle = base;
-  savedHandle = null;
-  await metaSet(KEY, base);
-  await ensureTree();
-  await mirrorAll();
-  return true;
+  // de-dupe: if this exact folder is already connected, just (re)activate it
+  let existing: any = null;
+  for (const h of handles) {
+    try {
+      if (h && h.isSameEntry && (await h.isSameEntry(base))) {
+        existing = h;
+        break;
+      }
+    } catch {}
+  }
+  const h = existing || base;
+  if (!existing) {
+    handles.push(base);
+    await metaSet(KEY, handles);
+  }
+  granted.add(h);
+  await ensureTree(h);
+  await mirrorAllTo(h);
+  return (h && h.name) || "folder";
 }
 
-export async function disconnectFolder(): Promise<void> {
-  dirHandle = null;
-  savedHandle = null;
-  await metaSet(KEY, null);
+/** Re-grant permission for a folder already in the list (by index). From a user gesture. */
+export async function grantFolder(i: number): Promise<boolean> {
+  const h = handles[i];
+  if (!h) return false;
+  if (await perm(h, true)) {
+    granted.add(h);
+    await ensureTree(h);
+    await mirrorAllTo(h);
+    return true;
+  }
+  return false;
+}
+
+/** Remove a folder from auto-save (by index). Files already written stay on disk. */
+export async function disconnectFolder(i: number): Promise<void> {
+  const h = handles[i];
+  if (!h) return;
+  granted.delete(h);
+  handles.splice(i, 1);
+  await metaSet(KEY, handles);
 }
 
 async function writeFile(dh: any, name: string, content: string) {
@@ -87,53 +119,52 @@ async function writeFile(dh: any, name: string, content: string) {
   await w.write(content);
   await w.close();
 }
-
 const safeName = (s: string) => String(s || "doc").replace(/[\/\\?#%:*"<>|]/g, "-");
 
-async function writeDocFiles(doc: Doc) {
+async function writeDocTo(h: any, doc: Doc) {
   const sub = doc.kind === "invoice" ? "Invoices" : "Quotations";
-  const dh = await dirHandle.getDirectoryHandle(sub, { create: true });
+  const dh = await h.getDirectoryHandle(sub, { create: true });
   const name = safeName(doc.number || doc.id);
   await writeFile(dh, name + ".json", JSON.stringify(doc, null, 2)); // complete + re-importable
   await writeFile(dh, name + ".html", documentSnapshotHtml(doc)); // human-readable copy
 }
 
-/** Snapshot the whole DB to Database/abuzar-data.json. Throttled to once / 20s unless forced. */
-export async function writeDbSnapshot(force = false): Promise<void> {
-  if (!dirHandle) return;
-  if (!force && Date.now() - lastSnap < 20000) return;
-  lastSnap = Date.now();
-  try {
-    const db = await dirHandle.getDirectoryHandle("Database", { create: true });
-    await writeFile(db, "abuzar-data.json", JSON.stringify(await dumpAll(), null, 2));
-  } catch (e) {
-    console.warn("folder db snapshot", e);
-  }
-}
-
-/** Write ONE document to disk immediately (on create/edit). No-op if no folder is connected. */
+/** Write ONE document to EVERY connected folder immediately (on create/edit). */
 export async function mirrorDoc(doc: Doc): Promise<void> {
-  if (!dirHandle || !doc) return;
-  try {
-    await writeDocFiles(doc);
-    await writeDbSnapshot();
-  } catch (e) {
-    console.warn("mirrorDoc", e);
+  if (!doc || granted.size === 0) return;
+  const doSnap = Date.now() - lastSnap >= 20000; // throttle the heavy full-DB dump to once / 20s
+  let dump: unknown = null;
+  if (doSnap) {
+    lastSnap = Date.now();
+    try {
+      dump = await dumpAll();
+    } catch {}
+  }
+  for (const h of granted) {
+    try {
+      await writeDocTo(h, doc);
+      if (dump) {
+        const db = await h.getDirectoryHandle("Database", { create: true });
+        await writeFile(db, "abuzar-data.json", JSON.stringify(dump, null, 2));
+      }
+    } catch (e) {
+      console.warn("mirrorDoc", e);
+    }
   }
 }
 
-/** Write every current invoice + quotation to disk (on first connect / re-authorize). */
-export async function mirrorAll(): Promise<void> {
-  if (!dirHandle) return;
+/** Write every current invoice + quotation to one folder (on first connect / re-grant). */
+async function mirrorAllTo(h: any): Promise<void> {
   try {
     const [inv, quo] = await Promise.all([allRec<Doc>("invoices"), allRec<Doc>("quotations")]);
     for (const d of [...inv, ...quo]) {
       try {
-        await writeDocFiles(d);
+        await writeDocTo(h, d);
       } catch {}
     }
-    await writeDbSnapshot(true);
+    const db = await h.getDirectoryHandle("Database", { create: true });
+    await writeFile(db, "abuzar-data.json", JSON.stringify(await dumpAll(), null, 2));
   } catch (e) {
-    console.warn("mirrorAll", e);
+    console.warn("mirrorAllTo", e);
   }
 }
