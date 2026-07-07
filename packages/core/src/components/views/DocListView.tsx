@@ -39,6 +39,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
   const [sel, setSel] = useState<Set<string>>(new Set());
+  const [trade, setTrade] = useState<"all" | "sell" | "buy">("all"); // invoices only: Sales / Purchases / All
   const isInv = store === "invoices";
 
   useEffect(() => {
@@ -68,7 +69,10 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     };
   }, [store, dataVersion]);
 
-  const filtered = useMemo(() => applySearch(docs, q || searchTerm), [docs, q, searchTerm]);
+  const filtered = useMemo(() => {
+    const base = isInv && trade !== "all" ? docs.filter((d) => (d.tradeType === "buy") === (trade === "buy")) : docs;
+    return applySearch(base, q || searchTerm);
+  }, [docs, q, searchTerm, isInv, trade]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const pageN = Math.min(page, pages - 1);
   const view = filtered.slice(pageN * PAGE, pageN * PAGE + PAGE);
@@ -76,8 +80,8 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
 
   useEffect(() => {
     setPage(0);
-    setSel(new Set()); // a search change hides rows; don't keep them silently selected
-  }, [q, searchTerm]);
+    setSel(new Set()); // a search / filter change hides rows; don't keep them silently selected
+  }, [q, searchTerm, trade]);
 
   const open = (id: string, suffix = "") => router.push("/editor/" + id + suffix);
   const toggle = (id: string) =>
@@ -128,6 +132,18 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
           <button className="btn primary sm" onClick={onNew}>
             {isInv ? "+ New Custom Invoice" : "+ New Quotation"}
           </button>
+        </div>
+      )}
+
+      {isInv && (
+        <div className="rowbtns" style={{ marginBottom: 6 }}>
+          <div className="rep-seg" role="group" aria-label="Filter by trade type">
+            {(["all", "sell", "buy"] as const).map((t) => (
+              <button key={t} className={trade === t ? "on" : ""} onClick={() => setTrade(t)}>
+                {t === "all" ? "All" : t === "sell" ? "Sales" : "Purchases"}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

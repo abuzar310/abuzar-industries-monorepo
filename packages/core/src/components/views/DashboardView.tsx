@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/db";
 import { computeDoc, inr } from "@/lib/calc";
 import { partyLedger, quoteBill } from "@/lib/payments";
+import { computeTrading, docTrade, getStockConfig } from "@/lib/trading";
 import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense, Stock } from "@/lib/types";
@@ -22,6 +23,7 @@ export default function DashboardView() {
   const [stk, setStk] = useState<Stock[]>([]);
   const [exp, setExp] = useState<Expense[]>([]);
   const [custs, setCusts] = useState<Customer[]>([]);
+  const [stockCfg, setStockCfg] = useState({ value: 0, cft: 0, closingCft: null as number | null });
   const [month, setMonth] = useState(""); // "" = all months
   const [year, setYear] = useState(""); // "" = all years
 
@@ -33,13 +35,15 @@ export default function DashboardView() {
       allRec<Stock>("stock"),
       allRec<Expense>("expenses"),
       allRec<Customer>("customers"),
-    ]).then(([q, i, s, e, c]) => {
+      getStockConfig(),
+    ]).then(([q, i, s, e, c, cfg]) => {
       if (!live) return;
       setQuotes(q);
       setInvs(i);
       setStk(s);
       setExp(e);
       setCusts(c);
+      setStockCfg(cfg);
     });
     return () => {
       live = false;
@@ -87,6 +91,12 @@ export default function DashboardView() {
   periodRev = Math.round(periodRev * 100) / 100;
   periodCft = Math.round(periodCft * 100) / 100;
 
+  // stock snapshot (all-time): opening + purchases − sold = closing (same as the Stock tab)
+  const tr = useMemo(
+    () => computeTrading(invs.map(docTrade), { value: stockCfg.value, cft: stockCfg.cft }, stockCfg.closingCft),
+    [invs, stockCfg],
+  );
+
   // running (not period-scoped) balances
   const ledger = feat.acceptPayment ? partyLedger(quotes, exp, custs) : null;
   const totalOutstanding = ledger ? ledger.totalPending : 0;
@@ -106,6 +116,8 @@ export default function DashboardView() {
     { k: "Sales", v: "₹ " + inr(periodRev), money: true, sub: periodLabel, onClick: () => router.push(feat.simpleQuote ? "/quotations" : "/invoices") },
     { k: feat.simpleQuote ? "Quotes" : "Invoices", v: String(periodCount), sub: periodLabel, onClick: () => router.push(feat.simpleQuote ? "/quotations" : "/invoices") },
     ...(feat.simpleQuote ? [{ k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/quotations") }] : []),
+    ...(!feat.simpleQuote ? [{ k: "CFT Sold", v: tr.saleCft.toFixed(2), sub: "₹ " + inr(tr.saleValue) + " · overall", onClick: () => router.push("/stock") }] : []),
+    ...(!feat.simpleQuote ? [{ k: "Closing Stock", v: tr.closingCft.toFixed(2), sub: "₹ " + inr(tr.closingValue) + " · overall", onClick: () => router.push("/stock") }] : []),
     ...(feat.acceptPayment ? [{ k: "Outstanding", v: "₹ " + inr(totalOutstanding), money: true, sub: dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"} · overall` : "all clear", onClick: () => router.push("/payments") }] : []),
     ...(!feat.simpleQuote ? [{ k: "Follow-ups", v: String(follow.length), sub: "to chase", onClick: () => router.push("/quotations") }] : []),
     ...(!feat.simpleQuote ? [{ k: "Low Stock", v: String(lowStock.length), danger: lowStock.length > 0, sub: "wood type(s)", onClick: () => router.push("/stock") }] : []),
