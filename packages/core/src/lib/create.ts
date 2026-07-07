@@ -1,6 +1,7 @@
 import { clone, getRec, metaSet, put } from "./db";
 import { blankDoc } from "./doc";
 import { nextNumber } from "./numbering";
+import { snapshotBefore } from "./autobackup";
 import type { Customer, Doc, Kind, Section } from "./types";
 
 /** A number guaranteed not to already name a record — hard guard so a "new" doc can NEVER be `put`
@@ -24,6 +25,7 @@ export async function createQuotation(seed?: Partial<Doc>): Promise<Doc> {
   if (seed) Object.assign(d, seed, { id, number: id });
   await put("quotations", clone(d));
   await metaSet("lastOpen", { store: "quotations", id });
+  snapshotBefore().catch(() => {}); // capture the new record in a local snapshot (throttled)
   return d;
 }
 
@@ -37,6 +39,7 @@ export async function createInvoice(seed?: Partial<Doc>): Promise<Doc> {
   if (seed) Object.assign(d, seed, { id, number: id, kind: "invoice" });
   await put("invoices", clone(d));
   await metaSet("lastOpen", { store: "invoices", id });
+  snapshotBefore().catch(() => {}); // capture the new invoice in a local snapshot (throttled)
   return d;
 }
 

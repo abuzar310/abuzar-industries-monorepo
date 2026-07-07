@@ -1,6 +1,6 @@
 // Supabase cloud sync + GoTrue auth — hand-rolled REST against {id, data jsonb,
 // updated_at} tables, faithfully ported from the legacy single-file app.
-import { allRec, delRec, getRec, metaGet, metaSet, put } from "./db";
+import { allRec, getRec, metaGet, metaSet, put } from "./db";
 import { nowIso, pad } from "./calc";
 import { fixCounters } from "./numbering";
 import { BAKED } from "./constants";
@@ -46,10 +46,6 @@ export const TABLE = {
   vouchers: "vouchers",
   collections: "collections",
 } as const;
-
-// Supabase REST returns at most this many rows for an unbounded select. A response at/above this
-// count is assumed truncated, so we never treat it as a complete set for convergence-deletes.
-const CLOUD_PAGE = 1000;
 
 // Per-app cloud namespace so the two apps never share tables (e.g. "sf_" for Safa).
 let cloudPrefix = "";
@@ -378,23 +374,11 @@ export async function mirrorFromCloud(): Promise<boolean> {
         rec.synced = true;
         await put(s, rec);
       }
-      // SAFETY: never converge-delete on an empty or page-capped response. A transient/partial fetch
-      // (blip, RLS hiccup, or >1000 rows hitting Supabase's default cap) would otherwise silently wipe
-      // every synced local document — the "a quote just vanished" data-loss bug. Only drop when the
-      // cloud clearly returned a complete, non-empty set. A stale local record is recoverable; a
-      // deleted one is not. ponytail: paginate the fetch if a store ever legitimately exceeds CLOUD_PAGE.
-      const complete = cloudIds.size > 0 && rows.length < CLOUD_PAGE;
-      if (complete) {
-        const local = await allRec<{ id?: string; key?: string; synced?: boolean }>(s);
-        for (const rec of local) {
-          const key = s === "stock" ? rec.key : rec.id;
-          if (!key) continue;
-          // drop only records that came from the cloud but are gone now (keep unsynced local writes)
-          if (rec.synced && !cloudIds.has(String(key)) && !(_openId === key && _openStore === s)) {
-            await delRec(s, key);
-          }
-        }
-      }
+      // DATA-SAFETY POLICY: we NEVER auto-delete a local record just because it's missing from the
+      // cloud response. A record only ever leaves by an explicit user action — moving it to the
+      // Recycle bin (a soft-delete that syncs as an update, so it's still there in the bin) or purging
+      // it. This guarantees no sync glitch, partial fetch, or other device can make a record silently
+      // disappear. (Was: converge-delete, which occasionally wiped freshly-created records.)
       ok = true;
     } catch {}
   }
