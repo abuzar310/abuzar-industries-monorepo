@@ -585,14 +585,12 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       sheet.style.zoom = "1";
       sheet.style.width = pageW + "px";
       if (isInv) {
-        // Invoices fill a full A4 via CSS. If the content overruns, first compress the totals +
-        // bank/sign boxes (inv-tight); if it's STILL a hair over, scale down just enough to keep it
-        // on ONE page (better than a near-empty 2nd sheet). Mild scale only — clamped so it never
-        // letterboxes badly.
-        if (sheet.scrollHeight > pageH + 2) sheet.classList.add("inv-tight");
-        if (sheet.scrollHeight > pageH + 2) {
-          const scale = Math.max(0.82, (pageH - 2) / sheet.scrollHeight);
-          sheet.style.zoom = String(scale);
+        // Goal: keep the whole invoice on ONE page. First compress the totals + bank/sign boxes
+        // (inv-tight); if it's still over, scale down just enough to fill exactly one page (better
+        // than a near-empty 2nd sheet). Clamp the scale so a genuinely huge invoice can still flow.
+        if (sheet.scrollHeight > pageH) sheet.classList.add("inv-tight");
+        if (sheet.scrollHeight > pageH) {
+          sheet.style.zoom = String(Math.max(0.72, pageH / sheet.scrollHeight));
         }
         sheet.style.width = "";
         return;
