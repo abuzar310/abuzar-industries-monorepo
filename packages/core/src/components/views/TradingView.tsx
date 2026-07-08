@@ -82,8 +82,10 @@ export default function TradingView() {
     return (MONTH_NAMES[mm] || mm) + " " + yy;
   };
   const mrows = [...mmap.values()].sort((a, b) => {
-    const [ma, ya] = a.key.split("-");
-    const [mb, yb] = b.key.split("-");
+    // default "" on destructuring so a "??" / malformed month key can never be undefined here
+    // (undefined.localeCompare threw and crashed the whole Stock page)
+    const [ma = "", ya = ""] = a.key.split("-");
+    const [mb = "", yb = ""] = b.key.split("-");
     return ya === yb ? ma.localeCompare(mb) : ya.localeCompare(yb);
   });
 

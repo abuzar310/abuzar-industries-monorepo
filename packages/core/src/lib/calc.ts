@@ -97,7 +97,7 @@ export const amountOf = (sec: Section, measure: number): number =>
 export function computeDoc(d: Doc): DocTotals {
   let sub = 0;
   const secCft: number[] = [];
-  d.sections.forEach((sec) => {
+  (d.sections || []).forEach((sec) => {
     const measureOf =
       sec.calcMode === "rft"
         ? rftOf
@@ -107,7 +107,7 @@ export function computeDoc(d: Doc): DocTotals {
             ? pcsOf
             : cftOf;
     let m = 0;
-    sec.rows.forEach((r) => (m += measureOf(r)));
+    (sec.rows || []).forEach((r) => (m += measureOf(r)));
     secCft.push(m);
     sub += amountOf(sec, m);
   });

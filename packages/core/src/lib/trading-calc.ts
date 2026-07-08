@@ -1,3 +1,5 @@
+import { dateSortKey } from "./calc";
+
 // Pure trading-account math (no db imports → unit-testable in plain node).
 // Mirrors the owner's Excel trading sheet:
 //   Opening (value + CFT) + Purchases → goods available.
@@ -93,8 +95,12 @@ export function computeTrading(lines: TradeLine[], opening: Opening, closingCftO
   };
 }
 
-/** "dd-mm-yy" -> "mm-yy" bucket for the month-wise breakdown. */
+/** "dd-mm-yy" (or any parseable date) -> "mm-yy" bucket for the month-wise breakdown.
+ *  Uses the robust date parser first so slash/ISO/loose dates still bucket correctly
+ *  instead of collapsing to "??". */
 export function monthKey(date: string): string {
+  const iso = dateSortKey(date); // "yyyy-mm-dd" or ""
+  if (iso) return iso.slice(5, 7) + "-" + iso.slice(2, 4);
   const [, mm, yy] = (date || "").split("-");
   return mm && yy ? mm + "-" + yy : "??";
 }
