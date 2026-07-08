@@ -25,6 +25,7 @@ export interface PayHolder {
   id: string; // "HLD-" + uid
   name: string;
   accounts: string[]; // sub-account names belonging to this holder
+  opening?: number; // opening balance already held by this person before tracking began (₹) — adds to the amount to collect
   createdAt: string;
   updatedAt: string;
   synced: boolean;
@@ -221,6 +222,15 @@ export async function renameHolder(id: string, name: string): Promise<PayHolder 
   const h = list.find((x) => x.id === id);
   if (!h) return null;
   h.name = n;
+  return saveHolder(h);
+}
+
+/** Set a holder's opening balance (₹ already in their hands before tracking began). */
+export async function setHolderOpening(id: string, amount: number): Promise<PayHolder | null> {
+  const list = await listHolders();
+  const h = list.find((x) => x.id === id);
+  if (!h) return null;
+  h.opening = Math.round((+amount || 0) * 100) / 100;
   return saveHolder(h);
 }
 

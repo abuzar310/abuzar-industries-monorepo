@@ -19,6 +19,7 @@ import {
   removeHolderAccount,
   removePayAccount,
   renameHolder,
+  setHolderOpening,
   type AccountCollection,
   type AcctBalance,
   type AcctStmtLine,
@@ -85,6 +86,8 @@ export default function AccountsView() {
   const [renameVal, setRenameVal] = useState("");
   const [addAcctFor, setAddAcctFor] = useState<string | null>(null); // holderId
   const [newAcct, setNewAcct] = useState("");
+  const [openingForId, setOpeningForId] = useState<string | null>(null); // holderId editing opening balance
+  const [openingVal, setOpeningVal] = useState("");
 
   const load = useCallback(() => {
     Promise.all([
@@ -187,21 +190,23 @@ export default function AccountsView() {
   const holderAccounts = (h: PayHolder) =>
     h.accounts.map((n) => byName.get(lc(n))).filter(Boolean) as AcctBalance[];
 
-  // aggregate a holder: money in across its accounts, minus everything handed over
+  // aggregate a holder: opening balance + money in across its accounts, minus everything handed over
   const holderView = (h: PayHolder) => {
     const subs = holderAccounts(h);
+    const opening = r2(h.opening || 0);
     const received = r2(subs.reduce((s, a) => s + a.received, 0));
     const owner = r2(subs.reduce((s, a) => s + a.ownerReceived, 0));
     const subCollected = r2(subs.reduce((s, a) => s + a.collected, 0)); // legacy per-entry
     const cols = holderCols(h.id);
     const collected = r2(subCollected + cols.reduce((s, c) => s + (+c.amount || 0), 0));
-    const balance = r2(received - collected);
-    return { subs, received, owner, collected, balance, cols };
+    const balance = r2(opening + received - collected);
+    return { subs, opening, received, owner, collected, balance, cols };
   };
 
-  // overall totals include holder-level hand-overs
+  // overall totals include holder opening balances + holder-level hand-overs
+  const totalOpening = r2(holders.reduce((s, h) => s + (h.opening || 0), 0));
   const totalCollected = r2(ledger.totalCollected + holderColTotal);
-  const totalBalance = r2(ledger.totalReceived - totalCollected);
+  const totalBalance = r2(ledger.totalReceived + totalOpening - totalCollected);
 
   // ── collect flow ──────────────────────────────────────────────────────────
   function startCollect(opts: { holderId?: string; account?: string }, balance: number, openKey: string) {
@@ -305,6 +310,15 @@ export default function AccountsView() {
     load();
     bumpData();
   }
+  async function submitOpening(id: string) {
+    await setHolderOpening(id, +openingVal || 0);
+    setOpeningForId(null);
+    setOpeningVal("");
+    load();
+    bumpData();
+    toast("Opening balance saved");
+  }
+
   async function delHolder(h: PayHolder) {
     const ok = await confirmDialog({
       title: "Remove “" + h.name + "”?",
@@ -564,12 +578,13 @@ export default function AccountsView() {
 
       {/* holders */}
       {holders.map((h) => {
-        const { subs, received, owner, collected, balance, cols } = holderView(h);
+        const { subs, opening, received, owner, collected, balance, cols } = holderView(h);
         const isOpen = !collapsedHolders.has(h.id);
         const due = balance > 0.5;
         const renaming = renameForId === h.id;
         const adding = addAcctFor === h.id;
         const collecting = collectHolder === h.id;
+        const editingOpening = openingForId === h.id;
         return (
           <div className="panel-card acct-holder" key={h.id}>
             <div className="pc-head acct-head acct-holder-head">
@@ -594,6 +609,7 @@ export default function AccountsView() {
                     <span className="acct-holder-count"> · {subs.length} acc{subs.length === 1 ? "" : "s"}</span>
                   </span>
                   <span className="acct-head-totals">
+                    {opening > 0 && <span className="acct-tag">Opening ₹{inr(opening)}</span>}
                     {received > 0 && <span className="acct-tag upi">In ₹{inr(received)}</span>}
                     {owner > 0 && <span className="acct-tag">Owner ₹{inr(owner)}</span>}
                     {due ? (
@@ -672,6 +688,27 @@ export default function AccountsView() {
                   </div>
                 )}
 
+                {editingOpening && (
+                  <div className="panel-card" style={{ padding: 12, margin: "6px 0 2px" }}>
+                    <div className="acct-add-row" style={{ alignItems: "flex-end" }}>
+                      <label className="modal-field" style={{ flex: 1, minWidth: 0 }}>
+                        <span>Opening balance ₹ <small style={{ color: "var(--ink-faint)" }}>(already in {h.name}&apos;s hands)</small></span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="0"
+                          value={openingVal}
+                          onChange={(e) => setOpeningVal(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && submitOpening(h.id)}
+                          autoFocus
+                        />
+                      </label>
+                      <button className="btn primary" type="button" onClick={() => submitOpening(h.id)} style={{ alignSelf: "flex-end" }}>Save</button>
+                      <button className="btn" type="button" onClick={() => { setOpeningForId(null); setOpeningVal(""); }} style={{ alignSelf: "flex-end" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
                 {adding ? (
                   <div className="panel-card" style={{ padding: 12, margin: "6px 0 2px" }}>
                     <div className="acct-add-row">
@@ -710,6 +747,9 @@ export default function AccountsView() {
                   <div className="rowbtns acct-holder-actions">
                     <button className="btn sm primary" type="button" onClick={() => { setAddAcctFor(h.id); setNewAcct(""); }}>
                       + Account
+                    </button>
+                    <button className="btn sm" type="button" onClick={() => { setOpeningForId(h.id); setOpeningVal(opening ? String(opening) : ""); }}>
+                      {opening > 0 ? "Opening ₹" + inr(opening) : "Opening balance"}
                     </button>
                     <button className="btn sm" type="button" onClick={() => { setRenameForId(h.id); setRenameVal(h.name); }}>
                       Rename
