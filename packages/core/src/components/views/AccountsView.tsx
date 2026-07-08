@@ -153,6 +153,27 @@ export default function AccountsView() {
 
   const allNames = useMemo(() => accounts.map((a) => a.name), [accounts]);
 
+  // Auto-file: any ungrouped account whose name STARTS WITH a holder's name lands under that
+  // holder automatically (e.g. "Tabrez GPay" → Tabrez). Names that match no holder stay
+  // ungrouped for manual sorting later. Longest holder-name match wins. Self-terminating:
+  // once attached the name is no longer ungrouped, so this settles after one pass.
+  useEffect(() => {
+    if (!ready || !holders.length) return;
+    const toAttach = ungrouped
+      .map((a) => {
+        const h = holders
+          .filter((x) => x.name.trim() && lc(a.name).startsWith(lc(x.name)))
+          .sort((x, y) => y.name.length - x.name.length)[0];
+        return h ? { holderId: h.id, name: a.name } : null;
+      })
+      .filter((x): x is { holderId: string; name: string } => !!x);
+    if (!toAttach.length) return;
+    Promise.all(toAttach.map((t) => addHolderAccount(t.holderId, t.name))).then(() => {
+      load();
+      bumpData();
+    });
+  }, [ready, ungrouped, holders, load]);
+
   // holder-level hand-overs (collections keyed by holderId)
   const holderCols = useCallback(
     (id: string) => collections.filter((c) => c.holderId === id),
