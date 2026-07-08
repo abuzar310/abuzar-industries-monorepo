@@ -182,6 +182,46 @@ export async function ensureAuth() {
   if (auth.token && Date.now() > auth.exp - 60000) await refreshAuth();
 }
 
+/**
+ * Atomically allocate the next document number from the cloud — the authoritative,
+ * collision-proof source. The DB functions serialize concurrent callers with an advisory
+ * lock and only ever hand out an increasing number, so two devices can never get the same
+ * one (which previously let a sync UPSERT overwrite an existing doc = "went missing").
+ * Returns null when offline / not configured so callers can fall back to local numbering.
+ */
+async function cloudNextNo(fn: string, args: Record<string, string>): Promise<number | null> {
+  if (!supa.url || !supa.key) return null;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return null;
+  if (authRequired() && !isLoggedIn()) return null;
+  try {
+    await ensureAuth();
+    const k = (supa.key || "").trim();
+    const headers: Record<string, string> = {
+      apikey: k,
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + (auth.token || k),
+    };
+    const r = await fetch(supa.url + "/rest/v1/rpc/" + fn, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(args),
+    });
+    if (!r.ok) return null;
+    const v = await r.json();
+    const n = typeof v === "number" ? v : parseInt(String(v), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Atomic next invoice number from the cloud (collision-proof). */
+export const cloudNextInvoiceNo = () => cloudNextNo("next_invoice_no", { pfx: cloudPrefix });
+
+/** Atomic next quotation sequence within a financial year, from the cloud (collision-proof). */
+export const cloudNextQuotationNo = (fy: string) =>
+  cloudNextNo("next_quotation_no", { pfx: cloudPrefix, fy });
+
 export async function signOut() {
   auth = { token: "", refresh: "", email: "", exp: 0 };
   await metaSet("auth", auth);

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/db";
+import { bgPull } from "@/lib/cloud";
 import { computeDoc, dateSortKey, inr } from "@/lib/calc";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { trashDoc } from "@/lib/trash";
@@ -41,6 +42,12 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [trade, setTrade] = useState<"all" | "sell" | "buy">("all"); // invoices only: Sales / Purchases / All
   const isInv = store === "invoices";
+
+  // Cloud-authoritative: pull the newest cloud state whenever the list opens so you always
+  // see the true set of docs (never a stale local copy that could hide/duplicate records).
+  useEffect(() => {
+    bgPull();
+  }, [store]);
 
   useEffect(() => {
     let live = true;

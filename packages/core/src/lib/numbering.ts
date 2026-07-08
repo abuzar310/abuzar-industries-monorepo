@@ -38,22 +38,25 @@ export function nextSeq(existingIds: string[], counterN: number, prefix: string)
 }
 
 /** Next number. Quotation → per-FY "2026-27-001". Invoice → a short running number like
- *  "2681" (NO "INV-FY-" prefix). Invoices IGNORE trashed (Recycle-bin) documents: the next
- *  number continues from the highest ACTIVE invoice, so deleting the most recent invoices
- *  frees their numbers to be used again (delete 96–99, next new invoice is 96, not 100). */
+ *  "2681" (NO "INV-FY-" prefix).
+ *
+ *  Invoice numbers are normally allocated ATOMICALLY from the cloud (see cloudNextInvoiceNo /
+ *  createInvoice) so they can never collide across devices. This local path is only the
+ *  OFFLINE fallback, and it is now MONOTONIC: it never reuses a number that has ever existed
+ *  — including trashed (Recycle-bin) invoices — so a new invoice can never take a number that
+ *  still names another record and overwrite it on sync. */
 export async function nextNumber(kind: Kind): Promise<string> {
   const fy = fyLabel();
   const store = kind === "quotation" ? "quotations" : "invoices";
   const docs = await allRec<Doc>(store);
 
   if (kind === "invoice") {
-    // only live invoices count — trashed ones don't hold their number hostage
-    const active = docs.filter((d) => !d.deletedAt);
-    const activeIds = new Set(active.map((d) => String(d.id)));
+    // every id ever seen locally (live OR trashed) — never reuse any of them
+    const takenIds = new Set(docs.map((d) => String(d.id)));
     let mx = 0;
-    for (const d of active) mx = Math.max(mx, trailingNum(String(d.id)));
+    for (const d of docs) mx = Math.max(mx, trailingNum(String(d.id)));
     let n = mx + 1;
-    while (activeIds.has(String(n))) n++; // never clash with a live invoice
+    while (takenIds.has(String(n))) n++;
     return String(n);
   }
 
