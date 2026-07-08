@@ -63,9 +63,10 @@ export default function AccountsView() {
   const [registry, setRegistry] = useState<PayAccount[]>([]);
   const [holders, setHolders] = useState<PayHolder[]>([]);
 
-  // expand state
-  const [openHolders, setOpenHolders] = useState<Set<string>>(new Set());
-  const [open, setOpen] = useState<string | null>(null); // account name whose statement is open
+  // expand state — everything is OPEN by default (we track what's been collapsed), so the whole
+  // ledger is visible at a glance without clicking into each holder/account.
+  const [collapsedHolders, setCollapsedHolders] = useState<Set<string>>(new Set());
+  const [collapsedAccts, setCollapsedAccts] = useState<Set<string>>(new Set());
 
   // collect form — either a holder (holderId) or an ungrouped account (name)
   const [collectHolder, setCollectHolder] = useState<string | null>(null);
@@ -188,7 +189,7 @@ export default function AccountsView() {
     setCAmt(balance > 0 ? String(r2(balance)) : "");
     setCDate("");
     setCNote("");
-    if (opts.account) setOpen(openKey);
+    if (opts.account) setCollapsedAccts((s) => { const n = new Set(s); n.delete(openKey); return n; });
   }
   function cancelCollect() {
     setCollectHolder(null);
@@ -255,7 +256,7 @@ export default function AccountsView() {
 
   // ── holder flow ───────────────────────────────────────────────────────────
   function toggleHolder(id: string) {
-    setOpenHolders((prev) => {
+    setCollapsedHolders((prev) => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id);
       else n.add(id);
@@ -269,7 +270,6 @@ export default function AccountsView() {
     if (!h) return toast("That holder already exists");
     setNewHolder("");
     setShowAddHolder(false);
-    setOpenHolders((prev) => new Set(prev).add(h.id));
     load();
     bumpData();
     toast("Account holder “" + n + "” added");
@@ -400,7 +400,7 @@ export default function AccountsView() {
 
   // ── one sub-account (grouped: In + log only; ungrouped: full incl. collect) ─
   function renderAccount(a: AcctBalance, holderId?: string) {
-    const isOpen = open === a.name;
+    const isOpen = !collapsedAccts.has(a.name);
     const due = a.balance > 0.5;
     const collecting = collectFor === a.name;
     const cleared = !due && a.received > 0;
@@ -408,7 +408,7 @@ export default function AccountsView() {
     return (
       <div className={"panel-card acct-sub" + (cleared && !grouped ? " acct-done" : "")} key={a.name}>
         <div className="pc-head acct-head">
-          <span style={{ cursor: "pointer", flex: 1, minWidth: 0 }} onClick={() => setOpen(isOpen ? null : a.name)}>
+          <span style={{ cursor: "pointer", flex: 1, minWidth: 0 }} onClick={() => setCollapsedAccts((s) => { const n = new Set(s); isOpen ? n.add(a.name) : n.delete(a.name); return n; })}>
             <span className="um-caret" style={{ marginRight: 6 }}>
               {isOpen ? "▾" : "▸"}
             </span>
@@ -544,7 +544,7 @@ export default function AccountsView() {
       {/* holders */}
       {holders.map((h) => {
         const { subs, received, owner, collected, balance, cols } = holderView(h);
-        const isOpen = openHolders.has(h.id);
+        const isOpen = !collapsedHolders.has(h.id);
         const due = balance > 0.5;
         const renaming = renameForId === h.id;
         const adding = addAcctFor === h.id;
