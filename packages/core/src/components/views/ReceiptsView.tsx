@@ -62,6 +62,12 @@ export default function ReceiptsView() {
     if (ready) load();
   }, [ready, dataVersion, load]);
 
+  // arrived from Accounts (a receipt line) → auto-open that customer's group
+  useEffect(() => {
+    const cust = new URLSearchParams(window.location.search).get("cust");
+    if (cust) setOpenCust(cust);
+  }, []);
+
   const ledger = partyLedger(quotes, expenses, customers);
   const party = picked ? ledger.parties.find((p) => p.custId === picked.id) : null;
   const outstanding = party ? party.balance : picked?.opening || 0;

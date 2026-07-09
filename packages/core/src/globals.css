@@ -1545,6 +1545,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 
 .rep-summary{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:14px}
 .rep-summary.cols3{grid-template-columns:repeat(3,1fr)}
+.rep-summary.cols4{grid-template-columns:repeat(4,1fr)}
 .rep-summary>div{border:1px solid var(--line); border-radius:8px; background:var(--paper-2); padding:8px 10px; text-align:center}
 .rep-summary b{display:block; font-family:var(--disp); font-size:16px; font-weight:800; color:var(--walnut)}
 .rep-summary span{display:block; font-size:9.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint); margin-top:2px}
@@ -1588,6 +1589,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   /* keep the summary on one compact row when printing */
   .rep-summary{grid-template-columns:repeat(5,1fr) !important; gap:6px; margin-bottom:10px}
   .rep-summary.cols3{grid-template-columns:repeat(3,1fr) !important}
+  .rep-summary.cols4{grid-template-columns:repeat(4,1fr) !important}
   .rep-summary>div{padding:5px 6px}
   .rep-summary b{font-size:12.5px}
   .rep-summary span{font-size:8px}
@@ -1606,3 +1608,18 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .rep-table tbody tr:nth-child(30n):last-child{break-after:auto; page-break-after:auto}
   @page{margin:10mm}
 }
+
+/* ===== Rented invoice: single "Rent" line (no wood boxes) ===== */
+.rentline{border:1px solid var(--line-2); border-radius:8px; overflow:hidden; margin-top:10px}
+.rentline .rl-head,.rentline .rl-row{display:grid; grid-template-columns:44px 1fr 210px}
+.rentline .rl-head{background:var(--panel); font-family:var(--disp); font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--walnut)}
+.rentline .rl-head span{padding:8px 10px; border-right:1px solid var(--line-2)}
+.rentline .rl-head span:last-child{border-right:none; text-align:right}
+.rentline .rl-row>*{padding:10px; border-right:1px solid var(--line); display:flex; align-items:center; min-height:44px}
+.rentline .rl-row>*:last-child{border-right:none}
+.rentline .rl-sl{justify-content:center; color:var(--ink-faint)}
+.rentline .rl-desc{border:none; background:transparent; font-family:var(--body); font-size:15px; width:100%; color:var(--ink)}
+.rentline .rl-amt{justify-content:flex-end; font-family:var(--mono); font-size:16px; font-weight:600; color:var(--walnut)}
+.rentline .rl-amt .amt-edit{display:inline-flex; align-items:baseline; gap:3px}
+.rentline .rl-amt input{width:130px; text-align:right; color:var(--walnut)}
+.rentline .rl-amt input::-webkit-outer-spin-button,.rentline .rl-amt input::-webkit-inner-spin-button{-webkit-appearance:none; appearance:none; margin:0}

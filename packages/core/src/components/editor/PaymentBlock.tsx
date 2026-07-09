@@ -103,14 +103,19 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
   }
 
   async function delLine(l: PartyStatement) {
-    await delRec("expenses", l.id);
-    await cloudDelete("expenses", l.id);
+    // synthetic lines ("from quote record") have no backing expense — they live only in the quote's
+    // payCash/payUpi totals, so just reduce those aggregates (no expense to delete).
+    if (!l.synthetic) {
+      await delRec("expenses", l.id);
+      await cloudDelete("expenses", l.id);
+    }
     setAggregates(
       Math.max(0, r2((doc.payCash || 0) - (l.mode === "cash" ? l.amount : 0))),
       Math.max(0, r2((doc.payUpi || 0) - (l.mode === "upi" ? l.amount : 0))),
     );
     reload();
     bumpData();
+    toast("Payment removed");
   }
 
   // load a recorded payment into the row form for editing
@@ -136,10 +141,20 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return;
     const isUpiMode = mode === "upi" || mode === "uowner";
-    if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
+    if (mode === "upi" && !acct.trim() && !old.synthetic) return toast("Pick the UPI account");
     const isCash = !isUpiMode;
     const e = await getRec<Expense>("expenses", old.id);
-    if (!e) return cancelEdit();
+    if (!e) {
+      // synthetic line (from the quote's own payCash/payUpi, no expense) — adjust the aggregates directly
+      const nextCash = Math.max(0, r2((doc.payCash || 0) - (old.mode === "cash" ? old.amount : 0) + (isCash ? a : 0)));
+      const nextUpi = Math.max(0, r2((doc.payUpi || 0) - (old.mode === "upi" ? old.amount : 0) + (isUpiMode ? a : 0)));
+      setAggregates(nextCash, nextUpi);
+      cancelEdit();
+      reload();
+      bumpData();
+      toast("Payment updated");
+      return;
+    }
     e.amount = a;
     e.mode = isUpiMode ? "upi" : "cash";
     e.account = mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "";
@@ -193,14 +208,10 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
             <span className="pb-when">
               {l.synthetic ? "from quote record" : l.date + (hhmm(l.at) ? " " + hhmm(l.at) : "") + " · " + userName(l.by)}
             </span>
-            {l.synthetic ? (
-              <span />
-            ) : (
-              <span className="pb-rowacts">
-                <button className="pb-x" title="Edit payment" onClick={() => startEdit(l)}>✎</button>
-                <button className="pb-x" title="Delete payment" onClick={() => delLine(l)}>×</button>
-              </span>
-            )}
+            <span className="pb-rowacts">
+              <button className="pb-x" title="Edit payment" onClick={() => startEdit(l)}>✎</button>
+              <button className="pb-x" title="Delete payment" onClick={() => delLine(l)}>×</button>
+            </span>
           </div>
         ))}
 

@@ -26,6 +26,8 @@ import {
   type PayAccount,
   type PayHolder,
 } from "@/lib/accounts";
+import { brandFor } from "@/lib/brand";
+import { waLink } from "@/lib/whatsapp";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -54,9 +56,31 @@ const emptyBal = (name: string): AcctBalance => ({
   lines: [],
 });
 
+const genDate = () => {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`;
+};
+
+interface PrintRow {
+  date: string;
+  at: string;
+  kind: "in" | "collect";
+  label: string;
+  amount: number;
+}
+interface PrintDoc {
+  title: string;
+  sub: string;
+  summary: { k: string; v: string }[];
+  rows: PrintRow[];
+}
+
 export default function AccountsView() {
-  const { ready, dataVersion, user } = useApp();
+  const { ready, dataVersion, user, brandMode } = useApp();
+  const brand = brandFor(brandMode);
   const router = useRouter();
+  const [printDoc, setPrintDoc] = useState<PrintDoc | null>(null);
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -116,6 +140,16 @@ export default function AccountsView() {
   useEffect(() => {
     if (ready) bgPull();
   }, [ready]);
+
+  // print the on-screen statement once the print doc has rendered, then clear it
+  useEffect(() => {
+    if (!printDoc) return;
+    const t = setTimeout(() => {
+      window.print();
+      setPrintDoc(null);
+    }, 80);
+    return () => clearTimeout(t);
+  }, [printDoc]);
 
   const ledger = useMemo(
     () => acctLedger(expenses, collections, quotes, customers),
@@ -362,6 +396,61 @@ export default function AccountsView() {
     toast("Removed “" + a.name + "”");
   }
 
+  // ── statement PDF / WhatsApp send (per holder or per account) ──────────────
+  function stmtRows(subs: AcctBalance[]): PrintRow[] {
+    const rows: PrintRow[] = [];
+    const multi = subs.length > 1;
+    for (const a of subs) {
+      for (const l of a.lines) {
+        if (l.kind === "in")
+          rows.push({
+            date: l.date,
+            at: l.at || "",
+            kind: "in",
+            label: (multi ? a.name + " · " : "") + (l.customer || "—") + (l.quoteNo ? " · #" + l.quoteNo : ""),
+            amount: l.amount,
+          });
+        else
+          rows.push({ date: l.date, at: l.at || "", kind: "collect", label: "Collected / handed over" + (l.note ? " · " + l.note : ""), amount: l.amount });
+      }
+    }
+    return rows;
+  }
+  function pdfHolder(h: PayHolder) {
+    const v = holderView(h);
+    const rows = stmtRows(v.subs);
+    for (const c of v.cols)
+      rows.push({ date: c.date, at: c.createdAt || "", kind: "collect", label: "Collected / handed over" + (c.note ? " · " + c.note : ""), amount: +c.amount || 0 });
+    rows.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+    setPrintDoc({
+      title: h.name,
+      sub: brand.name + " · UPI account statement · " + genDate(),
+      summary: [
+        ...(v.opening > 0 ? [{ k: "Opening", v: "₹ " + inr(v.opening) }] : []),
+        { k: "Received", v: "₹ " + inr(v.received) },
+        { k: "Collected", v: "₹ " + inr(v.collected) },
+        { k: "Balance", v: "₹ " + inr(v.balance) },
+      ],
+      rows,
+    });
+  }
+  function pdfAccount(a: AcctBalance) {
+    setPrintDoc({
+      title: a.name,
+      sub: brand.name + " · UPI account statement · " + genDate(),
+      summary: [
+        { k: "Received", v: "₹ " + inr(a.received) },
+        { k: "Collected", v: "₹ " + inr(a.collected) },
+        { k: "Balance", v: "₹ " + inr(a.balance) },
+      ],
+      rows: stmtRows([a]).sort((x, y) => (y.at || "").localeCompare(x.at || "")),
+    });
+  }
+  function sendSummary(title: string, summary: { k: string; v: string }[]) {
+    const text = [brand.name + " — " + title, ...summary.map((s) => s.k + ": " + s.v), "(as on " + genDate() + ")"].join("\n");
+    window.open(waLink("", text), "_blank");
+  }
+
   // ── one UPI credit / collection line ──────────────────────────────────────
   function renderLine(l: AcctStmtLine) {
     if (l.kind === "collect") {
@@ -391,12 +480,16 @@ export default function AccountsView() {
           <div className="stmt-ic upi">UPI</div>
           <div
             className="stmt-main"
-            style={{ cursor: l.quoteNo ? "pointer" : "default" }}
-            onClick={() => l.quoteNo && router.push("/editor/" + (quotes.find((d) => d.number === l.quoteNo)?.id || ""))}
+            style={{ cursor: l.quoteNo || l.custId ? "pointer" : "default" }}
+            title={l.quoteNo ? "Open quotation #" + l.quoteNo : l.custId ? "Open in Receipts" : undefined}
+            onClick={() => {
+              if (l.quoteNo) router.push("/editor/" + (quotes.find((d) => d.number === l.quoteNo)?.id || ""));
+              else if (l.custId) router.push("/receipts?cust=" + encodeURIComponent(l.custId));
+            }}
           >
             <div className="stmt-to">
               {l.customer}
-              {l.quoteNo ? " · #" + l.quoteNo : ""}
+              {l.quoteNo ? " · #" + l.quoteNo : l.custId ? " · receipt" : ""}
               {l.toOwner && <span className="acct-overall-hint"> · to owner</span>}
               {l.legacyCollected && <span className="acct-collected-badge sm"> ✓</span>}
             </div>
@@ -465,6 +558,25 @@ export default function AccountsView() {
               Collect
             </button>
           )}
+          {!grouped && (a.received > 0 || a.lines.length > 0) && (
+            <>
+              <button className="btn sm" type="button" title="Download PDF statement" onClick={() => pdfAccount(a)}>
+                PDF
+              </button>
+              <button
+                className="btn wa sm"
+                type="button"
+                title="Send summary on WhatsApp"
+                onClick={() => sendSummary(a.name, [
+                  { k: "Received", v: "₹" + inr(a.received) },
+                  { k: "Collected", v: "₹" + inr(a.collected) },
+                  { k: "Balance", v: "₹" + inr(a.balance) },
+                ])}
+              >
+                Send
+              </button>
+            </>
+          )}
           {grouped ? (
             <button className="pb-x" title="Move to Ungrouped" onClick={() => detachAccount(holderId, a.name)}>
               ×
@@ -519,6 +631,7 @@ export default function AccountsView() {
 
   return (
     <div>
+      <div className="cd-screen">
       <div className="sectitle">
         Accounts <small>— holders, their UPI accounts &amp; hand-overs</small>
       </div>
@@ -748,6 +861,17 @@ export default function AccountsView() {
                     <button className="btn sm primary" type="button" onClick={() => { setAddAcctFor(h.id); setNewAcct(""); }}>
                       + Account
                     </button>
+                    <button className="btn sm" type="button" onClick={() => pdfHolder(h)}>
+                      PDF
+                    </button>
+                    <button className="btn sm wa" type="button" onClick={() => sendSummary(h.name, [
+                      ...(opening > 0 ? [{ k: "Opening", v: "₹" + inr(opening) }] : []),
+                      { k: "Received", v: "₹" + inr(received) },
+                      { k: "Collected", v: "₹" + inr(collected) },
+                      { k: "Balance", v: "₹" + inr(balance) },
+                    ])}>
+                      Send
+                    </button>
                     <button className="btn sm" type="button" onClick={() => { setOpeningForId(h.id); setOpeningVal(opening ? String(opening) : ""); }}>
                       {opening > 0 ? "Opening ₹" + inr(opening) : "Opening balance"}
                     </button>
@@ -783,6 +907,66 @@ export default function AccountsView() {
           <div className="empty">
             No account holders yet. Add one (e.g. Tabrez), then add their UPI accounts inside.
           </div>
+        </div>
+      )}
+      </div>
+
+      {printDoc && (
+        <div className="cd-print rep-doc">
+          <div className="rep-head">
+            <div className="rep-brand">
+              <h1>{brand.name || "Statement"}</h1>
+              {brand.addr && <div>{brand.addr}</div>}
+            </div>
+            <div className="rep-meta">
+              <div className="rep-title">{printDoc.title}</div>
+              <div className="rep-period">{printDoc.sub}</div>
+            </div>
+          </div>
+          <div className={"rep-summary " + (printDoc.summary.length === 4 ? "cols4" : "cols3")}>
+            {printDoc.summary.map((s) => (
+              <div key={s.k}>
+                <b>{s.v}</b>
+                <span>{s.k}</span>
+              </div>
+            ))}
+          </div>
+          <table className="rep-table">
+            <colgroup>
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "42%" }} />
+              <col style={{ width: "18%" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="c-n">#</th>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Detail</th>
+                <th className="amt">Amount ₹</th>
+              </tr>
+            </thead>
+            <tbody>
+              {printDoc.rows.length ? (
+                printDoc.rows.map((r, i) => (
+                  <tr key={i}>
+                    <td className="c-n">{i + 1}</td>
+                    <td className="c-date">{r.date}</td>
+                    <td>{r.kind === "in" ? "Received" : "Handed over"}</td>
+                    <td className="c-cust">{r.label}</td>
+                    <td className="amt">{r.kind === "in" ? "+" : "−"}{inr(r.amount)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="rep-empty">No entries.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <div className="rep-foot">Generated {genDate()} · {brand.name}</div>
         </div>
       )}
     </div>

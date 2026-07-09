@@ -95,6 +95,13 @@ export const amountOf = (sec: Section, measure: number): number =>
     : Math.round(measure * (+sec.rate || 0) * 100) / 100;
 
 export function computeDoc(d: Doc): DocTotals {
+  // rented invoice: no wood line-items — the taxable value is the single custom rent amount.
+  if (d.rented) {
+    const sub = Math.round((+(d.rentAmount ?? 0) || 0) * 100) / 100;
+    const gstAmt =
+      d.gstMode === "flat" ? Math.round((+d.gst || 0) * 100) / 100 : Math.round(sub * (+d.gst || 0)) / 100;
+    return { sub, gstAmt, grand: Math.round((sub + gstAmt) * 100) / 100, secCft: [] };
+  }
   let sub = 0;
   const secCft: number[] = [];
   (d.sections || []).forEach((sec) => {

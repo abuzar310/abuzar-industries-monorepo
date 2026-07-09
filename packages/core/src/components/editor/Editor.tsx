@@ -70,6 +70,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const feat = getFeatures();
   const isInv = doc.kind === "invoice";
   const isBuy = isInv && doc.tradeType === "buy"; // purchase invoice
+  const isRent = isInv && !isBuy && !!doc.rented; // rental invoice: single rent amount, no wood lines
   // entry modes offered per section per app:
   //  invoice → by-size + total-CFT + total-CBM + per-price; unofficial quote → by-size + per-price; official quote → by-size + total-CFT + running-ft
   const secModes: ("cft" | "direct" | "rft" | "pcs" | "cbm")[] =
@@ -77,20 +78,20 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const totals = useMemo(() => computeDoc(doc), [doc]);
   // CFT and CBM are different units, so keep their running totals separate for the bill summary.
   // Per-price ("pcs") sections price by piece but their L·W·T·Pcs give real CFT — include it here.
-  const totalCft = doc.sections.reduce((s, sec, i) => {
-    if (sec.calcMode === "cbm" || sec.calcMode === "rft") return s;
-    if (sec.calcMode === "pcs") return s + sec.rows.reduce((c, r) => c + cftOf(r), 0);
-    return s + (totals.secCft[i] || 0);
-  }, 0);
-  const totalCbm = doc.sections.reduce(
-    (s, sec, i) => (sec.calcMode === "cbm" ? s + (totals.secCft[i] || 0) : s),
-    0,
-  );
+  const totalCft = isRent
+    ? 0
+    : doc.sections.reduce((s, sec, i) => {
+        if (sec.calcMode === "cbm" || sec.calcMode === "rft") return s;
+        if (sec.calcMode === "pcs") return s + sec.rows.reduce((c, r) => c + cftOf(r), 0);
+        return s + (totals.secCft[i] || 0);
+      }, 0);
+  const totalCbm = isRent
+    ? 0
+    : doc.sections.reduce((s, sec, i) => (sec.calcMode === "cbm" ? s + (totals.secCft[i] || 0) : s), 0);
   // total pieces across the whole invoice (info line on the bill)
-  const totalPcs = doc.sections.reduce(
-    (s, sec) => s + sec.rows.reduce((p, r) => p + (Math.round(+r.pcs) || 0), 0),
-    0,
-  );
+  const totalPcs = isRent
+    ? 0
+    : doc.sections.reduce((s, sec) => s + sec.rows.reduce((p, r) => p + (Math.round(+r.pcs) || 0), 0), 0);
   const { brandMode, user } = useApp();
   const brand = brandFor(brandMode);
   const invBank = brand.banks?.[doc.bankIdx ?? 0] || brand.bank; // chosen bank for this invoice
@@ -365,6 +366,9 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       d.rented = v;
       if (v) d.gstKind = "split";
     });
+  const onRentAmount = (v: string) =>
+    update((d) => (d.rentAmount = v.trim() === "" ? undefined : Math.max(0, +v || 0)));
+  const onRentDesc = (v: string) => update((d) => (d.rentDesc = v));
 
   // ---- document number inline edit ----
   async function commitNumber(raw: string) {
@@ -946,7 +950,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                     <option>Credit</option>
                   </select>
                 </div>
-                {!isBuy && (
+                {!isBuy && !isRent && (
                   <>
                     <div className="f">
                       <label>Vehicle No.</label>
@@ -965,6 +969,41 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
 
         <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} onFocus={onSecFocusIn} className={feat.simpleQuote ? "twocol" : ""}>
           {(() => {
+            // rented invoice: a single custom "Rent" line instead of wood boxes.
+            if (isRent)
+              return (
+                <div className="rentline">
+                  <div className="rl-head">
+                    <span>#</span>
+                    <span>Description</span>
+                    <span>Amount ₹</span>
+                  </div>
+                  <div className="rl-row">
+                    <span className="rl-sl">1</span>
+                    <input
+                      className="rl-desc"
+                      value={doc.rentDesc ?? "Rent"}
+                      placeholder="Rent"
+                      aria-label="Rent description"
+                      onChange={(e) => onRentDesc(e.target.value)}
+                    />
+                    <span className="rl-amt">
+                      <span className="amt-edit no-print">
+                        ₹{" "}
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          aria-label="Rent amount"
+                          placeholder="0"
+                          value={doc.rentAmount ?? ""}
+                          onChange={(e) => onRentAmount(e.target.value)}
+                        />
+                      </span>
+                      <b className="amt-print">₹ {inr(doc.rentAmount ?? 0)}</b>
+                    </span>
+                  </div>
+                </div>
+              );
             // Cut Size quote: split the wood boxes into EXACTLY two columns — FILL THE LEFT COLUMN
             // first (each box stacks directly below the previous one), and only start the right column
             // once the left is full (~one page of compact 0.72cm rows ≈ 30 lines). Never three columns.
@@ -1000,9 +1039,11 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
         </div>
           </>
         )}
-        <button className="add-sec" onClick={onAddSec}>
-          + Add wood type
-        </button>
+        {!isRent && (
+          <button className="add-sec" onClick={onAddSec}>
+            + Add wood type
+          </button>
+        )}
         <datalist id="woodtypes">
           {["Teak", "White Teak", "Nagpur Teak", "CP Teak", "Ghana Teak", "Honne", "Neem", "Sagwan", "Rosewood"].map((w) => (
             <option key={w} value={w} />

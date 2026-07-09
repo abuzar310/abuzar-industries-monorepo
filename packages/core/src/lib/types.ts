@@ -56,8 +56,13 @@ export interface Doc {
   gstMode?: "percent" | "flat";
   /** invoice tax split: "split" = SGST+CGST (intrastate), "igst" = single IGST (interstate). Default split. */
   gstKind?: "split" | "igst";
-  /** invoice: a rental invoice — always CGST+SGST, printed as "Rented Invoice" and grouped separately in Reports. */
+  /** invoice: a rental invoice — always CGST+SGST, printed as "Rented Invoice" and grouped separately in Reports.
+   *  A rented invoice has no wood line-items: just a single custom rent amount (rentAmount) + GST. */
   rented?: boolean;
+  /** rented invoice: the custom rent amount (the taxable value; ignores sections). */
+  rentAmount?: number;
+  /** rented invoice: description of the rent line (default "Rent"). */
+  rentDesc?: string;
   /** accepted round-figure price override; falls back to the computed grand total. */
   finalPrice?: number;
   quotationId: string;

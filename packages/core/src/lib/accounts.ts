@@ -564,6 +564,8 @@ export interface AcctStmtLine {
   by: string;
   customer?: string;
   quoteNo?: string;
+  /** the customer this credit was booked to when it came from the Receipts tab (no quote). */
+  custId?: string;
   toOwner?: boolean;
   note?: string;
   /** legacy per-entry collect flag (money already handed over under the old system). */
@@ -628,6 +630,7 @@ export function acctLedger(
       by: e.enteredBy,
       customer: partyName(e, quotes, customers),
       quoteNo: quoteNo(e, quotes),
+      custId: e.sourceId ? "" : e.custId || "",
       toOwner: !!e.toOwner,
       legacyCollected,
     });
