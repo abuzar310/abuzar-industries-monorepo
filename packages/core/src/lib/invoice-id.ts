@@ -3,10 +3,9 @@
 //   id      = permanent UID (e.g. "inv_a1b2c3…"). Sync / URLs / ledger keys. NEVER reused.
 //   number  = what humans see ("1", "2", "2695"). Editable. Per trade-type series.
 //
-// Delete + create ⇒ new UID every time. Display numbers for SALES are strictly monotonic:
-//   if the highest sales invoice on the list is 2714, the next create is 2715 — never a
-//   hole like 2615 from a stale counter. Purchases keep a separate 1,2,3… series with
-//   gap reuse among live buys only.
+// Delete + create ⇒ new UID every time, but the DISPLAY number is reused from the first
+// hole in the live series (same clean serial behaviour for sales AND purchases).
+// Example: live 2718 + 2721 → next create is 2719 (not 2722). Delete 2721 → next is 2721.
 
 import { allRec } from "./db";
 import {
@@ -42,25 +41,12 @@ function isBuy(d: Doc): boolean {
 }
 
 function numericLabel(d: Doc): number {
-  for (const label of [d.number, d.id]) {
-    const s = String(label || "").trim();
-    if (/^\d+$/.test(s)) return parseInt(s, 10);
-  }
+  const s = String(d.number || "").trim();
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
   return 0;
 }
 
-/** Highest numeric display label in this trade series (optionally including bin/archive). */
-function maxNumericInTrade(docs: Doc[], trade: InvoiceTrade, includeDead: boolean): number {
-  let mx = 0;
-  for (const d of docs) {
-    if (!includeDead && !isLiveDoc(d)) continue;
-    if (trade === "buy" ? !isBuy(d) : isBuy(d)) continue;
-    mx = Math.max(mx, numericLabel(d));
-  }
-  return mx;
-}
-
-function takenLiveNums(docs: Doc[], trade: InvoiceTrade): Set<number> {
+function takenFromDocs(docs: Doc[], trade: InvoiceTrade): Set<number> {
   const taken = new Set<number>();
   for (const d of docs) {
     if (!isLiveDoc(d)) continue;
@@ -71,79 +57,91 @@ function takenLiveNums(docs: Doc[], trade: InvoiceTrade): Set<number> {
   return taken;
 }
 
-/** Max sales display number currently in the cloud (authoritative across devices). */
-async function cloudMaxSellDisplay(): Promise<number> {
+/** Live display numbers for this trade from the cloud (so every device fills the same holes). */
+async function cloudLiveTaken(trade: InvoiceTrade): Promise<Set<number>> {
+  const taken = new Set<number>();
   const supa = getSupa();
-  if (!supa.url || !supa.key) return 0;
-  if (typeof navigator !== "undefined" && !navigator.onLine) return 0;
-  if (authRequired() && !isLoggedIn()) return 0;
+  if (!supa.url || !supa.key) return taken;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return taken;
+  if (authRequired() && !isLoggedIn()) return taken;
   try {
     await ensureAuth();
     const k = (supa.key || "").trim();
     const auth = getAuth();
     const r = await fetch(supa.url + "/rest/v1/" + tableName("invoices") + "?select=id,data", {
-      headers: {
-        apikey: k,
-        Authorization: "Bearer " + (auth.token || k),
-      },
+      headers: { apikey: k, Authorization: "Bearer " + (auth.token || k) },
     });
-    if (!r.ok) return 0;
+    if (!r.ok) return taken;
     const rows = await r.json();
-    if (!Array.isArray(rows)) return 0;
-    let mx = 0;
+    if (!Array.isArray(rows)) return taken;
     for (const row of rows) {
       const d = (row && row.data) || {};
-      if (d.tradeType === "buy") continue;
-      for (const label of [d.number, row.id]) {
-        const s = String(label || "").trim();
-        if (/^\d+$/.test(s)) mx = Math.max(mx, parseInt(s, 10));
-      }
+      if (d.deletedAt || d.purgedAt) continue;
+      const buy = d.tradeType === "buy";
+      if (trade === "buy" ? !buy : buy) continue;
+      const s = String(d.number || "").trim();
+      if (/^\d+$/.test(s)) taken.add(parseInt(s, 10));
     }
-    return mx;
   } catch {
-    return 0;
+    /* offline / error — local taken is enough */
   }
+  return taken;
 }
 
 /**
- * Next display number for a new invoice.
- *  - buy  → lowest free positive int among live purchases (delete 3 → next can be 3)
- *  - sell → strictly after the highest sales number anywhere (local + cloud + counter).
- *           Top of list 2714 ⇒ next is 2715. Never jumps backward into a hole (2615).
+ * Lowest free serial in the live series.
+ *  - purchases: search from 1 (1,2,3… with hole reuse)
+ *  - sales: reuse a small tip hole (live 2718+2721 → 2719), else max+1.
+ *    Won't rewind into ancient gaps (e.g. 2700) from old deletes.
  */
-export async function nextInvoiceDisplayNumber(trade: InvoiceTrade): Promise<string> {
-  const docs = await allRec<Doc>("invoices");
-  const taken = takenLiveNums(docs, trade);
-
+export function nextFreeLiveDisplay(taken: Set<number>, trade: InvoiceTrade): number {
   if (trade === "buy") {
     let n = 1;
     while (taken.has(n)) n++;
-    return String(n);
+    return n;
   }
 
-  // Floor = one past the highest sales number we've ever seen (bin/archive count too,
-  // so delete-then-create never rewinds the series).
-  const localMax = maxNumericInTrade(docs, "sell", true);
-  const remoteMax = await cloudMaxSellDisplay();
-  const floor = Math.max(localMax, remoteMax) + 1;
-
-  // Atomic cloud counter — catch it up if it's behind the real max (stale counter bug).
-  let n = (await cloudNextInvoiceNo()) ?? floor;
-  let guard = 0;
-  while (n < floor && guard++ < 500) {
-    const next = await cloudNextInvoiceNo();
-    if (next == null) {
-      n = floor;
-      break;
+  const series = [...taken].filter((n) => n >= 100).sort((a, b) => a - b);
+  if (series.length === 0) {
+    let n = 1;
+    while (taken.has(n)) n++;
+    return n;
+  }
+  const maxN = series[series.length - 1];
+  const prev = series.length >= 2 ? series[series.length - 2] : null;
+  // Recent delete left a small hole under the tip — fill it (clean serial).
+  if (prev != null && maxN - prev > 1 && maxN - prev <= 20) {
+    for (let n = prev + 1; n < maxN; n++) {
+      if (!taken.has(n)) return n;
     }
-    n = next;
   }
-  n = Math.max(n, floor);
+  return maxN + 1;
+}
 
-  while (taken.has(n)) {
-    const next = await cloudNextInvoiceNo();
-    n = next != null ? Math.max(next, n + 1) : n + 1;
+/**
+ * Next display number for a new invoice (sales AND purchases): clean serial with hole reuse.
+ * UID stays unique on every create; only the printed number is recycled after a delete.
+ */
+export async function nextInvoiceDisplayNumber(trade: InvoiceTrade): Promise<string> {
+  const docs = await allRec<Doc>("invoices");
+  const taken = takenFromDocs(docs, trade);
+  for (const n of await cloudLiveTaken(trade)) taken.add(n);
+
+  const n = nextFreeLiveDisplay(taken, trade);
+
+  // Best-effort: keep the cloud counter near the series tip so older clients stay sane.
+  // Never let the counter dictate a jump past a live hole.
+  try {
+    const tip = Math.max(n, ...taken, 0);
+    let guard = 0;
+    let c = await cloudNextInvoiceNo();
+    while (c != null && c < tip && guard++ < 20) {
+      c = await cloudNextInvoiceNo();
+    }
+  } catch {
+    /* ignore */
   }
+
   return String(n);
 }
 
