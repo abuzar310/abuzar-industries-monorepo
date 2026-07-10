@@ -88,6 +88,37 @@ export const directOf = (r: Row) => +(r.cft ?? 0) || 0;
 /** Per-piece pricing: just the piece count (amount = Pcs × rate). */
 export const pcsOf = (r: Row) => +r.pcs || 0;
 
+/** 1 cubic metre → cubic feet (timber trade standard). */
+export const CBM_TO_CFT = 35.315;
+export const cbmToCft = (cbm: number) => Math.round((+cbm || 0) * CBM_TO_CFT * 100) / 100;
+
+/** Physical timber volume of a section in CFT (CBM sections are converted).
+ *  Used for stock / trading — not for ₹ pricing (CBM still prices as measure × ₹/CBM). */
+export function sectionVolumeCft(sec: Section): number {
+  const rows = sec.rows || [];
+  if (sec.calcMode === "cbm") {
+    let m = 0;
+    rows.forEach((r) => (m += directOf(r)));
+    return cbmToCft(m);
+  }
+  if (sec.calcMode === "direct") {
+    let m = 0;
+    rows.forEach((r) => (m += directOf(r)));
+    return m;
+  }
+  if (sec.calcMode === "rft") return 0; // running feet is not a volume for stock
+  // "cft" / "pcs" / default: L×W×T×Pcs ÷ 144
+  let m = 0;
+  rows.forEach((r) => (m += cftOf(r)));
+  return m;
+}
+
+/** Total physical CFT on a document (purchases/sales stock movements). */
+export function docVolumeCft(d: Doc): number {
+  if (d.rented) return 0;
+  return Math.round((d.sections || []).reduce((s, sec) => s + sectionVolumeCft(sec), 0) * 100) / 100;
+}
+
 /** A section's Total Price (₹): the hand-typed override if set, else measure × rate. */
 export const amountOf = (sec: Section, measure: number): number =>
   sec.amtOverride != null && isFinite(+sec.amtOverride)

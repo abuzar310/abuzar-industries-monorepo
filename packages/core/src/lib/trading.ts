@@ -2,7 +2,7 @@
 // config (opening value + CFT, and an optional physical closing-stock count).
 // Pure math lives in trading-calc (re-exported).
 import { metaGet, metaSet } from "./db";
-import { computeDoc } from "./calc";
+import { docVolumeCft, computeDoc } from "./calc";
 import type { Doc } from "./types";
 import type { TradeLine } from "./trading-calc";
 
@@ -10,11 +10,10 @@ export * from "./trading-calc";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Total CFT + taxable/GST/total of one invoice, and its buy/sell direction. */
+/** Total CFT (CBM converted) + taxable/GST/total of one invoice, and its buy/sell direction. */
 export function docTrade(d: Doc): TradeLine {
   const t = computeDoc(d);
-  const cft = t.secCft.reduce((s, c) => s + c, 0);
-  return { cft: r2(cft), taxable: t.sub, gst: t.gstAmt, grand: t.grand, buy: d.tradeType === "buy" };
+  return { cft: r2(docVolumeCft(d)), taxable: t.sub, gst: t.gstAmt, grand: t.grand, buy: d.tradeType === "buy" };
 }
 
 export interface StockConfig {

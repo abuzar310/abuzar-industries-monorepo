@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, clone, put } from "@/lib/db";
-import { computeDoc, inr, nowIso, todayStr } from "@/lib/calc";
+import { computeDoc, cbmToCft, inr, nowIso, todayStr } from "@/lib/calc";
 import { createInvoice } from "@/lib/create";
 import { editSupplierDialog } from "@/lib/customer-form";
 import { seedSuppliersFromPurchases, upsertSupplierFromDoc } from "@/lib/suppliers";
@@ -144,6 +144,7 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
   const grand = r2(taxable + gstAmt);
   const qtyN = Math.max(0, +qty || 0);
   const unitLabel = unit === "cbm" ? "CBM" : "CFT";
+  const cftStored = unit === "cbm" ? cbmToCft(qtyN) : qtyN;
 
   const gstSplit = useMemo(() => {
     if (gstKind === "igst") return { igst: gstAmt, cgst: 0, sgst: 0 };
@@ -296,6 +297,11 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
               onChange={(e) => setQty(e.target.value)}
               placeholder="0"
             />
+            {unit === "cbm" && qtyN > 0 && (
+              <span className="note" style={{ marginTop: 4, display: "block" }}>
+                = {inr(cftStored)} CFT for stock (× 35.315)
+              </span>
+            )}
           </label>
         </div>
 
@@ -426,7 +432,12 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
                   <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>{doc.customerName}</td>
                   <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>{doc.supplierBillNo || "—"}</td>
                   <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>{doc.custGstin || "—"}</td>
-                  <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>{qtyN || "—"}</td>
+                  <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>
+                    {qtyN || "—"}
+                    {unit === "cbm" && qtyN > 0 ? (
+                      <div style={{ fontSize: 11, opacity: 0.7 }}>({inr(cftStored)} CFT)</div>
+                    ) : null}
+                  </td>
                   <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>₹ {inr(taxable)}</td>
                   <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>
                     ₹ {inr(gstAmt)}

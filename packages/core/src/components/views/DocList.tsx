@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { computeDoc, inr } from "@/lib/calc";
+import { computeDoc, docVolumeCft, inr } from "@/lib/calc";
 import type { Doc } from "@/lib/types";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -25,7 +25,7 @@ export default function DocList({ docs, empty }: { docs: Doc[]; empty: string })
     <>
       {docs.map((d) => {
         const t = computeDoc(d);
-        const cft = t.secCft.reduce((s, c) => s + c, 0);
+        const cft = docVolumeCft(d);
         const act = (e: React.MouseEvent, suffix: string) => {
           e.stopPropagation();
           open(d.id, suffix);

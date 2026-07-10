@@ -70,31 +70,48 @@ export default function DashboardView() {
   const monthName = month ? MONTHS.find((m) => m[0] === month)?.[1] : "";
   const periodLabel = !month && !year ? "all time" : [monthName, year].filter(Boolean).join(" ");
 
-  // period sales / count / CFT — Cut Size uses created quotes (no invoices); official uses invoices
+  // period sales / count / CFT — Cut Size uses created quotes (no invoices); official uses sell invoices
   let periodRev = 0;
+  let periodPurchase = 0;
   let periodCft = 0;
-  let periodCount = 0;
+  let periodBuyCft = 0;
+  let periodSaleCount = 0;
+  let periodBuyCount = 0;
   if (feat.simpleQuote) {
     quotes.forEach((qd) => {
       if (qd.status !== "Created" || qd.deletedAt || qd.purgedAt || !inPeriod(qd.createdAt)) return;
       periodRev += quoteBill(qd);
       periodCft += computeDoc(qd).secCft.reduce((s, c) => s + c, 0);
-      periodCount++;
+      periodSaleCount++;
     });
   } else {
     invs.forEach((i) => {
       if (i.deletedAt || i.purgedAt || !inPeriod(i.createdAt)) return;
-      periodRev += computeDoc(i).grand;
-      periodCount++;
+      const t = docTrade(i);
+      if (t.buy) {
+        periodPurchase += t.grand;
+        periodBuyCft += t.cft;
+        periodBuyCount++;
+      } else {
+        periodRev += t.grand;
+        periodCft += t.cft;
+        periodSaleCount++;
+      }
     });
   }
   periodRev = Math.round(periodRev * 100) / 100;
+  periodPurchase = Math.round(periodPurchase * 100) / 100;
   periodCft = Math.round(periodCft * 100) / 100;
+  periodBuyCft = Math.round(periodBuyCft * 100) / 100;
 
   // stock snapshot (all-time): opening + purchases − sold = closing (same as the Stock tab)
+  const activeInvs = useMemo(
+    () => invs.filter((d) => !d.deletedAt && !d.purgedAt),
+    [invs],
+  );
   const tr = useMemo(
-    () => computeTrading(invs.map(docTrade), { value: stockCfg.value, cft: stockCfg.cft }, stockCfg.closingCft),
-    [invs, stockCfg],
+    () => computeTrading(activeInvs.map(docTrade), { value: stockCfg.value, cft: stockCfg.cft }, stockCfg.closingCft),
+    [activeInvs, stockCfg],
   );
 
   // running (not period-scoped) balances
@@ -112,17 +129,32 @@ export default function DashboardView() {
     .slice(0, 5);
 
   type Card = { k: string; v: string; money?: boolean; danger?: boolean; sub?: string; onClick?: () => void };
-  const cards: Card[] = [
-    { k: "Sales", v: "₹ " + inr(periodRev), money: true, sub: periodLabel, onClick: () => router.push(feat.simpleQuote ? "/quotations" : "/invoices") },
-    { k: feat.simpleQuote ? "Quotes" : "Invoices", v: String(periodCount), sub: periodLabel, onClick: () => router.push(feat.simpleQuote ? "/quotations" : "/invoices") },
-    ...(feat.simpleQuote ? [{ k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/quotations") }] : []),
-    ...(!feat.simpleQuote ? [{ k: "CFT Sold", v: tr.saleCft.toFixed(2), sub: "₹ " + inr(tr.saleValue) + " · overall", onClick: () => router.push("/stock") }] : []),
-    ...(!feat.simpleQuote ? [{ k: "Closing Stock", v: tr.closingCft.toFixed(2), sub: "₹ " + inr(tr.closingValue) + " · overall", onClick: () => router.push("/stock") }] : []),
-    ...(feat.acceptPayment ? [{ k: "Outstanding", v: "₹ " + inr(totalOutstanding), money: true, sub: dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"} · overall` : "all clear", onClick: () => router.push("/payments") }] : []),
-    ...(!feat.simpleQuote ? [{ k: "Follow-ups", v: String(follow.length), sub: "to chase", onClick: () => router.push("/quotations") }] : []),
-    ...(!feat.simpleQuote ? [{ k: "Low Stock", v: String(lowStock.length), danger: lowStock.length > 0, sub: "wood type(s)", onClick: () => router.push("/stock") }] : []),
-  ];
-
+  const cards: Card[] = feat.simpleQuote
+    ? [
+        { k: "Sales", v: "₹ " + inr(periodRev), money: true, sub: periodLabel, onClick: () => router.push("/quotations") },
+        { k: "Quotes", v: String(periodSaleCount), sub: periodLabel, onClick: () => router.push("/quotations") },
+        { k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/quotations") },
+        ...(feat.acceptPayment
+          ? [
+              {
+                k: "Outstanding",
+                v: "₹ " + inr(totalOutstanding),
+                money: true,
+                sub: dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"} · overall` : "all clear",
+                onClick: () => router.push("/payments"),
+              },
+            ]
+          : []),
+      ]
+    : [
+        { k: "Sales", v: "₹ " + inr(periodRev), money: true, sub: `${periodSaleCount} invoice${periodSaleCount === 1 ? "" : "s"} · ${periodLabel}`, onClick: () => router.push("/invoices") },
+        { k: "Purchases", v: "₹ " + inr(periodPurchase), money: true, sub: `${periodBuyCount} bill${periodBuyCount === 1 ? "" : "s"} · ${periodLabel}`, onClick: () => router.push("/invoices") },
+        { k: "CFT Bought", v: periodBuyCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/stock") },
+        { k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/stock") },
+        { k: "Closing Stock", v: tr.closingCft.toFixed(2) + " CFT", sub: "₹ " + inr(tr.closingValue) + " · overall", onClick: () => router.push("/stock") },
+        { k: "Follow-ups", v: String(follow.length), sub: "to chase", onClick: () => router.push("/quotations") },
+        { k: "Low Stock", v: String(lowStock.length), danger: lowStock.length > 0, sub: "wood type(s)", onClick: () => router.push("/stock") },
+      ];
   return (
     <div>
       <div className="sectitle">
@@ -163,6 +195,39 @@ export default function DashboardView() {
           </div>
         ))}
       </div>
+
+      {!feat.simpleQuote && (
+        <>
+          <div className="dash-section" style={{ marginTop: 22 }}>
+            Stock <span>· overall</span>
+            <button className="dash-link" type="button" onClick={() => router.push("/stock")}>
+              Open stock →
+            </button>
+          </div>
+          <div className="dash-grid">
+            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+              <div className="k">Opening</div>
+              <div className="v">{tr.openCft.toFixed(2)}</div>
+              <div className="sub">CFT · ₹ {inr(tr.openValue)}</div>
+            </div>
+            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+              <div className="k">+ Bought</div>
+              <div className="v">{tr.purchaseCft.toFixed(2)}</div>
+              <div className="sub">CFT · ₹ {inr(tr.purchaseTotal)}</div>
+            </div>
+            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+              <div className="k">− Sold</div>
+              <div className="v">{tr.saleCft.toFixed(2)}</div>
+              <div className="sub">CFT · ₹ {inr(tr.saleTotal)}</div>
+            </div>
+            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+              <div className="k">Closing</div>
+              <div className="v money">{tr.closingCft.toFixed(2)}</div>
+              <div className="sub">CFT · ₹ {inr(tr.closingValue)}</div>
+            </div>
+          </div>
+        </>
+      )}
 
       {feat.acceptPayment && (
         <>

@@ -1,12 +1,16 @@
 // Self-check for the money / CFT / words logic. Run: node src/lib/calc.check.ts
 import assert from "node:assert/strict";
-import { cftOf, computeDoc, rupeesInWords, inr, splitHandover } from "./calc.ts";
+import { cftOf, cbmToCft, computeDoc, docVolumeCft, rupeesInWords, inr, splitHandover } from "./calc.ts";
 import type { Doc } from "./types.ts";
 
 // CFT = (L × W × T × Pcs) ÷ 144
 assert.equal(cftOf({ l: 12, w: 12, t: 12, pcs: 1 }), 12);
 assert.equal(cftOf({ l: "7", w: "6", t: "4", pcs: "3" }), 3.5);
 assert.equal(cftOf({ l: "", w: "", t: "", pcs: "" }), 0);
+
+// CBM → CFT (stock / trading)
+assert.equal(cbmToCft(1), 35.32); // 35.315 rounded to 2 dp
+assert.equal(cbmToCft(2.5), 88.29);
 
 // Indian rupees in words
 assert.equal(rupeesInWords(0), "Rupees Zero only");
@@ -32,10 +36,12 @@ assert.deepEqual(t.secCft, [12]);
 const dd = { sections: [{ name: "Bulk", rate: 100, calcMode: "direct", rows: [{ l: "", w: "", t: "", pcs: "", cft: 5 }] }], gst: 0 } as unknown as Doc;
 assert.equal(computeDoc(dd).sub, 500);
 
-// CBM mode: type CBM directly (2.5) × ₹/CBM rate 40000 = 100000
+// CBM mode: type CBM directly (2.5) × ₹/CBM rate 40000 = 100000 (pricing stays in CBM)
 const dc = { sections: [{ name: "Logs", rate: 40000, calcMode: "cbm", rows: [{ l: "", w: "", t: "", pcs: "", cft: 2.5 }] }], gst: 0 } as unknown as Doc;
 assert.equal(computeDoc(dc).sub, 100000);
 assert.deepEqual(computeDoc(dc).secCft, [2.5]);
+// but stock volume is converted to CFT
+assert.equal(docVolumeCft(dc), 88.29);
 
 // running-ft mode: L 7 × Pcs 3 = 21 ft × rate 10 = 210
 const dr = { sections: [{ name: "Ply", rate: 10, calcMode: "rft", rows: [{ l: 7, w: 0, t: 0, pcs: 3 }] }], gst: 0 } as unknown as Doc;

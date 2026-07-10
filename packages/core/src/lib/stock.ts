@@ -1,15 +1,15 @@
 import { getRec, put } from "./db";
-import { cftOf, nowIso } from "./calc";
+import { nowIso, sectionVolumeCft } from "./calc";
 import type { Doc, Stock } from "./types";
 
 export const stockKey = (name: string) => (name || "").trim().toLowerCase();
 
-/** Deduct each section's CFT from matching stock (by wood-type name). Once only. */
+/** Deduct each section's CFT from matching stock (by wood-type name). Once only.
+ *  CBM sections are converted to CFT first (1 CBM = 35.315 CFT). */
 export async function maybeDeductStock(d: Doc): Promise<boolean> {
   if (d.stockDeducted) return false;
-  for (const sec of d.sections) {
-    let cft = 0;
-    sec.rows.forEach((r) => (cft += cftOf(r)));
+  for (const sec of d.sections || []) {
+    const cft = sectionVolumeCft(sec);
     if (cft <= 0) continue;
     const key = stockKey(sec.name);
     if (!key) continue;
