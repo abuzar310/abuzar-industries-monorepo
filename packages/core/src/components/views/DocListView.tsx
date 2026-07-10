@@ -108,11 +108,13 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     });
 
   async function onNew() {
+    if (isInv) await bgPull(); // freshest cloud max so next number is top+1, not a stale hole
     const d = isInv ? await createInvoice() : await createQuotation();
     toast("New " + d.number + " created");
     router.push("/editor/" + d.id);
   }
   async function onNewPurchase() {
+    await bgPull();
     const d = await createInvoice({ tradeType: "buy" });
     toast("Purchase " + d.number + " created");
     router.push("/editor/" + d.id);

@@ -3,15 +3,21 @@
 //   id      = permanent UID (e.g. "inv_a1b2c3…"). Sync / URLs / ledger keys. NEVER reused.
 //   number  = what humans see ("1", "2", "2695"). Editable. Per trade-type series.
 //
-// Why: when id === number, deleting "3" left a tombstone/row at id "3", so the next create
-// became "4". With a UID id, deleting purchase #3 only frees the DISPLAY number "3" — the
-// next purchase can be "3" again without touching any cloud primary key.
-//
-// Sales keep the high running series (cloud counter). Purchases use 1, 2, 3… with gap reuse
-// among LIVE buys only (trashed/purged numbers are free to reuse as labels).
+// Delete + create ⇒ new UID every time. Display numbers for SALES are strictly monotonic:
+//   if the highest sales invoice on the list is 2714, the next create is 2715 — never a
+//   hole like 2615 from a stale counter. Purchases keep a separate 1,2,3… series with
+//   gap reuse among live buys only.
 
 import { allRec } from "./db";
-import { cloudNextInvoiceNo } from "./cloud";
+import {
+  cloudNextInvoiceNo,
+  ensureAuth,
+  getAuth,
+  getSupa,
+  authRequired,
+  isLoggedIn,
+  tableName,
+} from "./cloud";
 import { isLiveDoc } from "./durability";
 import { nextNumber } from "./numbering";
 import type { Doc } from "./types";
@@ -31,33 +37,83 @@ export function isInvoiceUid(id: string): boolean {
   return /^inv_[a-z0-9]+$/i.test(id || "");
 }
 
-/** Live invoices in this trade series (unset tradeType counts as sell). */
-function liveInTrade(docs: Doc[], trade: InvoiceTrade): Doc[] {
-  return docs.filter((d) => {
-    if (!isLiveDoc(d)) return false;
-    const buy = d.tradeType === "buy";
-    return trade === "buy" ? buy : !buy;
-  });
+function isBuy(d: Doc): boolean {
+  return d.tradeType === "buy";
 }
 
-/** Numeric display labels already used by LIVE docs in this trade series. */
-function takenDisplayNums(docs: Doc[], trade: InvoiceTrade): Set<number> {
+function numericLabel(d: Doc): number {
+  for (const label of [d.number, d.id]) {
+    const s = String(label || "").trim();
+    if (/^\d+$/.test(s)) return parseInt(s, 10);
+  }
+  return 0;
+}
+
+/** Highest numeric display label in this trade series (optionally including bin/archive). */
+function maxNumericInTrade(docs: Doc[], trade: InvoiceTrade, includeDead: boolean): number {
+  let mx = 0;
+  for (const d of docs) {
+    if (!includeDead && !isLiveDoc(d)) continue;
+    if (trade === "buy" ? !isBuy(d) : isBuy(d)) continue;
+    mx = Math.max(mx, numericLabel(d));
+  }
+  return mx;
+}
+
+function takenLiveNums(docs: Doc[], trade: InvoiceTrade): Set<number> {
   const taken = new Set<number>();
-  for (const d of liveInTrade(docs, trade)) {
-    const label = String(d.number || "").trim();
-    if (/^\d+$/.test(label)) taken.add(parseInt(label, 10));
+  for (const d of docs) {
+    if (!isLiveDoc(d)) continue;
+    if (trade === "buy" ? !isBuy(d) : isBuy(d)) continue;
+    const n = numericLabel(d);
+    if (n > 0) taken.add(n);
   }
   return taken;
+}
+
+/** Max sales display number currently in the cloud (authoritative across devices). */
+async function cloudMaxSellDisplay(): Promise<number> {
+  const supa = getSupa();
+  if (!supa.url || !supa.key) return 0;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return 0;
+  if (authRequired() && !isLoggedIn()) return 0;
+  try {
+    await ensureAuth();
+    const k = (supa.key || "").trim();
+    const auth = getAuth();
+    const r = await fetch(supa.url + "/rest/v1/" + tableName("invoices") + "?select=id,data", {
+      headers: {
+        apikey: k,
+        Authorization: "Bearer " + (auth.token || k),
+      },
+    });
+    if (!r.ok) return 0;
+    const rows = await r.json();
+    if (!Array.isArray(rows)) return 0;
+    let mx = 0;
+    for (const row of rows) {
+      const d = (row && row.data) || {};
+      if (d.tradeType === "buy") continue;
+      for (const label of [d.number, row.id]) {
+        const s = String(label || "").trim();
+        if (/^\d+$/.test(s)) mx = Math.max(mx, parseInt(s, 10));
+      }
+    }
+    return mx;
+  } catch {
+    return 0;
+  }
 }
 
 /**
  * Next display number for a new invoice.
  *  - buy  → lowest free positive int among live purchases (delete 3 → next can be 3)
- *  - sell → cloud atomic counter (continues 2714…), skipping any live collision
+ *  - sell → strictly after the highest sales number anywhere (local + cloud + counter).
+ *           Top of list 2714 ⇒ next is 2715. Never jumps backward into a hole (2615).
  */
 export async function nextInvoiceDisplayNumber(trade: InvoiceTrade): Promise<string> {
   const docs = await allRec<Doc>("invoices");
-  const taken = takenDisplayNums(docs, trade);
+  const taken = takenLiveNums(docs, trade);
 
   if (trade === "buy") {
     let n = 1;
@@ -65,19 +121,29 @@ export async function nextInvoiceDisplayNumber(trade: InvoiceTrade): Promise<str
     return String(n);
   }
 
-  // Sales: prefer cloud counter so devices don't collide on the high series.
-  let n = (await cloudNextInvoiceNo()) ?? 0;
-  if (!n) {
-    // offline fallback — above every numeric sales label we've ever seen locally
-    let mx = 0;
-    for (const d of docs) {
-      if (d.tradeType === "buy") continue;
-      const label = String(d.number || d.id || "");
-      if (/^\d+$/.test(label)) mx = Math.max(mx, parseInt(label, 10));
+  // Floor = one past the highest sales number we've ever seen (bin/archive count too,
+  // so delete-then-create never rewinds the series).
+  const localMax = maxNumericInTrade(docs, "sell", true);
+  const remoteMax = await cloudMaxSellDisplay();
+  const floor = Math.max(localMax, remoteMax) + 1;
+
+  // Atomic cloud counter — catch it up if it's behind the real max (stale counter bug).
+  let n = (await cloudNextInvoiceNo()) ?? floor;
+  let guard = 0;
+  while (n < floor && guard++ < 500) {
+    const next = await cloudNextInvoiceNo();
+    if (next == null) {
+      n = floor;
+      break;
     }
-    n = mx + 1;
+    n = next;
   }
-  while (taken.has(n)) n++;
+  n = Math.max(n, floor);
+
+  while (taken.has(n)) {
+    const next = await cloudNextInvoiceNo();
+    n = next != null ? Math.max(next, n + 1) : n + 1;
+  }
   return String(n);
 }
 
@@ -90,9 +156,11 @@ export async function findLiveInvoiceByDisplayNumber(
   const v = (number || "").trim();
   if (!v) return undefined;
   const docs = await allRec<Doc>("invoices");
-  return liveInTrade(docs, trade).find(
-    (d) => d.id !== exceptId && String(d.number || "").trim() === v,
-  );
+  return docs.find((d) => {
+    if (!isLiveDoc(d) || d.id === exceptId) return false;
+    if (trade === "buy" ? !isBuy(d) : isBuy(d)) return false;
+    return String(d.number || "").trim() === v;
+  });
 }
 
 /** Offline-safe local monotonic fallback (legacy path / tests). Prefer nextInvoiceDisplayNumber. */
