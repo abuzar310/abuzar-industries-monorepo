@@ -41,7 +41,7 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
 
   function onSearch(value: string) {
     setSearch(value);
-    if (!/^\/(quotations|invoices|customers)/.test(path)) router.push("/quotations");
+    if (!/^\/(quotations|invoices|customers|suppliers)/.test(path)) router.push("/quotations");
   }
 
   return (

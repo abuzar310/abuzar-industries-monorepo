@@ -130,6 +130,10 @@ export interface Customer {
   synced: boolean;
 }
 
+/** Purchase-side party — same shape as Customer, stored separately so sales customers
+ *  never appear in the purchase supplier picker (and vice versa). */
+export type Supplier = Customer;
+
 export interface Stock {
   key: string;
   name: string;
@@ -141,6 +145,7 @@ export interface Stock {
 export type DocStore = "quotations" | "invoices";
 export type StoreName =
   | "customers"
+  | "suppliers"
   | "quotations"
   | "invoices"
   | "stock"

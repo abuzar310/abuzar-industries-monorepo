@@ -5,7 +5,7 @@ do $$
 declare pfx text; t text; tbl text;
 begin
   foreach pfx in array array['ab_', 'sf_'] loop
-    foreach t in array array['customers','quotations','invoices','stock','expenses','settings','sessions','ledgers','vouchers','collections','payHolders'] loop
+    foreach t in array array['customers','suppliers','quotations','invoices','stock','expenses','settings','sessions','ledgers','vouchers','collections','payHolders'] loop
       tbl := pfx || t;
       execute format('create table if not exists %I (id text primary key, data jsonb, updated_at timestamptz default now())', tbl);
       execute format('alter table %I enable row level security', tbl);

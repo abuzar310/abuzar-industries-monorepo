@@ -9,6 +9,7 @@ import type { StoreName } from "./types";
 // data stores only — never "meta" (that's where the snapshots themselves live)
 const SNAP_STORES: StoreName[] = [
   "customers",
+  "suppliers",
   "quotations",
   "invoices",
   "expenses",

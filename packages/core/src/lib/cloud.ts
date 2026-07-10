@@ -37,6 +37,7 @@ const setSync = (s: SyncState) => cb.sync(s);
 
 export const TABLE = {
   customers: "customers",
+  suppliers: "suppliers",
   quotations: "quotations",
   invoices: "invoices",
   stock: "stock",

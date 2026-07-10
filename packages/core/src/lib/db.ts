@@ -4,9 +4,9 @@
 import type { StoreName } from "./types";
 
 const DB_BASE = "abuzar_industries";
-const DB_VER = 7;
+const DB_VER = 8; // v8: suppliers store (separate from customers)
 export const STORES: StoreName[] = [
-  "customers", "quotations", "invoices", "stock", "expenses", "meta",
+  "customers", "suppliers", "quotations", "invoices", "stock", "expenses", "meta",
   "sessions", "ledgers", "vouchers", "collections", "payHolders",
 ];
 

@@ -4,14 +4,14 @@ import { useRouter } from "next/navigation";
 import { allRec, clone, put } from "@/lib/db";
 import { computeDoc, inr, nowIso, todayStr } from "@/lib/calc";
 import { createInvoice } from "@/lib/create";
-import { editCustomerDialog } from "@/lib/customer-form";
-import { upsertCustomerFromDoc } from "@/lib/customers";
+import { editSupplierDialog } from "@/lib/customer-form";
+import { seedSuppliersFromPurchases, upsertSupplierFromDoc } from "@/lib/suppliers";
 import { trySync } from "@/lib/cloud";
 import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import CustomerPicker from "@/components/editor/CustomerPicker";
-import type { Customer, Doc } from "@/lib/types";
+import type { Doc, Supplier } from "@/lib/types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -80,8 +80,8 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
   const router = useRouter();
   const sheetRef = useRef<HTMLDivElement>(null);
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [picked, setPicked] = useState<Customer | null>(null);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [picked, setPicked] = useState<Supplier | null>(null);
   const [name, setName] = useState("");
   const [date, setDate] = useState(todayStr());
   const [billNo, setBillNo] = useState("");
@@ -94,13 +94,16 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
   const [saving, setSaving] = useState(false);
   const [doc, setDoc] = useState<Doc | null>(initialDoc || null);
 
-  const loadCustomers = useCallback(() => {
-    allRec<Customer>("customers").then(setCustomers);
+  const loadSuppliers = useCallback(() => {
+    allRec<Supplier>("suppliers").then(setSuppliers);
   }, []);
 
   useEffect(() => {
-    if (ready) loadCustomers();
-  }, [ready, dataVersion, loadCustomers]);
+    if (!ready) return;
+    seedSuppliersFromPurchases()
+      .catch(() => {})
+      .finally(loadSuppliers);
+  }, [ready, dataVersion, loadSuppliers]);
 
   // hydrate form from an existing purchase
   useEffect(() => {
@@ -117,7 +120,7 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
     setAmount(a ? String(a) : "");
     setCft(c ? String(c) : "");
     if (initialDoc.customerId) {
-      allRec<Customer>("customers").then((list) => {
+      allRec<Supplier>("suppliers").then((list) => {
         const c0 = list.find((x) => x.id === initialDoc.customerId) || null;
         setPicked(c0);
       });
@@ -143,7 +146,7 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
     return { igst: 0, cgst: half, sgst: r2(gstAmt - half) };
   }, [gstAmt, gstKind]);
 
-  function pickSupplier(c: Customer) {
+  function pickSupplier(c: Supplier) {
     setPicked(c);
     setName(c.name);
     setGstin(c.gstin || "");
@@ -155,9 +158,9 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
   }
 
   async function addSupplier() {
-    const c = await editCustomerDialog(undefined, { asSupplier: true });
+    const c = await editSupplierDialog();
     if (!c) return;
-    loadCustomers();
+    loadSuppliers();
     bumpData();
     pickSupplier(c);
     toast("Supplier " + c.name + " added");
@@ -186,7 +189,7 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
         gstKind,
         gst: rate,
       });
-      await upsertCustomerFromDoc(next);
+      await upsertSupplierFromDoc(next);
       await put("invoices", next);
       trySync();
       setDoc(next);
@@ -214,6 +217,9 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
         <button type="button" className="btn sm" onClick={addSupplier}>
           + Add supplier
         </button>
+        <button type="button" className="btn sm" onClick={() => router.push("/suppliers")}>
+          Manage suppliers
+        </button>
         <button type="button" className="btn sm" onClick={() => router.push("/invoices")}>
           ← Back to list
         </button>
@@ -229,10 +235,10 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
             <span>Supplier name</span>
             <CustomerPicker
               value={name}
-              customers={customers}
+              customers={suppliers}
               onType={onType}
               onPick={pickSupplier}
-              placeholder="Search or pick a supplier…"
+              placeholder="Search suppliers only…"
             />
           </label>
         </div>
