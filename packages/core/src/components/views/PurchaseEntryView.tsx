@@ -15,15 +15,16 @@ import type { Doc, Supplier } from "@/lib/types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Read taxable amount + CFT out of a purchase doc (simple single-section shape). */
+/** Read taxable amount + measure (CFT/CBM) out of a purchase doc. */
 function readPurchase(d: Doc) {
   const sec = (d.sections || [])[0];
   const amount = sec?.amtOverride != null ? +sec.amtOverride || 0 : computeDoc(d).sub;
-  const cft = +(sec?.rows?.[0]?.cft ?? 0) || 0;
-  return { amount, cft };
+  const qty = +(sec?.rows?.[0]?.cft ?? 0) || 0;
+  const unit: "cft" | "cbm" = sec?.calcMode === "cbm" ? "cbm" : "cft";
+  return { amount, qty, unit };
 }
 
-/** Write the simple purchase fields onto a Doc (keeps tradeType=buy + one direct section). */
+/** Write the simple purchase fields onto a Doc (keeps tradeType=buy + one measure section). */
 function writePurchase(
   d: Doc,
   f: {
@@ -35,7 +36,8 @@ function writePurchase(
     custGstin: string;
     supplierBillNo: string;
     amount: number;
-    cft: number;
+    qty: number;
+    unit: "cft" | "cbm";
     gstKind: "split" | "igst";
     gst: number;
   },
@@ -58,8 +60,8 @@ function writePurchase(
       name: "Purchase",
       rate: 0,
       amtOverride: r2(f.amount),
-      calcMode: "direct",
-      rows: [{ l: "", w: "", t: "", pcs: "", cft: f.cft || 0 }],
+      calcMode: f.unit === "cbm" ? "cbm" : "direct",
+      rows: [{ l: "", w: "", t: "", pcs: "", cft: f.qty || 0 }],
     },
   ];
   next.updatedAt = nowIso();
@@ -87,7 +89,8 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
   const [billNo, setBillNo] = useState("");
   const [gstin, setGstin] = useState("");
   const [address, setAddress] = useState("");
-  const [cft, setCft] = useState("");
+  const [qty, setQty] = useState("");
+  const [unit, setUnit] = useState<"cft" | "cbm">("cft");
   const [amount, setAmount] = useState("");
   const [gstKind, setGstKind] = useState<"split" | "igst">("split");
   const [gstRate, setGstRate] = useState("18");
@@ -116,9 +119,10 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
     setAddress(initialDoc.address || "");
     setGstKind(initialDoc.gstKind === "igst" ? "igst" : "split");
     setGstRate(String(initialDoc.gst ?? 18));
-    const { amount: a, cft: c } = readPurchase(initialDoc);
+    const { amount: a, qty: q, unit: u } = readPurchase(initialDoc);
     setAmount(a ? String(a) : "");
-    setCft(c ? String(c) : "");
+    setQty(q ? String(q) : "");
+    setUnit(u);
     if (initialDoc.customerId) {
       allRec<Supplier>("suppliers").then((list) => {
         const c0 = list.find((x) => x.id === initialDoc.customerId) || null;
@@ -138,7 +142,8 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
   const rate = Math.max(0, +gstRate || 0);
   const gstAmt = r2((taxable * rate) / 100);
   const grand = r2(taxable + gstAmt);
-  const cftN = Math.max(0, +cft || 0);
+  const qtyN = Math.max(0, +qty || 0);
+  const unitLabel = unit === "cbm" ? "CBM" : "CFT";
 
   const gstSplit = useMemo(() => {
     if (gstKind === "igst") return { igst: gstAmt, cgst: 0, sgst: 0 };
@@ -185,7 +190,8 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
         custGstin: gstin.trim(),
         supplierBillNo: billNo.trim(),
         amount: taxable,
-        cft: cftN,
+        qty: qtyN,
+        unit,
         gstKind,
         gst: rate,
       });
@@ -226,6 +232,26 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
       </div>
 
       <div className="panel-card no-print" style={{ padding: 16 }}>
+        <div className="modal-field" style={{ marginTop: 0, marginBottom: 8 }}>
+          <span>Measure</span>
+          <div className="db-seg sm" role="group" aria-label="CFT or CBM">
+            <button
+              type="button"
+              className={"seg-btn" + (unit === "cft" ? " on" : "")}
+              onClick={() => setUnit("cft")}
+            >
+              CFT
+            </button>
+            <button
+              type="button"
+              className={"seg-btn" + (unit === "cbm" ? " on" : "")}
+              onClick={() => setUnit("cbm")}
+            >
+              CBM
+            </button>
+          </div>
+        </div>
+
         <div className="rec-grid">
           <label className="modal-field" style={{ marginTop: 0 }}>
             <span>Date</span>
@@ -261,12 +287,12 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
             />
           </label>
           <label className="modal-field">
-            <span>CFT total</span>
+            <span>{unitLabel} total</span>
             <input
               type="number"
               inputMode="decimal"
-              value={cft}
-              onChange={(e) => setCft(e.target.value)}
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
               placeholder="0"
             />
           </label>
@@ -386,7 +412,7 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
             >
               <thead>
                 <tr style={{ background: "#2f6b3a", color: "#fff" }}>
-                  {["DATE", "NAME", "BILL NO", "GSTIN NO", "CFT", "AMOUNT", "GST", "GRAND TOTAL"].map((h) => (
+                  {["DATE", "NAME", "BILL NO", "GSTIN NO", unitLabel, "AMOUNT", "GST", "GRAND TOTAL"].map((h) => (
                     <th key={h} style={{ padding: "8px 6px", textAlign: "left", fontWeight: 600 }}>
                       {h}
                     </th>
@@ -399,7 +425,7 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
                   <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>{doc.customerName}</td>
                   <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>{doc.supplierBillNo || "—"}</td>
                   <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>{doc.custGstin || "—"}</td>
-                  <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>{cftN || "—"}</td>
+                  <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>{qtyN || "—"}</td>
                   <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>₹ {inr(taxable)}</td>
                   <td style={{ padding: "8px 6px", borderBottom: "1px solid #ccc" }}>
                     ₹ {inr(gstAmt)}
