@@ -1,17 +1,17 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, clone, delRec, getRec, metaSet, put } from "@/lib/db";
+import { allRec, clone, getRec, metaSet, put } from "@/lib/db";
 import { cftOf, computeDoc, inr, nowIso } from "@/lib/calc";
 import { getLineClip, setLineClip } from "@/lib/lineClipboard";
 import { STATUSES } from "@/lib/constants";
 import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
 import { docStore } from "@/lib/doc";
-import { nextNumber } from "@/lib/numbering";
-import { clearTombstone, cloudDelete, setOpenDoc, trySync } from "@/lib/cloud";
+import { setOpenDoc, trySync } from "@/lib/cloud";
 import { upsertCustomerFromDoc } from "@/lib/customers";
 import { createInvoice, createQuotation } from "@/lib/create";
+import { findLiveByNumber } from "@/lib/durability";
 import { trashDoc } from "@/lib/trash";
 import { snapshotBefore } from "@/lib/autobackup";
 import { getFeatures } from "@/lib/features";
@@ -371,30 +371,27 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const onRentDesc = (v: string) => update((d) => (d.rentDesc = v));
 
   // ---- document number inline edit ----
+  // DURABILITY: only the printed `number` changes. The primary key `id` is permanent — we used
+  // to delete+recreate the cloud row on rename, which is how invoices silently vanished.
   async function commitNumber(raw: string) {
     const v = raw.trim();
     setEditingNo(false);
     if (!v || v === doc.number) return; // unchanged / empty → keep the current number
-    // validate so a rename can never break the flow or overwrite another document
     if (/[/\\?#%]/.test(v)) return toast("A number can't contain / \\ ? # or %");
     const store = docStore(docRef.current);
-    // A number is only "taken" by a LIVE doc — one sitting in the Recycle bin is free to reuse
-    // (so old/back-dated numbers whose invoice was deleted can be entered again).
-    const existing = await getRec<Doc>(store, v);
-    if (existing && !existing.deletedAt) return toast("Number " + v + " is already used — pick a free one");
-    await snapshotBefore(); // safety restore point before we change the id
-    const oldId = docRef.current.id;
+    const trade = docRef.current.kind === "invoice"
+      ? (docRef.current.tradeType === "buy" ? "buy" : "sell")
+      : undefined;
+    const taken = await findLiveByNumber(store, v, docRef.current.id, trade);
+    if (taken) return toast("Number " + v + " is already used — pick a free one");
+    await snapshotBefore();
     const next = clone(docRef.current);
     next.number = v;
-    next.id = v;
-    await delRec(store, oldId);
-    cloudDelete(store, oldId); // drop the old id from the cloud too, so it can't re-sync as a duplicate
-    await clearTombstone(store, v); // if this number was deleted before, let the reused doc sync again
+    next.updatedAt = nowIso();
+    next.synced = false;
     persist(next);
     docRef.current = next;
     setDoc(next);
-    await metaSet("lastOpen", { store: docStore(next), id: v });
-    router.replace("/editor/" + v);
     toast("Number changed to " + v);
   }
 
@@ -470,30 +467,35 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     if (docRef.current.kind === "invoice") return;
     const cur = clone(docRef.current);
     await upsertCustomerFromDoc(cur);
-    const invId = await nextNumber("invoice");
-    const inv = clone(cur);
-    inv.id = invId;
-    inv.number = invId;
-    inv.kind = "invoice";
-    inv.quotationId = cur.id;
-    inv.status = "Converted to Invoice";
-    inv.paymentStatus = "Pending";
-    inv.amountPaid = 0;
-    inv.stockDeducted = false;
-    inv.createdAt = nowIso();
-    inv.updatedAt = nowIso();
-    inv.synced = false;
-    await put("invoices", inv);
+    // Collision-proof id (cloud atomic) — never the old local nextNumber, which could UPSERT-overwrite.
+    const inv = await createInvoice({
+      customerId: cur.customerId,
+      customerName: cur.customerName,
+      phone: cur.phone,
+      site: cur.site,
+      address: cur.address,
+      notes: cur.notes,
+      custGstin: cur.custGstin || "",
+      sections: clone(cur.sections),
+      gst: cur.gst,
+      gstKind: cur.gstKind,
+      hsn: cur.hsn,
+      shipTo: cur.shipTo,
+      vehicleNo: cur.vehicleNo,
+      bankIdx: cur.bankIdx,
+      finalPrice: cur.finalPrice,
+      quotationId: cur.id,
+      status: "Converted to Invoice",
+      date: cur.date,
+    });
     cur.status = "Converted to Invoice";
     cur.updatedAt = nowIso();
     cur.synced = false;
     await put("quotations", clone(cur));
-    await metaSet("lastOpen", { store: "invoices", id: invId });
     trySync();
-    mirrorDoc(clone(inv)).catch(() => {}); // write the new invoice to the folder immediately too
-    mirrorDoc(clone(cur)).catch(() => {}); // and the updated quotation
-    toast("Invoice " + invId + " created · prices locked");
-    router.push("/editor/" + invId);
+    mirrorDoc(clone(cur)).catch(() => {});
+    toast("Invoice " + inv.number + " created · prices locked");
+    router.push("/editor/" + inv.id);
   }
   async function onFolder() {
     const next = clone(docRef.current);

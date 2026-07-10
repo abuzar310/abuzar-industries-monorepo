@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupa, pullFromCloud, testConnection, trySync } from "@/lib/cloud";
 import { exportBackup, importBackup } from "@/lib/backup";
-import { purgeDoc, restoreDoc, trashedDocs } from "@/lib/trash";
+import { purgeDoc, purgedDocs, restoreDoc, trashedDocs } from "@/lib/trash";
 import { autoSnapshot, downloadSnapshot, listSnapshots, restoreSnapshot } from "@/lib/autobackup";
 import { connectFolder, disconnectFolder, folderList, folderSupported, grantAll, grantFolder, type FolderInfo, type FolderScope } from "@/lib/folderMirror";
 import { docStore } from "@/lib/doc";
@@ -21,12 +21,16 @@ export default function SettingsView() {
   const [cloud, setCloud] = useState("Checking cloud…");
   const [autoPost, setAutoPostUI] = useState(false);
   const [trash, setTrash] = useState<Doc[]>([]);
+  const [archive, setArchive] = useState<Doc[]>([]);
   const [snaps, setSnaps] = useState<{ at: string; total: number }[]>([]);
   const [folders, setFolders] = useState<FolderInfo[]>([]);
   const ledgerOn = getFeatures().ledger;
   const receiptsApp = getFeatures().acceptPayment;
 
-  const loadTrash = () => trashedDocs().then(setTrash);
+  const loadTrash = () => {
+    trashedDocs().then(setTrash);
+    purgedDocs().then(setArchive);
+  };
   const loadSnaps = () => listSnapshots().then(setSnaps);
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
@@ -87,16 +91,17 @@ export default function SettingsView() {
   }
   async function onPurge(d: Doc) {
     const ok = await confirmDialog({
-      title: "Delete " + d.number + " forever?",
-      message: "This permanently removes it and its payments. This cannot be undone.",
-      confirmLabel: "Delete forever",
+      title: "Archive " + d.number + "?",
+      message:
+        "Removes it from the Recycle bin, but the record stays in cloud + this device forever. You can still restore it from Archive below.",
+      confirmLabel: "Archive",
       danger: true,
     });
     if (!ok) return;
     await purgeDoc(docStore(d), d.id);
     loadTrash();
     bumpData();
-    toast(d.number + " permanently deleted");
+    toast(d.number + " archived (still recoverable)");
   }
 
   async function onMigrateReceipts() {
@@ -324,7 +329,7 @@ export default function SettingsView() {
       <div className="setbox">
         <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Recycle bin</div>
         <p className="note">
-          Deleted quotations &amp; invoices are kept here — never really removed. Restore anytime, or delete forever.
+          Deleted quotations &amp; invoices stay here — never really removed from the cloud. Restore anytime, or move to Archive.
         </p>
         {trash.length === 0 ? (
           <p className="note" style={{ opacity: 0.6, marginTop: 4 }}>Nothing deleted.</p>
@@ -342,7 +347,33 @@ export default function SettingsView() {
                 </small>
               </span>
               <button className="btn sm" onClick={() => onRestore(d)}>Restore</button>
-              <button className="btn warn sm" onClick={() => onPurge(d)}>Delete forever</button>
+              <button className="btn warn sm" onClick={() => onPurge(d)}>Archive</button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="setbox">
+        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Archive</div>
+        <p className="note">
+          Hidden invoices/quotations that were “deleted forever”. They still exist in the cloud — restore any time.
+        </p>
+        {archive.length === 0 ? (
+          <p className="note" style={{ opacity: 0.6, marginTop: 4 }}>Archive empty.</p>
+        ) : (
+          archive.map((d) => (
+            <div className="exprow" key={"arch-" + d.id}>
+              <span className="expnote">
+                {d.number} — {d.customerName || "—"}
+                <small>
+                  {d.kind === "invoice" ? "Invoice" : "Quotation"}
+                  {d.purgedAt
+                    ? " · archived " +
+                      new Date(d.purgedAt).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+                    : ""}
+                </small>
+              </span>
+              <button className="btn sm" onClick={() => onRestore(d)}>Restore</button>
             </div>
           ))
         )}

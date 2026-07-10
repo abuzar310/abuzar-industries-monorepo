@@ -1,6 +1,6 @@
 // Supabase cloud sync + GoTrue auth — hand-rolled REST against {id, data jsonb,
 // updated_at} tables, faithfully ported from the legacy single-file app.
-import { allRec, getRec, metaGet, metaSet, put } from "./db";
+import { allRec, delRec, getRec, metaGet, metaSet, put } from "./db";
 import { nowIso, pad } from "./calc";
 import { fixCounters } from "./numbering";
 import { BAKED } from "./constants";
@@ -259,6 +259,16 @@ export async function trySync(force?: boolean) {
     for (const rec of arr) {
       if (rec.synced && !force) continue;
       try {
+        // DURABILITY: before UPSERT-overwriting an invoice/quotation, check the cloud row.
+        // If it exists with a DIFFERENT createdAt, this id belongs to another document —
+        // re-key the local one instead of destroying the cloud copy ("went missing" bug).
+        if ((s === "invoices" || s === "quotations") && rec.id && rec.createdAt) {
+          const guarded = await guardDocUpsert(s, rec);
+          if (guarded === "skip") {
+            pending++;
+            continue;
+          }
+        }
         const body = JSON.stringify([
           { id: rec.id || rec.key, data: rec, updated_at: rec.updatedAt || nowIso() },
         ]);
@@ -296,6 +306,44 @@ export async function trySync(force?: boolean) {
     return;
   }
   setSync(pending === 0 ? "on" : ok ? "on" : "queue");
+}
+
+/** If cloud already has a different document at this id, move the local one to a free id
+ *  so the push cannot overwrite. Returns "ok" to proceed, "skip" if re-key failed. */
+async function guardDocUpsert(s: "invoices" | "quotations", rec: Doc): Promise<"ok" | "skip"> {
+  try {
+    const headers = { ...supaHeaders() };
+    delete headers.Prefer; // GET shouldn't ask for upsert semantics
+    const r = await fetch(
+      supa.url + "/rest/v1/" + tableName(s) + "?id=eq." + encodeURIComponent(rec.id) + "&select=id,data",
+      { headers },
+    );
+    if (!r.ok) return "ok"; // can't check — proceed (better to sync than stall forever)
+    const rows = await r.json();
+    const cloud = Array.isArray(rows) && rows[0] ? rows[0].data : null;
+    if (!cloud || !cloud.createdAt) return "ok";
+    if (cloud.createdAt === rec.createdAt) return "ok"; // same document lineage
+    // Different document at this id — re-key local to a free numeric/fy id and retry later.
+    const oldId = rec.id;
+    let n = Date.now() % 100000;
+    let newId = "";
+    for (let i = 0; i < 50; i++) {
+      const candidate = s === "invoices" ? String(100000 + n + i) : "conflict-" + (n + i);
+      const exists = await getRec(s, candidate);
+      if (!exists) {
+        newId = candidate;
+        break;
+      }
+    }
+    if (!newId) return "skip";
+    await put(s, { ...rec, id: newId, number: rec.number || newId, synced: false, updatedAt: nowIso() });
+    // Leave the cloud row untouched; drop the colliding local id so we don't keep fighting it.
+    await delRec(s, oldId);
+    cb.dataChanged();
+    return "skip"; // will sync under new id on next pass
+  } catch {
+    return "ok";
+  }
 }
 
 // ---- delete tombstones ----

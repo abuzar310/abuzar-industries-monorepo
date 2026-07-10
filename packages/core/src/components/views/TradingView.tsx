@@ -30,7 +30,7 @@ export default function TradingView() {
   const [showMonths, setShowMonths] = useState(false);
 
   const load = useCallback(() => {
-    allRec<Doc>("invoices").then(setInvoices);
+    allRec<Doc>("invoices").then((arr) => setInvoices(arr.filter((d) => !d.deletedAt && !d.purgedAt)));
     getStockConfig().then((c) => {
       setCfg(c);
       setOVal(c.value ? String(c.value) : "");

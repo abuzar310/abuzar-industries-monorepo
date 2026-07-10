@@ -68,7 +68,8 @@ export interface Doc {
   quotationId: string;
   paymentStatus: string;
   amountPaid: number;
-  /** App B (stock): a selling invoice reduces stock, a buying invoice adds to it. Default = sell. */
+  /** App B (stock): a selling invoice reduces stock, a buying invoice adds to it. Default = sell.
+   *  Display `number` series is per trade type (purchases 1,2,3…; sales keep the high counter). */
   tradeType?: "sell" | "buy";
   /** invoice: customer GSTIN + payment type (shown on the tax invoice). */
   custGstin?: string;
@@ -92,6 +93,9 @@ export interface Doc {
   /** soft-delete: ISO time it was moved to the Recycle bin. Hidden from lists, restorable from Settings.
    *  Kept in the cloud too (not hard-deleted), so a delete is always recoverable on any device. */
   deletedAt?: string;
+  /** "Delete forever" marker. Row stays in local + cloud forever (never hard-DELETEd) so a purge
+   *  can still be undone from Settings → Archive. Hidden from lists and the Recycle bin. */
+  purgedAt?: string;
 }
 
 /** Per-app feature switches (each app sets these via its layout/app-config). */

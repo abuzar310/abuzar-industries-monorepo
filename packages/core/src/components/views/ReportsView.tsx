@@ -63,7 +63,7 @@ export default function ReportsView() {
   useEffect(() => {
     let live = true;
     allRec<Doc>("invoices").then((arr) => {
-      if (live) setInvoices(arr.filter((d) => !d.deletedAt));
+      if (live) setInvoices(arr.filter((d) => !d.deletedAt && !d.purgedAt));
     });
     return () => {
       live = false;

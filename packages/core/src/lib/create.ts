@@ -1,39 +1,41 @@
 import { clone, getRec, metaSet, put } from "./db";
 import { blankDoc } from "./doc";
 import { nextNumber, fyLabel } from "./numbering";
-import { cloudNextInvoiceNo, cloudNextQuotationNo } from "./cloud";
+import { cloudNextQuotationNo } from "./cloud";
 import { pad } from "./calc";
 import { snapshotBefore } from "./autobackup";
 import { mirrorDoc } from "./folderMirror";
+import { newInvoiceUid, nextInvoiceDisplayNumber, type InvoiceTrade } from "./invoice-id";
 import type { Customer, Doc, Kind, Section } from "./types";
 
-/** A quotation id guaranteed not to already name a LIVE record. */
+/** Id is free only if no row exists — purged rows stay forever, so their ids are never reused
+ *  (reusing would let a sync UPSERT overwrite the archived document). */
+function idFree(ex: Doc | undefined): boolean {
+  return !ex;
+}
+
+/** A quotation id guaranteed not to already name any stored record (live, trashed, or purged). */
 async function freeId(store: "quotations" | "invoices", kind: Kind): Promise<string> {
   let id = await nextNumber(kind);
   for (let i = 0; i < 5; i++) {
     const ex = await getRec<Doc>(store, id);
-    if (!ex || ex.deletedAt) break;
+    if (idFree(ex)) break;
     id = await nextNumber(kind);
   }
   return id;
 }
 
 /**
- * A collision-proof invoice id. Numbers are allocated ATOMICALLY from the cloud so two
- * devices can never receive the same one — the sync UPSERT keys on this id, and a clash
- * used to silently overwrite an existing invoice ("invoice went missing"). Falls back to
- * local monotonic numbering only when offline. As a final guard we still never return an
- * id that already names a LIVE local invoice.
+ * Permanent invoice primary key (UID). Never equals the printed number — that separation is
+ * what stops "delete 3 → next becomes 4 forever" and silent UPSERT overwrites.
  */
-async function freeInvoiceId(): Promise<string> {
-  const cloudN = await cloudNextInvoiceNo();
-  let n = cloudN != null ? cloudN : parseInt(await nextNumber("invoice"), 10) || 1;
-  for (let i = 0; i < 100; i++) {
-    const ex = await getRec<Doc>("invoices", String(n));
-    if (!ex || ex.deletedAt) break;
-    n++;
+export async function freeInvoiceId(): Promise<string> {
+  for (let i = 0; i < 8; i++) {
+    const id = newInvoiceUid();
+    if (idFree(await getRec<Doc>("invoices", id))) return id;
   }
-  return String(n);
+  // astronomically unlikely; still guarantee uniqueness
+  return newInvoiceUid() + "_" + Date.now().toString(36);
 }
 
 /** A collision-proof quotation id ("2026-27-NNN"), allocated atomically from the cloud with
@@ -46,7 +48,7 @@ async function freeQuotationId(): Promise<string> {
   for (let i = 0; i < 100; i++) {
     const id = fy + "-" + pad(n, 3);
     const ex = await getRec<Doc>("quotations", id);
-    if (!ex || ex.deletedAt) break;
+    if (idFree(ex)) break;
     n++;
   }
   return fy + "-" + pad(n, 3);
@@ -64,18 +66,26 @@ export async function createQuotation(seed?: Partial<Doc>): Promise<Doc> {
   return d;
 }
 
-/** Create + persist a blank custom invoice (no source quotation), returning it. */
+/** Create + persist a blank custom invoice (no source quotation), returning it.
+ *  id = permanent UID · number = human display (1,2,3… for buys; sales series for sells). */
 export async function createInvoice(seed?: Partial<Doc>): Promise<Doc> {
   const id = await freeInvoiceId();
+  const trade: InvoiceTrade = seed?.tradeType === "buy" ? "buy" : "sell";
+  const display =
+    seed?.number && String(seed.number).trim()
+      ? String(seed.number).trim()
+      : await nextInvoiceDisplayNumber(trade);
   const d = blankDoc(id);
   d.kind = "invoice";
   d.paymentStatus = "Pending";
   d.amountPaid = 0;
-  if (seed) Object.assign(d, seed, { id, number: id, kind: "invoice" });
+  d.tradeType = trade;
+  d.number = display;
+  if (seed) Object.assign(d, seed, { id, number: display, kind: "invoice", tradeType: trade });
   await put("invoices", clone(d));
   await metaSet("lastOpen", { store: "invoices", id });
-  snapshotBefore().catch(() => {}); // capture the new invoice in a local snapshot (throttled)
-  mirrorDoc(clone(d)).catch(() => {}); // write it to the chosen local folder immediately (if connected)
+  snapshotBefore().catch(() => {});
+  mirrorDoc(clone(d)).catch(() => {});
   return d;
 }
 

@@ -34,8 +34,8 @@ export function customerFinancials(
   expenses: Expense[] = [],
   quotesAsBills = false,
 ): CustomerFinancials {
-  const q = quotes.filter((d) => d.customerId === custId && !d.deletedAt);
-  const inv = invoices.filter((d) => d.customerId === custId && !d.deletedAt);
+  const q = quotes.filter((d) => d.customerId === custId && !d.deletedAt && !d.purgedAt);
+  const inv = invoices.filter((d) => d.customerId === custId && !d.deletedAt && !d.purgedAt);
   let quotedTotal = 0;
   q.forEach((d) => (quotedTotal += quoteBill(d)));
   let invoicedTotal = 0;

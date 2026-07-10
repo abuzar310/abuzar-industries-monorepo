@@ -5,9 +5,9 @@ import type { Doc, DocStore } from "./types";
 export const docStore = (d: Doc): DocStore =>
   d.kind === "invoice" ? "invoices" : "quotations";
 
-/** Quotations use FY-sequence ids ("2026-27-001"); everything else — a short invoice
- *  number ("2695") or a legacy "INV-2026-27-…" id — is an invoice. Best-effort hint only;
- *  prefer loadDoc() to actually open a doc (it checks both stores and never guesses wrong). */
+/** Quotations use FY-sequence ids ("2026-27-001"); everything else — a short legacy
+ *  invoice id ("2695"), a UID ("inv_…"), or a legacy "INV-2026-27-…" id — is an invoice.
+ *  Best-effort hint only; prefer loadDoc() (checks both stores). */
 export const isInvoiceId = (id: string): boolean => !/^\d{4}-\d{2}-\d+$/.test(id);
 
 /** Best-guess store for an id (see isInvoiceId). */

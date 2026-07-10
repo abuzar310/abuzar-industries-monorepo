@@ -88,9 +88,31 @@ export default function AppProvider({
     let rtTimer: ReturnType<typeof setTimeout> | undefined;
     const onRealtime = (store: string, eventType: string, oldId?: string) => {
       if (eventType === "DELETE" && oldId) {
-        // Only honour a remote delete for a record we actually hold AS SYNCED (i.e. it came from the
-        // cloud). NEVER wipe a freshly-created local record that hasn't synced yet — otherwise a DELETE
-        // broadcast for a recycled/reused number can auto-remove a brand-new invoice (data-loss bug).
+        // DURABILITY: never honour a remote hard-delete for quotations/invoices. Older clients
+        // (or a manual SQL wipe) used to broadcast DELETE and every device would wipe the row.
+        // We keep a local purge marker instead so the document is still recoverable, and a later
+        // sync can push it back to the cloud.
+        if (store === "invoices" || store === "quotations") {
+          getRec<{ synced?: boolean; purgedAt?: string; deletedAt?: string; updatedAt?: string }>(
+            store as StoreName,
+            oldId,
+          )
+            .then(async (local) => {
+              if (!local || local.purgedAt) return;
+              const next = {
+                ...local,
+                deletedAt: local.deletedAt || new Date().toISOString(),
+                purgedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                synced: false, // re-push so the cloud row comes back
+              };
+              await put(store as StoreName, next);
+              bumpData();
+            })
+            .catch(() => {});
+          return;
+        }
+        // Other stores (expenses, etc.): only drop a record we hold as already-synced.
         getRec<{ synced?: boolean }>(store as StoreName, oldId)
           .then((local) => {
             if (local && local.synced) return delRec(store as StoreName, oldId).then(() => bumpData());

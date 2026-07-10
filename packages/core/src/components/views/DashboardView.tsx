@@ -76,14 +76,14 @@ export default function DashboardView() {
   let periodCount = 0;
   if (feat.simpleQuote) {
     quotes.forEach((qd) => {
-      if (qd.status !== "Created" || qd.deletedAt || !inPeriod(qd.createdAt)) return;
+      if (qd.status !== "Created" || qd.deletedAt || qd.purgedAt || !inPeriod(qd.createdAt)) return;
       periodRev += quoteBill(qd);
       periodCft += computeDoc(qd).secCft.reduce((s, c) => s + c, 0);
       periodCount++;
     });
   } else {
     invs.forEach((i) => {
-      if (i.deletedAt || !inPeriod(i.createdAt)) return;
+      if (i.deletedAt || i.purgedAt || !inPeriod(i.createdAt)) return;
       periodRev += computeDoc(i).grand;
       periodCount++;
     });
@@ -101,7 +101,7 @@ export default function DashboardView() {
   const ledger = feat.acceptPayment ? partyLedger(quotes, exp, custs) : null;
   const totalOutstanding = ledger ? ledger.totalPending : 0;
   const dueCount = ledger ? ledger.parties.filter((p) => p.balance > 0.5).length : 0;
-  const follow = quotes.filter((q) => q.status === "Follow-up Pending" && !q.deletedAt);
+  const follow = quotes.filter((q) => q.status === "Follow-up Pending" && !q.deletedAt && !q.purgedAt);
   const lowStock = stk.filter((s) => (+s.cft || 0) <= 0);
 
   // mini statements: the latest few payments received (full list lives in the Statements tab)

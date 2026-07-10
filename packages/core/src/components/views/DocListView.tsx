@@ -27,7 +27,9 @@ const PAGE = 15;
 function applySearch(arr: Doc[], q: string) {
   q = (q || "").trim().toLowerCase();
   if (!q) return arr;
-  return arr.filter((d) => [d.id, d.customerName, d.phone, d.site].some((v) => String(v || "").toLowerCase().includes(q)));
+  return arr.filter((d) =>
+    [d.id, d.number, d.customerName, d.phone, d.site].some((v) => String(v || "").toLowerCase().includes(q)),
+  );
 }
 
 export default function DocListView({ store, title, sub, statusCol, empty, showNew }: Props) {
@@ -52,7 +54,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
   useEffect(() => {
     let live = true;
     allRec<Doc>(store).then((arr) => {
-      const active = arr.filter((d) => !d.deletedAt); // trashed docs live in the Recycle bin (Settings)
+      const active = arr.filter((d) => !d.deletedAt && !d.purgedAt); // bin + archive stay out of lists
       if (store === "invoices") {
         // invoices: newest number on top (falls back to createdAt when numbers tie / are non-numeric)
         const num = (d: Doc) => {
@@ -107,7 +109,12 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
 
   async function onNew() {
     const d = isInv ? await createInvoice() : await createQuotation();
-    toast("New " + d.id + " created");
+    toast("New " + d.number + " created");
+    router.push("/editor/" + d.id);
+  }
+  async function onNewPurchase() {
+    const d = await createInvoice({ tradeType: "buy" });
+    toast("Purchase " + d.number + " created");
     router.push("/editor/" + d.id);
   }
   async function bulkDelete() {
@@ -137,8 +144,13 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       {showNew && (
         <div className="rowbtns">
           <button className="btn primary sm" onClick={onNew}>
-            {isInv ? "+ New Custom Invoice" : "+ New Quotation"}
+            {isInv ? "+ New Sales Invoice" : "+ New Quotation"}
           </button>
+          {isInv && (
+            <button className="btn sm" onClick={onNewPurchase}>
+              + New Purchase Invoice
+            </button>
+          )}
         </div>
       )}
 
@@ -211,7 +223,10 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                       aria-label={"Select " + d.id}
                     />
                   )}
-                  {d.id}
+                  {d.number || d.id}
+                  {isInv && d.tradeType === "buy" ? (
+                    <span className="mut" style={{ display: "block", fontSize: 11 }}>Purchase</span>
+                  ) : null}
                 </span>
                 <span className="nm">{d.customerName || "—"}</span>
                 <span className="mut">
