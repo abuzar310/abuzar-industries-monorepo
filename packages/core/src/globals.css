@@ -177,7 +177,7 @@ body{
 .custpick{position:relative; width:100%}
 .custpick > input{width:100%}
 .custpick-list{z-index:2000; background:#fff; border:1px solid var(--line-2); border-radius:10px;
-  box-shadow:var(--shadow-card); max-height:230px; overflow-y:auto; padding:3px}
+  box-shadow:var(--shadow-card); max-height:320px; overflow-y:auto; padding:3px}
 .custpick-item{display:flex; align-items:baseline; gap:6px; width:100%; text-align:left; border:none; background:transparent;
   cursor:pointer; padding:8px 10px; border-radius:7px; font-size:14px; color:var(--ink)}
 .custpick-item:hover{background:var(--panel-2)}
@@ -779,6 +779,14 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .lrow{grid-template-columns:1fr 1fr; gap:6px 12px; padding:14px 16px}
   .lrow .acts{grid-column:span 2; justify-content:flex-start}
   .lrow .col-date,.lrow .col-status{justify-self:end}
+}
+
+/* suppliers list (clean rows) */
+.sup-lhead, .sup-lrow{grid-template-columns:1.4fr 110px 150px 88px 1.4fr minmax(150px,auto)}
+@media(max-width:760px){
+  .sup-lrow{grid-template-columns:1fr 1fr}
+  .sup-lrow .nm{grid-column:1 / -1}
+  .sup-lrow .acts{grid-column:1 / -1}
 }
 
 /* customer cards */
@@ -1608,6 +1616,19 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
      so a count that's a multiple of 30 doesn't leave a trailing blank page). */
   .rep-table tbody tr:nth-child(30n){break-after:page; page-break-after:always}
   .rep-table tbody tr:nth-child(30n):last-child{break-after:auto; page-break-after:auto}
+
+  /* customer quotations PDF: taller rows (~10 per page), easier to read */
+  .cd-qreport .rep-table{font-size:13px}
+  .cd-qreport .rep-table th,.cd-qreport .rep-table td{padding:14px 10px; vertical-align:middle}
+  .cd-qreport .rep-table thead th{font-size:11px; padding:10px}
+  .cd-qreport .rep-table td.amt,.cd-qreport .rep-table th.amt,
+  .cd-qreport .rep-table td.c-no,.cd-qreport .rep-table td.c-date{font-size:12.5px}
+  .cd-qreport .rep-table td.c-cust{font-size:13px}
+  .cd-qreport .rep-table .rep-op td{font-weight:700; background:#f3f0ea}
+  .cd-qreport .rep-table tbody tr:nth-child(30n){break-after:auto; page-break-after:auto}
+  .cd-qreport .rep-table tbody tr:nth-child(10n){break-after:page; page-break-after:always}
+  .cd-qreport .rep-table tbody tr:nth-child(10n):last-child{break-after:auto; page-break-after:auto}
+  .cd-qreport .rep-table tbody tr.rep-tot{break-after:auto; page-break-after:auto}
   @page{margin:10mm}
 }
 

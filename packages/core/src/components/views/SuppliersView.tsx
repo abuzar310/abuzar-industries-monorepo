@@ -1,13 +1,14 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { allRec, delRec } from "@/lib/db";
-import { cloudDelete } from "@/lib/cloud";
+import { bgPull, cloudDelete } from "@/lib/cloud";
 import { editSupplierDialog } from "@/lib/customer-form";
 import { seedSuppliersFromPurchases } from "@/lib/suppliers";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
-import type { Supplier } from "@/lib/types";
+import type { Doc, Supplier } from "@/lib/types";
 
 function applySearch(list: Supplier[], q: string) {
   q = (q || "").trim().toLowerCase();
@@ -19,13 +20,21 @@ function applySearch(list: Supplier[], q: string) {
 
 export default function SuppliersView() {
   const { dataVersion, searchTerm } = useApp();
+  const router = useRouter();
   const [list, setList] = useState<Supplier[]>([]);
+  const [buys, setBuys] = useState<Doc[]>([]);
+  const [q, setQ] = useState("");
 
   const load = useCallback(() => {
-    allRec<Supplier>("suppliers").then((c) => {
+    Promise.all([allRec<Supplier>("suppliers"), allRec<Doc>("invoices")]).then(([c, invs]) => {
       c.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       setList(c);
+      setBuys(invs.filter((d) => d.tradeType === "buy" && !d.deletedAt && !d.purgedAt));
     });
+  }, []);
+
+  useEffect(() => {
+    bgPull();
   }, []);
 
   useEffect(() => {
@@ -40,6 +49,24 @@ export default function SuppliersView() {
       .finally(load);
   }, [load, dataVersion]);
 
+  const purchaseCount = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const d of buys) {
+      const key = d.customerId || d.customerName?.trim().toLowerCase() || "";
+      if (!key) continue;
+      m.set(key, (m.get(key) || 0) + 1);
+    }
+    return m;
+  }, [buys]);
+
+  function countFor(s: Supplier) {
+    return (
+      (s.id ? purchaseCount.get(s.id) || 0 : 0) ||
+      purchaseCount.get((s.name || "").trim().toLowerCase()) ||
+      0
+    );
+  }
+
   async function add() {
     const c = await editSupplierDialog();
     if (c) {
@@ -48,8 +75,7 @@ export default function SuppliersView() {
       toast("Supplier " + c.name + " added");
     }
   }
-  async function edit(e: React.MouseEvent, s: Supplier) {
-    e.stopPropagation();
+  async function edit(s: Supplier) {
     const next = await editSupplierDialog(s);
     if (next) {
       load();
@@ -72,48 +98,89 @@ export default function SuppliersView() {
     toast("Supplier removed");
   }
 
-  const shown = applySearch(list, searchTerm);
+  const shown = applySearch(list, q || searchTerm);
 
   return (
     <div>
       <div className="sectitle">
-        Suppliers <small>— {list.length} contact{list.length === 1 ? "" : "s"} for purchases</small>
+        Suppliers <small>— {list.length} contact{list.length === 1 ? "" : "s"}</small>
       </div>
-      <p className="note" style={{ marginTop: 0 }}>
-        Separate from Customers. Add suppliers here, then pick them on Purchase entry.
-      </p>
       <div className="rowbtns">
-        <button className="btn primary sm" onClick={add}>
+        <button className="btn primary sm" type="button" onClick={add}>
           + Add supplier
         </button>
+        <button className="btn sm" type="button" onClick={() => router.push("/purchases")}>
+          + New purchase
+        </button>
       </div>
-      <div className="custgrid">
+
+      <div className="searchbar">
+        <span className="s-ic" aria-hidden>
+          ⌕
+        </span>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search name, phone, GSTIN…"
+          aria-label="Search suppliers"
+        />
+        {q ? (
+          <button type="button" className="s-clear" onClick={() => setQ("")} aria-label="Clear">
+            ×
+          </button>
+        ) : null}
+        <span className="s-count">{shown.length}</span>
+      </div>
+
+      <div className="listwrap" style={{ marginTop: 10 }}>
+        <div className="lhead sup-lhead">
+          <span>Name</span>
+          <span>Phone</span>
+          <span>GSTIN</span>
+          <span>Purchases</span>
+          <span>Address</span>
+          <span />
+        </div>
         {shown.length ? (
-          shown.map((s) => (
-            <div className="custcard" key={s.id}>
-              <h3>{s.name}</h3>
-              <div className="ph">{s.phone || "—"}</div>
-              <div className="meta2">
-                {s.gstin && (
-                  <>
-                    GSTIN: {s.gstin}
-                    <br />
-                  </>
-                )}
-                {s.address || "—"}
+          shown.map((s) => {
+            const n = countFor(s);
+            return (
+              <div
+                className="lrow sup-lrow"
+                key={s.id}
+                onClick={() => edit(s)}
+                style={{ cursor: "pointer" }}
+                title="Edit supplier"
+              >
+                <span className="nm">{s.name || "—"}</span>
+                <span className="mut">{s.phone || "—"}</span>
+                <span className="mut">{s.gstin || "—"}</span>
+                <span className="amt" style={{ textAlign: "left" }}>
+                  {n || "—"}
+                </span>
+                <span className="mut" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {s.address || "—"}
+                </span>
+                <span className="acts" onClick={(e) => e.stopPropagation()}>
+                  <button className="btn sm" type="button" onClick={() => edit(s)}>
+                    Edit
+                  </button>
+                  <button className="btn warn sm" type="button" onClick={(e) => remove(e, s)}>
+                    Delete
+                  </button>
+                </span>
               </div>
-              <div className="links">
-                <button className="btn sm" type="button" onClick={(e) => edit(e, s)}>
-                  Edit
-                </button>
-                <button className="btn warn sm" type="button" onClick={(e) => remove(e, s)}>
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))
+            );
+          })
         ) : (
-          <div className="empty">{searchTerm ? "No matches." : "No suppliers yet — add one above."}</div>
+          <div className="empty">
+            <div className="empty-title">{q || searchTerm ? "No matches" : "No suppliers yet"}</div>
+            <div className="empty-note">
+              {q || searchTerm
+                ? "Try a different search."
+                : "Add one above, or record a purchase — suppliers are saved automatically."}
+            </div>
+          </div>
         )}
       </div>
     </div>

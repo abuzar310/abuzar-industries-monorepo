@@ -64,6 +64,7 @@ export default function CustomerDetail({ id }: { id: string }) {
 
   // printable quotations report for this customer (oldest → newest), with per-quote CFT + totals
   const brand = brandFor(brandMode);
+  const opening = Math.round((+(cust.opening || 0) || 0) * 100) / 100;
   const qreport = [...quotes].reverse().map((d, i) => {
     const t = computeDoc(d);
     return {
@@ -79,6 +80,8 @@ export default function CustomerDetail({ id }: { id: string }) {
     (s, r) => ({ cft: s.cft + r.cft, total: s.total + r.total }),
     { cft: 0, total: 0 },
   );
+  const grandTotal = Math.round((qtot.total + opening) * 100) / 100;
+  const canPrint = quotes.length > 0 || opening > 0;
   const today = new Date();
   const pad2 = (n: number) => String(n).padStart(2, "0");
   const genOn = `${pad2(today.getDate())}-${pad2(today.getMonth() + 1)}-${today.getFullYear()}`;
@@ -151,7 +154,7 @@ export default function CustomerDetail({ id }: { id: string }) {
 
       <div className="sectitle" style={{ marginTop: 24, fontSize: 22, display: "flex", alignItems: "center", gap: 12 }}>
         <span>Quotations <small>— {quotes.length}</small></span>
-        {quotes.length > 0 && (
+        {canPrint && (
           <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => window.print()}>
             Print / Save PDF
           </button>
@@ -173,8 +176,8 @@ export default function CustomerDetail({ id }: { id: string }) {
       )}
       </div>
 
-      {quotes.length > 0 && (
-        <div className="cd-print rep-doc">
+      {canPrint && (
+        <div className="cd-print rep-doc cd-qreport">
           <div className="rep-head">
             <div className="rep-brand">
               <h1>{brand.name || "Quotations"}</h1>
@@ -184,14 +187,13 @@ export default function CustomerDetail({ id }: { id: string }) {
             <div className="rep-meta">
               <div className="rep-title">Quotations</div>
               <div className="rep-period">{cust.name}{cust.phone ? " · " + cust.phone : ""}</div>
-              {f.outstanding > 0.5 && <div className="rep-period">Outstanding ₹ {inr(f.outstanding)}</div>}
             </div>
           </div>
 
           <div className="rep-summary cols3">
             <div><b>{qreport.length}</b><span>Quotations</span></div>
             <div><b>{inr(qtot.cft)}</b><span>Total CFT</span></div>
-            <div><b>₹{inr(qtot.total)}</b><span>Total</span></div>
+            <div><b>₹{inr(grandTotal)}</b><span>Total{opening > 0 ? " (incl. opening)" : ""}</span></div>
           </div>
 
           <table className="rep-table">
@@ -214,6 +216,16 @@ export default function CustomerDetail({ id }: { id: string }) {
               </tr>
             </thead>
             <tbody>
+              {opening > 0 && (
+                <tr className="rep-op">
+                  <td className="c-n">—</td>
+                  <td className="c-date">—</td>
+                  <td className="c-no">Opening Balance</td>
+                  <td className="c-cust">—</td>
+                  <td className="amt">—</td>
+                  <td className="amt">{inr(opening)}</td>
+                </tr>
+              )}
               {qreport.map((r) => (
                 <tr key={r.no + "-" + r.i}>
                   <td className="c-n">{r.i}</td>
@@ -225,9 +237,12 @@ export default function CustomerDetail({ id }: { id: string }) {
                 </tr>
               ))}
               <tr className="rep-tot">
-                <td colSpan={4}>Total — {qreport.length} quotation{qreport.length === 1 ? "" : "s"}</td>
+                <td colSpan={4}>
+                  Total
+                  {opening > 0 ? ` — opening + ${qreport.length} quotation${qreport.length === 1 ? "" : "s"}` : ` — ${qreport.length} quotation${qreport.length === 1 ? "" : "s"}`}
+                </td>
                 <td className="amt">{inr(qtot.cft)}</td>
-                <td className="amt">{inr(qtot.total)}</td>
+                <td className="amt">{inr(grandTotal)}</td>
               </tr>
             </tbody>
           </table>

@@ -12,19 +12,23 @@ export default function CustomerPicker({
   onType,
   onPick,
   placeholder,
+  /** Max suggestions; omit / 0 = show the full list (useful for suppliers). */
+  maxResults = 8,
 }: {
   value: string;
   customers: Customer[];
   onType: (v: string) => void;
   onPick: (c: Customer) => void;
   placeholder?: string;
+  maxResults?: number;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
   const term = value.trim().toLowerCase();
-  const matches = (
-    term ? customers.filter((c) => (c.name || "").toLowerCase().includes(term) || (c.phone || "").includes(term)) : customers
-  ).slice(0, 8);
+  const filtered = term
+    ? customers.filter((c) => (c.name || "").toLowerCase().includes(term) || (c.phone || "").includes(term))
+    : customers;
+  const matches = maxResults > 0 ? filtered.slice(0, maxResults) : filtered;
   // hide once the typed value already exactly names one customer (nothing left to choose)
   const exact = !!term && matches.length === 1 && matches[0].name.toLowerCase() === term;
   const show = open && !exact && matches.length > 0;
@@ -63,6 +67,7 @@ export default function CustomerPicker({
               >
                 <b>{c.name}</b>
                 {c.phone ? <small> · {c.phone}</small> : null}
+                {c.gstin ? <small> · {c.gstin}</small> : null}
                 {c.opening ? <span className="cp-due">dues ₹{Math.round(c.opening)}</span> : null}
               </button>
             ))}

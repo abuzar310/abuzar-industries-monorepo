@@ -264,7 +264,8 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
               customers={suppliers}
               onType={onType}
               onPick={pickSupplier}
-              placeholder="Search suppliers only…"
+              placeholder="Click to see all suppliers…"
+              maxResults={0}
             />
           </label>
         </div>
