@@ -28,7 +28,9 @@ function applySearch(arr: Doc[], q: string) {
   q = (q || "").trim().toLowerCase();
   if (!q) return arr;
   return arr.filter((d) =>
-    [d.id, d.number, d.customerName, d.phone, d.site].some((v) => String(v || "").toLowerCase().includes(q)),
+    [d.id, d.number, d.supplierBillNo, d.customerName, d.phone, d.site, d.custGstin].some((v) =>
+      String(v || "").toLowerCase().includes(q),
+    ),
   );
 }
 
@@ -92,7 +94,13 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     setSel(new Set()); // a search / filter change hides rows; don't keep them silently selected
   }, [q, searchTerm, trade]);
 
-  const open = (id: string, suffix = "") => router.push("/editor/" + id + suffix);
+  const open = (d: Doc, suffix = "") => {
+    if (isInv && d.tradeType === "buy") {
+      router.push("/purchases/" + encodeURIComponent(d.id) + suffix);
+      return;
+    }
+    router.push("/editor/" + d.id + suffix);
+  };
   const toggle = (id: string) =>
     setSel((s) => {
       const n = new Set(s);
@@ -113,11 +121,8 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     toast("New " + d.number + " created");
     router.push("/editor/" + d.id);
   }
-  async function onNewPurchase() {
-    await bgPull();
-    const d = await createInvoice({ tradeType: "buy" });
-    toast("Purchase " + d.number + " created");
-    router.push("/editor/" + d.id);
+  function onNewPurchase() {
+    router.push("/purchases");
   }
   async function bulkDelete() {
     const ids = [...sel];
@@ -150,7 +155,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
           </button>
           {isInv && (
             <button className="btn sm" onClick={onNewPurchase}>
-              + New Purchase Invoice
+              + New Purchase
             </button>
           )}
         </div>
@@ -211,10 +216,10 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
             const t = computeDoc(d);
             const act = (e: React.MouseEvent, suffix: string) => {
               e.stopPropagation();
-              open(d.id, suffix);
+              open(d, suffix);
             };
             return (
-              <div className={"lrow" + (sel.has(d.id) ? " picked" : "")} key={d.id} onClick={() => open(d.id)} style={{ cursor: "pointer" }}>
+              <div className={"lrow" + (sel.has(d.id) ? " picked" : "")} key={d.id} onClick={() => open(d)} style={{ cursor: "pointer" }}>
                 <span className="id selcol">
                   {canDelete && (
                     <input
@@ -225,9 +230,11 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                       aria-label={"Select " + d.id}
                     />
                   )}
-                  {d.number || d.id}
+                  {isInv && d.tradeType === "buy" ? d.supplierBillNo || d.number || d.id : d.number || d.id}
                   {isInv && d.tradeType === "buy" ? (
-                    <span className="mut" style={{ display: "block", fontSize: 11 }}>Purchase</span>
+                    <span className="mut" style={{ display: "block", fontSize: 11 }}>
+                      Purchase{d.number ? ` · #${d.number}` : ""}
+                    </span>
                   ) : null}
                 </span>
                 <span className="nm">{d.customerName || "—"}</span>

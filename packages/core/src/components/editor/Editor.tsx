@@ -850,7 +850,8 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
                   <div className="co-name">
                     {isBuy ? (
                       <>
-                        Purchase <span className="kindtag">Invoice</span>
+                        {(brand.name || "Abuzar Industries") + " "}
+                        <span className="kindtag">Purchase Invoice</span>
                       </>
                     ) : isInv ? (
                       brand.name

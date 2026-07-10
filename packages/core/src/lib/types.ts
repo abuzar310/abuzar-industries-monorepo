@@ -74,6 +74,8 @@ export interface Doc {
   /** invoice: customer GSTIN + payment type (shown on the tax invoice). */
   custGstin?: string;
   payType?: string;
+  /** purchase invoice: supplier's own bill / invoice number (custom, not our serial). */
+  supplierBillNo?: string;
   /** invoice: HSN/SAC code for the goods (short code shown on the tax invoice). */
   hsn?: string;
   /** selling invoice: consignee "Ship To" address + transport vehicle number (shown on the invoice). */
