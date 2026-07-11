@@ -4,8 +4,7 @@ import type { AppFeatures, Tab } from "@/lib/types";
 // No daybook, no ledger.
 export const FEATURES: AppFeatures = { invoices: true, simpleQuote: false, acceptPayment: false, soloLogin: true, ledger: true };
 
-// Isolated data namespace — official (Abuzar) never shares tables/DB with Safa.
-export const CLOUD_PREFIX = "ab_";
+// Data isolation lives server-side: this app's API routes use the "official" schema.
 
 export const TABS: Tab[] = [
   { label: "Dashboard", href: "/" },

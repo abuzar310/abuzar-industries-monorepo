@@ -21,7 +21,8 @@ function isActive(href: string, path: string) {
   return path === href || path.startsWith(href + "/");
 }
 
-const SYNC_LABEL = { on: "Synced", off: "Offline", queue: "Pending", local: "Local" } as const;
+// on = saved in the cloud · queue = a save is on its way · off = offline · local = still booting
+const SYNC_LABEL = { on: "Synced", off: "Offline", queue: "Saving…", local: "Loading…" } as const;
 
 export default function TopNav({ tabs }: { tabs: Tab[] }) {
   const TABS = tabs;
@@ -116,8 +117,8 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
                     if (!r) return;
                     if ((r.pw || "").trim().length < 4) return toast("Use at least 4 characters");
                     if (r.pw !== r.pw2) return toast("Passwords don't match");
-                    await changePassword(user.id, r.pw);
-                    toast("Password updated");
+                    const ok = await changePassword(user.id, r.pw);
+                    toast(ok ? "Password updated" : "Could not update — try again");
                   }}
                 >
                   Change password

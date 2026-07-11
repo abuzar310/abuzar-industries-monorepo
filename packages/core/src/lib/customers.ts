@@ -1,4 +1,4 @@
-import { allRec, getRec, put } from "./db";
+import { allRec, getRec, put } from "./data";
 import { computeDoc, nowIso, uid } from "./calc";
 import { quoteBill } from "./payments";
 import type { Customer, Doc, Expense } from "./types";
@@ -111,7 +111,6 @@ export async function saveCustomer(fields: {
   cust.opening = Math.round((+(fields.opening || 0) || 0) * 100) / 100;
   cust.notes = (fields.notes || "").trim();
   cust.updatedAt = nowIso();
-  cust.synced = false;
   await put("customers", cust);
   return cust;
 }
@@ -136,7 +135,6 @@ export async function upsertCustomerFromDoc(d: Doc): Promise<Customer | undefine
   cust.address = d.address || cust.address || "";
   cust.notes = d.notes || cust.notes || "";
   cust.updatedAt = nowIso();
-  cust.synced = false;
   d.customerId = cust.id;
   await put("customers", cust);
   return cust;

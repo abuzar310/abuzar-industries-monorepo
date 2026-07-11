@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec } from "@/lib/db";
+import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { quoteLedger } from "@/lib/payments";
 import { brandFor } from "@/lib/brand";

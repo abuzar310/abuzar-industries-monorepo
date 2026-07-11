@@ -1,8 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, delRec } from "@/lib/db";
-import { bgPull, cloudDelete } from "@/lib/cloud";
+import { allRec, delRec } from "@/lib/data";
 import { editSupplierDialog } from "@/lib/customer-form";
 import { seedSuppliersFromPurchases } from "@/lib/suppliers";
 import { useApp } from "@/store/useApp";
@@ -31,10 +30,6 @@ export default function SuppliersView() {
       setList(c);
       setBuys(invs.filter((d) => d.tradeType === "buy" && !d.deletedAt && !d.purgedAt));
     });
-  }, []);
-
-  useEffect(() => {
-    bgPull();
   }, []);
 
   useEffect(() => {
@@ -91,8 +86,7 @@ export default function SuppliersView() {
       danger: true,
     });
     if (!ok) return;
-    await delRec("suppliers", s.id);
-    await cloudDelete("suppliers", s.id);
+    await delRec("suppliers", s.id); // soft delete — the row stays recoverable in the database
     load();
     bumpData();
     toast("Supplier removed");

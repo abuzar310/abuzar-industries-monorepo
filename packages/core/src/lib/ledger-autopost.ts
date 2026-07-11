@@ -1,9 +1,8 @@
 // Optional auto-posting: mirror an invoice into the Tally ledger as double-entry
 // vouchers. Off by default (a Settings toggle). Deterministic voucher ids keyed to
 // the invoice id make re-posting idempotent; deleting the invoice unposts them.
-import { allRec, getRec, put, delRec, metaGet, metaSet } from "./db";
+import { allRec, getRec, put, delRec, metaGet, metaSet } from "./data";
 import { computeDoc, nowIso, uid } from "./calc";
-import { trySync, cloudDelete } from "./cloud";
 import { getFeatures } from "./features";
 import { nextVoucherNo, PURCHASE_LEDGER, SALES_LEDGER, TAX_CGST, TAX_IGST, TAX_SGST } from "./ledger";
 import type { Doc, Ledger, LedgerGroup, VLeg, Voucher, VoucherType } from "./types";
@@ -25,7 +24,7 @@ async function ensureLedger(name: string, group: LedgerGroup): Promise<string> {
   const l: Ledger = {
     id: "L-" + uid(), name: name.trim(), group, opening: 0,
     gstin: "", phone: "", address: "", notes: "",
-    createdAt: nowIso(), updatedAt: nowIso(), synced: false,
+    createdAt: nowIso(), updatedAt: nowIso(),
   };
   await put("ledgers", l);
   return l.id;
@@ -50,15 +49,11 @@ async function upsertVoucher(id: string, type: VoucherType, doc: Doc, legs: VLeg
     sourceId: doc.id,
     createdAt: existing?.createdAt || nowIso(),
     updatedAt: nowIso(),
-    synced: false,
   };
   await put("vouchers", v);
 }
 async function removeVoucher(id: string) {
-  if (await getRec<Voucher>("vouchers", id)) {
-    await delRec("vouchers", id);
-    cloudDelete("vouchers", id);
-  }
+  if (await getRec<Voucher>("vouchers", id)) await delRec("vouchers", id);
 }
 
 const tradeVid = (docId: string) => "AV-INV-" + docId;
@@ -115,7 +110,6 @@ export async function postInvoice(doc: Doc): Promise<void> {
   } else {
     await removeVoucher(settleVid(doc.id));
   }
-  trySync();
 }
 
 /** Remove any vouchers this invoice auto-posted (on delete / clear payments). */

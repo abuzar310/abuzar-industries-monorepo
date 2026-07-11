@@ -9,6 +9,7 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
@@ -30,6 +31,7 @@
     "packages/core/src/lib/calc.check.ts",
     "packages/core/src/lib/ledger.check.ts",
     "packages/core/src/lib/trading.check.ts",
-    "packages/core/src/lib/numbering.check.ts"
+    "packages/core/src/lib/numbering.check.ts",
+    "packages/core/src/lib/invoice-id.check.ts"
   ]
 }

@@ -1,7 +1,7 @@
 // Trading-account I/O: turn invoices into trade lines and read/write the stock
 // config (opening value + CFT, and an optional physical closing-stock count).
 // Pure math lives in trading-calc (re-exported).
-import { metaGet, metaSet } from "./db";
+import { metaGet, metaSet } from "./data";
 import { docVolumeCft, computeDoc } from "./calc";
 import type { Doc } from "./types";
 import type { TradeLine } from "./trading-calc";

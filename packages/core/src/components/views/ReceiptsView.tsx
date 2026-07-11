@@ -1,13 +1,11 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, delRec, getRec, put } from "@/lib/db";
-import { cloudDelete } from "@/lib/cloud";
+import { allRec, delRec, getRec, put } from "@/lib/data";
 import { inr, nowIso } from "@/lib/calc";
 import { addExpense, upiAccounts } from "@/lib/expenses";
 import { partyLedger } from "@/lib/payments";
 import { applyCustomerReceipt } from "@/lib/receipts";
-import { snapshotBefore } from "@/lib/autobackup";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -114,7 +112,6 @@ export default function ReceiptsView() {
         e.date = date ? toDmy(date) : e.date;
       }
       e.updatedAt = nowIso();
-      e.synced = false;
       await put("expenses", e);
       resetForm();
       load();
@@ -182,9 +179,7 @@ export default function ReceiptsView() {
       danger: true,
     });
     if (!ok) return;
-    await snapshotBefore();
-    await delRec("expenses", e.id);
-    await cloudDelete("expenses", e.id);
+    await delRec("expenses", e.id); // soft delete in the database — never resurrects
     if (editId === e.id) resetForm();
     load();
     bumpData();

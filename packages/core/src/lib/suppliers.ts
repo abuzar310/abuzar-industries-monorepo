@@ -1,4 +1,4 @@
-import { allRec, getRec, metaGet, metaSet, put } from "./db";
+import { allRec, getRec, metaGet, metaSet, put } from "./data";
 import { nowIso, uid } from "./calc";
 import type { Customer, Doc, Supplier } from "./types";
 
@@ -22,7 +22,6 @@ export async function saveSupplier(fields: {
   s.notes = (fields.notes || "").trim();
   s.opening = 0;
   s.updatedAt = nowIso();
-  s.synced = false;
   await put("suppliers", s);
   return s;
 }
@@ -46,7 +45,6 @@ export async function upsertSupplierFromDoc(d: Doc): Promise<Supplier | undefine
   s.gstin = (d.custGstin || s.gstin || "").trim().toUpperCase();
   s.notes = d.notes || s.notes || "";
   s.updatedAt = nowIso();
-  s.synced = false;
   d.customerId = s.id;
   await put("suppliers", s);
   return s;

@@ -1,7 +1,7 @@
 // Self-check for the pure double-entry math (no DB).
 // Run: npx tsx packages/core/src/lib/ledger.check.ts
-import type { Ledger, Voucher } from "./types";
-import { gstSplit, isBalanced, ledgerBalance, ledgerStatement, trialBalance } from "./ledger-calc";
+import type { Ledger, Voucher } from "./types.ts";
+import { gstSplit, isBalanced, ledgerBalance, ledgerStatement, trialBalance } from "./ledger-calc.ts";
 
 let n = 0;
 const ok = (cond: boolean, msg: string) => {

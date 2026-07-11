@@ -1,12 +1,11 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec } from "@/lib/db";
-import { bgPull } from "@/lib/cloud";
+import { allRec } from "@/lib/data";
 import { computeDoc, dateSortKey, inr } from "@/lib/calc";
 import { createInvoice, createQuotation } from "@/lib/create";
+import { seriesOf } from "@/lib/invoice-id";
 import { trashDoc } from "@/lib/trash";
-import { snapshotBefore } from "@/lib/autobackup";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -44,14 +43,10 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
   const [sel, setSel] = useState<Set<string>>(new Set());
-  const [trade, setTrade] = useState<"all" | "sell" | "buy">("all"); // invoices only: Sales / Purchases / All
+  // invoices only: All / Sales / Purchases / Rented — rented invoices are their own
+  // series (R-1, R-2, …), so they get their own tab and stay out of "Sales"
+  const [trade, setTrade] = useState<"all" | "sell" | "buy" | "rent">("all");
   const isInv = store === "invoices";
-
-  // Cloud-authoritative: pull the newest cloud state whenever the list opens so you always
-  // see the true set of docs (never a stale local copy that could hide/duplicate records).
-  useEffect(() => {
-    bgPull();
-  }, [store]);
 
   useEffect(() => {
     let live = true;
@@ -81,7 +76,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
   }, [store, dataVersion]);
 
   const filtered = useMemo(() => {
-    const base = isInv && trade !== "all" ? docs.filter((d) => (d.tradeType === "buy") === (trade === "buy")) : docs;
+    const base = isInv && trade !== "all" ? docs.filter((d) => seriesOf(d) === trade) : docs;
     return applySearch(base, q || searchTerm);
   }, [docs, q, searchTerm, isInv, trade]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
@@ -116,7 +111,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     });
 
   async function onNew() {
-    if (isInv) await bgPull(); // freshest cloud max so next number is top+1, not a stale hole
+    // numbering is allocated atomically by the server — no pre-pull needed
     const d = isInv ? await createInvoice() : await createQuotation();
     toast("New " + d.number + " created");
     router.push("/editor/" + d.id);
@@ -133,7 +128,6 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       confirmLabel: "Move " + ids.length + " to bin",
     });
     if (!ok) return;
-    await snapshotBefore(); // fresh restore point captured just before the bulk delete
     toast("Moving to bin…");
     // soft-delete only — nothing is hard-removed, so a mis-select is always recoverable
     for (const id of ids) await trashDoc(store, id);
@@ -164,9 +158,9 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       {isInv && (
         <div className="rowbtns" style={{ marginBottom: 6 }}>
           <div className="rep-seg" role="group" aria-label="Filter by trade type">
-            {(["all", "sell", "buy"] as const).map((t) => (
+            {(["all", "sell", "buy", "rent"] as const).map((t) => (
               <button key={t} className={trade === t ? "on" : ""} onClick={() => setTrade(t)}>
-                {t === "all" ? "All" : t === "sell" ? "Sales" : "Purchases"}
+                {t === "all" ? "All" : t === "sell" ? "Sales" : t === "buy" ? "Purchases" : "Rented"}
               </button>
             ))}
           </div>

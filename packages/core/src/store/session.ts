@@ -1,66 +1,34 @@
 "use client";
-// Shared sign-in side effects used by both the login gate and Settings.
-import { metaSet } from "@/lib/db";
-import {
-  dayKey,
-  getAuth,
-  hasRealData,
-  pullFromCloud,
-  signIn,
-  trySync,
-} from "@/lib/cloud";
-import { BAKED } from "@/lib/constants";
-import { checkOwnerNotifications, requestNotifyPermission } from "@/lib/notify";
-import { bumpData, getState, setAuthIdentity, setShowLogin, toast } from "./app-store";
+// Side effects shared by the lock gate and the boot path.
+import { bootData, isBooted } from "@/lib/data";
+import { loadBrand } from "@/lib/brand";
+import { checkOwnerNotifications, loadNotifyState, requestNotifyPermission } from "@/lib/notify";
+import { bumpData, getState, toast, type BrandMode } from "./app-store";
 
-/** Side effects after a local user unlocks the app (Owner / Manager). */
+// The app's default brand (set once by AppProvider from the layout prop).
+let defaultBrand: BrandMode = "demo";
+export const setDefaultBrand = (m: BrandMode) => {
+  defaultBrand = m;
+};
+export const getDefaultBrand = () => defaultBrand;
+
+/** After a user unlocks the app: load the full dataset from the server. */
 export async function afterUnlock() {
   const u = getState().user;
+  if (!isBooted()) {
+    try {
+      await bootData();
+      await loadBrand(defaultBrand);
+    } catch {
+      toast("Could not load data — check the connection and reload");
+      return;
+    }
+  }
+  loadNotifyState();
   if (u?.role === "owner") {
     requestNotifyPermission();
     checkOwnerNotifications();
   }
-  if (!(await hasRealData())) {
-    const n = await pullFromCloud(true);
-    if (n) {
-      bumpData();
-      toast(`Welcome ${u?.name ?? ""} — loaded ${n} records`);
-      trySync();
-      return;
-    }
-  }
   toast(`Welcome, ${u?.name ?? ""}`);
-  trySync();
   bumpData();
-}
-
-export function refreshAuthIdentity() {
-  const email = getAuth().email || "";
-  setAuthIdentity(email, !!email && BAKED.adminEmails.includes(email.toLowerCase()));
-}
-
-export async function afterAuthSuccess() {
-  await metaSet("lastLoginDay", dayKey());
-  refreshAuthIdentity();
-  setShowLogin(false);
-  if (!(await hasRealData())) {
-    const n = await pullFromCloud(true);
-    if (n) {
-      bumpData();
-      toast("Signed in — restored " + n + " records");
-      return;
-    }
-  }
-  toast("Signed in");
-  trySync(true);
-}
-
-/** Returns "" on success, or an error message. */
-export async function doLogin(email: string, password: string): Promise<string> {
-  const r = await signIn(email, password);
-  if (r.ok) {
-    await afterAuthSuccess();
-    return "";
-  }
-  return r.msg || "Sign in failed";
 }

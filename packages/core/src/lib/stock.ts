@@ -1,4 +1,4 @@
-import { getRec, put } from "./db";
+import { getRec, put } from "./data";
 import { nowIso, sectionVolumeCft } from "./calc";
 import type { Doc, Stock } from "./types";
 
@@ -14,10 +14,9 @@ export async function maybeDeductStock(d: Doc): Promise<boolean> {
     const key = stockKey(sec.name);
     if (!key) continue;
     let st = await getRec<Stock>("stock", key);
-    if (!st) st = { key, name: sec.name, cft: 0, updatedAt: nowIso(), synced: false };
+    if (!st) st = { key, name: sec.name, cft: 0, updatedAt: nowIso() };
     st.cft = Math.round(((+st.cft || 0) - cft) * 100) / 100;
     st.updatedAt = nowIso();
-    st.synced = false;
     await put("stock", st);
   }
   d.stockDeducted = true;

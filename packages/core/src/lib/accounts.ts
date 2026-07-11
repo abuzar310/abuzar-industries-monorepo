@@ -1,7 +1,6 @@
 // Named payment accounts (UPI + cash held by Tabrez, Afsar, etc.) — registry + rollup + daily collect.
-import { allRec, delRec, getRec, metaGet, metaSet, put } from "./db";
+import { allRec, delRec, getRec, metaGet, metaSet, put } from "./data";
 import { computeDoc, nowIso, todayStr, uid } from "./calc";
-import { cloudDelete, trySync } from "./cloud";
 import type { Customer, Doc, Expense } from "./types";
 
 const isUpi = (e: Expense) => e.type === "sale" && e.mode === "upi";
@@ -28,7 +27,7 @@ export interface PayHolder {
   opening?: number; // opening balance already held by this person before tracking began (₹) — adds to the amount to collect
   createdAt: string;
   updatedAt: string;
-  synced: boolean;
+  synced?: boolean;
 }
 
 /** One payment credited to a named account. */
@@ -199,9 +198,7 @@ export const listHolders = () => allRec<PayHolder>("payHolders");
 
 async function saveHolder(h: PayHolder): Promise<PayHolder> {
   h.updatedAt = nowIso();
-  h.synced = false;
   await put("payHolders", h);
-  trySync();
   return h;
 }
 
@@ -211,7 +208,7 @@ export async function addHolder(name: string): Promise<PayHolder | null> {
   const list = await listHolders();
   if (list.some((h) => sameName(h.name, n))) return null;
   const now = nowIso();
-  return saveHolder({ id: "HLD-" + uid(), name: n, accounts: [], createdAt: now, updatedAt: now, synced: false });
+  return saveHolder({ id: "HLD-" + uid(), name: n, accounts: [], createdAt: now, updatedAt: now });
 }
 
 export async function renameHolder(id: string, name: string): Promise<PayHolder | null> {
@@ -237,8 +234,6 @@ export async function setHolderOpening(id: string, amount: number): Promise<PayH
 /** Delete a holder. Its sub-accounts (and all their money) stay — they just become ungrouped. */
 export async function removeHolder(id: string): Promise<void> {
   await delRec("payHolders", id);
-  cloudDelete("payHolders", id);
-  trySync();
 }
 
 /**
@@ -402,11 +397,9 @@ export async function collectAccountDay(account: string, date: string, by: strin
     e.collectedAt = now;
     e.collectedBy = by;
     e.updatedAt = now;
-    e.synced = false;
     await put("expenses", e);
     total += +e.amount || 0;
   }
-  if (total > 0) trySync();
   return r2(total);
 }
 
@@ -470,7 +463,7 @@ export interface AccountCollection {
   note?: string;
   createdAt: string;
   updatedAt: string;
-  synced: boolean;
+  synced?: boolean;
 }
 
 /** A UPI credit into an account (customer payment). */
@@ -500,10 +493,8 @@ export async function addCollection(fields: {
     note: (fields.note || "").trim(),
     createdAt: now,
     updatedAt: now,
-    synced: false,
   };
   await put("collections", c);
-  trySync();
   return c;
 }
 
@@ -515,16 +506,12 @@ export async function moveEntryAccount(id: string, toAccount: string): Promise<b
   if (!e) return false;
   e.account = n;
   e.updatedAt = nowIso();
-  e.synced = false;
   await put("expenses", e);
-  trySync();
   return true;
 }
 
 export async function deleteCollection(id: string): Promise<void> {
   await delRec("collections", id);
-  cloudDelete("collections", id);
-  trySync();
 }
 
 /** Delete a UPI credit shown under an account. If it's a quote payment (sourceId), the amount is
@@ -545,13 +532,10 @@ export async function deleteAccountEntry(id: string): Promise<void> {
       q.paymentStatus = q.amountPaid <= 0 ? "Pending" : q.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
       q.paidLogged = q.amountPaid > 0;
       q.updatedAt = nowIso();
-      q.synced = false;
       await put("quotations", q);
     }
   }
   await delRec("expenses", id);
-  cloudDelete("expenses", id);
-  trySync();
 }
 
 export type AcctLineKind = "in" | "collect";

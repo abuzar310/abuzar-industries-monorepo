@@ -1,8 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, delRec, getRec } from "@/lib/db";
-import { cloudDelete } from "@/lib/cloud";
+import { allRec, delRec, getRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/create";
 import { getFeatures } from "@/lib/features";
@@ -76,8 +75,7 @@ export default function CustomersView() {
       danger: true,
     });
     if (!ok) return;
-    await delRec("customers", c.id);
-    await cloudDelete("customers", c.id); // tombstone it so the cloud doesn't re-sync it back
+    await delRec("customers", c.id); // soft delete — the row stays recoverable in the database
     load();
   }
 

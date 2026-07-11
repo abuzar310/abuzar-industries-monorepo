@@ -31,7 +31,7 @@ export default function LockGate() {
     if (ok) {
       setErr("");
       setPass("");
-      afterUnlock();
+      void afterUnlock(); // loads the dataset (views fill in as it lands)
     } else {
       setErr("Wrong password");
     }

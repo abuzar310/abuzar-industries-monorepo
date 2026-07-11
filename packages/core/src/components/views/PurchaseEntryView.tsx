@@ -1,12 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, clone, put } from "@/lib/db";
+import { allRec, clone, put } from "@/lib/data";
 import { computeDoc, cbmToCft, inr, nowIso, todayStr } from "@/lib/calc";
 import { createInvoice } from "@/lib/create";
 import { editSupplierDialog } from "@/lib/customer-form";
 import { seedSuppliersFromPurchases, upsertSupplierFromDoc } from "@/lib/suppliers";
-import { trySync } from "@/lib/cloud";
 import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -65,7 +64,6 @@ function writePurchase(
     },
   ];
   next.updatedAt = nowIso();
-  next.synced = false;
   return next;
 }
 
@@ -198,7 +196,6 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
       });
       await upsertSupplierFromDoc(next);
       await put("invoices", next);
-      trySync();
       setDoc(next);
       bumpData();
       toast("Purchase " + (next.supplierBillNo || next.number) + " saved ✓");

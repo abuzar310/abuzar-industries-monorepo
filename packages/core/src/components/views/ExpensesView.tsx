@@ -1,7 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { allRec, delRec } from "@/lib/db";
-import { cloudDelete } from "@/lib/cloud";
+import { allRec, delRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, ENTRY_TYPES, inDaybook, isInflow, isUpi, requestHandover, typeLabel, upiAccounts } from "@/lib/expenses";
 import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
@@ -122,8 +121,7 @@ export default function ExpensesView() {
       danger: true,
     });
     if (!ok) return;
-    await delRec("expenses", e.id);
-    await cloudDelete("expenses", e.id); // propagate the delete to the cloud so it doesn't re-sync back
+    await delRec("expenses", e.id); // soft delete in the database — never resurrects
     load();
     bumpData();
   }

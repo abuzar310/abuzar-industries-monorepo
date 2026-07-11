@@ -1,5 +1,5 @@
 import { nowIso, todayStr } from "./calc";
-import { getRec } from "./db";
+import { clone, getCached } from "./data";
 import type { Doc, DocStore } from "./types";
 
 export const docStore = (d: Doc): DocStore =>
@@ -18,7 +18,7 @@ export const storeForId = (id: string): DocStore =>
  *  Invoice ids were shortened from "INV-2026-27-2661" to "2661", so a prefix check is no
  *  longer reliable — this always finds the doc in whichever store actually holds it. */
 export async function loadDoc(id: string): Promise<Doc | undefined> {
-  return (await getRec<Doc>("invoices", id)) || (await getRec<Doc>("quotations", id));
+  return clone(getCached<Doc>("invoices", id) || getCached<Doc>("quotations", id));
 }
 
 export function blankDoc(id: string): Doc {
@@ -41,7 +41,6 @@ export function blankDoc(id: string): Doc {
     amountPaid: 0,
     createdAt: nowIso(),
     updatedAt: nowIso(),
-    synced: false,
     stockDeducted: false,
   };
 }

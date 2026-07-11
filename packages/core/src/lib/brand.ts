@@ -1,6 +1,6 @@
 // White-label brand identity. Default is a neutral demo identity shown publicly
 // and on every document; the owner can toggle to the real Abuzar branding.
-import { metaGet, metaSet } from "./db";
+import { metaGet, metaSet } from "./data";
 import { getState, setBrandMode, type BrandMode } from "@/store/app-store";
 
 export interface BankInfo {

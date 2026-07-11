@@ -1,7 +1,8 @@
 // Pure double-entry derivations — NO db/cloud imports, so it stays unit-testable
 // in plain node (see ledger.check.ts). Every balance is DERIVED from raw vouchers;
 // nothing is stored denormalized.
-import { inr } from "./calc";
+// .ts extension so `pnpm check` can run this chain directly under plain node
+import { inr } from "./calc.ts";
 import type { Ledger, LedgerGroup, VLeg, Voucher } from "./types";
 
 export const r2 = (n: number) => Math.round(n * 100) / 100;

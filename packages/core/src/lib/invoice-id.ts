@@ -1,27 +1,43 @@
 // Invoice identity vs display number.
 //
-//   id      = permanent UID (e.g. "inv_a1b2c3…"). Sync / URLs / ledger keys. NEVER reused.
-//   number  = what humans see ("1", "2", "2695"). Editable. Per trade-type series.
+//   id      = permanent UID (e.g. "inv_a1b2c3…"). URLs / ledger keys. NEVER reused.
+//   number  = what humans see ("1", "2695", "R-3"). Editable. Per SERIES.
 //
-// Delete + create ⇒ new UID every time, but the DISPLAY number is reused from the first
-// hole in the live series (same clean serial behaviour for sales AND purchases).
-// Example: live 2718 + 2721 → next create is 2719 (not 2722). Delete 2721 → next is 2721.
+// Three independent series, so numbers never mix:
+//   sell → the running sales serial ("2695", "2696", …)
+//   buy  → purchases from 1 with hole reuse ("1", "2", …)
+//   rent → rented invoices with their own "R-1", "R-2", … serial
+//
+// Allocation happens ATOMICALLY on the server (rpc/create-doc + rpc/next-invoice-number
+// run nextFreeLiveDisplay inside an advisory lock), so every device fills the same
+// holes. The pure helpers here are shared by server/api.ts — keep them free of
+// client-only imports.
 
-import { allRec } from "./db";
-import {
-  cloudNextInvoiceNo,
-  ensureAuth,
-  getAuth,
-  getSupa,
-  authRequired,
-  isLoggedIn,
-  tableName,
-} from "./cloud";
+import { listCached } from "./data";
 import { isLiveDoc } from "./durability";
-import { nextNumber } from "./numbering";
 import type { Doc } from "./types";
 
 export type InvoiceTrade = "buy" | "sell";
+/** The number series an invoice belongs to (rented sales run their own serial). */
+export type InvoiceSeries = "sell" | "buy" | "rent";
+
+/** Which series an invoice's display number lives in. */
+export const seriesOf = (d: Pick<Doc, "tradeType" | "rented">): InvoiceSeries =>
+  d.tradeType === "buy" ? "buy" : d.rented ? "rent" : "sell";
+
+/** Parse a display number into its serial within a series (0 = not part of the series). */
+export function seriesNumeric(series: InvoiceSeries, number: unknown): number {
+  const s = String(number ?? "").trim();
+  if (series === "rent") {
+    const m = s.match(/^R-?(\d+)$/i);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+  return /^\d+$/.test(s) ? parseInt(s, 10) : 0;
+}
+
+/** Render a serial as the display number for its series. */
+export const formatSeriesNumber = (series: InvoiceSeries, n: number): string =>
+  series === "rent" ? "R-" + n : String(n);
 
 /** Opaque permanent invoice primary key. */
 export function newInvoiceUid(): string {
@@ -36,79 +52,27 @@ export function isInvoiceUid(id: string): boolean {
   return /^inv_[a-z0-9]+$/i.test(id || "");
 }
 
-function isBuy(d: Doc): boolean {
-  return d.tradeType === "buy";
-}
-
-function numericLabel(d: Doc): number {
-  const s = String(d.number || "").trim();
-  if (/^\d+$/.test(s)) return parseInt(s, 10);
-  return 0;
-}
-
-function takenFromDocs(docs: Doc[], trade: InvoiceTrade): Set<number> {
-  const taken = new Set<number>();
-  for (const d of docs) {
-    if (!isLiveDoc(d)) continue;
-    if (trade === "buy" ? !isBuy(d) : isBuy(d)) continue;
-    const n = numericLabel(d);
-    if (n > 0) taken.add(n);
-  }
-  return taken;
-}
-
-/** Live display numbers for this trade from the cloud (so every device fills the same holes). */
-async function cloudLiveTaken(trade: InvoiceTrade): Promise<Set<number>> {
-  const taken = new Set<number>();
-  const supa = getSupa();
-  if (!supa.url || !supa.key) return taken;
-  if (typeof navigator !== "undefined" && !navigator.onLine) return taken;
-  if (authRequired() && !isLoggedIn()) return taken;
-  try {
-    await ensureAuth();
-    const k = (supa.key || "").trim();
-    const auth = getAuth();
-    const r = await fetch(supa.url + "/rest/v1/" + tableName("invoices") + "?select=id,data", {
-      headers: { apikey: k, Authorization: "Bearer " + (auth.token || k) },
-    });
-    if (!r.ok) return taken;
-    const rows = await r.json();
-    if (!Array.isArray(rows)) return taken;
-    for (const row of rows) {
-      const d = (row && row.data) || {};
-      if (d.deletedAt || d.purgedAt) continue;
-      const buy = d.tradeType === "buy";
-      if (trade === "buy" ? !buy : buy) continue;
-      const s = String(d.number || "").trim();
-      if (/^\d+$/.test(s)) taken.add(parseInt(s, 10));
-    }
-  } catch {
-    /* offline / error — local taken is enough */
-  }
-  return taken;
-}
-
 /**
  * Lowest free serial in the live series.
- *  - purchases: search from 1 (1,2,3… with hole reuse)
+ *  - purchases + rented: search from 1 (1,2,3… with hole reuse)
  *  - sales: reuse a small tip hole (live 2718+2721 → 2719), else max+1.
  *    Won't rewind into ancient gaps (e.g. 2700) from old deletes.
  */
-export function nextFreeLiveDisplay(taken: Set<number>, trade: InvoiceTrade): number {
-  if (trade === "buy") {
+export function nextFreeLiveDisplay(taken: Set<number>, series: InvoiceTrade | InvoiceSeries): number {
+  if (series === "buy" || series === "rent") {
     let n = 1;
     while (taken.has(n)) n++;
     return n;
   }
 
-  const series = [...taken].filter((n) => n >= 100).sort((a, b) => a - b);
-  if (series.length === 0) {
+  const sorted = [...taken].filter((n) => n >= 100).sort((a, b) => a - b);
+  if (sorted.length === 0) {
     let n = 1;
     while (taken.has(n)) n++;
     return n;
   }
-  const maxN = series[series.length - 1];
-  const prev = series.length >= 2 ? series[series.length - 2] : null;
+  const maxN = sorted[sorted.length - 1];
+  const prev = sorted.length >= 2 ? sorted[sorted.length - 2] : null;
   // Recent delete left a small hole under the tip — fill it (clean serial).
   if (prev != null && maxN - prev > 1 && maxN - prev <= 20) {
     for (let n = prev + 1; n < maxN; n++) {
@@ -118,50 +82,19 @@ export function nextFreeLiveDisplay(taken: Set<number>, trade: InvoiceTrade): nu
   return maxN + 1;
 }
 
-/**
- * Next display number for a new invoice (sales AND purchases): clean serial with hole reuse.
- * UID stays unique on every create; only the printed number is recycled after a delete.
- */
-export async function nextInvoiceDisplayNumber(trade: InvoiceTrade): Promise<string> {
-  const docs = await allRec<Doc>("invoices");
-  const taken = takenFromDocs(docs, trade);
-  for (const n of await cloudLiveTaken(trade)) taken.add(n);
-
-  const n = nextFreeLiveDisplay(taken, trade);
-
-  // Best-effort: keep the cloud counter near the series tip so older clients stay sane.
-  // Never let the counter dictate a jump past a live hole.
-  try {
-    const tip = Math.max(n, ...taken, 0);
-    let guard = 0;
-    let c = await cloudNextInvoiceNo();
-    while (c != null && c < tip && guard++ < 20) {
-      c = await cloudNextInvoiceNo();
-    }
-  } catch {
-    /* ignore */
-  }
-
-  return String(n);
-}
-
-/** True if another LIVE invoice in the same trade series already shows this number. */
+/** True if another LIVE invoice in the same series already shows this number.
+ *  Used by the editor's manual number edit (over the client cache). */
 export async function findLiveInvoiceByDisplayNumber(
   number: string,
-  trade: InvoiceTrade,
+  series: InvoiceTrade | InvoiceSeries,
   exceptId?: string,
 ): Promise<Doc | undefined> {
   const v = (number || "").trim();
   if (!v) return undefined;
-  const docs = await allRec<Doc>("invoices");
-  return docs.find((d) => {
+  const want: InvoiceSeries = series === "buy" ? "buy" : series === "rent" ? "rent" : "sell";
+  return listCached<Doc>("invoices").find((d) => {
     if (!isLiveDoc(d) || d.id === exceptId) return false;
-    if (trade === "buy" ? !isBuy(d) : isBuy(d)) return false;
+    if (seriesOf(d) !== want) return false;
     return String(d.number || "").trim() === v;
   });
-}
-
-/** Offline-safe local monotonic fallback (legacy path / tests). Prefer nextInvoiceDisplayNumber. */
-export async function localNextSalesDisplayNumber(): Promise<string> {
-  return nextNumber("invoice");
 }

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { metaGet } from "@/lib/db";
+import { prefGet } from "@/lib/data";
 import { createQuotation } from "@/lib/create";
 import { useApp } from "@/store/useApp";
 
@@ -12,15 +12,11 @@ export default function Page() {
 
   useEffect(() => {
     if (!ready) return;
-    let live = true;
-    metaGet<{ store: string; id: string } | null>("lastOpen", null).then((last) => {
-      if (!live) return;
-      if (last && last.id) router.replace("/editor/" + last.id);
-      else setChecked(true);
-    });
-    return () => {
-      live = false;
-    };
+    const last = prefGet<{ store: string; id: string } | null>("lastOpen", null);
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (last && last.id) router.replace("/editor/" + last.id);
+    else setChecked(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [ready, router]);
 
   async function create() {

@@ -1,9 +1,7 @@
 // Tally-style double-entry ledger I/O. Raw ledgers + vouchers are stored; every
-// balance is DERIVED on read by ledger-calc (re-exported below). Sync is automatic
-// via the cloud TABLE map (ledgers, vouchers).
-import { allRec, getRec, put, delRec, metaGet, metaSet } from "./db";
+// balance is DERIVED on read by ledger-calc (re-exported below).
+import { allRec, getRec, put, delRec, rpcNextVoucherNo } from "./data";
 import { nowIso, todayStr, uid } from "./calc";
-import { trySync, cloudDelete } from "./cloud";
 import { gstSplit, isBalanced, r2 } from "./ledger-calc";
 import type { Ledger, LedgerGroup, VLeg, Voucher, VoucherType } from "./types";
 
@@ -38,9 +36,7 @@ export async function saveLedger(fields: {
   l.address = (fields.address || "").trim();
   l.notes = (fields.notes || "").trim();
   l.updatedAt = nowIso();
-  l.synced = false;
   await put("ledgers", l);
-  trySync();
   return l;
 }
 
@@ -50,7 +46,6 @@ export async function deleteLedger(id: string): Promise<{ ok: boolean; count: nu
   const count = vs.filter((v) => v.legs.some((l) => l.ledgerId === id)).length;
   if (count > 0) return { ok: false, count };
   await delRec("ledgers", id);
-  cloudDelete("ledgers", id);
   return { ok: true, count: 0 };
 }
 
@@ -58,12 +53,9 @@ export async function deleteLedger(id: string): Promise<{ ok: boolean; count: nu
 
 export const allVouchers = () => allRec<Voucher>("vouchers");
 
-/** Per-type running number (Tally: "Receipt No. 210"), stored in meta. */
+/** Per-type running number (Tally: "Receipt No. 210") — an atomic counter in the database. */
 export async function nextVoucherNo(type: VoucherType): Promise<number> {
-  const key = "vno_" + type;
-  const n = (await metaGet<number>(key, 0)) + 1;
-  await metaSet(key, n);
-  return n;
+  return rpcNextVoucherNo(type);
 }
 
 export interface VoucherInput {
@@ -86,11 +78,9 @@ export async function addVoucher(input: VoucherInput): Promise<Voucher> {
     enteredBy: input.enteredBy || "unknown",
     createdAt: nowIso(),
     updatedAt: nowIso(),
-    synced: false,
   };
   if (!isBalanced(v)) throw new Error("Voucher not balanced (Dr ≠ Cr)");
   await put("vouchers", v);
-  trySync();
   return v;
 }
 
@@ -104,17 +94,14 @@ export async function editVoucher(id: string, input: VoucherInput): Promise<Vouc
     legs: cleanLegs(input.legs),
     narration: (input.narration ?? old.narration).trim(),
     updatedAt: nowIso(),
-    synced: false,
   };
   if (!isBalanced(v)) throw new Error("Voucher not balanced (Dr ≠ Cr)");
   await put("vouchers", v);
-  trySync();
   return v;
 }
 
 export async function deleteVoucher(id: string): Promise<void> {
   await delRec("vouchers", id);
-  cloudDelete("vouchers", id);
 }
 
 const cleanLegs = (legs: VLeg[]): VLeg[] =>

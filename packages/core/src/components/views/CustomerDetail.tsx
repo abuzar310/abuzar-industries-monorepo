@@ -1,8 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, delRec, getRec } from "@/lib/db";
-import { cloudDelete } from "@/lib/cloud";
+import { allRec, delRec, getRec } from "@/lib/data";
 import { computeDoc, inr } from "@/lib/calc";
 import { brandFor } from "@/lib/brand";
 import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/create";
@@ -108,8 +107,7 @@ export default function CustomerDetail({ id }: { id: string }) {
       danger: true,
     });
     if (!ok) return;
-    await delRec("customers", cust!.id);
-    await cloudDelete("customers", cust!.id); // tombstone it so the cloud doesn't re-sync it back
+    await delRec("customers", cust!.id); // soft delete — the row stays recoverable in the database
     toast("Customer deleted");
     router.push("/customers");
   }

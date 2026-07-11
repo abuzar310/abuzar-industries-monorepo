@@ -1,27 +1,25 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, clone, getRec, metaSet, put } from "@/lib/db";
+import { allRec, clone, prefSet, put, rpcNextInvoiceNumber } from "@/lib/data";
+import { seriesOf } from "@/lib/invoice-id";
 import { cftOf, computeDoc, inr, nowIso } from "@/lib/calc";
 import { getLineClip, setLineClip } from "@/lib/lineClipboard";
 import { STATUSES } from "@/lib/constants";
 import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
 import { docStore } from "@/lib/doc";
-import { setOpenDoc, trySync } from "@/lib/cloud";
 import { upsertCustomerFromDoc } from "@/lib/customers";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { findLiveByNumber } from "@/lib/durability";
 import { trashDoc } from "@/lib/trash";
-import { snapshotBefore } from "@/lib/autobackup";
 import { getFeatures } from "@/lib/features";
-import { addExpense, allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
-import { postInvoice, unpostInvoice } from "@/lib/ledger-autopost";
+import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
+import { postInvoice } from "@/lib/ledger-autopost";
 import { quoteMessage, reminderMessage, waLink } from "@/lib/whatsapp";
 import { generatePdf } from "@/lib/pdf";
-import { connectFolder, folderActiveFor, mirrorDoc } from "@/lib/folderMirror";
-import { bumpData, setSyncState, toast } from "@/store/app-store";
-import { confirmDialog, formDialog } from "@/store/dialog-store";
+import { bumpData, toast } from "@/store/app-store";
+import { confirmDialog } from "@/store/dialog-store";
 import type { BoxRect, Customer, Doc, Expense, Row } from "@/lib/types";
 import SectionCard from "./SectionCard";
 import Totals from "./Totals";
@@ -53,7 +51,10 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const router = useRouter();
   const [doc, setDoc] = useState<Doc>(initialDoc);
   const docRef = useRef(doc);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Explicit-save model: edits only touch React state and raise the dirty flag;
+  // the Save button (or Ctrl/Cmd+S, or any action that uses the doc) persists.
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const secRef = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<{ si: number; ri: number; k: string } | null>(null);
@@ -96,12 +97,6 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   const brand = brandFor(brandMode);
   const invBank = brand.banks?.[doc.bankIdx ?? 0] || brand.bank; // chosen bank for this invoice
 
-  // track the open doc so background pulls don't clobber it
-  useEffect(() => {
-    setOpenDoc(doc.id, docStore(doc));
-    return () => setOpenDoc("", "");
-  }, [doc.id, doc.kind]);
-
   // accept-payment: load the UPI accounts used before, for the "to whom" quick-pick
   useEffect(() => {
     if (feat.acceptPayment) upiAccounts().then(setUpiAccts);
@@ -130,31 +125,65 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   });
 
   // ---- persistence ----
+  const markDirty = (v: boolean) => {
+    dirtyRef.current = v;
+    setDirty(v);
+  };
   function persist(d: Doc) {
     d.updatedAt = nowIso();
-    d.synced = false;
-    put(docStore(d), clone(d));
-    setSyncState("queue");
-    trySync();
-    mirrorDoc(clone(d)).catch(() => {}); // write a durable copy to the chosen local folder (if connected)
+    put(docStore(d), clone(d)); // optimistic cache + retrying outbox → the database
     // optional: mirror this invoice into the Tally ledger (no-op unless the toggle is on)
     if (d.kind === "invoice") postInvoice(d).catch(() => {});
-  }
-  function scheduleSave() {
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => persist(docRef.current), 350);
+    markDirty(false);
   }
   function commit(next: Doc, immediate = false) {
     docRef.current = next;
     setDoc(next);
     if (immediate) persist(next);
-    else scheduleSave();
+    else markDirty(true);
   }
   function update(producer: (d: Doc) => void) {
     const next = clone(docRef.current);
     producer(next);
     commit(next);
   }
+  /** The Save button / Ctrl+S: link the customer record, then persist. */
+  async function saveNow() {
+    const next = clone(docRef.current);
+    await upsertCustomerFromDoc(next);
+    commit(next, true);
+  }
+
+  // Ctrl/Cmd+S saves; navigating away (unmount) or closing the tab never loses edits.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (dirtyRef.current) saveNow().then(() => toast("Saved ✓"));
+      }
+    };
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(
+    () => () => {
+      // in-app navigation away from a dirty doc — save it rather than lose the edits
+      if (dirtyRef.current) persist(docRef.current);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   // ---- field handlers ----
   const setField = (k: keyof Doc, v: string) =>
@@ -360,12 +389,26 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
   // ---- status / payment ----
   const onStatus = (v: string) => update((d) => (d.status = v));
   const onTradeType = (v: string) => update((d) => (d.tradeType = v === "buy" ? "buy" : "sell"));
-  // rental invoice: always CGST+SGST (never IGST), printed as "Rented Invoice"
-  const onRented = (v: boolean) =>
-    update((d) => {
-      d.rented = v;
-      if (v) d.gstKind = "split";
-    });
+  // rental invoice: always CGST+SGST (never IGST), printed as "Rented Invoice".
+  // Rented invoices run their OWN number series ("R-1", "R-2", …), so toggling moves the
+  // invoice between series and re-numbers it atomically from the server — the numbers
+  // of normal sales invoices and rented invoices never mix.
+  async function onRented(v: boolean) {
+    const next = clone(docRef.current);
+    next.rented = v;
+    if (v) next.gstKind = "split";
+    try {
+      // exceptId = this invoice — its own (possibly still-saving) number never blocks it,
+      // so toggling on→off→on always lands back on R-1, not R-2.
+      const number = await rpcNextInvoiceNumber(v ? "rent" : "sell", next.id);
+      next.number = number;
+      commit(next, true); // explicit action — saves immediately under the new series number
+      toast(v ? "Rented invoice — number " + number : "Regular invoice — number " + number);
+    } catch {
+      commit(next); // offline — keep the edit; the number can be fixed manually
+      toast("Couldn't fetch a " + (v ? "rented" : "sales") + " series number — check the number");
+    }
+  }
   const onRentAmount = (v: string) =>
     update((d) => (d.rentAmount = v.trim() === "" ? undefined : Math.max(0, +v || 0)));
   const onRentDesc = (v: string) => update((d) => (d.rentDesc = v));
@@ -379,19 +422,13 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     if (!v || v === doc.number) return; // unchanged / empty → keep the current number
     if (/[/\\?#%]/.test(v)) return toast("A number can't contain / \\ ? # or %");
     const store = docStore(docRef.current);
-    const trade = docRef.current.kind === "invoice"
-      ? (docRef.current.tradeType === "buy" ? "buy" : "sell")
-      : undefined;
-    const taken = await findLiveByNumber(store, v, docRef.current.id, trade);
+    // invoices: uniqueness is checked within the doc's own series (sell / buy / rent)
+    const series = docRef.current.kind === "invoice" ? seriesOf(docRef.current) : undefined;
+    const taken = await findLiveByNumber(store, v, docRef.current.id, series);
     if (taken) return toast("Number " + v + " is already used — pick a free one");
-    await snapshotBefore();
     const next = clone(docRef.current);
     next.number = v;
-    next.updatedAt = nowIso();
-    next.synced = false;
-    persist(next);
-    docRef.current = next;
-    setDoc(next);
+    commit(next, true); // explicit action — saves immediately
     toast("Number changed to " + v);
   }
 
@@ -428,37 +465,30 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
 
   // ---- actions ----
   async function onSaveClick() {
-    const next = clone(docRef.current);
-    await upsertCustomerFromDoc(next);
-    commit(next, true); // commit → persist → mirrors a durable copy to the local folder too
+    await saveNow();
+    const next = docRef.current;
     toast(
       "Saved ✓  " + next.number + " — reopen from " + (next.kind === "invoice" ? "Invoices" : "Quotations") + " to edit",
     );
   }
   async function onPrint() {
-    const next = clone(docRef.current);
-    await upsertCustomerFromDoc(next);
-    commit(next, true);
+    await saveNow(); // never print an unsaved doc
     window.print();
   }
   async function onPdf() {
-    const next = clone(docRef.current);
     try {
-      await upsertCustomerFromDoc(next);
-      commit(next, true);
+      await saveNow();
     } catch {}
     try {
-      if (sheetRef.current) await generatePdf(sheetRef.current, next.number);
+      if (sheetRef.current) await generatePdf(sheetRef.current, docRef.current.number);
       toast("PDF downloaded ✓");
     } catch (e) {
       toast("PDF error: " + ((e as Error)?.message || e));
     }
   }
   async function onWaSend() {
-    const next = clone(docRef.current);
-    await upsertCustomerFromDoc(next);
-    commit(next, true);
-    window.open(waLink(next.phone, quoteMessage(next)), "_blank");
+    await saveNow();
+    window.open(waLink(docRef.current.phone, quoteMessage(docRef.current)), "_blank");
   }
   function onWaRemind() {
     window.open(waLink(doc.phone, reminderMessage(doc)), "_blank");
@@ -467,7 +497,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
     if (docRef.current.kind === "invoice") return;
     const cur = clone(docRef.current);
     await upsertCustomerFromDoc(cur);
-    // Collision-proof id (cloud atomic) — never the old local nextNumber, which could UPSERT-overwrite.
+    // Collision-proof id + number — allocated atomically by the database.
     const inv = await createInvoice({
       customerId: cur.customerId,
       customerName: cur.customerName,
@@ -489,28 +519,9 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       date: cur.date,
     });
     cur.status = "Converted to Invoice";
-    cur.updatedAt = nowIso();
-    cur.synced = false;
-    await put("quotations", clone(cur));
-    trySync();
-    mirrorDoc(clone(cur)).catch(() => {});
+    commit(cur, true); // saves the source quote before navigating away
     toast("Invoice " + inv.number + " created · prices locked");
     router.push("/editor/" + inv.id);
-  }
-  async function onFolder() {
-    const next = clone(docRef.current);
-    await upsertCustomerFromDoc(next);
-    commit(next, true); // persist → mirror to any already-connected folders
-    const label = isInv ? "invoices" : "quotations";
-    // a folder covering this kind is already connected → this save already mirrored it
-    if (folderActiveFor(next.kind)) {
-      await mirrorDoc(next).catch(() => {});
-      toast("Saved " + next.number + " to the " + label + " backup folder");
-      return;
-    }
-    // otherwise open the picker now (a click = a valid user gesture) — scoped to this kind
-    const name = await connectFolder(isInv ? "invoices" : "quotations");
-    toast(name ? `Auto-saving ${label} to "${name}"` : "No folder chosen");
   }
   async function onDelete() {
     const ok = await confirmDialog({
@@ -519,10 +530,10 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
       confirmLabel: "Move to bin",
     });
     if (!ok) return;
-    await snapshotBefore(); // fresh restore point captured just before the delete
+    markDirty(false); // deleting — never re-save the doc on unmount
     const st = docStore(docRef.current);
-    await trashDoc(st, docRef.current.id); // soft-delete: kept locally + in the cloud, always recoverable
-    await metaSet("lastOpen", null);
+    await trashDoc(st, docRef.current.id); // soft-delete: kept in the cloud, always recoverable
+    prefSet("lastOpen", null);
     bumpData();
     toast(doc.number + " moved to Recycle bin");
     router.push(st === "invoices" ? "/invoices" : "/quotations");
@@ -784,7 +795,16 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
             </select>
           </>
         )}
-        <span className={"badge " + badgeCls} style={{ marginLeft: "auto" }}>
+        <button
+          className={"btn primary sm save-btn" + (dirty ? " save-needed" : " save-clean")}
+          style={{ marginLeft: "auto" }}
+          disabled={!dirty}
+          title={dirty ? "Save changes (Ctrl+S)" : "All changes saved"}
+          onClick={() => saveNow().then(() => toast("Saved ✓"))}
+        >
+          {dirty ? "Save" : "Saved ✓"}
+        </button>
+        <span className={"badge " + badgeCls}>
           {badgeText}
         </span>
       </div>
@@ -1142,7 +1162,6 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
           <MoreMenu>
             <button onClick={onPdf}>Download PDF</button>
             {!isInv && <button onClick={onWaRemind}>WhatsApp reminder</button>}
-            <button onClick={onFolder}>Save copy to folder</button>
             {(user?.role === "owner" || !isInv) && (
               <>
                 <div className="moremenu-sep" />
@@ -1189,7 +1208,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
 
       <p className="hint">
         Use the <b>arrow keys</b> to move between L · W · T · Pcs boxes, and <b>Enter</b> to drop to the next row (a new
-        row is added automatically). Everything autosaves.
+        row is added automatically). Click <b>Save</b> (or press <b>Ctrl+S</b>) to save your changes.
       </p>
     </div>
   );

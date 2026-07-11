@@ -1,5 +1,5 @@
 // Minimal service worker — required for notifications (esp. installed iOS PWAs).
-// Offline data lives in IndexedDB, so no caching here.
+// Data lives in the cloud database, so no caching here.
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener("notificationclick", (e) => {

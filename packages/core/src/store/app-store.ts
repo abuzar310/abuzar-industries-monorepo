@@ -1,5 +1,5 @@
-// Tiny vanilla external store for app-wide UI state (sync dot, toast, login gate,
-// auth identity, and a data-version counter that view components watch to refetch).
+// Tiny vanilla external store for app-wide UI state (sync dot, toast, and a
+// data-version counter that view components watch to refetch).
 // Read with useSyncExternalStore via the useApp() hook. Zero dependencies.
 import type { LocalUser, SyncState } from "@/lib/types";
 
@@ -9,11 +9,6 @@ export interface AppState {
   ready: boolean;
   syncState: SyncState;
   toast: string;
-  showLogin: boolean;
-  /** when true the login gate hides its "continue offline" escape hatch */
-  loginStrict: boolean;
-  authEmail: string;
-  isAdmin: boolean;
   /** bump to tell list/dashboard views their underlying data changed */
   dataVersion: number;
   /** global search box term, shared across list views */
@@ -30,10 +25,6 @@ let state: AppState = {
   ready: false,
   syncState: "local",
   toast: "",
-  showLogin: false,
-  loginStrict: false,
-  authEmail: "",
-  isAdmin: false,
   dataVersion: 0,
   searchTerm: "",
   user: null,
@@ -58,9 +49,6 @@ function set(patch: Partial<AppState>) {
 // ---- actions ----
 export const setReady = (ready: boolean) => set({ ready });
 export const setSyncState = (syncState: SyncState) => set({ syncState });
-export const setShowLogin = (showLogin: boolean, loginStrict = state.loginStrict) =>
-  set({ showLogin, loginStrict });
-export const setAuthIdentity = (authEmail: string, isAdmin: boolean) => set({ authEmail, isAdmin });
 export const bumpData = () => set({ dataVersion: state.dataVersion + 1 });
 export const setSearch = (searchTerm: string) => set({ searchTerm });
 export const setUser = (user: LocalUser | null) => set({ user });

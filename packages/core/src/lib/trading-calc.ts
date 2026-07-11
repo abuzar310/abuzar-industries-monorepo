@@ -1,4 +1,5 @@
-import { dateSortKey } from "./calc";
+// .ts extension so `pnpm check` can run this chain directly under plain node
+import { dateSortKey } from "./calc.ts";
 
 // Pure trading-account math (no db imports → unit-testable in plain node).
 // Mirrors the owner's Excel trading sheet:

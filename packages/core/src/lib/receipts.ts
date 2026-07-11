@@ -11,9 +11,8 @@
 // (beyond every quote's due — e.g. paying down an opening balance) is kept as an
 // account receipt. Result: Statements, Balances, the quotation and the Daybook all
 // move together.
-import { allRec, delRec, getRec, put } from "./db";
+import { allRec, delRec, getRec, put } from "./data";
 import { computeDoc, nowIso, uid } from "./calc";
-import { cloudDelete, trySync } from "./cloud";
 import { addExpense } from "./expenses";
 import { quoteBill } from "./payments";
 import type { Doc, Expense } from "./types";
@@ -89,7 +88,6 @@ export async function applyCustomerReceipt(inp: ReceiptInput): Promise<ReceiptRe
     fresh.paymentStatus = fresh.amountPaid <= 0 ? "Pending" : fresh.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
     fresh.paidLogged = fresh.amountPaid > 0;
     fresh.updatedAt = nowIso();
-    fresh.synced = false;
     await put("quotations", fresh);
 
     applied.push({ id: d.id, number: fresh.number, amount: apply });
@@ -207,7 +205,6 @@ export async function migrateAccountReceiptsToQuotes(): Promise<MigrationResult>
         collectedBy: rc.collectedBy,
         createdAt: rc.createdAt || nowIso(),
         updatedAt: nowIso(),
-        synced: false,
       } as Expense);
       st.payCash = r2(st.payCash + (isCash ? apply : 0));
       st.payUpi = r2(st.payUpi + (!isCash ? apply : 0));
@@ -218,7 +215,7 @@ export async function migrateAccountReceiptsToQuotes(): Promise<MigrationResult>
     if (remaining <= 0.5) {
       deletedReceiptIds.push(rc.id);
     } else if (remaining < original - 0.005) {
-      updatedReceipts.push({ ...rc, amount: remaining, updatedAt: nowIso(), synced: false });
+      updatedReceipts.push({ ...rc, amount: remaining, updatedAt: nowIso() });
       leftover = r2(leftover + remaining);
     } else {
       leftover = r2(leftover + original); // untouched — no open quote to absorb it
@@ -244,18 +241,13 @@ export async function migrateAccountReceiptsToQuotes(): Promise<MigrationResult>
       d.paymentStatus = d.amountPaid <= 0 ? "Pending" : d.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
       d.paidLogged = d.amountPaid > 0;
       d.updatedAt = nowIso();
-      d.synced = false;
       await put("quotations", d);
       quotesUpdated++;
     }
   }
 
   for (const e of updatedReceipts) await put("expenses", e);
-  for (const id of deletedReceiptIds) {
-    await delRec("expenses", id);
-    cloudDelete("expenses", id);
-  }
+  for (const id of deletedReceiptIds) await delRec("expenses", id);
 
-  trySync();
   return { scanned: receipts.length, receiptsConverted, payments: newPayments.length, quotesUpdated, leftover };
 }

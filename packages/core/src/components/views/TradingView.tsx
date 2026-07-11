@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { allRec } from "@/lib/db";
+import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { computeTrading, docTrade, getStockConfig, MONTH_NAMES, monthKey, setStockConfig } from "@/lib/trading";
 import { useApp } from "@/store/useApp";

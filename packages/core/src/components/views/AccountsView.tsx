@@ -1,8 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec } from "@/lib/db";
-import { bgPull } from "@/lib/cloud";
+import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import {
   acctLedger,
@@ -133,13 +132,6 @@ export default function AccountsView() {
   useEffect(() => {
     if (ready) load();
   }, [ready, dataVersion, load]);
-
-  // Accounts is cloud-authoritative: pull the newest cloud state every time the tab
-  // opens so what you see here always matches the cloud (never a stale local copy).
-  // bgPull → dataChanged → dataVersion bump → load() re-runs with fresh data.
-  useEffect(() => {
-    if (ready) bgPull();
-  }, [ready]);
 
   // print the on-screen statement once the print doc has rendered, then clear it
   useEffect(() => {

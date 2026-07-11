@@ -1,4 +1,5 @@
-// Core data model — mirrors the legacy IndexedDB record shapes exactly.
+// Core data model. Records live in the cloud database (the single source of
+// truth) and are cached in memory on the client — see lib/data.ts.
 
 export type Kind = "quotation" | "invoice";
 
@@ -90,7 +91,8 @@ export interface Doc {
   paidLogged?: boolean;
   createdAt: string;
   updatedAt: string;
-  synced: boolean;
+  /** legacy sync flag from the old local-first records — ignored now. */
+  synced?: boolean;
   stockDeducted: boolean;
   /** soft-delete: ISO time it was moved to the Recycle bin. Hidden from lists, restorable from Settings.
    *  Kept in the cloud too (not hard-deleted), so a delete is always recoverable on any device. */
@@ -127,7 +129,7 @@ export interface Customer {
   opening?: number;
   createdAt: string;
   updatedAt?: string;
-  synced: boolean;
+  synced?: boolean;
 }
 
 /** Purchase-side party — same shape as Customer, stored separately so sales customers
@@ -139,7 +141,7 @@ export interface Stock {
   name: string;
   cft: number;
   updatedAt: string;
-  synced: boolean;
+  synced?: boolean;
 }
 
 export type DocStore = "quotations" | "invoices";
@@ -150,7 +152,6 @@ export type StoreName =
   | "invoices"
   | "stock"
   | "expenses"
-  | "meta"
   | "sessions"
   | "ledgers"
   | "vouchers"
@@ -207,7 +208,7 @@ export interface Expense {
   collectedBy?: string;
   createdAt: string;
   updatedAt: string;
-  synced: boolean;
+  synced?: boolean;
 }
 
 /** A closed daybook session (handed over to the owner). Entries keep their
@@ -236,25 +237,11 @@ export interface DaybookSession {
   by: string;
   createdAt: string;
   updatedAt: string;
-  synced: boolean;
+  synced?: boolean;
 }
 
-export interface SupaConfig {
-  url: string;
-  key: string;
-  secure?: boolean;
-  openLock?: "never" | "daily" | "always";
-  /** legacy flag, kept for migration */
-  lockOnOpen?: boolean;
-}
-
-export interface AuthSession {
-  token: string;
-  refresh: string;
-  email: string;
-  exp: number;
-}
-
+/** "on" = everything saved to the cloud · "queue" = a write is on its way ·
+ *  "off" = offline (writes wait and retry) · "local" = booting. */
 export type SyncState = "local" | "queue" | "on" | "off";
 
 // ---- ledger (Tally-style double-entry general ledger) ----
@@ -292,7 +279,7 @@ export interface Ledger {
   notes: string;
   createdAt: string;
   updatedAt: string;
-  synced: boolean;
+  synced?: boolean;
 }
 
 export type VoucherType = "Receipt" | "Payment" | "Sales" | "Purchase" | "Journal" | "Contra";
@@ -317,5 +304,5 @@ export interface Voucher {
   sourceId?: string;
   createdAt: string;
   updatedAt: string;
-  synced: boolean;
+  synced?: boolean;
 }

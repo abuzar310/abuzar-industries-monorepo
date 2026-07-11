@@ -1,6 +1,5 @@
-import { allRec, delRec, put } from "./db";
+import { allRec, delRec, put } from "./data";
 import { nowIso, splitHandover, todayStr, uid } from "./calc";
-import { cloudDelete, trySync } from "./cloud";
 import type { DaybookSession, EntryType, Expense, PayMode } from "./types";
 
 export const ENTRY_TYPES: { value: EntryType; label: string; flow: "in" | "out" }[] = [
@@ -80,10 +79,8 @@ export async function addExpense(fields: {
     charge: !!fields.charge,
     createdAt: nowIso(),
     updatedAt: nowIso(),
-    synced: false,
   };
   await put("expenses", e);
-  trySync();
   return e;
 }
 
@@ -96,10 +93,7 @@ export { payAccounts as upiAccounts } from "./accounts";
 export async function deleteExpensesBySource(sourceId: string): Promise<number> {
   if (!sourceId) return 0;
   const linked = (await allExpenses()).filter((e) => e.sourceId === sourceId);
-  for (const e of linked) {
-    await delRec("expenses", e.id);
-    cloudDelete("expenses", e.id);
-  }
+  for (const e of linked) await delRec("expenses", e.id);
   return linked.length;
 }
 
@@ -156,10 +150,8 @@ export async function requestHandover(by: string, given?: number): Promise<Daybo
     pending: true,
     createdAt: now,
     updatedAt: now,
-    synced: false,
   };
   await put("sessions", session);
-  trySync();
   return session;
 }
 
@@ -173,23 +165,18 @@ export async function confirmHandover(id: string, by: string): Promise<boolean> 
   for (const e of openCash) {
     e.sessionId = ses.id;
     e.updatedAt = now;
-    e.synced = false;
     await put("expenses", e);
   }
   ses.pending = false;
   ses.confirmedBy = by;
   ses.updatedAt = now;
-  ses.synced = false;
   await put("sessions", ses);
-  trySync();
   return true;
 }
 
 /** Cancel a pending handover (owner declines or the manager withdraws) — nothing was archived. */
 export async function declineHandover(id: string): Promise<void> {
   await delRec("sessions", id);
-  cloudDelete("sessions", id);
-  trySync();
 }
 
 /** Delete a confirmed session record AND every entry it archived (its (prevClose, thisClose] window —
@@ -205,11 +192,6 @@ export async function deleteSession(id: string): Promise<void> {
     const at = e.createdAt || "";
     return !!at && at <= to && (!from || at > from);
   });
-  for (const e of entries) {
-    await delRec("expenses", e.id);
-    cloudDelete("expenses", e.id);
-  }
+  for (const e of entries) await delRec("expenses", e.id);
   await delRec("sessions", id);
-  cloudDelete("sessions", id);
-  trySync();
 }

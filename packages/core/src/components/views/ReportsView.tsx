@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { allRec } from "@/lib/db";
+import { allRec } from "@/lib/data";
 import { inr, pad } from "@/lib/calc";
 import { docTrade } from "@/lib/trading";
 import { brandFor } from "@/lib/brand";

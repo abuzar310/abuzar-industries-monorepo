@@ -2,8 +2,7 @@
 import { useState } from "react";
 import { inr, nowIso } from "@/lib/calc";
 import { addExpense } from "@/lib/expenses";
-import { delRec, getRec, put } from "@/lib/db";
-import { cloudDelete } from "@/lib/cloud";
+import { delRec, getRec, put } from "@/lib/data";
 import { statementsForQuote, type PartyStatement } from "@/lib/payments";
 import { USERS } from "@/lib/local-auth";
 import AccountPicker from "@/components/AccountPicker";
@@ -105,10 +104,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
   async function delLine(l: PartyStatement) {
     // synthetic lines ("from quote record") have no backing expense — they live only in the quote's
     // payCash/payUpi totals, so just reduce those aggregates (no expense to delete).
-    if (!l.synthetic) {
-      await delRec("expenses", l.id);
-      await cloudDelete("expenses", l.id);
-    }
+    if (!l.synthetic) await delRec("expenses", l.id);
     setAggregates(
       Math.max(0, r2((doc.payCash || 0) - (l.mode === "cash" ? l.amount : 0))),
       Math.max(0, r2((doc.payUpi || 0) - (l.mode === "upi" ? l.amount : 0))),
@@ -162,7 +158,6 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     e.label = isCash ? note.trim() : "";
     e.date = payDate ? toDmy(payDate) : e.date;
     e.updatedAt = nowIso();
-    e.synced = false;
     await put("expenses", e);
     // aggregate delta: drop the old contribution, add the new
     const nextCash = Math.max(0, r2((doc.payCash || 0) - (old.mode === "cash" ? old.amount : 0) + (isCash ? a : 0)));

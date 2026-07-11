@@ -6,7 +6,7 @@
 //
 // iOS note: a PWA only runs JS while it's open, so without a push server these fire
 // only while the app is in the foreground. True background delivery needs Web Push.
-import { allRec, metaGet, metaSet } from "./db";
+import { allRec, prefGet, prefSet } from "./data";
 import { computeDoc, inr, nowIso } from "./calc";
 import { allExpenses, allSessions, typeLabel } from "./expenses";
 import { getFeatures } from "./features";
@@ -19,13 +19,15 @@ let lastNotifiedAt = ""; // notifications: never re-alert on anything older than
 
 const whoName = (id: string) => USERS.find((u) => u.id === id)?.name || id;
 
-export async function loadNotifyState() {
-  lastSeen = await metaGet<string>("lastSeenExpenseAt", "");
-  lastNotifiedAt = await metaGet<string>("lastNotifiedAt", "");
+// Watermarks are DEVICE-LOCAL on purpose: each owner device should badge/alert
+// on what *it* hasn't seen yet.
+export function loadNotifyState() {
+  lastSeen = prefGet<string>("lastSeenExpenseAt", "");
+  lastNotifiedAt = prefGet<string>("lastNotifiedAt", "");
   // first ever run: start the notification clock now so we don't alert for all of history
   if (!lastNotifiedAt) {
     lastNotifiedAt = nowIso();
-    await metaSet("lastNotifiedAt", lastNotifiedAt);
+    prefSet("lastNotifiedAt", lastNotifiedAt);
   }
 }
 
@@ -100,12 +102,12 @@ export async function checkOwnerNotifications() {
   events.slice(-6).forEach((ev) => fire(ev.title, ev.body, ev.tag)); // cap the burst, never spam
   // advance past EVERY candidate so nothing re-fires, even the ones beyond the cap
   lastNotifiedAt = events.reduce((mx, ev) => (ev.at > mx ? ev.at : mx), lastNotifiedAt);
-  await metaSet("lastNotifiedAt", lastNotifiedAt);
+  prefSet("lastNotifiedAt", lastNotifiedAt);
 }
 
 /** Owner opened the daybook — clears the unseen badge only (never touches notifications). */
 export async function markExpensesSeen() {
   lastSeen = nowIso();
-  await metaSet("lastSeenExpenseAt", lastSeen);
+  prefSet("lastSeenExpenseAt", lastSeen);
   setUnseen(0);
 }

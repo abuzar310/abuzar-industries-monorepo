@@ -1,9 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { allRec, delRec, getRec, put } from "@/lib/db";
+import { allRec, delRec, getRec, put } from "@/lib/data";
 import { nowIso } from "@/lib/calc";
 import { stockKey } from "@/lib/stock";
-import { trySync } from "@/lib/cloud";
 import { useApp } from "@/store/useApp";
 import { bumpData } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
@@ -30,9 +29,8 @@ export default function StockView() {
   async function commit(key: string, patch: Partial<Stock>) {
     const s = await getRec<Stock>("stock", key);
     if (!s) return;
-    Object.assign(s, patch, { updatedAt: nowIso(), synced: false });
+    Object.assign(s, patch, { updatedAt: nowIso() });
     await put("stock", s);
-    trySync();
     bumpData();
   }
   async function applyAdjust(key: string) {
@@ -60,7 +58,6 @@ export default function StockView() {
       name: res.name.trim(),
       cft: Math.round((+res.cft || 0) * 100) / 100,
       updatedAt: nowIso(),
-      synced: false,
     });
     load();
   }
