@@ -1,4 +1,4 @@
-import { allRec, getRec, metaGet, metaSet, put } from "./data";
+import { allRec, getRec, listCached, metaGet, metaSet, put } from "./data";
 import { nowIso, uid } from "./calc";
 import type { Customer, Doc, Supplier } from "./types";
 
@@ -50,37 +50,46 @@ export async function upsertSupplierFromDoc(d: Doc): Promise<Supplier | undefine
   return s;
 }
 
+// One seed at a time: two views mounting together (or React re-running effects) used
+// to both see suppliersSeeded=false and seed concurrently → every supplier duplicated.
+let seeding: Promise<number> | null = null;
+
 /** One-time: copy parties from existing purchase invoices into the suppliers store
- *  (so Vandana etc. show up under Suppliers without re-typing). Idempotent. */
-export async function seedSuppliersFromPurchases(): Promise<number> {
+ *  (so Vandana etc. show up under Suppliers without re-typing). Idempotent + race-safe. */
+export function seedSuppliersFromPurchases(): Promise<number> {
+  if (!seeding) {
+    seeding = doSeed().catch((e) => {
+      seeding = null; // a failed run may retry later
+      throw e;
+    });
+  }
+  return seeding;
+}
+
+async function doSeed(): Promise<number> {
   const done = await metaGet("suppliersSeeded", false);
   if (done) return 0;
-  const [invs, custs, existing] = await Promise.all([
-    allRec<Doc>("invoices"),
-    allRec<Customer>("customers"),
-    allRec<Supplier>("suppliers"),
-  ]);
-  const byName = new Map(existing.map((s) => [(s.name || "").toLowerCase(), s]));
+  await metaSet("suppliersSeeded", true); // claim FIRST so a parallel boot can't seed too
+  const [invs, custs] = await Promise.all([allRec<Doc>("invoices"), allRec<Customer>("customers")]);
   let n = 0;
   for (const inv of invs) {
     if (inv.tradeType !== "buy") continue;
     const name = (inv.customerName || "").trim();
     if (!name) continue;
     const key = name.toLowerCase();
-    if (byName.has(key)) continue;
+    // check against the LIVE cache each iteration — never trust a stale snapshot
+    if (listCached<Supplier>("suppliers").some((s) => (s.name || "").toLowerCase() === key)) continue;
     const c =
       (inv.customerId && custs.find((x) => x.id === inv.customerId)) ||
       custs.find((x) => (x.name || "").toLowerCase() === key);
-    const s = await saveSupplier({
+    await saveSupplier({
       name,
       phone: inv.phone || c?.phone || "",
       address: inv.address || c?.address || "",
       gstin: inv.custGstin || c?.gstin || "",
       notes: c?.notes || "",
     });
-    byName.set(key, s);
     n++;
   }
-  await metaSet("suppliersSeeded", true);
   return n;
 }
