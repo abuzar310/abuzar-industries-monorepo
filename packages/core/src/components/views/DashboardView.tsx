@@ -156,6 +156,21 @@ export default function DashboardView() {
   const ledger = feat.acceptPayment ? partyLedger(quotes, exp, custs) : null;
   const totalOutstanding = ledger ? ledger.totalPending : 0;
   const dueCount = ledger ? ledger.parties.filter((p) => p.balance > 0.5).length : 0;
+  // reconcile with the Balances tab EXACTLY: its Billed = quote bills + old opening dues +
+  // directly-added dues. Split out the non-quote part so every card visibly adds up:
+  //   Total billed (= Balances) − Received (= Balances collected) = Outstanding
+  const allTimeQuotesBilled = feat.simpleQuote
+    ? quotes.reduce((s, qd) => {
+        if (qd.deletedAt || qd.purgedAt) return s;
+        const billable =
+          qd.status === "Created" ||
+          (+(qd.payCash || 0)) > 0 ||
+          (+(qd.payUpi || 0)) > 0 ||
+          (+(qd.amountPaid || 0)) > 0;
+        return billable ? s + quoteBill(qd) : s;
+      }, 0)
+    : 0;
+  const oldDues = ledger ? Math.round((ledger.totalBilled - allTimeQuotesBilled) * 100) / 100 : 0;
   const follow = quotes.filter((q) => q.status === "Follow-up Pending" && !q.deletedAt && !q.purgedAt);
   const lowStock = stk.filter((s) => (+s.cft || 0) <= 0);
 
@@ -182,12 +197,32 @@ export default function DashboardView() {
             ]
           : []),
         {
-          k: "Billed",
+          k: "Billed (quotes)",
           v: "₹ " + inr(periodRev),
           money: true,
-          sub: `${periodSaleCount} quote${periodSaleCount === 1 ? "" : "s"} created · ${periodLabel}`,
+          sub: `${periodSaleCount} quote${periodSaleCount === 1 ? "" : "s"} · ${periodLabel}`,
           onClick: () => router.push("/quotations"),
         },
+        // the piece Balances adds on top of quotes — so Dashboard and Balances always agree:
+        // Total billed − Received = Outstanding, to the paisa
+        ...(feat.acceptPayment && ledger && Math.abs(oldDues) > 0.5
+          ? [
+              {
+                k: "Old dues & charges",
+                v: "₹ " + inr(oldDues),
+                money: true,
+                sub: "opening balances + added dues · overall",
+                onClick: () => router.push("/payments"),
+              },
+              {
+                k: "Total billed",
+                v: "₹ " + inr(ledger.totalBilled),
+                money: true,
+                sub: "quotes + old dues · overall — same as Balances",
+                onClick: () => router.push("/payments"),
+              },
+            ]
+          : []),
         { k: "Quotes", v: String(periodSaleCount), sub: periodLabel, onClick: () => router.push("/quotations") },
         { k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/quotations") },
         ...(feat.acceptPayment
