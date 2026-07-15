@@ -105,6 +105,84 @@ export interface AccountLedger {
 
 const loadRegistry = () => metaGet<PayAccount[]>(META_KEY, []);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// "Clear log & start fresh" — a WATERMARK, never a delete. When the owner is
+// satisfied an account/holder is fully settled, we store a timestamp; the
+// Accounts page then hides everything at/before it and the running totals start
+// again from zero. The underlying payments are untouched everywhere else
+// (quotations, Statements, Balances, Daybook) and stay in the database forever.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CLEAR_KEY = "acctClearedAt";
+
+export const holderClearKey = (holderId: string) => "holder:" + holderId;
+export const acctClearKey = (name: string) => "acct:" + (name || "").trim().toLowerCase();
+/** stashes the holder's opening balance at clear time, so Undo can restore it */
+const openingStashKey = (holderId: string) => "opening:" + holderId;
+
+export async function stashHolderOpening(holderId: string, opening: number): Promise<void> {
+  const marks = await getClearMarks();
+  await metaSet(CLEAR_KEY, { ...marks, [openingStashKey(holderId)]: String(opening) });
+}
+
+/** The opening balance stashed at clear time (0 if none), removed from the stash. */
+export async function popHolderOpening(holderId: string): Promise<number> {
+  const marks = await getClearMarks();
+  const k = openingStashKey(holderId);
+  const v = +(marks[k] || 0) || 0;
+  if (k in marks) {
+    const next = { ...marks };
+    delete next[k];
+    await metaSet(CLEAR_KEY, next);
+  }
+  return v;
+}
+
+export const getClearMarks = () => metaGet<Record<string, string>>(CLEAR_KEY, {});
+
+/** Stamp a clear-mark (now) for a holder/account key. */
+export async function markCleared(key: string): Promise<void> {
+  const marks = await getClearMarks();
+  await metaSet(CLEAR_KEY, { ...marks, [key]: nowIso() });
+}
+
+/** Undo a clear-mark — the full history shows again (nothing was ever deleted). */
+export async function unmarkCleared(key: string): Promise<void> {
+  const marks = await getClearMarks();
+  if (!(key in marks)) return;
+  const next = { ...marks };
+  delete next[key];
+  await metaSet(CLEAR_KEY, next);
+}
+
+/** An AcctBalance with only the lines AFTER the watermark, totals re-derived.
+ *  Lines with no timestamp are treated as old history (hidden once cleared). */
+export function balanceAfter(a: AcctBalance, cutIso?: string): AcctBalance {
+  if (!cutIso) return a;
+  const lines = a.lines.filter((l) => (l.at || "") > cutIso);
+  let received = 0;
+  let ownerReceived = 0;
+  let collected = 0;
+  for (const l of lines) {
+    if (l.kind === "collect") {
+      collected += l.amount;
+    } else if (l.toOwner) {
+      ownerReceived += l.amount;
+    } else {
+      received += l.amount;
+      if (l.legacyCollected) collected += l.amount;
+    }
+  }
+  return {
+    name: a.name,
+    received: r2(received),
+    ownerReceived: r2(ownerReceived),
+    collected: r2(collected),
+    balance: r2(received - collected),
+    lines,
+  };
+}
+
 const isAccountPayment = (e: Expense) => {
   if (e.type !== "sale" || e.charge) return false;
   const acct = (e.account || "").trim();

@@ -5,20 +5,28 @@ import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import {
   acctLedger,
+  acctClearKey,
   addCollection,
   addHolder,
   addHolderAccount,
+  balanceAfter,
   deleteAccountEntry,
   deleteCollection,
+  getClearMarks,
+  holderClearKey,
   listCollections,
   listHolders,
   listPayAccounts,
+  markCleared,
   moveEntryAccount,
+  popHolderOpening,
   removeHolder,
   removeHolderAccount,
   removePayAccount,
   renameHolder,
   setHolderOpening,
+  stashHolderOpening,
+  unmarkCleared,
   type AccountCollection,
   type AcctBalance,
   type AcctStmtLine,
@@ -86,6 +94,9 @@ export default function AccountsView() {
   const [collections, setCollections] = useState<AccountCollection[]>([]);
   const [registry, setRegistry] = useState<PayAccount[]>([]);
   const [holders, setHolders] = useState<PayHolder[]>([]);
+  // "cleared log" watermarks — everything at/before a mark is hidden HERE only
+  // (never deleted; quotations / Statements / Balances / Daybook keep it all)
+  const [clearMarks, setClearMarks] = useState<Record<string, string>>({});
 
   // expand state — everything is OPEN by default (we track what's been collapsed), so the whole
   // ledger is visible at a glance without clicking into each holder/account.
@@ -120,13 +131,15 @@ export default function AccountsView() {
       listCollections(),
       listPayAccounts(),
       listHolders(),
-    ]).then(([qs, es, cs, cols, reg, hs]) => {
+      getClearMarks(),
+    ]).then(([qs, es, cs, cols, reg, hs, marks]) => {
       setQuotes(qs);
       setExpenses(es);
       setCustomers(cs);
       setCollections(cols);
       setRegistry(reg);
       setHolders(hs);
+      setClearMarks(marks);
     });
   }, []);
   useEffect(() => {
@@ -148,9 +161,12 @@ export default function AccountsView() {
     [expenses, collections, quotes, customers],
   );
 
-  // every named account, even ones with no activity yet (holder sub-accounts + legacy registry)
+  // every named account, even ones with no activity yet (holder sub-accounts + legacy registry).
+  // Each account's log is cut at its clear-mark: older lines are hidden and its totals restart.
   const accounts = useMemo(() => {
-    const seen = new Set(ledger.accounts.map((a) => lc(a.name)));
+    const cut = (a: AcctBalance) => balanceAfter(a, clearMarks[acctClearKey(a.name)]);
+    const base = ledger.accounts.map(cut);
+    const seen = new Set(base.map((a) => lc(a.name)));
     const empties: AcctBalance[] = [];
     const addEmpty = (name: string) => {
       const k = lc(name);
@@ -160,8 +176,8 @@ export default function AccountsView() {
     };
     holders.forEach((h) => h.accounts.forEach(addEmpty));
     registry.forEach((r) => addEmpty(r.name));
-    return [...ledger.accounts, ...empties];
-  }, [ledger, holders, registry]);
+    return [...base, ...empties];
+  }, [ledger, holders, registry, clearMarks]);
 
   const byName = useMemo(() => {
     const m = new Map<string, AcctBalance>();
@@ -203,14 +219,26 @@ export default function AccountsView() {
     });
   }, [ready, ungrouped, holders, load]);
 
-  // holder-level hand-overs (collections keyed by holderId)
+  // holder-level hand-overs (collections keyed by holderId), cut at the holder's clear-mark
   const holderCols = useCallback(
-    (id: string) => collections.filter((c) => c.holderId === id),
-    [collections],
+    (id: string) => {
+      const cut = clearMarks[holderClearKey(id)] || "";
+      return collections.filter((c) => c.holderId === id && (!cut || (c.createdAt || "") > cut));
+    },
+    [collections, clearMarks],
   );
   const holderColTotal = useMemo(
-    () => r2(collections.filter((c) => c.holderId).reduce((s, c) => s + (+c.amount || 0), 0)),
-    [collections],
+    () =>
+      r2(
+        collections
+          .filter((c) => {
+            if (!c.holderId) return false;
+            const cut = clearMarks[holderClearKey(c.holderId)] || "";
+            return !cut || (c.createdAt || "") > cut;
+          })
+          .reduce((s, c) => s + (+c.amount || 0), 0),
+      ),
+    [collections, clearMarks],
   );
 
   const holderAccounts = (h: PayHolder) =>
@@ -230,9 +258,12 @@ export default function AccountsView() {
   };
 
   // overall totals include holder opening balances + holder-level hand-overs
+  // (computed over the CUT accounts, so cleared history stays out of the tiles too)
   const totalOpening = r2(holders.reduce((s, h) => s + (h.opening || 0), 0));
-  const totalCollected = r2(ledger.totalCollected + holderColTotal);
-  const totalBalance = r2(ledger.totalReceived + totalOpening - totalCollected);
+  const sumReceived = r2(accounts.reduce((s, a) => s + a.received, 0));
+  const sumOwner = r2(accounts.reduce((s, a) => s + a.ownerReceived, 0));
+  const totalCollected = r2(accounts.reduce((s, a) => s + a.collected, 0) + holderColTotal);
+  const totalBalance = r2(sumReceived + totalOpening - totalCollected);
 
   // ── collect flow ──────────────────────────────────────────────────────────
   function startCollect(opts: { holderId?: string; account?: string }, balance: number, openKey: string) {
@@ -304,6 +335,63 @@ export default function AccountsView() {
     load();
     bumpData();
     toast("Moved to “" + to + "”");
+  }
+
+  // ── clear log & start fresh (owner) ──────────────────────────────────────
+  // Hides this card's settled history behind a watermark and restarts its totals
+  // at zero. NOTHING is deleted: every payment stays on its quotation and keeps
+  // showing in Statements / Balances / Daybook. Undo brings the log back anytime.
+  const isOwner = user?.role === "owner";
+  const clearedOn = (key: string) => {
+    const iso = clearMarks[key];
+    if (!iso) return "";
+    const d = new Date(iso);
+    return isNaN(+d) ? "" : d.toLocaleDateString("en-GB");
+  };
+  async function clearAccountLog(a: AcctBalance) {
+    const ok = await confirmDialog({
+      title: "Clear “" + a.name + "” and start fresh?",
+      message:
+        "This only resets THIS account's log — the " +
+        a.lines.length +
+        " entries are hidden here and the totals restart from ₹0. Nothing is deleted: every payment stays on its quotation, Statements, Balances and the Daybook. You can Undo anytime.",
+      confirmLabel: "Clear log",
+    });
+    if (!ok) return;
+    await markCleared(acctClearKey(a.name));
+    load();
+    bumpData();
+    toast("“" + a.name + "” starts fresh — history kept, Undo anytime");
+  }
+  async function clearHolderLog(h: PayHolder, v: ReturnType<typeof holderView>) {
+    const ok = await confirmDialog({
+      title: "Clear “" + h.name + "” and start fresh?",
+      message:
+        "Resets this holder's log (all their accounts + hand-overs" +
+        (v.opening > 0 ? " + the ₹" + inr(v.opening) + " opening balance" : "") +
+        ") back to ₹0 here. Nothing is deleted anywhere else — quotations, Statements, Balances and the Daybook keep every payment. You can Undo anytime.",
+      confirmLabel: "Clear log",
+    });
+    if (!ok) return;
+    await markCleared(holderClearKey(h.id));
+    for (const name of h.accounts) await markCleared(acctClearKey(name));
+    if ((h.opening || 0) > 0) {
+      await stashHolderOpening(h.id, h.opening || 0); // so Undo can put it back
+      await setHolderOpening(h.id, 0); // settled — fresh start owes nothing
+    }
+    load();
+    bumpData();
+    toast("“" + h.name + "” starts fresh — history kept, Undo anytime");
+  }
+  async function undoClear(keys: string[], label: string, holderId?: string) {
+    for (const k of keys) await unmarkCleared(k);
+    if (holderId) {
+      const prev = await popHolderOpening(holderId);
+      if (prev > 0) await setHolderOpening(holderId, prev);
+    }
+    load();
+    bumpData();
+    toast("“" + label + "” history is back");
   }
 
   // ── holder flow ───────────────────────────────────────────────────────────
@@ -567,6 +655,16 @@ export default function AccountsView() {
               >
                 Send
               </button>
+              {isOwner && cleared && (
+                <button
+                  className="btn sm"
+                  type="button"
+                  title="Everything is settled — hide this log here and start from ₹0 (nothing is deleted, undo anytime)"
+                  onClick={() => clearAccountLog(a)}
+                >
+                  Clear log
+                </button>
+              )}
             </>
           )}
           {grouped ? (
@@ -612,6 +710,15 @@ export default function AccountsView() {
         {isOpen &&
           (a.lines.length ? (
             a.lines.map(renderLine)
+          ) : clearMarks[acctClearKey(a.name)] ? (
+            <div className="stmt-sub" style={{ padding: "8px 12px", opacity: 0.7 }}>
+              Log cleared on {clearedOn(acctClearKey(a.name))} — fresh start. History is kept everywhere else.
+              {isOwner && !grouped && (
+                <button className="btn sm" type="button" style={{ marginLeft: 8 }} onClick={() => undoClear([acctClearKey(a.name)], a.name)}>
+                  Undo
+                </button>
+              )}
+            </div>
           ) : (
             <div className="stmt-sub" style={{ padding: "8px 12px", opacity: 0.7 }}>No UPI payments to this account yet.</div>
           ))}
@@ -639,8 +746,8 @@ export default function AccountsView() {
           </div>
           <div className="acct-stat">
             <span className="k">Received (UPI)</span>
-            <span className="v">₹ {inr(ledger.totalReceived)}</span>
-            <span className="sub">{ledger.totalOwner > 0.5 ? "+ ₹" + inr(ledger.totalOwner) + " to owner" : "collectable"}</span>
+            <span className="v">₹ {inr(sumReceived)}</span>
+            <span className="sub">{sumOwner > 0.5 ? "+ ₹" + inr(sumOwner) + " to owner" : "collectable"}</span>
           </div>
           <div className="acct-stat">
             <span className="k">Collected</span>
@@ -870,9 +977,34 @@ export default function AccountsView() {
                     <button className="btn sm" type="button" onClick={() => { setRenameForId(h.id); setRenameVal(h.name); }}>
                       Rename
                     </button>
+                    {isOwner && !due && (received > 0 || collected > 0) && (
+                      <button
+                        className="btn sm"
+                        type="button"
+                        title="All settled — hide this holder's log here and start from ₹0 (nothing is deleted, undo anytime)"
+                        onClick={() => clearHolderLog(h, { subs, opening, received, owner, collected, balance, cols })}
+                      >
+                        Clear log
+                      </button>
+                    )}
                     <button className="btn sm danger" type="button" onClick={() => delHolder(h)}>
                       Remove
                     </button>
+                  </div>
+                )}
+                {clearMarks[holderClearKey(h.id)] && received === 0 && cols.length === 0 && (
+                  <div className="stmt-sub" style={{ padding: "6px 4px", opacity: 0.7 }}>
+                    Log cleared on {clearedOn(holderClearKey(h.id))} — fresh start. History is kept everywhere else.
+                    {isOwner && (
+                      <button
+                        className="btn sm"
+                        type="button"
+                        style={{ marginLeft: 8 }}
+                        onClick={() => undoClear([holderClearKey(h.id), ...h.accounts.map(acctClearKey)], h.name, h.id)}
+                      >
+                        Undo
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
