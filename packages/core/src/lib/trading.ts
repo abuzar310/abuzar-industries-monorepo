@@ -23,8 +23,24 @@ export interface StockConfig {
   cft: number;
   /** physical closing-stock CFT count; null = auto (available − sold) */
   closingCft: number | null;
+  /** Gross-profit method: "stock" (from closing stock, default) or
+   *  "percent" (GP = sales × gpPercent, closing value balances — the accountant's way). */
+  gpMode?: "stock" | "percent";
+  /** GP % of sales when gpMode is "percent" (e.g. 10). */
+  gpPercent?: number;
 }
 
-export const getStockConfig = () => metaGet<StockConfig>("stockConfig", { value: 0, cft: 0, closingCft: null });
+const DEFAULT_CFG: StockConfig = { value: 0, cft: 0, closingCft: null, gpMode: "stock", gpPercent: 10 };
+
+export const getStockConfig = async (): Promise<StockConfig> => ({
+  ...DEFAULT_CFG,
+  ...(await metaGet<Partial<StockConfig>>("stockConfig", {})),
+});
 export const setStockConfig = (c: StockConfig) =>
-  metaSet("stockConfig", { value: r2(c.value), cft: r2(c.cft), closingCft: c.closingCft == null ? null : r2(c.closingCft) });
+  metaSet("stockConfig", {
+    value: r2(c.value),
+    cft: r2(c.cft),
+    closingCft: c.closingCft == null ? null : r2(c.closingCft),
+    gpMode: c.gpMode === "percent" ? "percent" : "stock",
+    gpPercent: r2(Math.max(0, Math.min(100, +(c.gpPercent ?? 10) || 0))),
+  });

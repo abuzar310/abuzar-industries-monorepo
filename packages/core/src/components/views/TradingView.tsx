@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
-import { computeTrading, docTrade, getStockConfig, MONTH_NAMES, monthKey, setStockConfig } from "@/lib/trading";
+import { computeTrading, docTrade, getStockConfig, MONTH_NAMES, monthKey, setStockConfig, type StockConfig } from "@/lib/trading";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import type { Doc } from "@/lib/types";
@@ -22,10 +22,11 @@ interface MRow {
 export default function TradingView() {
   const { dataVersion } = useApp();
   const [invoices, setInvoices] = useState<Doc[]>([]);
-  const [cfg, setCfg] = useState({ value: 0, cft: 0, closingCft: null as number | null });
+  const [cfg, setCfg] = useState<StockConfig>({ value: 0, cft: 0, closingCft: null, gpMode: "stock", gpPercent: 10 });
   const [oVal, setOVal] = useState("");
   const [oCft, setOCft] = useState("");
   const [cCft, setCCft] = useState("");
+  const [gpPct, setGpPct] = useState("10");
   const [editOpening, setEditOpening] = useState(false);
   const [showMonths, setShowMonths] = useState(false);
 
@@ -36,14 +37,26 @@ export default function TradingView() {
       setOVal(c.value ? String(c.value) : "");
       setOCft(c.cft ? String(c.cft) : "");
       setCCft(c.closingCft != null ? String(c.closingCft) : "");
+      setGpPct(String(c.gpPercent ?? 10));
     });
   }, []);
   useEffect(() => {
     load();
   }, [load, dataVersion]);
 
+  const gpMode = cfg.gpMode === "percent" ? "percent" : "stock";
   const lines = invoices.map(docTrade);
-  const tr = computeTrading(lines, { value: cfg.value, cft: cfg.cft }, cfg.closingCft);
+  const tr = computeTrading(lines, { value: cfg.value, cft: cfg.cft }, cfg.closingCft, {
+    mode: gpMode,
+    percent: cfg.gpPercent ?? 10,
+  });
+
+  async function saveGp(next: Partial<StockConfig>) {
+    const merged = { ...cfg, ...next };
+    await setStockConfig(merged);
+    setCfg(merged);
+    bumpData();
+  }
 
   // per-invoice stock movements: a sale DEBITS stock (amount + CFT), a purchase CREDITS it.
   const dsort = (d: string) => {
@@ -91,7 +104,7 @@ export default function TradingView() {
 
   async function saveCfg(e: React.FormEvent) {
     e.preventDefault();
-    await setStockConfig({ value: +oVal || 0, cft: +oCft || 0, closingCft: cCft.trim() === "" ? null : +cCft || 0 });
+    await setStockConfig({ ...cfg, value: +oVal || 0, cft: +oCft || 0, closingCft: cCft.trim() === "" ? null : +cCft || 0 });
     setEditOpening(false);
     load();
     bumpData();
@@ -125,6 +138,88 @@ export default function TradingView() {
             <div><b>₹{inr(tr.saleValue)}</b><span>Sales · {num(tr.saleCft)} CFT sold</span></div>
             <div><b style={{ color: tr.grossProfit < 0 ? "var(--t-cr)" : "var(--t-dr)" }}>₹{inr(tr.grossProfit)}</b><span>Gross profit</span></div>
           </div>
+
+          {/* how Gross Profit is computed — the owner picks the method, the math is shown in full */}
+          <div className="gp-ctl">
+            <span className="gp-lbl">Gross profit method</span>
+            <div className="rep-seg" role="group" aria-label="Gross profit method">
+              <button
+                className={gpMode === "percent" ? "on" : ""}
+                title="GP = Sales × your % (closing stock value balances the account — like the accountant's sheet)"
+                onClick={() => { saveGp({ gpMode: "percent" }); toast("GP = sales × " + (cfg.gpPercent ?? 10) + "%"); }}
+              >
+                % of sales
+              </button>
+              <button
+                className={gpMode === "stock" ? "on" : ""}
+                title="GP = Sales − cost of goods sold (closing stock counted at average cost rate)"
+                onClick={() => { saveGp({ gpMode: "stock" }); toast("GP from closing stock"); }}
+              >
+                From closing stock
+              </button>
+            </div>
+            {gpMode === "percent" && (
+              <label className="gp-pct">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={100}
+                  step="0.1"
+                  value={gpPct}
+                  onChange={(e) => setGpPct(e.target.value)}
+                  onBlur={() => {
+                    const p = Math.max(0, Math.min(100, +gpPct || 0));
+                    if (p !== (cfg.gpPercent ?? 10)) {
+                      saveGp({ gpPercent: p });
+                      toast("GP set to " + p + "% of sales");
+                    }
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+                />
+                <span>%</span>
+              </label>
+            )}
+          </div>
+          <div className="gp-how">
+            {gpMode === "percent" ? (
+              <>
+                GP = Sales ₹{inr(tr.saleValue)} × {num(cfg.gpPercent ?? 10)}% = <b>₹{inr(tr.grossProfit)}</b>
+                {" "}· Closing stock is the balancing figure: ₹{inr(tr.availValue)} + ₹{inr(tr.grossProfit)} − ₹{inr(tr.saleValue)} = <b>₹{inr(tr.closingValue)}</b>
+              </>
+            ) : (
+              <>
+                Closing = {num(tr.closingCft)} CFT × avg ₹{inr(tr.avgRate)} = ₹{inr(tr.closingValue)}
+                {" "}· GP = Sales ₹{inr(tr.saleValue)} − cost of goods sold ₹{inr(tr.cogs)} = <b>₹{inr(tr.grossProfit)}</b>
+              </>
+            )}
+          </div>
+
+          {/* Trading A/C — the accountant's two-sided sheet; both sides always total the same */}
+          <table className="t-table narrow" style={{ marginTop: 12 }}>
+            <thead>
+              <tr><th colSpan={4} style={{ textAlign: "center" }}>Trading A/C — both sides balance</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Opening</td><td className="amt">{inr(tr.openValue)}</td>
+                <td>Sell</td><td className="amt">{inr(tr.saleValue)}</td>
+              </tr>
+              <tr>
+                <td>Purchase</td><td className="amt">{inr(tr.purchaseValue)}</td>
+                <td>Closing</td><td className="amt">{inr(tr.closingValue)}</td>
+              </tr>
+              <tr>
+                <td>G/P {gpMode === "percent" ? "(" + num(cfg.gpPercent ?? 10) + "% of sell)" : "(from stock)"}</td>
+                <td className="amt" style={{ color: tr.grossProfit < 0 ? "var(--t-cr)" : "inherit" }}>{inr(tr.grossProfit)}</td>
+                <td /><td />
+              </tr>
+              <tr className="tot">
+                <td>Total</td><td className="amt">{inr(tr.totalAmount)}</td>
+                <td>Total</td><td className="amt">{inr(tr.saleValue + tr.closingValue)}</td>
+              </tr>
+            </tbody>
+          </table>
 
           <table className="t-table narrow">
             <thead><tr><th>Particulars</th><th className="amt">CFT</th><th className="amt">Value ₹</th></tr></thead>

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
 import { computeDoc, inr } from "@/lib/calc";
 import { partyLedger, quoteBill, quoteLedger } from "@/lib/payments";
-import { computeTrading, docTrade, getStockConfig } from "@/lib/trading";
+import { computeTrading, docTrade, getStockConfig, type StockConfig } from "@/lib/trading";
 import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense, Stock } from "@/lib/types";
@@ -23,7 +23,7 @@ export default function DashboardView() {
   const [stk, setStk] = useState<Stock[]>([]);
   const [exp, setExp] = useState<Expense[]>([]);
   const [custs, setCusts] = useState<Customer[]>([]);
-  const [stockCfg, setStockCfg] = useState({ value: 0, cft: 0, closingCft: null as number | null });
+  const [stockCfg, setStockCfg] = useState<StockConfig>({ value: 0, cft: 0, closingCft: null });
   const [month, setMonth] = useState(""); // "" = all months
   const [year, setYear] = useState(""); // "" = all years
 
@@ -148,7 +148,11 @@ export default function DashboardView() {
     [invs],
   );
   const tr = useMemo(
-    () => computeTrading(activeInvs.map(docTrade), { value: stockCfg.value, cft: stockCfg.cft }, stockCfg.closingCft),
+    () =>
+      computeTrading(activeInvs.map(docTrade), { value: stockCfg.value, cft: stockCfg.cft }, stockCfg.closingCft, {
+        mode: stockCfg.gpMode === "percent" ? "percent" : "stock",
+        percent: stockCfg.gpPercent ?? 10,
+      }),
     [activeInvs, stockCfg],
   );
 

@@ -32,6 +32,23 @@ assert.equal(z.avgRate, 0);
 assert.equal(z.closingValue, 0);
 assert.equal(z.grossProfit, 0);
 
+// "% of sales" mode reproduces the accountant's TRADING A/C 2026-27 sheet exactly:
+// Opening 44,99,771.16 + Purchase 65,76,037.13 + G/P (10% of sell) = Sell 42,12,813.44 + Closing 72,84,276.19,
+// both sides totalling 1,14,97,089.63.
+const acct = computeTrading(
+  [
+    { cft: 0, taxable: 6576037.13, gst: 0, grand: 6576037.13, buy: true },
+    { cft: 0, taxable: 4212813.44, gst: 0, grand: 4212813.44, buy: false },
+  ],
+  { value: 4499771.16, cft: 0 },
+  null,
+  { mode: "percent", percent: 10 },
+);
+assert.equal(acct.grossProfit, 421281.34); // 10% of sell
+assert.equal(acct.closingValue, 7284276.19); // balancing figure
+assert.equal(acct.totalAmount, 11497089.63); // Opening + Purchase + GP
+assert.equal(Math.round((acct.saleValue + acct.closingValue) * 100) / 100, 11497089.63); // = other side
+
 assert.equal(monthKey("05-06-26"), "06-26");
 
 console.log("trading.check: all assertions passed ✓");

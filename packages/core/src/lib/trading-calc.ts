@@ -19,6 +19,17 @@ export interface Opening {
   value: number;
   cft: number;
 }
+
+/** How Gross Profit is computed — the owner picks, the math is shown either way.
+ *  - "stock":   from closing stock (CFT × avg rate): COGS = available − closing; GP = Sales − COGS.
+ *  - "percent": the accountant's way: GP = Sales × p%; CLOSING is then the balancing
+ *               figure (Opening + Purchases + GP − Sales), exactly like the Excel
+ *               trading account where both sides total the same. */
+export interface GpConfig {
+  mode: "stock" | "percent";
+  /** GP as % of sales (only for mode "percent"), e.g. 10. */
+  percent?: number;
+}
 export interface Trading {
   openValue: number;
   openCft: number;
@@ -42,8 +53,14 @@ export interface Trading {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** closingCftOverride: physical stock count (from the sheet). null = auto (avail − sold). */
-export function computeTrading(lines: TradeLine[], opening: Opening, closingCftOverride: number | null): Trading {
+/** closingCftOverride: physical stock count (from the sheet). null = auto (avail − sold).
+ *  gp: how gross profit is derived (defaults to "stock" — the closing-stock method). */
+export function computeTrading(
+  lines: TradeLine[],
+  opening: Opening,
+  closingCftOverride: number | null,
+  gp: GpConfig = { mode: "stock" },
+): Trading {
   let purchaseValue = 0,
     purchaseGst = 0,
     purchaseTotal = 0,
@@ -71,9 +88,21 @@ export function computeTrading(lines: TradeLine[], opening: Opening, closingCftO
   const availCft = openCft + purchaseCft;
   const avgRate = availCft > 0 ? availValue / availCft : 0;
   const closingCft = closingCftOverride != null ? closingCftOverride : availCft - saleCft;
-  const closingValue = closingCft * avgRate;
+
+  let closingValue: number;
+  let grossProfit: number;
+  if (gp.mode === "percent") {
+    // accountant's method: GP is a chosen % of sales; closing stock VALUE balances
+    // the account (Opening + Purchases + GP = Sales + Closing, both sides equal)
+    grossProfit = saleValue * ((+gp.percent! || 0) / 100);
+    closingValue = availValue + grossProfit - saleValue;
+  } else {
+    // closing-stock method: value the physical/auto closing CFT at the average
+    // cost rate; profit is whatever sales made over that cost
+    closingValue = closingCft * avgRate;
+    grossProfit = saleValue - (availValue - closingValue);
+  }
   const cogs = availValue - closingValue;
-  const grossProfit = saleValue - cogs;
   return {
     openValue: r2(openValue),
     openCft: r2(openCft),
