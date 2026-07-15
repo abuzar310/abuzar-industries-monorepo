@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
 import { computeDoc, inr } from "@/lib/calc";
-import { partyLedger, quoteBill } from "@/lib/payments";
+import { partyLedger, quoteBill, quoteLedger } from "@/lib/payments";
 import { computeTrading, docTrade, getStockConfig } from "@/lib/trading";
 import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
@@ -87,7 +87,15 @@ export default function DashboardView() {
   let periodBuyCount = 0;
   if (feat.simpleQuote) {
     quotes.forEach((qd) => {
-      if (qd.status !== "Created" || qd.deletedAt || qd.purgedAt || !inPeriod(qd.createdAt)) return;
+      if (qd.deletedAt || qd.purgedAt || !inPeriodDmy(qd.date)) return;
+      // a quote is a bill once it's Created OR once money is recorded against it (an
+      // advance on a Draft) — the SAME rule as Balances/Statements, so all three agree
+      const billable =
+        qd.status === "Created" ||
+        (+(qd.payCash || 0)) > 0 ||
+        (+(qd.payUpi || 0)) > 0 ||
+        (+(qd.amountPaid || 0)) > 0;
+      if (!billable) return;
       periodRev += quoteBill(qd);
       periodCft += computeDoc(qd).secCft.reduce((s, c) => s + c, 0);
       periodSaleCount++;
@@ -112,24 +120,24 @@ export default function DashboardView() {
   periodCft = Math.round(periodCft * 100) / 100;
   periodBuyCft = Math.round(periodBuyCft * 100) / 100;
 
-  // money ACTUALLY received in the period (quote payments + direct receipts, dues excluded) —
-  // this is "Sales received"; the quotation totals above are only what was billed
+  // money ACTUALLY received in the period — the EXACT same rule as the Statements tab
+  // (payments on live quotations incl. legacy on-quote amounts, + direct customer receipts),
+  // so the Sales card always reconciles with Statements. Bin-quote payments and unlinked
+  // daybook entries are excluded, exactly as they are there.
   let periodReceived = 0;
   let periodPayCount = 0;
   if (feat.acceptPayment) {
+    for (const r of quoteLedger(quotes, exp).quotes) {
+      for (const s of r.statements) {
+        if (!inPeriodDmy(s.date)) continue;
+        periodReceived += +s.amount || 0;
+        periodPayCount++;
+      }
+    }
     exp.forEach((e) => {
-      if (e.type !== "sale" || e.charge || !inPeriodDmy(e.date)) return;
+      if (e.type !== "sale" || e.charge || !e.custId || !inPeriodDmy(e.date)) return;
       periodReceived += +e.amount || 0;
       periodPayCount++;
-    });
-    // legacy payments recorded only on the quote itself (payCash/payUpi never itemised)
-    quotes.forEach((qd) => {
-      if (qd.deletedAt || qd.purgedAt || !inPeriodDmy(qd.date)) return;
-      const itemised = exp
-        .filter((e) => e.type === "sale" && e.sourceId === qd.id)
-        .reduce((s, e) => s + (+e.amount || 0), 0);
-      const onQuote = (+(qd.payCash || 0)) + (+(qd.payUpi || 0));
-      if (onQuote > itemised + 0.5) periodReceived += onQuote - itemised;
     });
     periodReceived = Math.round(periodReceived * 100) / 100;
   }
