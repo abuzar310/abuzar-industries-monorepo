@@ -227,7 +227,13 @@ export default function StatementsView() {
               <>
                 <div className="pbd-lbl">Payments received · {r.statements.length}</div>
                 {r.statements.map((s) => (
-                  <div className="stmt" key={s.id}>
+                  <div
+                    className="stmt"
+                    key={s.id}
+                    style={{ cursor: "pointer" }}
+                    title={"Open #" + r.number + " at this payment"}
+                    onClick={() => router.push("/editor/" + r.id + "?pay=" + encodeURIComponent(s.id))}
+                  >
                     <div className={"stmt-ic " + (s.mode === "upi" ? "upi" : "cash")}>{s.mode === "upi" ? "UPI" : "₹"}</div>
                     <div className="stmt-main">
                       <div className="stmt-to">{s.mode === "upi" ? s.account || "UPI account" : s.note || "Cash in hand"}</div>

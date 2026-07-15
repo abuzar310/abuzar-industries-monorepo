@@ -59,6 +59,14 @@ export default function DashboardView() {
     if (month && d.slice(5, 7) !== month) return false;
     return true;
   };
+  // period filter over a business date ("dd-mm-yy") — payments are often backdated,
+  // so they're bucketed by when the money actually came in, not when it was typed
+  const inPeriodDmy = (dmy?: string) => {
+    const [, mm = "", yy = ""] = (dmy || "").split("-");
+    if (year && "20" + yy !== year) return false;
+    if (month && mm !== month) return false;
+    return true;
+  };
   const years = useMemo(() => {
     const set = new Set<string>();
     [...quotes, ...invs].forEach((d) => {
@@ -104,6 +112,28 @@ export default function DashboardView() {
   periodCft = Math.round(periodCft * 100) / 100;
   periodBuyCft = Math.round(periodBuyCft * 100) / 100;
 
+  // money ACTUALLY received in the period (quote payments + direct receipts, dues excluded) —
+  // this is "Sales received"; the quotation totals above are only what was billed
+  let periodReceived = 0;
+  let periodPayCount = 0;
+  if (feat.acceptPayment) {
+    exp.forEach((e) => {
+      if (e.type !== "sale" || e.charge || !inPeriodDmy(e.date)) return;
+      periodReceived += +e.amount || 0;
+      periodPayCount++;
+    });
+    // legacy payments recorded only on the quote itself (payCash/payUpi never itemised)
+    quotes.forEach((qd) => {
+      if (qd.deletedAt || qd.purgedAt || !inPeriodDmy(qd.date)) return;
+      const itemised = exp
+        .filter((e) => e.type === "sale" && e.sourceId === qd.id)
+        .reduce((s, e) => s + (+e.amount || 0), 0);
+      const onQuote = (+(qd.payCash || 0)) + (+(qd.payUpi || 0));
+      if (onQuote > itemised + 0.5) periodReceived += onQuote - itemised;
+    });
+    periodReceived = Math.round(periodReceived * 100) / 100;
+  }
+
   // stock snapshot (all-time): opening + purchases − sold = closing (same as the Stock tab)
   const activeInvs = useMemo(
     () => invs.filter((d) => !d.deletedAt && !d.purgedAt),
@@ -131,7 +161,25 @@ export default function DashboardView() {
   type Card = { k: string; v: string; money?: boolean; danger?: boolean; sub?: string; onClick?: () => void };
   const cards: Card[] = feat.simpleQuote
     ? [
-        { k: "Sales", v: "₹ " + inr(periodRev), money: true, sub: periodLabel, onClick: () => router.push("/quotations") },
+        // "Sales" = money actually RECEIVED in the period; what was merely quoted is "Billed"
+        ...(feat.acceptPayment
+          ? [
+              {
+                k: "Sales (received)",
+                v: "₹ " + inr(periodReceived),
+                money: true,
+                sub: `${periodPayCount} payment${periodPayCount === 1 ? "" : "s"} · ${periodLabel}`,
+                onClick: () => router.push("/statements"),
+              },
+            ]
+          : []),
+        {
+          k: "Billed",
+          v: "₹ " + inr(periodRev),
+          money: true,
+          sub: `${periodSaleCount} quote${periodSaleCount === 1 ? "" : "s"} created · ${periodLabel}`,
+          onClick: () => router.push("/quotations"),
+        },
         { k: "Quotes", v: String(periodSaleCount), sub: periodLabel, onClick: () => router.push("/quotations") },
         { k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/quotations") },
         ...(feat.acceptPayment

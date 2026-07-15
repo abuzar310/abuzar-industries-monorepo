@@ -38,5 +38,5 @@ export default function Page() {
       </div>
     );
   }
-  return <Editor key={doc.id} initialDoc={doc} action={sp.get("action") || undefined} />;
+  return <Editor key={doc.id} initialDoc={doc} action={sp.get("action") || undefined} payFocus={sp.get("pay") || undefined} />;
 }

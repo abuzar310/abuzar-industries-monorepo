@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { inr, nowIso } from "@/lib/calc";
 import { addExpense } from "@/lib/expenses";
 import { delRec, getRec, put } from "@/lib/data";
@@ -41,9 +41,11 @@ interface Props {
   setAggregates: (payCash: number, payUpi: number) => void;
   onClearAll: () => void;
   reload: () => void;
+  /** payment line to scroll to + flash on open (arriving from a Statements click) */
+  highlightId?: string;
 }
 
-export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, isOwner, onFinalPrice, setAggregates, onClearAll, reload }: Props) {
+export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, isOwner, onFinalPrice, setAggregates, onClearAll, reload, highlightId }: Props) {
   const [amt, setAmt] = useState("");
   const [mode, setMode] = useState<"cash" | "owner" | "upi" | "uowner">("cash");
   const [acct, setAcct] = useState("");
@@ -56,6 +58,20 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
   const received = r2(lines.reduce((s, l) => s + l.amount, 0));
   const balance = r2(finalPrice - received);
   const settled = balance <= 0.5;
+
+  // arriving from a Statements click: scroll to the exact payment line and flash it
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const flashed = useRef(false);
+  const hasLine = !!highlightId && lines.some((l) => l.id === highlightId);
+  useEffect(() => {
+    if (!highlightId || !hasLine || flashed.current) return;
+    flashed.current = true;
+    setFlashId(highlightId);
+    const el = document.getElementById("payline-" + highlightId);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = setTimeout(() => setFlashId(null), 3200);
+    return () => clearTimeout(t);
+  }, [highlightId, hasLine]);
 
   async function addLine() {
     const a = Math.max(0, +amt || 0);
@@ -194,7 +210,11 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
         </div>
 
         {lines.map((l) => (
-          <div className={"pb-r" + (editId === l.id ? " pb-editing" : "")} key={l.id}>
+          <div
+            className={"pb-r" + (editId === l.id ? " pb-editing" : "") + (flashId === l.id ? " pb-flash" : "")}
+            id={"payline-" + l.id}
+            key={l.id}
+          >
             <span className="pb-amt">₹ {inr(l.amount)}</span>
             <span className="pb-mode">{l.mode === "upi" ? (l.toOwner ? "UPI → Owner" : "UPI") : l.toOwner ? "Cash → Owner" : "Cash"}</span>
             <span className="pb-acct">

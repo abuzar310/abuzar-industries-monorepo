@@ -647,6 +647,9 @@ body{
 .save-btn.save-needed{animation:save-pulse 1.6s infinite}
 .save-btn.save-clean{background:transparent; color:var(--ink-faint); border-color:var(--line); box-shadow:none; cursor:default}
 @keyframes save-pulse{0%,100%{box-shadow:0 0 0 0 rgba(176,124,40,.45)}50%{box-shadow:0 0 0 6px rgba(176,124,40,.08)}}
+/* payment line landed on from a Statements click — flash it so the eye finds it */
+.pb-r.pb-flash{animation:pay-flash 3.2s ease-out}
+@keyframes pay-flash{0%,55%{background:rgba(176,124,40,.22);box-shadow:inset 3px 0 0 var(--accent, #b07c28)}100%{background:transparent;box-shadow:none}}
 .btn.wa{background:linear-gradient(180deg,#27a35b,#1f8a4c); color:#fff; border-color:#17703c; box-shadow:0 2px 10px -2px rgba(31,138,76,.45)}
 .btn.wa:hover{background:linear-gradient(180deg,#1f8a4c,#17703c)}
 .btn.warn{border-color:rgba(165,61,41,.4); color:var(--danger); background:#fff}

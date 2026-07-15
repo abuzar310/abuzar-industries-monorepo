@@ -47,7 +47,16 @@ const STATUS_BADGE: Record<string, string> = {
 const WOOD_PRICES: Record<string, number> = { teak: 4000, "white teak": 2600 };
 const DEFAULT_RATES = new Set(Object.values(WOOD_PRICES));
 
-export default function Editor({ initialDoc, action }: { initialDoc: Doc; action?: string }) {
+export default function Editor({
+  initialDoc,
+  action,
+  payFocus,
+}: {
+  initialDoc: Doc;
+  action?: string;
+  /** a payment line (expense id) to scroll to + flash — set when arriving from Statements */
+  payFocus?: string;
+}) {
   const router = useRouter();
   const [doc, setDoc] = useState<Doc>(initialDoc);
   const docRef = useRef(doc);
@@ -1187,6 +1196,7 @@ export default function Editor({ initialDoc, action }: { initialDoc: Doc; action
           setAggregates={setPayAggregates}
           onClearAll={onClearPayments}
           reload={loadExpenses}
+          highlightId={payFocus}
         />
       )}
 

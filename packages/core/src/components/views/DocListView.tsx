@@ -6,11 +6,45 @@ import { computeDoc, dateSortKey, inr } from "@/lib/calc";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { seriesOf } from "@/lib/invoice-id";
 import { trashDoc } from "@/lib/trash";
+import { quoteBill } from "@/lib/payments";
+import { getFeatures } from "@/lib/features";
+import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { Doc } from "@/lib/types";
 import { StatusBadge } from "./DocList";
+
+const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Month-wise rollup of quotations for the printable report (dd-mm-yy → per-month rows). */
+function monthlyReport(docs: Doc[]) {
+  interface MRow { key: string; label: string; count: number; created: number; billed: number; paid: number }
+  const map = new Map<string, MRow>();
+  for (const d of docs) {
+    const [, mm = "", yy = ""] = (d.date || "").split("-");
+    const key = yy && mm ? `20${yy}-${mm}` : "unknown";
+    const label = yy && mm ? `${MONTH_NAMES[parseInt(mm, 10)] || mm} 20${yy}` : "No date";
+    let r = map.get(key);
+    if (!r) {
+      r = { key, label, count: 0, created: 0, billed: 0, paid: 0 };
+      map.set(key, r);
+    }
+    r.count++;
+    const isCreated = d.status !== "Draft";
+    if (isCreated) {
+      r.created++;
+      r.billed += quoteBill(d);
+    }
+    r.paid += +d.amountPaid || 0;
+  }
+  const rows = [...map.values()].sort((a, b) => b.key.localeCompare(a.key));
+  const total = rows.reduce(
+    (t, r) => ({ count: t.count + r.count, created: t.created + r.created, billed: t.billed + r.billed, paid: t.paid + r.paid }),
+    { count: 0, created: 0, billed: 0, paid: 0 },
+  );
+  return { rows, total };
+}
 
 interface Props {
   store: "quotations" | "invoices";
@@ -34,7 +68,7 @@ function applySearch(arr: Doc[], q: string) {
 }
 
 export default function DocListView({ store, title, sub, statusCol, empty, showNew }: Props) {
-  const { dataVersion, searchTerm, user } = useApp();
+  const { dataVersion, searchTerm, user, brandMode } = useApp();
   // manager can delete quotations too (soft-delete → Recycle bin; owner controls restore/purge);
   // invoices stay owner-only
   const canDelete = user?.role === "owner" || store === "quotations";
@@ -47,6 +81,9 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
   // series (R-1, R-2, …), so they get their own tab and stay out of "Sales"
   const [trade, setTrade] = useState<"all" | "sell" | "buy" | "rent">("all");
   const isInv = store === "invoices";
+  // quotations report (unofficial app): printable month-wise summary — count + billed + received
+  const canReport = !isInv && getFeatures().simpleQuote;
+  const brand = brandFor(brandMode);
 
   useEffect(() => {
     let live = true;
@@ -79,6 +116,8 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     const base = isInv && trade !== "all" ? docs.filter((d) => seriesOf(d) === trade) : docs;
     return applySearch(base, q || searchTerm);
   }, [docs, q, searchTerm, isInv, trade]);
+  // report follows the active search, so what you print is what you see
+  const report = useMemo(() => (canReport ? monthlyReport(filtered) : null), [canReport, filtered]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const pageN = Math.min(page, pages - 1);
   const view = filtered.slice(pageN * PAGE, pageN * PAGE + PAGE);
@@ -138,6 +177,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
 
   return (
     <>
+    <div className={canReport ? "cd-screen" : undefined}>
       <div className="sectitle">
         {title} <small>— {sub}</small>
       </div>
@@ -150,6 +190,11 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
           {isInv && (
             <button className="btn sm" onClick={onNewPurchase}>
               + New Purchase
+            </button>
+          )}
+          {canReport && (
+            <button className="btn sm" title="Month-wise totals — print or save as PDF" onClick={() => window.print()}>
+              Report / PDF
             </button>
           )}
         </div>
@@ -264,6 +309,72 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
           <button className="btn sm" disabled={pageN >= pages - 1} onClick={() => { setPage(pageN + 1); setSel(new Set()); }}>Next ›</button>
         </div>
       )}
+    </div>
+
+    {/* printable quotations report — rendered only on print (Report / PDF button) */}
+    {canReport && report && (
+      <div className="cd-print rep-doc">
+        <div className="rep-head">
+          <div className="rep-brand">
+            <h1>{brand.name || "Quotations"}</h1>
+            {brand.addr && <div>{brand.addr}</div>}
+          </div>
+          <div className="rep-meta">
+            <div className="rep-title">Quotations report</div>
+            <div className="rep-period">{q || searchTerm ? `Search: “${(q || searchTerm).trim()}”` : "All time · month-wise"}</div>
+          </div>
+        </div>
+
+        <div className="rep-summary cols3">
+          <div><b>{report.total.count}</b><span>Quotations</span></div>
+          <div><b>₹{inr(report.total.billed)}</b><span>Billed (created)</span></div>
+          <div><b>₹{inr(report.total.paid)}</b><span>Received</span></div>
+        </div>
+
+        <table className="rep-table">
+          <colgroup>
+            <col style={{ width: "22%" }} />
+            <col style={{ width: "13%" }} />
+            <col style={{ width: "13%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "17%" }} />
+            <col style={{ width: "17%" }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th className="amt">Quotes</th>
+              <th className="amt">Created</th>
+              <th className="amt">Billed ₹</th>
+              <th className="amt">Received ₹</th>
+              <th className="amt">Balance ₹</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.rows.map((r) => (
+              <tr key={r.key}>
+                <td>{r.label}</td>
+                <td className="amt">{r.count}</td>
+                <td className="amt">{r.created}</td>
+                <td className="amt">{inr(r.billed)}</td>
+                <td className="amt">{inr(r.paid)}</td>
+                <td className="amt">{inr(Math.max(0, r.billed - r.paid))}</td>
+              </tr>
+            ))}
+            <tr className="rep-tot">
+              <td>Total — {report.rows.length} month{report.rows.length === 1 ? "" : "s"}</td>
+              <td className="amt">{report.total.count}</td>
+              <td className="amt">{report.total.created}</td>
+              <td className="amt">{inr(report.total.billed)}</td>
+              <td className="amt">{inr(report.total.paid)}</td>
+              <td className="amt">{inr(Math.max(0, report.total.billed - report.total.paid))}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div className="rep-foot">Generated {new Date().toLocaleDateString("en-GB")} · {brand.name}</div>
+      </div>
+    )}
     </>
   );
 }
