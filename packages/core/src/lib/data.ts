@@ -22,6 +22,7 @@ import { bumpData, setSyncState } from "@/store/app-store";
 export const DATA_STORES: StoreName[] = [
   "customers", "suppliers", "quotations", "invoices", "stock", "expenses",
   "sessions", "ledgers", "vouchers", "collections", "payHolders",
+  "workers", "attendance",
 ];
 
 // ---- in-memory cache ----

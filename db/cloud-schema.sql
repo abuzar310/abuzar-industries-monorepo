@@ -36,7 +36,9 @@ declare
   t text;
   tables text[] := array[
     'documents', 'customers', 'suppliers', 'stock', 'expenses', 'sessions',
-    'ledgers', 'vouchers', 'collections', 'pay_holders'
+    'ledgers', 'vouchers', 'collections', 'pay_holders',
+    -- attendance: workers (name + daily rate) and one row per worker per day
+    'workers', 'attendance'
   ];
 begin
   foreach sch in array array['official', 'unofficial'] loop

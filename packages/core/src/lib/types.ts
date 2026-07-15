@@ -156,7 +156,9 @@ export type StoreName =
   | "ledgers"
   | "vouchers"
   | "collections"
-  | "payHolders";
+  | "payHolders"
+  | "workers"
+  | "attendance";
 
 // ---- app navigation (each app supplies its own tab set) ----
 export interface Tab {

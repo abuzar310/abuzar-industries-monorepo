@@ -1279,6 +1279,49 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .tform .btn{align-self:flex-end}
 @media(max-width:640px){ .tsum{grid-template-columns:repeat(2,1fr)} .tform input{width:100%} .tform label{flex:1 1 45%} }
 
+/* ---------- attendance (weekly wage register) ---------- */
+.att-nav{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:8px}
+.att-week{font-family:var(--mono); font-size:13px; font-weight:700; color:var(--walnut); font-variant-numeric:tabular-nums; white-space:nowrap}
+.att-payday-sel{display:inline-flex; align-items:center; gap:6px; font-family:var(--disp); font-size:11px; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint)}
+.att-payday-sel select{font:inherit; font-size:13px; text-transform:none; letter-spacing:0; padding:6px 8px;
+  border:1px solid var(--line-2); border-radius:8px; background:var(--panel-2); color:var(--ink); cursor:pointer}
+.att-payday-sel select:disabled{cursor:default; opacity:.65}
+.att-table th.att-day{text-align:center}
+.att-table th.att-day small{display:block; font-weight:400; font-family:var(--mono); color:#8a7b45; font-size:10.5px}
+.att-table td.att-day{text-align:center; padding:4px 4px}
+.att-table td.att-payday, .att-table th.att-payday{background:rgba(148,99,23,.08)}
+.att-cell{width:30px; height:30px; border:1px solid var(--t-line); border-radius:8px; background:#fff;
+  font-family:var(--mono); font-size:14px; font-weight:700; color:var(--t-ink); cursor:pointer; transition:all var(--t-fast)}
+.att-cell:hover{border-color:var(--t-head); transform:scale(1.08)}
+.att-cell.f{background:rgba(86,107,59,.16); border-color:var(--green); color:var(--green)}
+.att-cell.h{background:rgba(176,124,40,.16); border-color:var(--ochre); color:var(--ochre-deep)}
+.att-cell.a{background:rgba(165,61,41,.13); border-color:var(--danger); color:var(--danger)}
+.att-name{background:none; border:0; padding:0; font:inherit; font-weight:700; color:var(--t-ink); cursor:pointer; white-space:nowrap}
+.att-name:hover{color:var(--t-head); text-decoration:underline}
+.att-rate{display:block; font-family:var(--mono); font-size:10.5px; color:#8a7b45}
+.att-acts{white-space:nowrap; text-align:right}
+.att-acts .btn{margin-left:5px}
+/* phones: finger-sized day cells + the worker name stays pinned while the week scrolls */
+@media (max-width: 640px){
+  .att-cell{width:40px; height:40px; font-size:15px}
+  .att-table th:first-child, .att-table td:first-child{
+    position:sticky; left:0; z-index:2; background:#FAF6EF;
+    box-shadow:2px 0 0 rgba(0,0,0,.04);
+  }
+  .att-table td.att-day{padding:5px 3px}
+}
+.att-acts .pb-x{margin-left:5px}
+.att-pays{background:var(--t-cream2); border-bottom:1px solid var(--t-line); padding:6px 14px !important}
+.att-pay{display:inline-flex; align-items:center; gap:7px; margin:3px 12px 3px 0;
+  font-family:var(--mono); font-size:12px; color:#6a5a2f}
+.att-pay b{color:var(--t-cr)}
+.att-payform{display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; margin:3px 0}
+.att-payform input{font:inherit; font-size:13px; padding:5px 8px; border:1px solid var(--t-line); border-radius:6px; background:#fff}
+.att-payform input[type=number]{width:90px} .att-payform input[type=date]{width:135px} .att-payform input[type=text]{width:150px}
+.att-payform input:focus{outline:none; border-color:var(--t-head)}
+@media(max-width:640px){ .att-week{flex-basis:100%; order:-1} }
+
 /* ---------- daybook quick-entry (clean In/Out) ---------- */
 .db-entry{display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-top:8px}
 .db-seg{display:flex; gap:6px; flex-basis:100%}
