@@ -17,10 +17,19 @@ import { StatusBadge } from "./DocList";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+/** A quote counts as money once it's Created OR money was taken against it — the ONE
+ *  rule shared with Balances/Statements/Customers. A pure Draft is never counted. */
+const isBillable = (d: Doc) =>
+  d.status === "Created" ||
+  (+(d.payCash || 0)) > 0 ||
+  (+(d.payUpi || 0)) > 0 ||
+  (+(d.amountPaid || 0)) > 0;
+
 /** Month-wise report of quotations: every quotation listed under its month, with
- *  per-month subtotals (count + amount + paid) and grand totals. */
+ *  per-month subtotals (count + amount + paid) and grand totals. Pure drafts are
+ *  listed for completeness but their amounts are NOT counted in any total. */
 function monthlyReport(docs: Doc[]) {
-  interface MGroup { key: string; label: string; docs: Doc[]; count: number; billed: number; paid: number }
+  interface MGroup { key: string; label: string; docs: Doc[]; count: number; billedCount: number; billed: number; paid: number }
   const map = new Map<string, MGroup>();
   for (const d of docs) {
     const [, mm = "", yy = ""] = (d.date || "").split("-");
@@ -28,19 +37,22 @@ function monthlyReport(docs: Doc[]) {
     const label = yy && mm ? `${MONTH_NAMES[parseInt(mm, 10)] || mm} 20${yy}` : "No date";
     let g = map.get(key);
     if (!g) {
-      g = { key, label, docs: [], count: 0, billed: 0, paid: 0 };
+      g = { key, label, docs: [], count: 0, billedCount: 0, billed: 0, paid: 0 };
       map.set(key, g);
     }
     g.docs.push(d);
     g.count++;
-    g.billed += quoteBill(d);
-    g.paid += +d.amountPaid || 0;
+    if (isBillable(d)) {
+      g.billedCount++;
+      g.billed += quoteBill(d);
+      g.paid += +d.amountPaid || 0;
+    }
   }
   const groups = [...map.values()].sort((a, b) => b.key.localeCompare(a.key));
   for (const g of groups) g.docs.sort((a, b) => (b.number || "").localeCompare(a.number || ""));
   const total = groups.reduce(
-    (t, g) => ({ count: t.count + g.count, billed: t.billed + g.billed, paid: t.paid + g.paid }),
-    { count: 0, billed: 0, paid: 0 },
+    (t, g) => ({ count: t.count + g.count, billedCount: t.billedCount + g.billedCount, billed: t.billed + g.billed, paid: t.paid + g.paid }),
+    { count: 0, billedCount: 0, billed: 0, paid: 0 },
   );
   return { groups, total };
 }
