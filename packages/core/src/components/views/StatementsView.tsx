@@ -6,6 +6,7 @@ import { inr } from "@/lib/calc";
 import { quoteLedger } from "@/lib/payments";
 import { brandFor } from "@/lib/brand";
 import { USERS } from "@/lib/local-auth";
+import { useFocusFlash } from "@/lib/use-focus-flash";
 import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
@@ -29,6 +30,7 @@ export default function StatementsView() {
   const { ready, dataVersion, brandMode } = useApp();
   const brand = brandFor(brandMode);
   const router = useRouter();
+  const flash = useFocusFlash(); // dashboard card → highlight the exact figure it meant
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [custs, setCusts] = useState<Customer[]>([]);
@@ -115,7 +117,7 @@ export default function StatementsView() {
 
       {/* summary — tracks the current filter */}
       <div className="pay-hero">
-        <div className="ph-main">
+        <div className={"ph-main" + flash("payments")}>
           <span className="ph-k">Payments recorded</span>
           <span className="ph-v">{totalPayCount}</span>
           <span className="ph-sub">
@@ -125,7 +127,7 @@ export default function StatementsView() {
           </span>
         </div>
         <div className="ph-side">
-          <div className="ph-tile rec">
+          <div className={"ph-tile rec" + flash("received")}>
             <small>Received</small>
             <b>₹ {inr(totalReceived)}</b>
           </div>

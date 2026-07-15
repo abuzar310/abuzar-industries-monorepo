@@ -5,6 +5,7 @@ import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { partyLedger, type Party } from "@/lib/payments";
 import { USERS } from "@/lib/local-auth";
+import { useFocusFlash } from "@/lib/use-focus-flash";
 import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
@@ -36,6 +37,7 @@ export default function PaymentsView() {
     if (ready) load();
   }, [ready, dataVersion, load]);
 
+  const flash = useFocusFlash(); // dashboard card → highlight the exact figure it meant
   const { parties, totalBilled, totalPaid, totalPending } = partyLedger(quotes, expenses, customers);
   const dueCount = parties.filter((p) => p.balance > 0.5).length;
   const term = q.trim().toLowerCase();
@@ -56,7 +58,7 @@ export default function PaymentsView() {
 
       {/* overall tracker */}
       <div className="pay-hero">
-        <div className="ph-main">
+        <div className={"ph-main" + flash("pending")}>
           <span className="ph-k">Total Pending</span>
           <span className="ph-v">₹ {inr(totalPending)}</span>
           <span className="ph-sub">
@@ -64,11 +66,11 @@ export default function PaymentsView() {
           </span>
         </div>
         <div className="ph-side">
-          <div className="ph-tile rec">
+          <div className={"ph-tile rec" + flash("received")}>
             <small>Received</small>
             <b>₹ {inr(totalPaid)}</b>
           </div>
-          <div className="ph-tile">
+          <div className={"ph-tile" + flash("billed")}>
             <small>Billed</small>
             <b>₹ {inr(totalBilled)}</b>
           </div>

@@ -192,7 +192,7 @@ export default function DashboardView() {
                 v: "₹ " + inr(periodReceived),
                 money: true,
                 sub: `${periodPayCount} payment${periodPayCount === 1 ? "" : "s"} · ${periodLabel}`,
-                onClick: () => router.push("/statements"),
+                onClick: () => router.push("/statements?focus=received"),
               },
             ]
           : []),
@@ -212,14 +212,14 @@ export default function DashboardView() {
                 v: "₹ " + inr(oldDues),
                 money: true,
                 sub: "opening balances + added dues · overall",
-                onClick: () => router.push("/payments"),
+                onClick: () => router.push("/payments?focus=billed"),
               },
               {
                 k: "Total billed",
                 v: "₹ " + inr(ledger.totalBilled),
                 money: true,
                 sub: "quotes + old dues · overall — same as Balances",
-                onClick: () => router.push("/payments"),
+                onClick: () => router.push("/payments?focus=billed"),
               },
             ]
           : []),
@@ -232,7 +232,7 @@ export default function DashboardView() {
                 v: "₹ " + inr(totalOutstanding),
                 money: true,
                 sub: dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"} · overall` : "all clear",
-                onClick: () => router.push("/payments"),
+                onClick: () => router.push("/payments?focus=pending"),
               },
             ]
           : []),
@@ -329,7 +329,13 @@ export default function DashboardView() {
           <div className="panel-card">
             {recentPays.length ? (
               recentPays.map((e) => (
-                <div className="stmt" key={e.id}>
+                <div
+                  className="stmt"
+                  key={e.id}
+                  style={{ cursor: "pointer" }}
+                  title="Open the quotation at this payment"
+                  onClick={() => router.push("/editor/" + e.sourceId + "?pay=" + encodeURIComponent(e.id))}
+                >
                   <div className={"stmt-ic " + (e.mode === "upi" ? "upi" : "cash")}>{e.mode === "upi" ? "UPI" : "₹"}</div>
                   <div className="stmt-main">
                     <div className="stmt-to">{quoteById.get(e.sourceId || "")?.customerName || "Payment"}</div>
