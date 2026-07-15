@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
 import { computeDoc, dateSortKey, inr } from "@/lib/calc";
@@ -17,33 +17,32 @@ import { StatusBadge } from "./DocList";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** Month-wise rollup of quotations for the printable report (dd-mm-yy → per-month rows). */
+/** Month-wise report of quotations: every quotation listed under its month, with
+ *  per-month subtotals (count + amount + paid) and grand totals. */
 function monthlyReport(docs: Doc[]) {
-  interface MRow { key: string; label: string; count: number; created: number; billed: number; paid: number }
-  const map = new Map<string, MRow>();
+  interface MGroup { key: string; label: string; docs: Doc[]; count: number; billed: number; paid: number }
+  const map = new Map<string, MGroup>();
   for (const d of docs) {
     const [, mm = "", yy = ""] = (d.date || "").split("-");
-    const key = yy && mm ? `20${yy}-${mm}` : "unknown";
+    const key = yy && mm ? `20${yy}-${mm}` : "0000-00";
     const label = yy && mm ? `${MONTH_NAMES[parseInt(mm, 10)] || mm} 20${yy}` : "No date";
-    let r = map.get(key);
-    if (!r) {
-      r = { key, label, count: 0, created: 0, billed: 0, paid: 0 };
-      map.set(key, r);
+    let g = map.get(key);
+    if (!g) {
+      g = { key, label, docs: [], count: 0, billed: 0, paid: 0 };
+      map.set(key, g);
     }
-    r.count++;
-    const isCreated = d.status !== "Draft";
-    if (isCreated) {
-      r.created++;
-      r.billed += quoteBill(d);
-    }
-    r.paid += +d.amountPaid || 0;
+    g.docs.push(d);
+    g.count++;
+    g.billed += quoteBill(d);
+    g.paid += +d.amountPaid || 0;
   }
-  const rows = [...map.values()].sort((a, b) => b.key.localeCompare(a.key));
-  const total = rows.reduce(
-    (t, r) => ({ count: t.count + r.count, created: t.created + r.created, billed: t.billed + r.billed, paid: t.paid + r.paid }),
-    { count: 0, created: 0, billed: 0, paid: 0 },
+  const groups = [...map.values()].sort((a, b) => b.key.localeCompare(a.key));
+  for (const g of groups) g.docs.sort((a, b) => (b.number || "").localeCompare(a.number || ""));
+  const total = groups.reduce(
+    (t, g) => ({ count: t.count + g.count, billed: t.billed + g.billed, paid: t.paid + g.paid }),
+    { count: 0, billed: 0, paid: 0 },
   );
-  return { rows, total };
+  return { groups, total };
 }
 
 interface Props {
@@ -116,8 +115,25 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     const base = isInv && trade !== "all" ? docs.filter((d) => seriesOf(d) === trade) : docs;
     return applySearch(base, q || searchTerm);
   }, [docs, q, searchTerm, isInv, trade]);
-  // report follows the active search, so what you print is what you see
+  // report follows the active search, so what you export is what you see
   const report = useMemo(() => (canReport ? monthlyReport(filtered) : null), [canReport, filtered]);
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  async function downloadReport() {
+    if (!reportRef.current || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      const { generatePdf } = await import("@/lib/pdf");
+      const d = new Date();
+      const stamp = `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
+      await generatePdf(reportRef.current, "quotations-report-" + stamp);
+      toast("Report PDF downloaded ✓");
+    } catch (e) {
+      toast("PDF error: " + ((e as Error)?.message || e));
+    } finally {
+      setPdfBusy(false);
+    }
+  }
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const pageN = Math.min(page, pages - 1);
   const view = filtered.slice(pageN * PAGE, pageN * PAGE + PAGE);
@@ -177,7 +193,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
 
   return (
     <>
-    <div className={canReport ? "cd-screen" : undefined}>
+    <div>
       <div className="sectitle">
         {title} <small>— {sub}</small>
       </div>
@@ -193,8 +209,13 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
             </button>
           )}
           {canReport && (
-            <button className="btn sm" title="Month-wise totals — print or save as PDF" onClick={() => window.print()}>
-              Report / PDF
+            <button
+              className="btn sm"
+              title="Download a month-wise quotations report as PDF"
+              disabled={pdfBusy}
+              onClick={downloadReport}
+            >
+              {pdfBusy ? "Preparing…" : "Download report PDF"}
             </button>
           )}
         </div>
@@ -311,68 +332,90 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       )}
     </div>
 
-    {/* printable quotations report — rendered only on print (Report / PDF button) */}
+    {/* quotations report — laid out off-screen, exported as a PDF download.
+        Every quotation is listed under its month with per-month subtotals. */}
     {canReport && report && (
-      <div className="cd-print rep-doc">
-        <div className="rep-head">
-          <div className="rep-brand">
-            <h1>{brand.name || "Quotations"}</h1>
-            {brand.addr && <div>{brand.addr}</div>}
+      <div style={{ position: "fixed", left: -10000, top: 0, width: 900, pointerEvents: "none" }} aria-hidden="true">
+        <div ref={reportRef} className="rep-doc" style={{ display: "block", background: "#FAF6EF", padding: 24 }}>
+          <div className="rep-head">
+            <div className="rep-brand">
+              <h1>{brand.name || "Quotations"}</h1>
+              {brand.addr && <div>{brand.addr}</div>}
+            </div>
+            <div className="rep-meta">
+              <div className="rep-title">Quotations report</div>
+              <div className="rep-period">{q || searchTerm ? `Search: “${(q || searchTerm).trim()}”` : "All time · month-wise"}</div>
+            </div>
           </div>
-          <div className="rep-meta">
-            <div className="rep-title">Quotations report</div>
-            <div className="rep-period">{q || searchTerm ? `Search: “${(q || searchTerm).trim()}”` : "All time · month-wise"}</div>
+
+          <div className="rep-summary cols3">
+            <div><b>{report.total.count}</b><span>Quotations</span></div>
+            <div><b>₹{inr(report.total.billed)}</b><span>Total amount</span></div>
+            <div><b>₹{inr(report.total.paid)}</b><span>Received</span></div>
           </div>
-        </div>
 
-        <div className="rep-summary cols3">
-          <div><b>{report.total.count}</b><span>Quotations</span></div>
-          <div><b>₹{inr(report.total.billed)}</b><span>Billed (created)</span></div>
-          <div><b>₹{inr(report.total.paid)}</b><span>Received</span></div>
-        </div>
+          {report.groups.map((g) => (
+            <div key={g.key} style={{ marginTop: 14 }}>
+              <div className="rep-title" style={{ marginBottom: 6 }}>
+                {g.label} — {g.count} quotation{g.count === 1 ? "" : "s"} · ₹{inr(g.billed)}
+              </div>
+              <table className="rep-table">
+                <colgroup>
+                  <col style={{ width: "5%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "15%" }} />
+                  <col style={{ width: "28%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: "13%" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className="c-n">#</th>
+                    <th>Date</th>
+                    <th>Quote No</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th className="amt">Amount ₹</th>
+                    <th className="amt">Paid ₹</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {g.docs.map((d, i) => (
+                    <tr key={d.id}>
+                      <td className="c-n">{i + 1}</td>
+                      <td className="c-date">{d.date}</td>
+                      <td className="c-no">{d.number}</td>
+                      <td className="c-cust">{d.customerName || "Walk-in"}</td>
+                      <td>{d.status}</td>
+                      <td className="amt">{inr(quoteBill(d))}</td>
+                      <td className="amt">{inr(+d.amountPaid || 0)}</td>
+                    </tr>
+                  ))}
+                  <tr className="rep-tot">
+                    <td colSpan={5}>{g.label} total — {g.count} quotation{g.count === 1 ? "" : "s"}</td>
+                    <td className="amt">{inr(g.billed)}</td>
+                    <td className="amt">{inr(g.paid)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ))}
 
-        <table className="rep-table">
-          <colgroup>
-            <col style={{ width: "22%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "17%" }} />
-            <col style={{ width: "17%" }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th className="amt">Quotes</th>
-              <th className="amt">Created</th>
-              <th className="amt">Billed ₹</th>
-              <th className="amt">Received ₹</th>
-              <th className="amt">Balance ₹</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.rows.map((r) => (
-              <tr key={r.key}>
-                <td>{r.label}</td>
-                <td className="amt">{r.count}</td>
-                <td className="amt">{r.created}</td>
-                <td className="amt">{inr(r.billed)}</td>
-                <td className="amt">{inr(r.paid)}</td>
-                <td className="amt">{inr(Math.max(0, r.billed - r.paid))}</td>
+          <table className="rep-table" style={{ marginTop: 14 }}>
+            <tbody>
+              <tr className="rep-tot">
+                <td style={{ width: "74%" }}>
+                  Grand total — {report.total.count} quotation{report.total.count === 1 ? "" : "s"} across {report.groups.length} month{report.groups.length === 1 ? "" : "s"}
+                </td>
+                <td className="amt" style={{ width: "13%" }}>{inr(report.total.billed)}</td>
+                <td className="amt" style={{ width: "13%" }}>{inr(report.total.paid)}</td>
               </tr>
-            ))}
-            <tr className="rep-tot">
-              <td>Total — {report.rows.length} month{report.rows.length === 1 ? "" : "s"}</td>
-              <td className="amt">{report.total.count}</td>
-              <td className="amt">{report.total.created}</td>
-              <td className="amt">{inr(report.total.billed)}</td>
-              <td className="amt">{inr(report.total.paid)}</td>
-              <td className="amt">{inr(Math.max(0, report.total.billed - report.total.paid))}</td>
-            </tr>
-          </tbody>
-        </table>
+            </tbody>
+          </table>
 
-        <div className="rep-foot">Generated {new Date().toLocaleDateString("en-GB")} · {brand.name}</div>
+          <div className="rep-foot">Generated {new Date().toLocaleDateString("en-GB")} · {brand.name}</div>
+        </div>
       </div>
     )}
     </>
