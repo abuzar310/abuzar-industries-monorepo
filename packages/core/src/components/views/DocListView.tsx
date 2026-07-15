@@ -362,9 +362,14 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
 
           <div className="rep-summary cols3">
             <div><b>{report.total.count}</b><span>Quotations</span></div>
-            <div><b>₹{inr(report.total.billed)}</b><span>Total amount</span></div>
+            <div><b>₹{inr(report.total.billed)}</b><span>Billed amount</span></div>
             <div><b>₹{inr(report.total.paid)}</b><span>Received</span></div>
           </div>
+          {report.total.count > report.total.billedCount && (
+            <div style={{ fontSize: 12, color: "#8a7f6d", marginTop: 6 }}>
+              Draft quotations with no payment are listed in (brackets) but never counted in any total.
+            </div>
+          )}
 
           {report.groups.map((g) => (
             <div key={g.key} style={{ marginTop: 14 }}>
@@ -394,18 +399,21 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                 </thead>
                 <tbody>
                   {g.docs.map((d, i) => (
-                    <tr key={d.id}>
+                    <tr key={d.id} style={isBillable(d) ? undefined : { color: "#8a7f6d" }}>
                       <td className="c-n">{i + 1}</td>
                       <td className="c-date">{d.date}</td>
                       <td className="c-no">{d.number}</td>
                       <td className="c-cust">{d.customerName || "Walk-in"}</td>
-                      <td>{d.status}</td>
-                      <td className="amt">{inr(quoteBill(d))}</td>
+                      <td>{isBillable(d) ? d.status : "Draft — not counted"}</td>
+                      <td className="amt">{isBillable(d) ? inr(quoteBill(d)) : "(" + inr(quoteBill(d)) + ")"}</td>
                       <td className="amt">{inr(+d.amountPaid || 0)}</td>
                     </tr>
                   ))}
                   <tr className="rep-tot">
-                    <td colSpan={5}>{g.label} total — {g.count} quotation{g.count === 1 ? "" : "s"}</td>
+                    <td colSpan={5}>
+                      {g.label} total — {g.billedCount} billed quotation{g.billedCount === 1 ? "" : "s"}
+                      {g.count > g.billedCount ? ` (+ ${g.count - g.billedCount} draft${g.count - g.billedCount === 1 ? "" : "s"} not counted)` : ""}
+                    </td>
                     <td className="amt">{inr(g.billed)}</td>
                     <td className="amt">{inr(g.paid)}</td>
                   </tr>
@@ -418,7 +426,8 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
             <tbody>
               <tr className="rep-tot">
                 <td style={{ width: "74%" }}>
-                  Grand total — {report.total.count} quotation{report.total.count === 1 ? "" : "s"} across {report.groups.length} month{report.groups.length === 1 ? "" : "s"}
+                  Grand total — {report.total.billedCount} billed quotation{report.total.billedCount === 1 ? "" : "s"} across {report.groups.length} month{report.groups.length === 1 ? "" : "s"}
+                  {report.total.count > report.total.billedCount ? ` (+ ${report.total.count - report.total.billedCount} drafts not counted)` : ""}
                 </td>
                 <td className="amt" style={{ width: "13%" }}>{inr(report.total.billed)}</td>
                 <td className="amt" style={{ width: "13%" }}>{inr(report.total.paid)}</td>
