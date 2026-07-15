@@ -59,6 +59,9 @@ export default function ReportsView() {
   const [to, setTo] = useState(fy.to);
   const [type, setType] = useState<TradeFilter>("sell");
   const [cls, setCls] = useState<"all" | "b2b" | "b2c" | "rented" | "igst" | "split">("all"); // All · B2B · B2C · Rented · IGST · Split
+  // when the chosen window spans several months, break the report into one clean
+  // section per month (each with its own subtotal); "One table" flattens it back
+  const [monthly, setMonthly] = useState(true);
 
   useEffect(() => {
     let live = true;
@@ -129,6 +132,19 @@ export default function ReportsView() {
   const shownRows =
     cls === "b2b" ? b2bRows : cls === "b2c" ? b2cRows : cls === "rented" ? rentedRows : cls === "igst" ? igstRows : rows;
   const shownTotals = sumOf(shownRows);
+
+  // month sections — oldest month first (a report reads forward in time)
+  const MONTH_NAMES = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const monthKeys = useMemo(
+    () => [...new Set(rows.map((r) => r.iso.slice(0, 7)))].sort(),
+    [rows],
+  );
+  const multiMonth = monthKeys.length > 1;
+  const monthLabel = (k: string) => {
+    const [y, m] = k.split("-");
+    return (MONTH_NAMES[parseInt(m, 10)] || m) + " " + y;
+  };
+  const inMonth = (list: typeof rows, k: string) => list.filter((r) => r.iso.slice(0, 7) === k);
 
   /** One invoice table. B2B tables show GSTIN + Net + GST columns; Regular tables omit GST. */
   const renderTable = (list: typeof rows, withGst: boolean, heading: string) => {
@@ -252,6 +268,16 @@ export default function ReportsView() {
               </button>
             ))}
           </div>
+          {multiMonth && (
+            <div className="rep-seg" role="group" aria-label="Month layout">
+              <button className={monthly ? "on" : ""} onClick={() => setMonthly(true)} title="One section per month, each with its own totals (prints each month separately)">
+                Month-wise
+              </button>
+              <button className={!monthly ? "on" : ""} onClick={() => setMonthly(false)} title="Everything in one table">
+                One table
+              </button>
+            </div>
+          )}
           <div className="rep-seg" role="group" aria-label="Invoice class">
             {(["all", "b2b", "b2c", "rented", "igst", "split"] as const).map((c) => (
               <button
@@ -302,15 +328,60 @@ export default function ReportsView() {
           <div><b>₹{inr(shownTotals.total)}</b><span>Total</span></div>
         </div>
 
-        {cls === "all" && renderTable(rows, true, "")}
-        {cls === "b2b" && renderTable(b2bRows, true, "")}
-        {cls === "b2c" && renderTable(b2cRows, true, "")}
-        {cls === "rented" && renderTable(rentedRows, true, "")}
-        {cls === "igst" && renderTable(igstRows, true, "")}
-        {cls === "split" && renderTable(splitB2b, true, "B2B — CGST + SGST")}
-        {cls === "split" && renderTable(splitB2c, true, "B2C")}
-        {cls === "split" && renderTable(splitIgst, true, "IGST — interstate")}
-        {cls === "split" && renderTable(rentedRows, true, "Rented — CGST + SGST")}
+        {monthly && multiMonth ? (
+          // one clean section per month in the chosen window, each with its own totals;
+          // print CSS puts every month on its own page
+          <>
+            {monthKeys.map((k) => {
+              const mAll = inMonth(shownRows, k);
+              const mt = sumOf(mAll);
+              return (
+                <div className="rep-month" key={k}>
+                  <div className="rep-title rep-subhead rep-month-head">
+                    {monthLabel(k)}
+                    <span className="rep-subcount">
+                      {" "}· {mAll.length} invoice{mAll.length === 1 ? "" : "s"} · ₹{inr(mt.total)}
+                    </span>
+                  </div>
+                  {cls === "all" && renderTable(mAll, true, "")}
+                  {cls === "b2b" && renderTable(inMonth(b2bRows, k), true, "")}
+                  {cls === "b2c" && renderTable(inMonth(b2cRows, k), true, "")}
+                  {cls === "rented" && renderTable(inMonth(rentedRows, k), true, "")}
+                  {cls === "igst" && renderTable(inMonth(igstRows, k), true, "")}
+                  {cls === "split" && renderTable(inMonth(splitB2b, k), true, "B2B — CGST + SGST")}
+                  {cls === "split" && renderTable(inMonth(splitB2c, k), true, "B2C")}
+                  {cls === "split" && renderTable(inMonth(splitIgst, k), true, "IGST — interstate")}
+                  {cls === "split" && renderTable(inMonth(rentedRows, k), true, "Rented — CGST + SGST")}
+                </div>
+              );
+            })}
+            <table className="rep-table" style={{ marginTop: 12 }}>
+              <tbody>
+                <tr className="rep-tot">
+                  <td>
+                    Grand total — {shownRows.length} invoice{shownRows.length === 1 ? "" : "s"} across {monthKeys.length} months
+                  </td>
+                  <td className="amt" style={{ width: "11%" }}>{num(shownTotals.cft)}</td>
+                  <td className="amt" style={{ width: "13%" }}>{inr(shownTotals.net)}</td>
+                  <td className="amt" style={{ width: "12%" }}>{inr(shownTotals.gst)}</td>
+                  <td className="amt" style={{ width: "13%" }}>{inr(shownTotals.total)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </>
+        ) : (
+          <>
+            {cls === "all" && renderTable(rows, true, "")}
+            {cls === "b2b" && renderTable(b2bRows, true, "")}
+            {cls === "b2c" && renderTable(b2cRows, true, "")}
+            {cls === "rented" && renderTable(rentedRows, true, "")}
+            {cls === "igst" && renderTable(igstRows, true, "")}
+            {cls === "split" && renderTable(splitB2b, true, "B2B — CGST + SGST")}
+            {cls === "split" && renderTable(splitB2c, true, "B2C")}
+            {cls === "split" && renderTable(splitIgst, true, "IGST — interstate")}
+            {cls === "split" && renderTable(rentedRows, true, "Rented — CGST + SGST")}
+          </>
+        )}
 
         <div className="rep-foot">Generated {fmtISO(isoOf(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()))} · {brand.name}</div>
       </div>
