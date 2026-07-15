@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { allRec, delRec, getRec, put } from "@/lib/data";
 import { inr, nowIso } from "@/lib/calc";
 import { addExpense, upiAccounts } from "@/lib/expenses";
+import { listWorkers, payWorker, type Worker } from "@/lib/attendance";
 import { partyLedger } from "@/lib/payments";
 import { applyCustomerReceipt } from "@/lib/receipts";
 import { USERS } from "@/lib/local-auth";
@@ -45,6 +46,13 @@ export default function ReceiptsView() {
   const [date, setDate] = useState("");
   const [openCust, setOpenCust] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  // worker salary-account quick panel
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [showWkr, setShowWkr] = useState(false);
+  const [wkrId, setWkrId] = useState("");
+  const [wAmt, setWAmt] = useState("");
+  const [wDate, setWDate] = useState("");
+  const [wNote, setWNote] = useState("");
 
   const load = useCallback(() => {
     Promise.all([allRec<Customer>("customers"), allRec<Doc>("quotations"), allRec<Expense>("expenses")]).then(
@@ -55,6 +63,7 @@ export default function ReceiptsView() {
       },
     );
     upiAccounts().then(setUpiAccts);
+    listWorkers().then(setWorkers);
   }, []);
   useEffect(() => {
     if (ready) load();
@@ -248,6 +257,24 @@ export default function ReceiptsView() {
 
   const editing = !!editId;
   const showReceivedFields = kind === "received";
+  const activeWorkers = workers.filter((w) => w.active).sort((a, b) => a.name.localeCompare(b.name));
+
+  async function recordWorker() {
+    const w = activeWorkers.find((x) => x.id === wkrId);
+    if (!w) return toast("Pick a worker");
+    const a = Math.max(0, +wAmt || 0);
+    if (a <= 0) return toast("Enter an amount");
+    await payWorker({ worker: w, amount: a, date: wDate ? toDmy(wDate) : undefined, by: user?.id || "unknown", note: wNote.trim(), toOwner: isOwner });
+    setWAmt("");
+    setWNote("");
+    setWDate("");
+    load();
+    bumpData();
+    toast(
+      "₹" + inr(a) + " given to " + w.name + " — " +
+        (isOwner ? "recorded (owner's cash — not in Daybook)" : "recorded · cut from Daybook"),
+    );
+  }
 
   return (
     <div>
@@ -348,6 +375,48 @@ export default function ReceiptsView() {
           {editing ? "Save changes" : kind === "due" ? "Add due" : "Record receipt"}
         </button>
       </div>
+
+      {activeWorkers.length > 0 && (
+        <div className="panel-card">
+          <div className="pc-head" style={{ cursor: "pointer" }} onClick={() => setShowWkr((v) => !v)}>
+            <span className="um-caret" style={{ marginRight: 6 }}>{showWkr ? "▾" : "▸"}</span>
+            Worker salary account
+            <small style={{ marginLeft: 8, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>
+              give money against a worker&apos;s account without opening Attendance
+            </small>
+          </div>
+          {showWkr && (
+            <div style={{ padding: "0 14px 14px" }}>
+              <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap", marginTop: 10 }}>
+                <label className="modal-field" style={{ flex: "2 1 140px", minWidth: 0 }}>
+                  <span>Worker</span>
+                  <select value={wkrId} onChange={(e) => setWkrId(e.target.value)}>
+                    <option value="">— pick —</option>
+                    {activeWorkers.map((w) => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="modal-field" style={{ flex: "1 1 100px", minWidth: 0 }}>
+                  <span>Amount ₹</span>
+                  <input type="number" inputMode="decimal" placeholder="0" value={wAmt} onChange={(e) => setWAmt(e.target.value)} />
+                </label>
+                <label className="modal-field" style={{ flex: "1 1 130px", minWidth: 0 }}>
+                  <span>Date (optional)</span>
+                  <input type="date" value={wDate} onChange={(e) => setWDate(e.target.value)} />
+                </label>
+                <label className="modal-field" style={{ flex: "2 1 150px", minWidth: 0 }}>
+                  <span>Note (optional)</span>
+                  <input type="text" placeholder="e.g. advance" value={wNote} onChange={(e) => setWNote(e.target.value)} />
+                </label>
+                <button className="btn primary" type="button" onClick={recordWorker} style={{ alignSelf: "flex-end" }}>
+                  Give
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
         By customer <small>— {groups.length}</small>

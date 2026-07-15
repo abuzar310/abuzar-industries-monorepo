@@ -13,6 +13,8 @@ export interface Worker {
   name: string;
   /** daily wage ₹ */
   rate: number;
+  /** ₹ the worker owed at the start (lump-sum credit/loan the company gave them). */
+  opening?: number;
   /** false = removed from the register (history stays; can be reactivated). */
   active: boolean;
   createdAt: string;
@@ -37,15 +39,16 @@ export const markId = (workerId: string, iso: string) => workerId + "|" + iso;
 
 export const listWorkers = () => allRec<Worker>("workers");
 
-export async function saveWorker(fields: { id?: string; name: string; rate: number }): Promise<Worker | null> {
+export async function saveWorker(fields: { id?: string; name: string; rate: number; opening?: number }): Promise<Worker | null> {
   const name = (fields.name || "").trim();
   const rate = r2(Math.max(0, +fields.rate || 0));
   if (!name) return null;
   const now = nowIso();
   const prev = fields.id ? await getRec<Worker>("workers", fields.id) : undefined;
+  const opening = fields.opening === undefined ? prev?.opening || 0 : r2(Math.max(0, +fields.opening || 0));
   const w: Worker = prev
-    ? { ...prev, name, rate, updatedAt: now }
-    : { id: "WKR-" + uid(), name, rate, active: true, createdAt: now, updatedAt: now };
+    ? { ...prev, name, rate, opening, updatedAt: now }
+    : { id: "WKR-" + uid(), name, rate, opening, active: true, createdAt: now, updatedAt: now };
   await put("workers", w);
   return w;
 }
@@ -117,7 +120,8 @@ export const nextWeek = (start: Date) => { const d = new Date(start); d.setDate(
 
 export const workerSourceId = (workerId: string) => "wkr:" + workerId;
 
-/** Record a wage / advance: one "salary" daybook expense (cash out of the manager's book). */
+/** Record a wage / advance: one "salary" daybook expense. `toOwner` = the OWNER paid from
+ *  his own pocket (kept out of the manager's cash daybook); false = manager's cash. */
 export async function payWorker(fields: {
   worker: Worker;
   amount: number;
@@ -125,6 +129,7 @@ export async function payWorker(fields: {
   date?: string;
   by: string;
   note?: string;
+  toOwner?: boolean;
 }): Promise<Expense> {
   const note = fields.worker.name + (fields.note?.trim() ? " · " + fields.note.trim() : "");
   return addExpense({
@@ -132,14 +137,39 @@ export async function payWorker(fields: {
     amount: fields.amount,
     mode: "",
     note,
+    toOwner: fields.toOwner,
     sourceId: workerSourceId(fields.worker.id),
     date: fields.date,
     enteredBy: fields.by,
   });
 }
 
-export const workerPayments = (expenses: Expense[], workerId: string) =>
-  expenses.filter((e) => e.sourceId === workerSourceId(workerId));
+/** Every payment made to a worker (newest last; callers sort as needed).
+ *  There is ONE account per worker: wages earned credit it, money given debits it —
+ *  any extra taken simply stays on the account as their debt. No separate flows. */
+export const workerPayments = (expenses: Expense[], workerId: string): Expense[] =>
+  expenses.filter((e) => e.type === "salary" && e.sourceId === workerSourceId(workerId));
+
+// ---- all-time account (pure) ----
+
+export interface WorkerAccount {
+  /** attendance days × the worker's CURRENT rate (historic rate changes aren't replayed) */
+  earnedAll: number;
+  givenAll: number;
+  opening: number;
+  /** earnedAll − opening − givenAll. NEGATIVE = worker owes the company (advance/debt) ·
+   *  POSITIVE = company owes the worker unpaid wages · 0 = square. */
+  balance: number;
+}
+
+export function workerAccount(worker: Worker, marks: AttendanceMark[], expenses: Expense[]): WorkerAccount {
+  let days = 0;
+  for (const m of marks) if (m.workerId === worker.id) days += +m.present || 0;
+  const earnedAll = r2(days * (+worker.rate || 0));
+  const givenAll = r2(workerPayments(expenses, worker.id).reduce((s, e) => s + (+e.amount || 0), 0));
+  const opening = r2(+(worker.opening || 0));
+  return { earnedAll, givenAll, opening, balance: r2(earnedAll - opening - givenAll) };
+}
 
 // ---- settings ----
 
@@ -161,10 +191,11 @@ export interface WeekRow {
   marks: Record<string, number>;
   presentDays: number;
   earned: number;
+  /** money GIVEN to the worker this week (repayments don't count as wages paid) */
   paid: number;
   /** earned − paid: >0 still owed to the worker · <0 the worker owes (advance) */
   balance: number;
-  /** this week's payments, oldest first */
+  /** this week's "given" payments, oldest first */
   payments: Expense[];
 }
 

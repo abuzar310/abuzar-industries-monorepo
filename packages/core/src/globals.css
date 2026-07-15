@@ -1321,6 +1321,40 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .att-payform input[type=number]{width:90px} .att-payform input[type=date]{width:135px} .att-payform input[type=text]{width:150px}
 .att-payform input:focus{outline:none; border-color:var(--t-head)}
 @media(max-width:640px){ .att-week{flex-basis:100%; order:-1} }
+/* worker account card (expandable panel under a register row) */
+.att-th-sub{display:block; font-weight:400; font-family:var(--mono); color:#8a7b45; font-size:9.5px; text-transform:none; letter-spacing:0}
+.att-bal{background:none; border:0; padding:0; font-family:var(--mono); font-size:12.5px; font-weight:700; cursor:pointer; white-space:nowrap}
+.att-bal:hover{text-decoration:underline}
+.att-acct-cell{background:var(--t-cream2); border-bottom:1px solid var(--t-line); padding:10px 14px !important}
+/* account card v2: balance hero + give form + statement */
+.att-card-hero{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.att-hero-main{flex:1; min-width:200px}
+.att-hero-k{display:block; font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint)}
+.att-hero-bal{display:block; font-family:var(--mono); font-size:21px; font-weight:800; margin:2px 0; white-space:nowrap}
+.att-hero-sub{display:block; font-family:var(--mono); font-size:11.5px; color:var(--ink-faint)}
+.att-hero-acts{display:flex; gap:6px; align-items:center}
+.att-give{margin-top:12px; background:var(--panel-2); border:1px solid var(--line-2); border-radius:10px; padding:10px 12px}
+.att-give-row{display:flex; gap:10px; flex-wrap:wrap}
+.att-give-row .modal-field{flex:1; min-width:110px; margin:0}
+.att-give-quick{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px}
+.att-give-preview{font-family:var(--mono); font-size:12px; color:var(--walnut); font-weight:700}
+.att-give-where{font-size:11.5px; color:var(--ink-faint); margin-left:4px}
+.att-opening{margin-top:10px}
+.att-opening .tlink:disabled{cursor:default; text-decoration:none; opacity:.75}
+.att-card-stmt{margin-top:8px}
+/* the cell spans the whole (scrollable) table — pin the card to the visible edge */
+.att-card{position:sticky; left:14px; background:var(--panel); border:1px solid var(--line-2); border-radius:var(--radius-md); padding:12px; max-width:720px}
+.att-opening-edit{display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:4px}
+.att-opening-edit input{width:90px; font:inherit; font-size:13px; padding:4px 7px; border:1px solid var(--t-line); border-radius:6px; background:#fff}
+.att-card-stmt{margin-top:10px; border-top:1px solid var(--line)}
+.att-card .stmt{padding:8px 2px}
+.att-card .stmt-ic{width:30px; height:30px; border-radius:8px}
+.att-card .stmt-ic.ok{background:rgba(86,107,59,.15); color:var(--green)}
+.att-card .stmt-ic.att-given{background:rgba(165,61,41,.13); color:var(--danger)}
+.att-card .stmt-to{font-size:13px}
+@media(max-width:640px){
+  .att-card{left:10px; max-width:calc(100vw - 52px)}
+  }
 
 /* ---------- daybook quick-entry (clean In/Out) ---------- */
 .db-entry{display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-top:8px}

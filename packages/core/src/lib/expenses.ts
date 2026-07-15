@@ -72,7 +72,9 @@ export async function addExpense(fields: {
     amount: r2(fields.amount),
     note: fields.note || "",
     account: (fields.account || "").trim(),
-    toOwner: mode === "cash" ? !!fields.toOwner : false,
+    // outflows (mode "") can also be owner-paid — e.g. the owner hands a worker money
+    // from his own pocket; inDaybook() then keeps it out of the manager's cash book.
+    toOwner: mode === "cash" || mode === "" ? !!fields.toOwner : false,
     enteredBy: fields.enteredBy,
     sourceId: fields.sourceId,
     custId: fields.custId,
