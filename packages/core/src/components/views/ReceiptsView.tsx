@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { allRec, delRec, getRec, put } from "@/lib/data";
 import { inr, nowIso } from "@/lib/calc";
 import { addExpense, upiAccounts } from "@/lib/expenses";
-import { listWorkers, payWorker, type Worker } from "@/lib/attendance";
+import { listWorkers, payWorker, repayWorker, type Worker } from "@/lib/attendance";
 import { partyLedger } from "@/lib/payments";
 import { applyCustomerReceipt } from "@/lib/receipts";
 import { USERS } from "@/lib/local-auth";
@@ -50,6 +50,7 @@ export default function ReceiptsView() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [showWkr, setShowWkr] = useState(false);
   const [wkrId, setWkrId] = useState("");
+  const [wKind, setWKind] = useState<"give" | "repay">("give");
   const [wAmt, setWAmt] = useState("");
   const [wDate, setWDate] = useState("");
   const [wNote, setWNote] = useState("");
@@ -264,15 +265,21 @@ export default function ReceiptsView() {
     if (!w) return toast("Pick a worker");
     const a = Math.max(0, +wAmt || 0);
     if (a <= 0) return toast("Enter an amount");
-    await payWorker({ worker: w, amount: a, date: wDate ? toDmy(wDate) : undefined, by: user?.id || "unknown", note: wNote.trim(), toOwner: isOwner });
+    const fields = { worker: w, amount: a, date: wDate ? toDmy(wDate) : undefined, by: user?.id || "unknown", note: wNote.trim(), toOwner: isOwner };
+    if (wKind === "give") await payWorker(fields);
+    else await repayWorker(fields);
     setWAmt("");
     setWNote("");
     setWDate("");
     load();
     bumpData();
     toast(
-      "₹" + inr(a) + " given to " + w.name + " — " +
-        (isOwner ? "recorded (owner's cash — not in Daybook)" : "recorded · cut from Daybook"),
+      "₹" + inr(a) + (wKind === "give" ? " given to " : " received back from ") + w.name + " — " +
+        (isOwner
+          ? "recorded (owner's cash — not in Daybook)"
+          : wKind === "give"
+            ? "recorded · cut from Daybook"
+            : "recorded · added to Daybook"),
     );
   }
 
@@ -382,11 +389,19 @@ export default function ReceiptsView() {
             <span className="um-caret" style={{ marginRight: 6 }}>{showWkr ? "▾" : "▸"}</span>
             Worker salary account
             <small style={{ marginLeft: 8, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>
-              give money against a worker&apos;s account without opening Attendance
+              give / take back money against a worker&apos;s account without opening Attendance
             </small>
           </div>
           {showWkr && (
             <div style={{ padding: "0 14px 14px" }}>
+              <div className="db-seg sm" style={{ margin: "10px 0 2px" }}>
+                <button className={"seg-btn" + (wKind === "give" ? " on" : "")} type="button" onClick={() => setWKind("give")}>
+                  Give
+                </button>
+                <button className={"seg-btn" + (wKind === "repay" ? " on" : "")} type="button" onClick={() => setWKind("repay")}>
+                  Received back
+                </button>
+              </div>
               <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap", marginTop: 10 }}>
                 <label className="modal-field" style={{ flex: "2 1 140px", minWidth: 0 }}>
                   <span>Worker</span>
@@ -410,7 +425,7 @@ export default function ReceiptsView() {
                   <input type="text" placeholder="e.g. advance" value={wNote} onChange={(e) => setWNote(e.target.value)} />
                 </label>
                 <button className="btn primary" type="button" onClick={recordWorker} style={{ alignSelf: "flex-end" }}>
-                  Give
+                  {wKind === "give" ? "Give" : "Record"}
                 </button>
               </div>
             </div>

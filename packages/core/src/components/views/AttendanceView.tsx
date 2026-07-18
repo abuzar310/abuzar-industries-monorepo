@@ -12,6 +12,7 @@ import {
   nextWeek,
   payWorker,
   prevWeek,
+  repayWorker,
   saveWorker,
   setAttendanceCfg,
   setWorkerActive,
@@ -20,6 +21,7 @@ import {
   weekStart,
   workerAccount,
   workerPayments,
+  workerRepayments,
   type AttendanceCfg,
   type AttendanceMark,
   type WeekRow,
@@ -78,9 +80,9 @@ export default function AttendanceView() {
   const [newName, setNewName] = useState("");
   const [newRate, setNewRate] = useState("");
   const [newOpening, setNewOpening] = useState("");
-  // account card (one worker at a time) + its give-money inline form
+  // account card (one worker at a time) + its give / received-back inline form
   const [openAcct, setOpenAcct] = useState<string | null>(null);
-  const [giving, setGiving] = useState(false);
+  const [formKind, setFormKind] = useState<"give" | "repay" | null>(null);
   const [fAmt, setFAmt] = useState("");
   const [fDate, setFDate] = useState("");
   const [fNote, setFNote] = useState("");
@@ -117,7 +119,7 @@ export default function AttendanceView() {
     return m;
   }, [active, marks, expenses]);
   const acctOf = (id: string): WorkerAccount =>
-    accounts.get(id) || { earnedAll: 0, givenAll: 0, opening: 0, balance: 0 };
+    accounts.get(id) || { earnedAll: 0, givenAll: 0, repaidAll: 0, opening: 0, balance: 0 };
 
   const totDays = r2(rows.reduce((s, x) => s + x.presentDays, 0));
   const totEarned = r2(rows.reduce((s, x) => s + x.earned, 0));
@@ -203,27 +205,36 @@ export default function AttendanceView() {
 
   function toggleAcct(id: string) {
     setOpenAcct((cur) => (cur === id ? null : id));
-    setGiving(false);
+    setFormKind(null);
     setEditOpening(false);
   }
-  function startGive(prefill?: number) {
-    setGiving(true);
+  function startForm(kind: "give" | "repay", prefill?: number) {
+    setFormKind(kind);
     setFAmt(prefill && prefill > 0 ? String(r2(prefill)) : "");
     setFDate(todayIso());
     setFNote("");
   }
-  function cancelGive() {
-    setGiving(false);
+  function cancelForm() {
+    setFormKind(null);
     setFAmt("");
     setFDate("");
     setFNote("");
   }
-  async function submitGive(w: Worker) {
+  async function submitForm(w: Worker) {
     const amt = +fAmt || 0;
     if (amt <= 0) return toast("Enter an amount");
-    await payWorker({ worker: w, amount: amt, date: toDmy(fDate), by: user?.id || "unknown", note: fNote, toOwner: isOwner });
-    toast("₹" + inr(amt) + " given to " + w.name + " — " + whereMoneyWent());
-    cancelGive();
+    const fields = { worker: w, amount: amt, date: toDmy(fDate), by: user?.id || "unknown", note: fNote, toOwner: isOwner };
+    if (formKind === "repay") {
+      await repayWorker(fields);
+      toast(
+        "₹" + inr(amt) + " received back from " + w.name + " — " +
+          (isOwner ? "recorded (owner's cash — not in Daybook)" : "recorded · added to Daybook"),
+      );
+    } else {
+      await payWorker(fields);
+      toast("₹" + inr(amt) + " given to " + w.name + " — " + whereMoneyWent());
+    }
+    cancelForm();
     load();
     bumpData();
   }
@@ -261,8 +272,9 @@ export default function AttendanceView() {
   }
 
   async function delPayment(e: Expense) {
+    const repaid = e.type === "sale";
     const ok = await confirmDialog({
-      title: "Delete this payment?",
+      title: "Delete this " + (repaid ? "repayment" : "payment") + "?",
       message: `₹${inr(e.amount)} · ${e.date} — removes it from the Daybook too; the amount goes back onto the account.`,
       confirmLabel: "Delete",
       danger: true,
@@ -271,7 +283,7 @@ export default function AttendanceView() {
     await delRec("expenses", e.id);
     load();
     bumpData();
-    toast("Payment removed");
+    toast(repaid ? "Repayment removed" : "Payment removed");
   }
 
   const dayNum = (iso: string) => iso.slice(8);
@@ -281,18 +293,20 @@ export default function AttendanceView() {
     const w = x.worker;
     const a = acctOf(w.id);
     const bw = balWords(a.balance);
-    const stmt = workerPayments(expenses, w.id).sort(
+    // full statement, both directions, newest first
+    const stmt = [...workerPayments(expenses, w.id), ...workerRepayments(expenses, w.id)].sort(
       (p, q) => (q.createdAt || "").localeCompare(p.createdAt || ""),
     );
     const weekUnpaid = r2(x.earned - x.paid);
-    // the payment note carries the worker's name ("Zameer · note") — show only the note part here
+    // the "given" note carries the worker's name ("Zameer · note") — show only the note part here
     const extraNote = (e: Expense) => {
       const n = e.note || "";
+      if (e.type === "sale") return n === "Repaid · " + w.name ? "" : n;
       return n === w.name ? "" : n.startsWith(w.name + " · ") ? n.slice(w.name.length + 3) : n;
     };
-    // live preview while typing an amount: what the account becomes after this payment
+    // live preview while typing an amount: what the account becomes after this entry
     const amt = +fAmt || 0;
-    const after = r2(a.balance - amt);
+    const after = r2(formKind === "repay" ? a.balance + amt : a.balance - amt);
     const preview =
       amt <= 0
         ? ""
@@ -312,19 +326,28 @@ export default function AttendanceView() {
                 <b className="att-hero-bal" style={{ color: bw.color }}>{bw.text}</b>
                 <span className="att-hero-sub">
                   earned ₹{inr(a.earnedAll)} all-time · given ₹{inr(a.givenAll)}
+                  {a.repaidAll > 0.5 ? " · repaid ₹" + inr(a.repaidAll) : ""}
                   {a.opening > 0.5 ? " · started owing ₹" + inr(a.opening) : ""}
                 </span>
               </div>
               <div className="att-hero-acts">
-                {!giving && (
+                {formKind === null && (
                   <>
                     <button
                       className="btn primary sm"
                       type="button"
                       title="Hand money to the worker — any amount, any day; whatever isn't covered by wages stays on the account"
-                      onClick={() => startGive(a.balance > 0.5 ? a.balance : weekUnpaid)}
+                      onClick={() => startForm("give", a.balance > 0.5 ? a.balance : weekUnpaid)}
                     >
                       Give money
+                    </button>
+                    <button
+                      className="btn sm"
+                      type="button"
+                      title="The worker returned money (repaying an advance) — cash comes back in"
+                      onClick={() => startForm("repay")}
+                    >
+                      Received back
                     </button>
                     <button className="btn sm" type="button" onClick={() => editWorker(w)}>Edit</button>
                   </>
@@ -332,18 +355,18 @@ export default function AttendanceView() {
               </div>
             </div>
 
-            {giving && (
+            {formKind !== null && (
               <div className="att-give">
                 <div className="att-give-row">
                   <label className="modal-field">
-                    <span>Give ₹</span>
+                    <span>{formKind === "give" ? "Give ₹" : "Received back ₹"}</span>
                     <input
                       type="number"
                       inputMode="decimal"
                       placeholder="0"
                       value={fAmt}
                       onChange={(e) => setFAmt(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && submitGive(w)}
+                      onKeyDown={(e) => e.key === "Enter" && submitForm(w)}
                       autoFocus
                     />
                   </label>
@@ -355,20 +378,20 @@ export default function AttendanceView() {
                     <span>Note (optional)</span>
                     <input
                       type="text"
-                      placeholder="e.g. advance"
+                      placeholder={formKind === "give" ? "e.g. advance" : "e.g. returned advance"}
                       value={fNote}
                       onChange={(e) => setFNote(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && submitGive(w)}
+                      onKeyDown={(e) => e.key === "Enter" && submitForm(w)}
                     />
                   </label>
                 </div>
                 <div className="att-give-quick">
-                  {a.balance > 0.5 && (
+                  {formKind === "give" && a.balance > 0.5 && (
                     <button className="acct-chip" type="button" onClick={() => setFAmt(String(a.balance))}>
                       Full due ₹{inr(a.balance)}
                     </button>
                   )}
-                  {weekUnpaid > 0.5 && r2(weekUnpaid) !== r2(a.balance) && (
+                  {formKind === "give" && weekUnpaid > 0.5 && r2(weekUnpaid) !== r2(a.balance) && (
                     <button className="acct-chip" type="button" onClick={() => setFAmt(String(weekUnpaid))}>
                       This week ₹{inr(weekUnpaid)}
                     </button>
@@ -376,11 +399,19 @@ export default function AttendanceView() {
                   {preview && <span className="att-give-preview">→ {preview}</span>}
                 </div>
                 <div className="rowbtns" style={{ marginTop: 10 }}>
-                  <button className="btn primary sm" type="button" onClick={() => submitGive(w)}>
-                    Give{amt > 0 ? " ₹" + inr(amt) : ""}
+                  <button className="btn primary sm" type="button" onClick={() => submitForm(w)}>
+                    {formKind === "give" ? "Give" : "Record"}{amt > 0 ? " ₹" + inr(amt) : ""}
                   </button>
-                  <button className="btn sm" type="button" onClick={cancelGive}>Cancel</button>
-                  <span className="att-give-where">{isOwner ? "from the owner's cash (not the Daybook)" : "cash goes out of the Daybook"}</span>
+                  <button className="btn sm" type="button" onClick={cancelForm}>Cancel</button>
+                  <span className="att-give-where">
+                    {isOwner
+                      ? formKind === "give"
+                        ? "from the owner's cash (not the Daybook)"
+                        : "to the owner's cash (not the Daybook)"
+                      : formKind === "give"
+                        ? "cash goes out of the Daybook"
+                        : "cash comes into the Daybook"}
+                  </span>
                 </div>
               </div>
             )}
@@ -418,30 +449,38 @@ export default function AttendanceView() {
             </div>
 
             <div className="att-card-stmt">
-              <div className="pbd-lbl">Money given · {stmt.length}</div>
+              <div className="pbd-lbl">Money given &amp; received back · {stmt.length}</div>
               {stmt.length ? (
-                stmt.map((e) => (
-                  <div className="stmt" key={e.id}>
-                    <div className="stmt-ic att-given">₹</div>
-                    <div className="stmt-main">
-                      <div className="stmt-to">
-                        {extraNote(e) || "Given"}
-                        {e.toOwner && <span className="acct-overall-hint"> · owner&apos;s cash</span>}
+                stmt.map((e) => {
+                  const repaid = e.type === "sale";
+                  return (
+                    <div className="stmt" key={e.id}>
+                      <div className={"stmt-ic " + (repaid ? "ok" : "att-given")}>{repaid ? "↑" : "₹"}</div>
+                      <div className="stmt-main">
+                        <div className="stmt-to">
+                          <span style={{ color: repaid ? "var(--green)" : "var(--danger)" }}>
+                            {repaid ? "Repaid" : "Given"}
+                          </span>
+                          {extraNote(e) ? " · " + extraNote(e) : ""}
+                          {e.toOwner && <span className="acct-overall-hint"> · owner&apos;s cash</span>}
+                        </div>
+                        <div className="stmt-sub">
+                          {e.date}
+                          {hhmm(e.createdAt) ? " · " + hhmm(e.createdAt) : ""} · by {userName(e.enteredBy)}
+                        </div>
                       </div>
-                      <div className="stmt-sub">
-                        {e.date}
-                        {hhmm(e.createdAt) ? " · " + hhmm(e.createdAt) : ""} · by {userName(e.enteredBy)}
+                      <div className="stmt-amt" style={{ color: repaid ? "var(--green)" : "var(--danger)" }}>
+                        {repaid ? "+" : "−"}₹{inr(e.amount)}
                       </div>
+                      <span className="pb-rowacts">
+                        <button className="pb-x" title="Delete" onClick={() => delPayment(e)}>×</button>
+                      </span>
                     </div>
-                    <div className="stmt-amt" style={{ color: "var(--danger)" }}>−₹{inr(e.amount)}</div>
-                    <span className="pb-rowacts">
-                      <button className="pb-x" title="Delete this payment" onClick={() => delPayment(e)}>×</button>
-                    </span>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="stmt-sub" style={{ padding: "6px 2px", opacity: 0.7 }}>
-                  Nothing given yet{a.opening > 0.5 ? " — the account only has attendance and the opening credit" : ""}.
+                  No money given or received yet{a.opening > 0.5 ? " — the account only has attendance and the opening credit" : ""}.
                 </div>
               )}
             </div>

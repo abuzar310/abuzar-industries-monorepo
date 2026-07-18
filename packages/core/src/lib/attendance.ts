@@ -144,11 +144,40 @@ export async function payWorker(fields: {
   });
 }
 
+/** Worker returns money (repaying an advance): one "sale" cash-IN daybook entry. `toOwner` =
+ *  the owner received it (stays out of the manager's daybook); false = manager's cash book. */
+export async function repayWorker(fields: {
+  worker: Worker;
+  amount: number;
+  /** dd-mm-yy app format */
+  date?: string;
+  by: string;
+  note?: string;
+  toOwner?: boolean;
+}): Promise<Expense> {
+  return addExpense({
+    type: "sale",
+    amount: fields.amount,
+    mode: "cash",
+    label: "Repaid · " + fields.worker.name,
+    // default note so the Daybook line is self-explanatory (its rows show note || type)
+    note: fields.note?.trim() || "Repaid · " + fields.worker.name,
+    toOwner: fields.toOwner,
+    sourceId: workerSourceId(fields.worker.id),
+    date: fields.date,
+    enteredBy: fields.by,
+  });
+}
+
 /** Every payment made to a worker (newest last; callers sort as needed).
- *  There is ONE account per worker: wages earned credit it, money given debits it —
- *  any extra taken simply stays on the account as their debt. No separate flows. */
+ *  There is ONE account per worker: wages earned + repayments credit it, money given
+ *  debits it — any extra taken simply stays on the account as their debt. */
 export const workerPayments = (expenses: Expense[], workerId: string): Expense[] =>
   expenses.filter((e) => e.type === "salary" && e.sourceId === workerSourceId(workerId));
+
+/** Money the worker returned (repayments), same source tag, "sale" side. */
+export const workerRepayments = (expenses: Expense[], workerId: string): Expense[] =>
+  expenses.filter((e) => e.type === "sale" && e.sourceId === workerSourceId(workerId));
 
 // ---- all-time account (pure) ----
 
@@ -156,9 +185,10 @@ export interface WorkerAccount {
   /** attendance days × the worker's CURRENT rate (historic rate changes aren't replayed) */
   earnedAll: number;
   givenAll: number;
+  repaidAll: number;
   opening: number;
-  /** earnedAll − opening − givenAll. NEGATIVE = worker owes the company (advance/debt) ·
-   *  POSITIVE = company owes the worker unpaid wages · 0 = square. */
+  /** earnedAll + repaidAll − opening − givenAll. NEGATIVE = worker owes the company
+   *  (advance/debt) · POSITIVE = company owes the worker unpaid wages · 0 = square. */
   balance: number;
 }
 
@@ -167,8 +197,9 @@ export function workerAccount(worker: Worker, marks: AttendanceMark[], expenses:
   for (const m of marks) if (m.workerId === worker.id) days += +m.present || 0;
   const earnedAll = r2(days * (+worker.rate || 0));
   const givenAll = r2(workerPayments(expenses, worker.id).reduce((s, e) => s + (+e.amount || 0), 0));
+  const repaidAll = r2(workerRepayments(expenses, worker.id).reduce((s, e) => s + (+e.amount || 0), 0));
   const opening = r2(+(worker.opening || 0));
-  return { earnedAll, givenAll, opening, balance: r2(earnedAll - opening - givenAll) };
+  return { earnedAll, givenAll, repaidAll, opening, balance: r2(earnedAll + repaidAll - opening - givenAll) };
 }
 
 // ---- settings ----
