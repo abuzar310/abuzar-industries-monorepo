@@ -54,6 +54,8 @@ export default function ReceiptsView() {
   const [wAmt, setWAmt] = useState("");
   const [wDate, setWDate] = useState("");
   const [wNote, setWNote] = useState("");
+  /** whose cash moved (null = default to the logged-in role) */
+  const [wBy, setWBy] = useState<"owner" | "manager" | null>(null);
 
   const load = useCallback(() => {
     Promise.all([allRec<Customer>("customers"), allRec<Doc>("quotations"), allRec<Expense>("expenses")]).then(
@@ -265,7 +267,9 @@ export default function ReceiptsView() {
     if (!w) return toast("Pick a worker");
     const a = Math.max(0, +wAmt || 0);
     if (a <= 0) return toast("Enter an amount");
-    const fields = { worker: w, amount: a, date: wDate ? toDmy(wDate) : undefined, by: user?.id || "unknown", note: wNote.trim(), toOwner: isOwner };
+    // explicit cash side: whoever's money actually moved, regardless of who's logged in
+    const by = wBy ?? (isOwner ? "owner" : "manager");
+    const fields = { worker: w, amount: a, date: wDate ? toDmy(wDate) : undefined, by: user?.id || "unknown", note: wNote.trim(), toOwner: by === "owner" };
     if (wKind === "give") await payWorker(fields);
     else await repayWorker(fields);
     setWAmt("");
@@ -275,11 +279,11 @@ export default function ReceiptsView() {
     bumpData();
     toast(
       "₹" + inr(a) + (wKind === "give" ? " given to " : " received back from ") + w.name + " — " +
-        (isOwner
-          ? "recorded (owner's cash — not in Daybook)"
+        (by === "owner"
+          ? "Owner's cash (not in Daybook)"
           : wKind === "give"
-            ? "recorded · cut from Daybook"
-            : "recorded · added to Daybook"),
+            ? "cut from the Manager's Daybook"
+            : "added to the Manager's Daybook"),
     );
   }
 
@@ -427,6 +431,27 @@ export default function ReceiptsView() {
                 <button className="btn primary" type="button" onClick={recordWorker} style={{ alignSelf: "flex-end" }}>
                   {wKind === "give" ? "Give" : "Record"}
                 </button>
+              </div>
+              <div className="att-paidby">
+                <span className="att-paidby-lbl">{wKind === "give" ? "Paid by" : "Received by"}</span>
+                <div className="db-seg sm">
+                  <button
+                    className={"seg-btn" + ((wBy ?? (isOwner ? "owner" : "manager")) === "owner" ? " on" : "")}
+                    type="button"
+                    title="The Owner's own cash — the Daybook is untouched"
+                    onClick={() => setWBy("owner")}
+                  >
+                    Owner
+                  </button>
+                  <button
+                    className={"seg-btn" + ((wBy ?? (isOwner ? "owner" : "manager")) === "manager" ? " on" : "")}
+                    type="button"
+                    title="The Manager's cash — moves the Daybook"
+                    onClick={() => setWBy("manager")}
+                  >
+                    Manager
+                  </button>
+                </div>
               </div>
             </div>
           )}

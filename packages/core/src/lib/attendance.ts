@@ -1,6 +1,6 @@
 // Worker wage register (weekly, MON → SUN). Attendance marks live in their own
-// store; the MONEY (advances + wages) lives ONLY in the daybook as "salary"
-// expenses tagged sourceId "wkr:<workerId>" — never duplicated here.
+// store; the MONEY (wages, debt loans, deductions, repayments) lives ONLY in the
+// daybook as expenses tagged by sourceId prefix — never duplicated here.
 import { allRec, delRec, getRec, metaGet, metaSet, put } from "./data";
 import { dateSortKey, nowIso, pad, uid } from "./calc";
 import { addExpense } from "./expenses";
@@ -13,7 +13,7 @@ export interface Worker {
   name: string;
   /** daily wage ₹ */
   rate: number;
-  /** ₹ the worker owed at the start (lump-sum credit/loan the company gave them). */
+  /** Debt-account opening ₹ (rarely used) — a loan the worker already owed when the register started. */
   opening?: number;
   /** false = removed from the register (history stays; can be reactivated). */
   active: boolean;
@@ -117,11 +117,19 @@ export const prevWeek = (start: Date) => { const d = new Date(start); d.setDate(
 export const nextWeek = (start: Date) => { const d = new Date(start); d.setDate(d.getDate() + 7); return d; };
 
 // ---- payments (daybook is the single source of truth) ----
+// Two separate pots per worker, told apart by the expense sourceId prefix:
+//   "wkr:<id>"    + type "salary"              = WAGE payment (cash out)
+//   "wkradv:<id>" + type "salary"              = money given onto the DEBT account (cash out)
+//   "wkrded:<id>" + type "salary" + charge     = DEDUCTION: wages cut against debt (NO cash)
+//   "wkr:<id>"    + type "sale"                = worker returned cash → repays the DEBT
 
 export const workerSourceId = (workerId: string) => "wkr:" + workerId;
+export const workerDebtSourceId = (workerId: string) => "wkradv:" + workerId;
+export const workerDeductSourceId = (workerId: string) => "wkrded:" + workerId;
 
-/** Record a wage / advance: one "salary" daybook expense. `toOwner` = the OWNER paid from
- *  his own pocket (kept out of the manager's cash daybook); false = manager's cash. */
+/** Hand money to a worker: one "salary" daybook expense. `kind` picks the pot —
+ *  "wage" (default) settles wages, "debt" is a loan onto the debt account. `toOwner` = the
+ *  OWNER paid from his own pocket (kept out of the manager's cash daybook); false = manager's cash. */
 export async function payWorker(fields: {
   worker: Worker;
   amount: number;
@@ -130,6 +138,7 @@ export async function payWorker(fields: {
   by: string;
   note?: string;
   toOwner?: boolean;
+  kind?: "wage" | "debt";
 }): Promise<Expense> {
   const note = fields.worker.name + (fields.note?.trim() ? " · " + fields.note.trim() : "");
   return addExpense({
@@ -138,7 +147,30 @@ export async function payWorker(fields: {
     mode: "",
     note,
     toOwner: fields.toOwner,
-    sourceId: workerSourceId(fields.worker.id),
+    sourceId: (fields.kind === "debt" ? workerDebtSourceId : workerSourceId)(fields.worker.id),
+    date: fields.date,
+    enteredBy: fields.by,
+  });
+}
+
+/** Cut wages against the debt account: wage due −₹X AND debt −₹X, NO cash moves
+ *  (a charge entry — inDaybook() already keeps it out of every cash book). */
+export async function deductAdvance(fields: {
+  worker: Worker;
+  amount: number;
+  /** dd-mm-yy app format */
+  date?: string;
+  by: string;
+  note?: string;
+}): Promise<Expense> {
+  const note = fields.worker.name + (fields.note?.trim() ? " · " + fields.note.trim() : "");
+  return addExpense({
+    type: "salary",
+    amount: fields.amount,
+    mode: "",
+    charge: true,
+    note,
+    sourceId: workerDeductSourceId(fields.worker.id),
     date: fields.date,
     enteredBy: fields.by,
   });
@@ -169,37 +201,78 @@ export async function repayWorker(fields: {
   });
 }
 
-/** Every payment made to a worker (newest last; callers sort as needed).
- *  There is ONE account per worker: wages earned + repayments credit it, money given
- *  debits it — any extra taken simply stays on the account as their debt. */
-export const workerPayments = (expenses: Expense[], workerId: string): Expense[] =>
-  expenses.filter((e) => e.type === "salary" && e.sourceId === workerSourceId(workerId));
+export type WorkerEntryKind = "wage" | "debt" | "deduct" | "repaid";
 
-/** Money the worker returned (repayments), same source tag, "sale" side. */
-export const workerRepayments = (expenses: Expense[], workerId: string): Expense[] =>
-  expenses.filter((e) => e.type === "sale" && e.sourceId === workerSourceId(workerId));
+export interface WorkerEntry {
+  e: Expense;
+  kind: WorkerEntryKind;
+}
+
+/** Every money event on a worker's account, tagged by pot (unsorted; callers sort). */
+export function workerPayments(expenses: Expense[], workerId: string): WorkerEntry[] {
+  const wage = workerSourceId(workerId);
+  const debt = workerDebtSourceId(workerId);
+  const ded = workerDeductSourceId(workerId);
+  const out: WorkerEntry[] = [];
+  for (const e of expenses) {
+    if (e.type === "salary" && e.sourceId === wage) out.push({ e, kind: "wage" });
+    else if (e.type === "salary" && e.sourceId === debt) out.push({ e, kind: "debt" });
+    else if (e.type === "salary" && e.sourceId === ded) out.push({ e, kind: "deduct" });
+    else if (e.type === "sale" && e.sourceId === wage) out.push({ e, kind: "repaid" });
+  }
+  return out;
+}
 
 // ---- all-time account (pure) ----
 
 export interface WorkerAccount {
   /** attendance days × the worker's CURRENT rate (historic rate changes aren't replayed) */
   earnedAll: number;
-  givenAll: number;
+  /** cash handed over as wages */
+  wagePaidAll: number;
+  /** cash handed over onto the debt account (loans) */
+  debtGivenAll: number;
+  /** wages cut against the debt (no cash) */
+  deductedAll: number;
+  /** cash the worker returned (repays the debt) */
   repaidAll: number;
   opening: number;
-  /** earnedAll + repaidAll − opening − givenAll. NEGATIVE = worker owes the company
-   *  (advance/debt) · POSITIVE = company owes the worker unpaid wages · 0 = square. */
-  balance: number;
+  /** wage cash taken BEYOND what was earned — automatically rolled onto the debt account
+   *  (it shrinks again as more days are worked). */
+  overflowAll: number;
+  /** WAGE pot: earnedAll − wagePaidAll − deductedAll, floored at 0 — any overpay
+   *  becomes debt (overflowAll), never a negative wage balance. */
+  wageBalance: number;
+  /** DEBT pot: opening + debtGivenAll − repaidAll − deductedAll + overflowAll. */
+  debt: number;
 }
 
 export function workerAccount(worker: Worker, marks: AttendanceMark[], expenses: Expense[]): WorkerAccount {
   let days = 0;
   for (const m of marks) if (m.workerId === worker.id) days += +m.present || 0;
   const earnedAll = r2(days * (+worker.rate || 0));
-  const givenAll = r2(workerPayments(expenses, worker.id).reduce((s, e) => s + (+e.amount || 0), 0));
-  const repaidAll = r2(workerRepayments(expenses, worker.id).reduce((s, e) => s + (+e.amount || 0), 0));
+  const sums: Record<WorkerEntryKind, number> = { wage: 0, debt: 0, deduct: 0, repaid: 0 };
+  for (const { e, kind } of workerPayments(expenses, worker.id)) sums[kind] += +e.amount || 0;
+  const wagePaidAll = r2(sums.wage);
+  const debtGivenAll = r2(sums.debt);
+  const deductedAll = r2(sums.deduct);
+  const repaidAll = r2(sums.repaid);
   const opening = r2(+(worker.opening || 0));
-  return { earnedAll, givenAll, repaidAll, opening, balance: r2(earnedAll + repaidAll - opening - givenAll) };
+  const rawWage = r2(earnedAll - wagePaidAll - deductedAll);
+  // took more wage cash than earned → the extra automatically rolls onto the debt
+  // account (and rolls back off as more days are worked — rawWage rises toward 0)
+  const overflowAll = rawWage < 0 ? r2(-rawWage) : 0;
+  return {
+    earnedAll,
+    wagePaidAll,
+    debtGivenAll,
+    deductedAll,
+    repaidAll,
+    opening,
+    overflowAll,
+    wageBalance: rawWage < 0 ? 0 : rawWage,
+    debt: r2(opening + debtGivenAll - repaidAll - deductedAll + overflowAll),
+  };
 }
 
 // ---- settings ----
@@ -222,12 +295,12 @@ export interface WeekRow {
   marks: Record<string, number>;
   presentDays: number;
   earned: number;
-  /** money GIVEN to the worker this week (repayments don't count as wages paid) */
+  /** wages SETTLED this week: wage payments + deductions (debt loans/repayments don't touch wages) */
   paid: number;
-  /** earned − paid: >0 still owed to the worker · <0 the worker owes (advance) */
+  /** earned − paid: >0 still owed to the worker · <0 paid over this week's wages */
   balance: number;
-  /** this week's "given" payments, oldest first */
-  payments: Expense[];
+  /** this week's wage-settling entries (wage + deduct), oldest first */
+  payments: WorkerEntry[];
 }
 
 export function weekRollup(
@@ -247,10 +320,10 @@ export function weekRollup(
       presentDays += +m.present || 0;
     }
     const payments = workerPayments(expenses, worker.id)
-      .filter((e) => inWeek(dateSortKey(e.date) || (e.createdAt || "").slice(0, 10)))
-      .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+      .filter((x) => (x.kind === "wage" || x.kind === "deduct") && inWeek(dateSortKey(x.e.date) || (x.e.createdAt || "").slice(0, 10)))
+      .sort((a, b) => (a.e.createdAt || "").localeCompare(b.e.createdAt || ""));
     const earned = r2(presentDays * (+worker.rate || 0));
-    const paid = r2(payments.reduce((s, e) => s + (+e.amount || 0), 0));
+    const paid = r2(payments.reduce((s, x) => s + (+x.e.amount || 0), 0));
     return { worker, marks: wm, presentDays: r2(presentDays), earned, paid, balance: r2(earned - paid), payments };
   });
 }
