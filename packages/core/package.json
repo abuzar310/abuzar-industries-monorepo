@@ -1,0 +1,16 @@
+{
+  "name": "@abuzar/core",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "react-rnd": "^10.5.3"
+  },
+  "peerDependencies": {
+    "next": ">=16",
+    "react": ">=19",
+    "react-dom": ">=19"
+  }
+}

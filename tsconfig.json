@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./packages/core/src/*"]
+    }
+  },
+  "include": [
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "apps/**/*.ts",
+    "apps/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/.next",
+    "packages/core/src/lib/calc.check.ts",
+    "packages/core/src/lib/ledger.check.ts",
+    "packages/core/src/lib/trading.check.ts",
+    "packages/core/src/lib/numbering.check.ts",
+    "packages/core/src/lib/invoice-id.check.ts"
+  ]
+}
