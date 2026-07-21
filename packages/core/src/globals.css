@@ -1664,38 +1664,59 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 /* B2B / Regular split: each table is its own block with a sub-heading */
 .rep-block + .rep-block{margin-top:18px}
 .rep-subhead{margin-bottom:8px}
-/* daybook: day-wise statement inside the current session */
+/* ---------- daybook: day-wise statement (passbook look) ---------- */
 .db-day{border-top:1px solid var(--line)}
 .db-day:first-of-type{border-top:0}
-.db-day-head{display:flex; align-items:center; justify-content:space-between; padding:8px 14px 4px;
-  background:var(--t-cream2, #f6f0e4)}
-.db-day-date{font-family:var(--mono); font-size:13px; font-weight:800; color:var(--walnut)}
+/* day band: warm strip with a wood-accent edge, date as a little plate */
+.db-day-head{display:flex; align-items:center; gap:10px; padding:9px 14px 8px;
+  background:linear-gradient(to right, rgba(148,99,23,.10), rgba(148,99,23,.03));
+  border-left:3px solid var(--ochre, #b07c28)}
+.db-day-date{font-family:var(--mono); font-size:13px; font-weight:800; color:var(--walnut);
+  background:#fff; border:1px solid var(--line-2); border-radius:8px; padding:2px 9px;
+  box-shadow:0 1px 0 rgba(0,0,0,.03)}
 .db-day-date small{font-weight:600; color:var(--ink-faint); text-transform:none}
-.db-day-mini{font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
-.db-day-sum{display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:7px 14px;
-  background:var(--t-cream2, #f6f0e4); border-top:1px dashed var(--line);
-  font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums; color:var(--ink-soft)}
+.db-day-mini{margin-left:auto; font-family:var(--disp); font-size:10px; font-weight:700;
+  letter-spacing:.07em; text-transform:uppercase; color:var(--ink-faint)}
+/* day close line: quiet subtotals, the balance as a solid chip on the right */
+.db-day-sum{display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:8px 14px;
+  background:rgba(148,99,23,.05); border-top:1px dashed var(--line);
+  font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums; color:var(--ink-faint)}
 .db-day-sum .in{color:var(--green)}
 .db-day-sum .out{color:var(--danger)}
-.db-day-sum b{margin-left:auto; font-size:13px; color:var(--walnut)}
-.db-day-sum b.out{color:var(--danger)}
-.db-carry{border-top:0; border-bottom:1px dashed var(--line)}
-.db-carry b{color:var(--ochre-deep)}
+.db-day-sum b{margin-left:auto; font-size:12.5px; color:#fff; background:var(--walnut, #4a3a26);
+  border-radius:999px; padding:3px 12px; box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.db-day-sum b.out{background:var(--danger)}
+.db-carry{border-top:0; border-bottom:1px dashed var(--line); background:rgba(176,124,40,.07)}
+.db-carry b{margin-left:auto; color:#fff; background:var(--ochre-deep, #946317)}
 /* statement rows: Entry | Cash in | Cash out | Balance (running, after each line) */
-.db-srow{display:grid; grid-template-columns:auto minmax(0,1fr) 88px 88px 96px auto;
-  gap:10px; align-items:center; padding:8px 14px; border-top:1px solid var(--line)}
+.db-srow{display:grid; grid-template-columns:64px minmax(0,1fr) 88px 88px 100px auto;
+  gap:10px; align-items:center; padding:9px 14px; border-top:1px solid var(--line);
+  transition:background .12s}
 .db-day .db-srow:first-of-type{border-top:0}
-.db-srow .amt{font-family:var(--mono); font-size:12.5px; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-faint)}
-.db-srow .amt.in{color:var(--green)}
-.db-srow .amt.out{color:var(--danger)}
-.db-srow .amt.bal{font-weight:800; color:var(--walnut)}
+.db-srow:hover{background:rgba(176,124,40,.05)}
+.db-srow .exptag{justify-self:start; min-width:52px; text-align:center}
+.db-srow .amt{font-family:var(--mono); font-size:12.5px; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-faint); opacity:.45}
+.db-srow .amt.in{color:var(--green); font-weight:700; opacity:1}
+.db-srow .amt.out{color:var(--danger); font-weight:700; opacity:1}
+.db-srow .amt.bal{opacity:1}
+/* the balance column reads like a ledger's: its own tinted rail */
+.db-srow .amt.bal{font-weight:800; color:var(--walnut);
+  background:rgba(148,99,23,.06); border-radius:7px; padding:3px 8px}
 .db-srow .amt.bal.out{color:var(--danger)}
-.db-shead{padding:6px 14px; border-top:0; background:var(--t-cream2,#f6f0e4)}
-.db-shead span{font-family:var(--disp); font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint)}
-.db-shead .amt{font-family:var(--disp)}
+.db-srow .x-row{opacity:0; transition:opacity .12s}
+.db-srow:hover .x-row{opacity:1}
+.db-shead{padding:7px 14px; border-top:0; background:var(--t-cream2,#f6f0e4);
+  border-bottom:1px solid var(--line)}
+.db-shead span{font-family:var(--disp); font-size:9.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-faint)}
+.db-shead .amt{font-family:var(--disp); background:none; padding:0}
 @media (max-width: 640px){
-  .db-srow{grid-template-columns:auto minmax(0,1fr) 64px 64px 76px auto; gap:6px; padding:8px 10px}
+  .db-srow{grid-template-columns:50px minmax(0,1fr) 62px 62px 78px auto; gap:6px; padding:8px 10px}
   .db-srow .amt{font-size:11px}
+  .db-srow .amt.bal{padding:2px 5px}
+  .db-srow .exptag{min-width:44px}
+  .db-srow .x-row{opacity:.5}
+  .db-day-mini{display:none}
+  .db-day-sum{gap:10px; font-size:11px}
 }
 
 /* editor: "show final price on print" toggle under the Final price field */
