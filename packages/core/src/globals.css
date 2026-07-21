@@ -1681,6 +1681,22 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .db-day-sum b.out{color:var(--danger)}
 .db-carry{border-top:0; border-bottom:1px dashed var(--line)}
 .db-carry b{color:var(--ochre-deep)}
+/* statement rows: Entry | Cash in | Cash out | Balance (running, after each line) */
+.db-srow{display:grid; grid-template-columns:auto minmax(0,1fr) 88px 88px 96px auto;
+  gap:10px; align-items:center; padding:8px 14px; border-top:1px solid var(--line)}
+.db-day .db-srow:first-of-type{border-top:0}
+.db-srow .amt{font-family:var(--mono); font-size:12.5px; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-faint)}
+.db-srow .amt.in{color:var(--green)}
+.db-srow .amt.out{color:var(--danger)}
+.db-srow .amt.bal{font-weight:800; color:var(--walnut)}
+.db-srow .amt.bal.out{color:var(--danger)}
+.db-shead{padding:6px 14px; border-top:0; background:var(--t-cream2,#f6f0e4)}
+.db-shead span{font-family:var(--disp); font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint)}
+.db-shead .amt{font-family:var(--disp)}
+@media (max-width: 640px){
+  .db-srow{grid-template-columns:auto minmax(0,1fr) 64px 64px 76px auto; gap:6px; padding:8px 10px}
+  .db-srow .amt{font-size:11px}
+}
 
 /* editor: "show final price on print" toggle under the Final price field */
 .fp-print-opt{display:flex; align-items:center; gap:7px; margin-bottom:12px; font-size:12.5px; color:var(--ink-soft); cursor:pointer}

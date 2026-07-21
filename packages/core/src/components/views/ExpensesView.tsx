@@ -219,19 +219,25 @@ export default function ExpensesView() {
       map.set(e.date, arr);
     }
     const asc = [...map.entries()].sort((a, b) => dkey(a[0]).localeCompare(dkey(b[0])));
-    type DayGroup = { date: string; entries: Expense[]; recv: number; paid: number; bal: number };
+    type SLine = { e: Expense; cin: number; cout: number; bal: number };
+    type DayGroup = { date: string; lines: SLine[]; recv: number; paid: number; bal: number };
     const { rows } = asc.reduce<{ rows: DayGroup[]; bal: number }>(
       (acc, [date, entries]) => {
-        const recv = r2(entries.reduce((s, e) => s + (isInflow(e.type) ? +e.amount || 0 : 0), 0));
-        const paid = r2(entries.reduce((s, e) => s + (isInflow(e.type) ? 0 : +e.amount || 0), 0));
-        const bal = r2(acc.bal + recv - paid);
-        return {
-          bal,
-          rows: [
-            ...acc.rows,
-            { date, entries: [...entries].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")), recv, paid, bal },
-          ],
-        };
+        // statement lines in the order the money moved (oldest first), each carrying
+        // the cash balance AFTER it — then flipped so the newest shows on top
+        const ordered = [...entries].sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+        const { lines, bal } = ordered.reduce<{ lines: SLine[]; bal: number }>(
+          (ai, e) => {
+            const cin = isInflow(e.type) ? r2(+e.amount || 0) : 0;
+            const cout = isInflow(e.type) ? 0 : r2(+e.amount || 0);
+            const nb = r2(ai.bal + cin - cout);
+            return { bal: nb, lines: [...ai.lines, { e, cin, cout, bal: nb }] };
+          },
+          { lines: [], bal: acc.bal },
+        );
+        const recv = r2(lines.reduce((s, l) => s + l.cin, 0));
+        const paid = r2(lines.reduce((s, l) => s + l.cout, 0));
+        return { bal, rows: [...acc.rows, { date, lines: [...lines].reverse(), recv, paid, bal }] };
       },
       { rows: [], bal: carryIn },
     );
@@ -398,6 +404,15 @@ export default function ExpensesView() {
               day-wise statement · running balance
             </span>
           </div>
+          {/* statement column headers */}
+          <div className="db-srow db-shead">
+            <span />
+            <span>Entry</span>
+            <span className="amt">Cash in ₹</span>
+            <span className="amt">Cash out ₹</span>
+            <span className="amt">Balance ₹</span>
+            {isOwner && <span />}
+          </div>
           {carryIn > 0 && (
             <div className="db-day-sum db-carry">
               <span>↩ Opening (carried from last session)</span>
@@ -410,21 +425,21 @@ export default function ExpensesView() {
                 <span className="db-day-date">
                   {g.date} <small>· {weekday(g.date)}</small>
                 </span>
-                <span className="db-day-mini">{g.entries.length} entr{g.entries.length === 1 ? "y" : "ies"}</span>
+                <span className="db-day-mini">{g.lines.length} entr{g.lines.length === 1 ? "y" : "ies"}</span>
               </div>
-              {g.entries.map((e) => (
-                <div className="exprow" key={e.id}>
-                  <span className={"exptag " + (isInflow(e.type) ? "in" : "out")}>{typeLabel(e.type).split(" ")[0]}</span>
+              {g.lines.map(({ e, cin, cout, bal }) => (
+                <div className="db-srow" key={e.id}>
+                  <span className={"exptag " + (cin > 0 ? "in" : "out")}>{typeLabel(e.type).split(" ")[0]}</span>
                   <span className="expnote">
                     {e.note || typeLabel(e.type)}
                     <small>
                       {userName(e.enteredBy)}
-                      {isInflow(e.type) && e.mode ? " · " + e.mode.toUpperCase() : ""}
+                      {cin > 0 && e.mode ? " · " + e.mode.toUpperCase() : ""}
                     </small>
                   </span>
-                  <span className={"expamt " + (isInflow(e.type) ? "in" : "out")}>
-                    {isInflow(e.type) ? "+" : "−"}₹ {inr(e.amount)}
-                  </span>
+                  <span className="amt in">{cin > 0 ? inr(cin) : "—"}</span>
+                  <span className="amt out">{cout > 0 ? inr(cout) : "—"}</span>
+                  <span className={"amt bal" + (bal < 0 ? " out" : "")}>{inr(bal)}</span>
                   {isOwner && (
                     <button className="x-row" title="Delete" onClick={() => remove(e)}>
                       ×
@@ -432,10 +447,10 @@ export default function ExpensesView() {
                   )}
                 </div>
               ))}
-              {/* the statement line: what came in, what went out, and the cash balance AFTER this day */}
+              {/* day close line: subtotals + the cash balance AFTER this day */}
               <div className="db-day-sum">
-                <span className="in">Received ₹{inr(g.recv)}</span>
-                <span className="out">Paid ₹{inr(g.paid)}</span>
+                <span className="in">In ₹{inr(g.recv)}</span>
+                <span className="out">Out ₹{inr(g.paid)}</span>
                 <span className={g.recv - g.paid < 0 ? "out" : "in"}>
                   Day {g.recv - g.paid < 0 ? "−" : "+"}₹{inr(Math.abs(r2(g.recv - g.paid)))}
                 </span>
