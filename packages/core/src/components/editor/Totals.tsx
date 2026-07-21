@@ -16,6 +16,7 @@ interface Props {
 
 export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, onGst, onGstMode }: Props) {
   const isInv = doc.kind === "invoice";
+  const showFinal = !isInv && !!doc.showFinalOnPrint && (doc.finalPrice || 0) > 0;
   const flat = doc.gstMode === "flat";
   const half = Math.round((+doc.gst || 0) * 50) / 100; // e.g. 18 -> 9
   const halfAmt = Math.round(gstAmt * 50) / 100;
@@ -79,10 +80,17 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
         <span className="lab">Grand total</span>
         <span className="val">₹ {inr(grand)}</span>
       </div>
+      {/* the agreed round figure — printed only when the toggle next to Final price is on */}
+      {showFinal && (
+        <div className="t-row grand final-print">
+          <span className="lab">Final price (agreed)</span>
+          <span className="val">₹ {inr(doc.finalPrice!)}</span>
+        </div>
+      )}
       </div>
       {/* amount-in-words lives OUTSIDE the totals box (which clips overflow) so it can never be cut off */}
       <div className="words">
-        Amount in words: <b>{rupeesInWords(grand)}</b>
+        Amount in words: <b>{rupeesInWords(showFinal ? doc.finalPrice! : grand)}</b>
       </div>
     </>
   );

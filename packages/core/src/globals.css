@@ -1657,6 +1657,14 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 /* B2B / Regular split: each table is its own block with a sub-heading */
 .rep-block + .rep-block{margin-top:18px}
 .rep-subhead{margin-bottom:8px}
+/* editor: "show final price on print" toggle under the Final price field */
+.fp-print-opt{display:flex; align-items:center; gap:7px; margin-bottom:12px; font-size:12.5px; color:var(--ink-soft); cursor:pointer}
+.fp-print-opt input{accent-color:var(--ochre-deep)}
+.fp-print-opt small{color:var(--ink-faint)}
+.fp-print-opt:has(input:disabled){opacity:.6; cursor:default}
+/* the printed "Final price (agreed)" row — slightly separated from the computed grand */
+.t-row.final-print{border-top:2px solid rgba(255,255,255,.35)}
+
 /* Stock: gross-profit method picker + transparent formula line */
 .gp-ctl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
 .gp-lbl{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint,#8a7f6d)}

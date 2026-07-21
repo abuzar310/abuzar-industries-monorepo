@@ -66,6 +66,8 @@ export interface Doc {
   rentDesc?: string;
   /** accepted round-figure price override; falls back to the computed grand total. */
   finalPrice?: number;
+  /** print the agreed final price on the sheet (default OFF — clean quote format). */
+  showFinalOnPrint?: boolean;
   quotationId: string;
   paymentStatus: string;
   amountPaid: number;

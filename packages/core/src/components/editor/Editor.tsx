@@ -1200,6 +1200,7 @@ export default function Editor({
           by={user?.id || "unknown"}
           isOwner={user?.role === "owner"}
           onFinalPrice={onFinalPrice}
+          onShowFinalOnPrint={(v) => update((d) => (d.showFinalOnPrint = v))}
           setAggregates={setPayAggregates}
           onClearAll={onClearPayments}
           reload={loadExpenses}

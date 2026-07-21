@@ -37,6 +37,8 @@ interface Props {
   /** current user is the owner — their cash never enters the manager's daybook */
   isOwner: boolean;
   onFinalPrice: (v: string) => void;
+  /** toggle printing the agreed final price on the quotation sheet (default off) */
+  onShowFinalOnPrint: (v: boolean) => void;
   /** persist new cash/UPI running totals onto the doc */
   setAggregates: (payCash: number, payUpi: number) => void;
   onClearAll: () => void;
@@ -45,7 +47,7 @@ interface Props {
   highlightId?: string;
 }
 
-export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, isOwner, onFinalPrice, setAggregates, onClearAll, reload, highlightId }: Props) {
+export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, isOwner, onFinalPrice, onShowFinalOnPrint, setAggregates, onClearAll, reload, highlightId }: Props) {
   const [amt, setAmt] = useState("");
   const [mode, setMode] = useState<"cash" | "owner" | "upi" | "uowner">("cash");
   const [acct, setAcct] = useState("");
@@ -187,7 +189,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
 
   return (
     <div className="panel-card no-print" style={{ marginTop: 12, padding: 14 }}>
-      <label className="modal-field" style={{ marginBottom: 12 }}>
+      <label className="modal-field" style={{ marginBottom: 6 }}>
         <span>
           Final price ₹ <small style={{ color: "var(--ink-faint)" }}>(quote ₹{inr(quoteGrand)})</small>
         </span>
@@ -198,6 +200,17 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
           value={doc.finalPrice != null ? doc.finalPrice : ""}
           onChange={(e) => onFinalPrice(e.target.value)}
         />
+      </label>
+      {/* default OFF — the printed quote stays clean unless this is ticked */}
+      <label className="fp-print-opt" title="Adds a 'Final price (agreed)' line to the printed sheet">
+        <input
+          type="checkbox"
+          checked={!!doc.showFinalOnPrint}
+          disabled={!(doc.finalPrice && doc.finalPrice > 0)}
+          onChange={(e) => onShowFinalOnPrint(e.target.checked)}
+        />
+        Show final price on the printed quotation
+        {!(doc.finalPrice && doc.finalPrice > 0) && <small> (enter a final price first)</small>}
       </label>
 
       <div className="paybook">
