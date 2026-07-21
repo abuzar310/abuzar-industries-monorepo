@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { allRec } from "@/lib/data";
 import { dateSortKey, inr, pad } from "@/lib/calc";
-import { computeTrading, docTrade, getStockConfig, MONTH_NAMES, monthKey, setStockConfig, type StockConfig } from "@/lib/trading";
+import { computeItc, computeTrading, docItc, docTrade, getStockConfig, MONTH_NAMES, monthKey, setStockConfig, type StockConfig } from "@/lib/trading";
 import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -48,6 +48,11 @@ export default function TradingView() {
   const [gpPct, setGpPct] = useState("10");
   const [editOpening, setEditOpening] = useState(false);
   const [showMonths, setShowMonths] = useState(false);
+  // ITC opening-balance edit form (CGST / SGST / IGST)
+  const [editItc, setEditItc] = useState(false);
+  const [iCgst, setICgst] = useState("");
+  const [iSgst, setISgst] = useState("");
+  const [iIgst, setIIgst] = useState("");
   // period window ("" = open-ended) — default all time, presets like the Reports page
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -60,6 +65,9 @@ export default function TradingView() {
       setOCft(c.cft ? String(c.cft) : "");
       setCCft(c.closingCft != null ? String(c.closingCft) : "");
       setGpPct(String(c.gpPercent ?? 10));
+      setICgst(c.itcOpen?.cgst ? String(c.itcOpen.cgst) : "");
+      setISgst(c.itcOpen?.sgst ? String(c.itcOpen.sgst) : "");
+      setIIgst(c.itcOpen?.igst ? String(c.itcOpen.igst) : "");
     });
   }, []);
   useEffect(() => {
@@ -91,6 +99,17 @@ export default function TradingView() {
     mode: gpMode,
     percent: cfg.gpPercent ?? 10,
   });
+
+  // GST Input-Tax-Credit ledger, same rolling-window treatment as the stock:
+  // credits before the window fold into the period's opening balances
+  const itcBase = cfg.itcOpen || { cgst: 0, sgst: 0, igst: 0 };
+  const itcOpening = beforeDocs.length
+    ? (() => {
+        const pre = computeItc(beforeDocs.map(docItc), itcBase);
+        return { cgst: pre.cgst.closing, sgst: pre.sgst.closing, igst: pre.igst.closing };
+      })()
+    : itcBase;
+  const itc = computeItc(periodDocs.map(docItc), itcOpening);
   const periodLabel =
     from && to ? `${fmtISO(from)}  to  ${fmtISO(to)}` : from ? `From ${fmtISO(from)}` : to ? `Up to ${fmtISO(to)}` : "All time";
   const fy = currentFY();
@@ -173,6 +192,15 @@ export default function TradingView() {
     load();
     bumpData();
     toast("Stock opening saved");
+  }
+
+  async function saveItc(e: React.FormEvent) {
+    e.preventDefault();
+    await setStockConfig({ ...cfg, itcOpen: { cgst: +iCgst || 0, sgst: +iSgst || 0, igst: +iIgst || 0 } });
+    setEditItc(false);
+    load();
+    bumpData();
+    toast("ITC opening balances saved");
   }
 
   const stmt: { k: string; cft: number; val: number; sub?: boolean; tot?: boolean }[] = [
@@ -346,6 +374,71 @@ export default function TradingView() {
         </div>
       </div>
 
+      {/* GST Input Tax Credit — purchases add credit, every sale's tax is set off (minus) */}
+      <div className="tsheet">
+        <div className="tsheet-head">
+          <span>GST Input Tax Credit</span>
+          <small>{periodLabel} · purchases add credit · sales minus · closing carries</small>
+        </div>
+        <div className="tsheet-body" style={{ overflowX: "auto" }}>
+          <table className="t-table narrow">
+            <thead>
+              <tr>
+                <th>Head</th>
+                <th className="amt">Opening ₹</th>
+                <th className="amt">+ Input (purchases)</th>
+                <th className="amt">− Output (sales)</th>
+                <th className="amt">Closing ₹</th>
+              </tr>
+            </thead>
+            <tbody>
+              {([["CGST", itc.cgst], ["SGST", itc.sgst], ["IGST", itc.igst]] as const).map(([k, h]) => (
+                <tr key={k}>
+                  <td>{k}</td>
+                  <td className="amt">{inr(h.open)}</td>
+                  <td className="amt">{inr(h.input)}</td>
+                  <td className="amt">{inr(h.output)}</td>
+                  <td className="amt" style={{ color: h.closing < -0.005 ? "var(--t-cr)" : "inherit", fontWeight: 700 }}>
+                    {inr(h.closing)}
+                    {h.closing < -0.005 ? " (payable)" : ""}
+                  </td>
+                </tr>
+              ))}
+              <tr className="tot">
+                <td>Total</td>
+                <td className="amt">{inr(itc.total.open)}</td>
+                <td className="amt">{inr(itc.total.input)}</td>
+                <td className="amt">{inr(itc.total.output)}</td>
+                <td className="amt" style={{ color: itc.total.closing < -0.005 ? "var(--t-cr)" : "inherit" }}>
+                  {inr(itc.total.closing)}
+                  {itc.total.closing < -0.005 ? " (payable)" : ""}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="gp-how" style={{ marginTop: 8 }}>
+            Closing credit = opening + tax paid on purchases − tax on sales, per head. A negative
+            closing means the credit is used up — that much is payable. Interstate (IGST) invoices
+            go to IGST; CGST+SGST invoices split half-half.
+          </div>
+          <div style={{ marginTop: 10 }}>
+            {!editItc ? (
+              <button className="tlink" onClick={() => setEditItc(true)}>
+                Opening credit{from ? " (this period, carried in)" : ""}: CGST ₹{inr(itcOpening.cgst)} · SGST ₹{inr(itcOpening.sgst)} · IGST ₹{inr(itcOpening.igst)} — edit{from ? " original" : ""}
+              </button>
+            ) : (
+              <form className="tform" onSubmit={saveItc}>
+                <label>CGST opening ₹<input type="number" inputMode="decimal" placeholder="0" value={iCgst} onChange={(e) => setICgst(e.target.value)} /></label>
+                <label>SGST opening ₹<input type="number" inputMode="decimal" placeholder="0" value={iSgst} onChange={(e) => setISgst(e.target.value)} /></label>
+                <label>IGST opening ₹<input type="number" inputMode="decimal" placeholder="0" value={iIgst} onChange={(e) => setIIgst(e.target.value)} /></label>
+                <button className="btn primary sm" type="submit">Save</button>
+                <button className="btn sm" type="button" onClick={() => setEditItc(false)}>Cancel</button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Stock movements */}
       <div className="tsheet">
         <div className="tsheet-head"><span>Stock Movements</span><small>each sale debits stock · each purchase adds</small></div>
@@ -495,6 +588,37 @@ export default function TradingView() {
               <td>Total</td>
               <td className="amt">{num(Math.round((rightCft + Math.max(0, cftDiff)) * 100) / 100)}</td>
               <td className="amt">{inr(Math.round((tr.saleValue + tr.closingValue) * 100) / 100)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div className="rep-title" style={{ marginTop: 18, marginBottom: 8 }}>GST Input Tax Credit</div>
+        <table className="rep-table">
+          <thead>
+            <tr>
+              <th>Head</th>
+              <th className="amt">Opening ₹</th>
+              <th className="amt">+ Input (purchases)</th>
+              <th className="amt">− Output (sales)</th>
+              <th className="amt">Closing ₹</th>
+            </tr>
+          </thead>
+          <tbody>
+            {([["CGST", itc.cgst], ["SGST", itc.sgst], ["IGST", itc.igst]] as const).map(([k, h]) => (
+              <tr key={k}>
+                <td>{k}</td>
+                <td className="amt">{inr(h.open)}</td>
+                <td className="amt">{inr(h.input)}</td>
+                <td className="amt">{inr(h.output)}</td>
+                <td className="amt">{inr(h.closing)}{h.closing < -0.005 ? " (payable)" : ""}</td>
+              </tr>
+            ))}
+            <tr className="rep-tot">
+              <td>Total</td>
+              <td className="amt">{inr(itc.total.open)}</td>
+              <td className="amt">{inr(itc.total.input)}</td>
+              <td className="amt">{inr(itc.total.output)}</td>
+              <td className="amt">{inr(itc.total.closing)}{itc.total.closing < -0.005 ? " (payable)" : ""}</td>
             </tr>
           </tbody>
         </table>
