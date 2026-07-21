@@ -61,22 +61,33 @@ export function customerFollowupMessage(name: string): string {
 
 /**
  * Send the document on WhatsApp. Priority #1 is the RIGHT RECIPIENT:
- *  - Doc has a phone → open that customer's chat directly (number auto-selected,
- *    message prefilled) and save the PDF just before, so it's the first file under
- *    WhatsApp's 📎 → Document → Recent. (WhatsApp links can't carry attachments —
- *    platform limit — so this is the closest to one-tap with the number locked in.)
- *  - No phone → system share sheet with the PDF attached; you pick the contact.
+ *  - PHONE (mobile/tablet) + customer number → open the WhatsApp chat IMMEDIATELY
+ *    (number auto-selected, message prefilled). No PDF here: phone browsers hijack a
+ *    blob "download" by opening the PDF viewer instead — which used to swallow the
+ *    whole send — and an async pause before opening the chat trips popup blockers.
+ *  - PHONE without a number → system share sheet with the PDF attached; pick the contact.
+ *  - DESKTOP → save the PDF (a real download) and open the chat with the message,
+ *    so the file is ready to drop in. (WhatsApp links can't carry attachments —
+ *    platform limit — so number-first is the closest to one-tap.)
  */
 export async function sendDocOnWhatsApp(
   sheet: HTMLElement,
   doc: Doc,
 ): Promise<"direct" | "shared" | "cancelled"> {
   const text = quoteMessage(doc);
-  const file = await generatePdfFile(sheet, doc.number || doc.id);
   const hasPhone = (doc.phone || "").replace(/\D/g, "").length >= 10;
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
+  const mobile = !!nav && /Android|iPhone|iPad|iPod/i.test(nav.userAgent);
 
-  if (!hasPhone && nav?.canShare?.({ files: [file] })) {
+  // phone + number: straight into the chat, synchronously (inside the tap gesture)
+  if (mobile && hasPhone) {
+    window.open(waLink(doc.phone, text), "_blank");
+    return "direct";
+  }
+
+  const file = await generatePdfFile(sheet, doc.number || doc.id);
+
+  if (mobile && nav?.canShare?.({ files: [file] })) {
     try {
       await nav.share({
         files: [file],
@@ -87,11 +98,11 @@ export async function sendDocOnWhatsApp(
     } catch (e) {
       // user closed the share sheet — do nothing (no duplicate sends)
       if ((e as Error)?.name === "AbortError") return "cancelled";
-      // share failed for another reason — fall through to the direct path
+      // share failed for another reason — fall through to the download path
     }
   }
 
-  // save the PDF (lands in Downloads / recent files), then open the chat
+  // desktop: save the PDF (lands in Downloads), then open the chat
   const url = URL.createObjectURL(file);
   const a = document.createElement("a");
   a.href = url;

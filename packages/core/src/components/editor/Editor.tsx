@@ -498,12 +498,10 @@ export default function Editor({
   async function onWaSend() {
     await saveNow();
     if (!sheetRef.current) return;
-    toast("Preparing PDF…");
     try {
       const how = await sendDocOnWhatsApp(sheetRef.current, docRef.current);
       if (how === "shared") toast("PDF attached — pick the contact in WhatsApp");
-      else if (how === "direct")
-        toast("Chat opened with the message — PDF is saved, attach it via 📎 → Document");
+      else if (how === "direct") toast("WhatsApp opened with the message ✓");
     } catch (e) {
       toast("WhatsApp send error: " + ((e as Error)?.message || e));
     }
