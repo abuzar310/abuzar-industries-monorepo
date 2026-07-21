@@ -21,13 +21,18 @@ function reviewFooter(): string {
 export function quoteMessage(doc: Doc): string {
   const b = activeBrand();
   const t = computeDoc(doc);
-  const lines = doc.sections
-    .map((s) => {
-      let cft = 0;
-      s.rows.forEach((r) => (cft += cftOf(r)));
-      return `• ${s.name}: ${cft.toFixed(2)} CFT @ ₹${s.rate}/CFT`;
-    })
-    .join("\n");
+  // per-section quantity from the SAME math the sheet uses (secCft handles every entry
+  // mode — by-size, direct CFT, CBM, per-piece, running feet — not just L×W×T rows)
+  const unitOf = (m?: string) => (m === "cbm" ? "CBM" : m === "rft" ? "RFT" : m === "pcs" ? "pc" : "CFT");
+  const lines = doc.rented
+    ? `• ${doc.rentDesc || "Rent"}: ₹${inr(doc.rentAmount || 0)}`
+    : doc.sections
+        .map((s, i) => {
+          const qty = t.secCft[i] ?? s.rows.reduce((c, r) => c + cftOf(r), 0);
+          const u = unitOf(s.calcMode);
+          return `• ${s.name}: ${qty.toFixed(2)} ${u} @ ₹${s.rate}/${u}`;
+        })
+        .join("\n");
   const kind = doc.kind === "invoice" ? "Invoice" : "Quotation";
   const sign = [b.name, [b.phone, b.web].filter(Boolean).join(" · ")].filter(Boolean).join("\n");
   return `${greet(doc.customerName)}
@@ -55,20 +60,23 @@ export function customerFollowupMessage(name: string): string {
 }
 
 /**
- * Send the document on WhatsApp with the PDF ATTACHED (one tap, no manual download):
- * renders the sheet to a PDF and hands it to the system share sheet (phones/tablets —
- * pick WhatsApp and the PDF is attached with the message). Where the share sheet
- * doesn't exist (desktop browsers), falls back to downloading the PDF and opening
- * the WhatsApp chat with the message so it can be dropped in.
+ * Send the document on WhatsApp. Priority #1 is the RIGHT RECIPIENT:
+ *  - Doc has a phone → open that customer's chat directly (number auto-selected,
+ *    message prefilled) and save the PDF just before, so it's the first file under
+ *    WhatsApp's 📎 → Document → Recent. (WhatsApp links can't carry attachments —
+ *    platform limit — so this is the closest to one-tap with the number locked in.)
+ *  - No phone → system share sheet with the PDF attached; you pick the contact.
  */
 export async function sendDocOnWhatsApp(
   sheet: HTMLElement,
   doc: Doc,
-): Promise<"shared" | "cancelled" | "fallback"> {
+): Promise<"direct" | "shared" | "cancelled"> {
   const text = quoteMessage(doc);
   const file = await generatePdfFile(sheet, doc.number || doc.id);
+  const hasPhone = (doc.phone || "").replace(/\D/g, "").length >= 10;
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
-  if (nav?.canShare?.({ files: [file] })) {
+
+  if (!hasPhone && nav?.canShare?.({ files: [file] })) {
     try {
       await nav.share({
         files: [file],
@@ -79,9 +87,11 @@ export async function sendDocOnWhatsApp(
     } catch (e) {
       // user closed the share sheet — do nothing (no duplicate sends)
       if ((e as Error)?.name === "AbortError") return "cancelled";
-      // share failed for another reason — fall through to the download path
+      // share failed for another reason — fall through to the direct path
     }
   }
+
+  // save the PDF (lands in Downloads / recent files), then open the chat
   const url = URL.createObjectURL(file);
   const a = document.createElement("a");
   a.href = url;
@@ -89,5 +99,5 @@ export async function sendDocOnWhatsApp(
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
   window.open(waLink(doc.phone, text), "_blank");
-  return "fallback";
+  return "direct";
 }
