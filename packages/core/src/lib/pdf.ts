@@ -4,6 +4,19 @@
 // Loaded dynamically so it stays out of the server bundle.
 
 export async function generatePdf(sheet: HTMLElement, fileBase: string) {
+  const pdf = await renderPdf(sheet);
+  pdf.save((fileBase || "document") + ".pdf");
+}
+
+/** The document as a shareable File — used to attach the PDF straight into WhatsApp
+ *  via the system share sheet (navigator.share), instead of download-then-attach. */
+export async function generatePdfFile(sheet: HTMLElement, fileBase: string): Promise<File> {
+  const pdf = await renderPdf(sheet);
+  const blob = pdf.output("blob");
+  return new File([blob], (fileBase || "document") + ".pdf", { type: "application/pdf" });
+}
+
+async function renderPdf(sheet: HTMLElement) {
   const [{ jsPDF }, h2c] = await Promise.all([import("jspdf"), import("html2canvas")]);
   const html2canvas = h2c.default;
 
@@ -82,7 +95,7 @@ export async function generatePdf(sheet: HTMLElement, fileBase: string) {
       pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
       heightLeft -= pageH;
     }
-    pdf.save((fileBase || "document") + ".pdf");
+    return pdf;
   } finally {
     if (holder.parentNode) holder.parentNode.removeChild(holder);
   }

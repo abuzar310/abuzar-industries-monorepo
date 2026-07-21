@@ -16,7 +16,7 @@ import { trashDoc } from "@/lib/trash";
 import { getFeatures } from "@/lib/features";
 import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
 import { postInvoice } from "@/lib/ledger-autopost";
-import { quoteMessage, reminderMessage, waLink } from "@/lib/whatsapp";
+import { reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
 import { generatePdf } from "@/lib/pdf";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -497,7 +497,15 @@ export default function Editor({
   }
   async function onWaSend() {
     await saveNow();
-    window.open(waLink(docRef.current.phone, quoteMessage(docRef.current)), "_blank");
+    if (!sheetRef.current) return;
+    toast("Preparing PDF…");
+    try {
+      const how = await sendDocOnWhatsApp(sheetRef.current, docRef.current);
+      if (how === "shared") toast("Sent to WhatsApp with the PDF attached ✓");
+      else if (how === "fallback") toast("PDF downloaded — attach it in the WhatsApp chat that just opened");
+    } catch (e) {
+      toast("WhatsApp send error: " + ((e as Error)?.message || e));
+    }
   }
   function onWaRemind() {
     window.open(waLink(doc.phone, reminderMessage(doc)), "_blank");

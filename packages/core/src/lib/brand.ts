@@ -26,6 +26,8 @@ export interface Brand {
   banks?: BankInfo[];
   /** invoice terms & conditions lines */
   terms?: string[];
+  /** Google review page — appended to WhatsApp messages ("rate us") when set */
+  reviewUrl?: string;
 }
 
 const HDFC_BANK: BankInfo = { name: "HDFC Bank, Chitradurga", acName: "ABUZAR INDUSTRIES", ac: "50200006429458", ifsc: "HDFC0002566" };
@@ -50,6 +52,8 @@ export const REAL_BRAND: Brand = {
   bank: HDFC_BANK,
   banks: [HDFC_BANK, AXIS_BANK],
   terms: INVOICE_TERMS,
+  // Google Maps listing (CID link) — opens the business page with the Reviews tab
+  reviewUrl: "https://maps.google.com/?cid=11136242296025670152",
 };
 
 export const DEMO_BRAND: Brand = {
