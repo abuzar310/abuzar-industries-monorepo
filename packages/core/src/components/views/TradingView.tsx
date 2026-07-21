@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { allRec } from "@/lib/data";
-import { inr } from "@/lib/calc";
+import { dateSortKey, inr, pad } from "@/lib/calc";
 import { computeTrading, docTrade, getStockConfig, MONTH_NAMES, monthKey, setStockConfig, type StockConfig } from "@/lib/trading";
 import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
@@ -9,6 +9,23 @@ import { bumpData, toast } from "@/store/app-store";
 import type { Doc } from "@/lib/types";
 
 const num = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// period helpers (same behavior as the Reports page)
+const docISO = (d: Doc) => dateSortKey(d.date) || (d.createdAt || "").slice(0, 10);
+const isoOf = (y: number, m: number, day: number) => `${y}-${pad(m)}-${pad(day)}`;
+const fmtISO = (iso: string) => {
+  const [y, m, d] = (iso || "").split("-");
+  return y && m && d ? `${d}-${m}-${y}` : iso;
+};
+function currentFY(now = new Date()): { from: string; to: string; label: string } {
+  const y = now.getFullYear();
+  const startY = now.getMonth() + 1 >= 4 ? y : y - 1;
+  return { from: isoOf(startY, 4, 1), to: isoOf(startY + 1, 3, 31), label: `FY ${startY}-${String(startY + 1).slice(2)}` };
+}
+const todayISO = () => {
+  const d = new Date();
+  return isoOf(d.getFullYear(), d.getMonth() + 1, d.getDate());
+};
 
 interface MRow {
   key: string;
@@ -31,6 +48,9 @@ export default function TradingView() {
   const [gpPct, setGpPct] = useState("10");
   const [editOpening, setEditOpening] = useState(false);
   const [showMonths, setShowMonths] = useState(false);
+  // period window ("" = open-ended) — default all time, presets like the Reports page
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
 
   const load = useCallback(() => {
     allRec<Doc>("invoices").then((arr) => setInvoices(arr.filter((d) => !d.deletedAt && !d.purgedAt)));
@@ -47,11 +67,53 @@ export default function TradingView() {
   }, [load, dataVersion]);
 
   const gpMode = cfg.gpMode === "percent" ? "percent" : "stock";
-  const lines = invoices.map(docTrade);
-  const tr = computeTrading(lines, { value: cfg.value, cft: cfg.cft }, cfg.closingCft, {
+
+  // period accounting: invoices BEFORE the window roll into a derived opening
+  // (configured opening + earlier purchases − earlier sales at cost), so any
+  // month/FY window is a correct standalone trading account.
+  const beforeDocs = from ? invoices.filter((d) => docISO(d) < from) : [];
+  const periodDocs = invoices.filter((d) => {
+    const iso = docISO(d);
+    if (from && iso < from) return false;
+    if (to && iso > to) return false;
+    return true;
+  });
+  const baseOpening = { value: cfg.value, cft: cfg.cft };
+  const opening = beforeDocs.length
+    ? (() => {
+        const pre = computeTrading(beforeDocs.map(docTrade), baseOpening, null); // at cost — GP method irrelevant here
+        return { value: pre.closingValue, cft: pre.closingCft };
+      })()
+    : baseOpening;
+  // the physical closing count describes TODAY's stock — only apply it when the window reaches today
+  const includesNow = !to || to >= todayISO();
+  const tr = computeTrading(periodDocs.map(docTrade), opening, includesNow ? cfg.closingCft : null, {
     mode: gpMode,
     percent: cfg.gpPercent ?? 10,
   });
+  const periodLabel =
+    from && to ? `${fmtISO(from)}  to  ${fmtISO(to)}` : from ? `From ${fmtISO(from)}` : to ? `Up to ${fmtISO(to)}` : "All time";
+  const fy = currentFY();
+  function preset(kind: "thisMonth" | "lastMonth" | "fy" | "all") {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    if (kind === "thisMonth") {
+      setFrom(isoOf(y, m, 1));
+      setTo(isoOf(y, m, new Date(y, m, 0).getDate()));
+    } else if (kind === "lastMonth") {
+      const lm = m === 1 ? 12 : m - 1;
+      const ly = m === 1 ? y - 1 : y;
+      setFrom(isoOf(ly, lm, 1));
+      setTo(isoOf(ly, lm, new Date(ly, lm, 0).getDate()));
+    } else if (kind === "fy") {
+      setFrom(fy.from);
+      setTo(fy.to);
+    } else {
+      setFrom("");
+      setTo("");
+    }
+  }
 
   async function saveGp(next: Partial<StockConfig>) {
     const merged = { ...cfg, ...next };
@@ -66,7 +128,7 @@ export default function TradingView() {
     return "20" + (yy || "") + (mm || "") + (dd || "");
   };
   let runCft = tr.openCft;
-  const moves = [...invoices]
+  const moves = [...periodDocs]
     .sort((a, b) => dsort(a.date).localeCompare(dsort(b.date)))
     .map((d) => {
       const it = docTrade(d);
@@ -77,7 +139,7 @@ export default function TradingView() {
 
   // month-wise Karnataka/GST/Total P.K vs Sell/Sell GST/Total Sell (like the Excel)
   const mmap = new Map<string, MRow>();
-  invoices.forEach((d) => {
+  periodDocs.forEach((d) => {
     const k = monthKey(d.date);
     const it = docTrade(d);
     const m = mmap.get(k) || { key: k, pTax: 0, pGst: 0, pTot: 0, sTax: 0, sGst: 0, sTot: 0 };
@@ -141,11 +203,25 @@ export default function TradingView() {
         </button>
       </div>
 
+      {/* period window — same clean controls as Reports; earlier trade rolls into the opening */}
+      <div className="rep-controls">
+        <div className="rep-presets">
+          <button className="btn sm" onClick={() => preset("thisMonth")}>This month</button>
+          <button className="btn sm" onClick={() => preset("lastMonth")}>Last month</button>
+          <button className="btn sm" onClick={() => preset("fy")}>{fy.label}</button>
+          <button className="btn sm" onClick={() => preset("all")}>All time</button>
+        </div>
+        <div className="rep-range">
+          <label>From<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+          <label>To<input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+        </div>
+      </div>
+
       {/* Stock Summary sheet */}
       <div className="tsheet">
         <div className="tsheet-head">
           <span>Stock Summary</span>
-          <small>avg ₹{inr(tr.avgRate)} / CFT</small>
+          <small>{periodLabel} · avg ₹{inr(tr.avgRate)} / CFT{from ? " · opening carried in from earlier trade" : ""}</small>
         </div>
         <div className="tsheet-body">
           <div className="tsum">
@@ -254,7 +330,8 @@ export default function TradingView() {
           <div style={{ marginTop: 10 }}>
             {!editOpening ? (
               <button className="tlink" onClick={() => setEditOpening(true)}>
-                Opening: {num(tr.openCft)} CFT · ₹{inr(tr.openValue)} — edit
+                Opening{from ? " (this period, carried in)" : ""}: {num(tr.openCft)} CFT · ₹{inr(tr.openValue)} — edit
+                {from ? " original" : ""}
               </button>
             ) : (
               <form className="tform" onSubmit={saveCfg}>
@@ -345,7 +422,7 @@ export default function TradingView() {
           </div>
           <div className="rep-meta">
             <div className="rep-title">Trading Account</div>
-            <div className="rep-period">As on {genOn}</div>
+            <div className="rep-period">{periodLabel === "All time" ? "As on " + genOn : periodLabel}</div>
           </div>
         </div>
 
