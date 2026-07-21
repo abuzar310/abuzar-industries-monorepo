@@ -62,7 +62,7 @@ const markCls = (v: number | undefined) => (v === 1 ? " f" : v === 0.5 ? " h" : 
 // WAGE pot convention: POSITIVE = still to pay the worker · NEGATIVE = paid over what was earned
 const balWords = (bal: number) =>
   bal < -0.5
-    ? { text: "took extra ₹" + inr(-bal), color: "var(--danger)" }
+    ? { text: "−₹" + inr(-bal) + " extra taken", color: "var(--danger)" }
     : bal > 0.5
       ? { text: "to pay ₹" + inr(bal), color: "var(--green)" }
       : { text: "✓ square", color: "var(--ink-faint)" };
@@ -139,7 +139,7 @@ export default function AttendanceView() {
   const acctOf = (id: string): WorkerAccount =>
     accounts.get(id) || {
       earnedAll: 0, wagePaidAll: 0, debtGivenAll: 0, deductedAll: 0, repaidAll: 0,
-      opening: 0, overflowAll: 0, wageBalance: 0, debt: 0,
+      opening: 0, wageBalance: 0, debt: 0,
     };
   // the pay panel always talks about the CURRENT calendar week
   const curDays = useMemo(() => weekDays(weekStart(new Date())), []);
@@ -582,7 +582,6 @@ export default function AttendanceView() {
                 <span className="att-hero-sub">
                   earned ₹{inr(a.earnedAll)} all-time · paid ₹{inr(a.wagePaidAll)}
                   {a.deductedAll > 0.5 ? " · cut ₹" + inr(a.deductedAll) : ""}
-                  {a.overflowAll > 0.5 ? " · ₹" + inr(a.overflowAll) + " taken extra → advance" : ""}
                 </span>
               </div>
               <div className="att-hero-acts">
@@ -607,7 +606,6 @@ export default function AttendanceView() {
               <div className="att-debt-line">
                 <span className="att-debt-chip">
                   Advance: opening ₹{inr(a.opening)} + given ₹{inr(a.debtGivenAll)}
-                  {a.overflowAll > 0.5 ? " + extra wages taken ₹" + inr(a.overflowAll) : ""}
                   {" "}− cut ₹{inr(a.deductedAll)} − repaid ₹{inr(a.repaidAll)} = ₹{inr(a.debt)}
                 </span>
               </div>

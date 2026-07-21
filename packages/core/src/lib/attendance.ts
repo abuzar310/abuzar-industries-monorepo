@@ -237,13 +237,13 @@ export interface WorkerAccount {
   /** cash the worker returned (repays the debt) */
   repaidAll: number;
   opening: number;
-  /** wage cash taken BEYOND what was earned — automatically rolled onto the debt account
-   *  (it shrinks again as more days are worked). */
-  overflowAll: number;
-  /** WAGE pot: earnedAll − wagePaidAll − deductedAll, floored at 0 — any overpay
-   *  becomes debt (overflowAll), never a negative wage balance. */
+  /** WAGE pot: earnedAll − wagePaidAll − deductedAll. POSITIVE = to pay the worker ·
+   *  NEGATIVE = took more wage cash than earned (shown as a minus — it stays HERE and
+   *  self-corrects as more days are worked; it NEVER moves to the Advance on its own,
+   *  only via the explicit "cut from wages" action or re-entering it as an advance). */
   wageBalance: number;
-  /** DEBT pot: opening + debtGivenAll − repaidAll − deductedAll + overflowAll. */
+  /** ADVANCE pot: opening + debtGivenAll − repaidAll − deductedAll. Changes only by
+   *  explicit actions — never automatically. */
   debt: number;
 }
 
@@ -258,10 +258,6 @@ export function workerAccount(worker: Worker, marks: AttendanceMark[], expenses:
   const deductedAll = r2(sums.deduct);
   const repaidAll = r2(sums.repaid);
   const opening = r2(+(worker.opening || 0));
-  const rawWage = r2(earnedAll - wagePaidAll - deductedAll);
-  // took more wage cash than earned → the extra automatically rolls onto the debt
-  // account (and rolls back off as more days are worked — rawWage rises toward 0)
-  const overflowAll = rawWage < 0 ? r2(-rawWage) : 0;
   return {
     earnedAll,
     wagePaidAll,
@@ -269,9 +265,8 @@ export function workerAccount(worker: Worker, marks: AttendanceMark[], expenses:
     deductedAll,
     repaidAll,
     opening,
-    overflowAll,
-    wageBalance: rawWage < 0 ? 0 : rawWage,
-    debt: r2(opening + debtGivenAll - repaidAll - deductedAll + overflowAll),
+    wageBalance: r2(earnedAll - wagePaidAll - deductedAll),
+    debt: r2(opening + debtGivenAll - repaidAll - deductedAll),
   };
 }
 
