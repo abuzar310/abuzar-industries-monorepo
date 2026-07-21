@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { computeTrading, docTrade, getStockConfig, MONTH_NAMES, monthKey, setStockConfig, type StockConfig } from "@/lib/trading";
+import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import type { Doc } from "@/lib/types";
@@ -20,7 +21,8 @@ interface MRow {
 }
 
 export default function TradingView() {
-  const { dataVersion } = useApp();
+  const { dataVersion, brandMode } = useApp();
+  const brand = brandFor(brandMode);
   const [invoices, setInvoices] = useState<Doc[]>([]);
   const [cfg, setCfg] = useState<StockConfig>({ value: 0, cft: 0, closingCft: null, gpMode: "stock", gpPercent: 10 });
   const [oVal, setOVal] = useState("");
@@ -119,10 +121,24 @@ export default function TradingView() {
     { k: "= Closing stock", cft: tr.closingCft, val: tr.closingValue, tot: true },
   ];
 
+  // printable Trading A/C: CFT on both sides must reconcile too — any gap between
+  // goods available and (sold + closing) is a physical shortage/excess, shown explicitly
+  const rightCft = Math.round((tr.saleCft + tr.closingCft) * 100) / 100;
+  const cftDiff = Math.round((tr.availCft - rightCft) * 100) / 100;
+  const gToday = new Date();
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  const genOn = `${p2(gToday.getDate())}-${p2(gToday.getMonth() + 1)}-${gToday.getFullYear()}`;
+  const gpLabel =
+    gpMode === "percent" ? `Gross Profit (${num(cfg.gpPercent ?? 10)}% of sales)` : "Gross Profit (from closing stock)";
+
   return (
     <div>
-      <div className="sectitle">
-        Stock <small>— opening + purchases − sold = closing</small>
+      <div className="cd-screen">
+      <div className="sectitle" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <span>Stock <small>— opening + purchases − sold = closing</small></span>
+        <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => window.print()}>
+          Print Trading A/C
+        </button>
       </div>
 
       {/* Stock Summary sheet */}
@@ -317,6 +333,138 @@ export default function TradingView() {
           )}
         </div>
       )}
+      </div>
+
+      {/* clean printable TRADING ACCOUNT — rendered only on print (Print Trading A/C button) */}
+      <div className="cd-print rep-doc">
+        <div className="rep-head">
+          <div className="rep-brand">
+            <h1>{brand.name || "Trading Account"}</h1>
+            {brand.addr && <div>{brand.addr}</div>}
+            {brand.gstin && <div>GSTIN: {brand.gstin}</div>}
+          </div>
+          <div className="rep-meta">
+            <div className="rep-title">Trading Account</div>
+            <div className="rep-period">As on {genOn}</div>
+          </div>
+        </div>
+
+        <div className="rep-summary cols4">
+          <div><b>{num(tr.closingCft)}</b><span>Closing CFT</span></div>
+          <div><b>₹{inr(tr.closingValue)}</b><span>Closing value</span></div>
+          <div><b>₹{inr(tr.avgRate)}</b><span>Avg rate / CFT</span></div>
+          <div><b>₹{inr(tr.grossProfit)}</b><span>Gross profit</span></div>
+        </div>
+
+        {/* the classic two-sided account — ₹ AND CFT on both sides, both sides balance */}
+        <table className="rep-table">
+          <colgroup>
+            <col style={{ width: "22%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "16%" }} />
+            <col style={{ width: "22%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "16%" }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Particulars</th>
+              <th className="amt">CFT</th>
+              <th className="amt">Amount ₹</th>
+              <th>Particulars</th>
+              <th className="amt">CFT</th>
+              <th className="amt">Amount ₹</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Opening stock</td>
+              <td className="amt">{num(tr.openCft)}</td>
+              <td className="amt">{inr(tr.openValue)}</td>
+              <td>Sales</td>
+              <td className="amt">{num(tr.saleCft)}</td>
+              <td className="amt">{inr(tr.saleValue)}</td>
+            </tr>
+            <tr>
+              <td>Purchases</td>
+              <td className="amt">{num(tr.purchaseCft)}</td>
+              <td className="amt">{inr(tr.purchaseValue)}</td>
+              <td>Closing stock</td>
+              <td className="amt">{num(tr.closingCft)}</td>
+              <td className="amt">{inr(tr.closingValue)}</td>
+            </tr>
+            <tr>
+              <td>{gpLabel}</td>
+              <td className="amt">—</td>
+              <td className="amt">{inr(tr.grossProfit)}</td>
+              {Math.abs(cftDiff) > 0.01 ? (
+                <>
+                  <td>CFT difference ({cftDiff > 0 ? "shortage" : "excess"})</td>
+                  <td className="amt">{num(Math.abs(cftDiff))}</td>
+                  <td className="amt">—</td>
+                </>
+              ) : (
+                <>
+                  <td />
+                  <td />
+                  <td />
+                </>
+              )}
+            </tr>
+            <tr className="rep-tot">
+              <td>Total</td>
+              <td className="amt">{num(tr.availCft)}</td>
+              <td className="amt">{inr(tr.totalAmount)}</td>
+              <td>Total</td>
+              <td className="amt">{num(Math.round((rightCft + Math.max(0, cftDiff)) * 100) / 100)}</td>
+              <td className="amt">{inr(Math.round((tr.saleValue + tr.closingValue) * 100) / 100)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {mrows.length > 0 && (
+          <>
+            <div className="rep-title" style={{ marginTop: 18, marginBottom: 8 }}>Month-wise · Purchase vs Sell</div>
+            <table className="rep-table">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th className="amt">Purchase ₹</th>
+                  <th className="amt">GST ₹</th>
+                  <th className="amt">Total ₹</th>
+                  <th className="amt">Sell ₹</th>
+                  <th className="amt">Sell GST ₹</th>
+                  <th className="amt">Total ₹</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mrows.map((m) => (
+                  <tr key={m.key}>
+                    <td>{monthName(m.key)}</td>
+                    <td className="amt">{inr(m.pTax)}</td>
+                    <td className="amt">{inr(m.pGst)}</td>
+                    <td className="amt">{inr(m.pTot)}</td>
+                    <td className="amt">{inr(m.sTax)}</td>
+                    <td className="amt">{inr(m.sGst)}</td>
+                    <td className="amt">{inr(m.sTot)}</td>
+                  </tr>
+                ))}
+                <tr className="rep-tot">
+                  <td>Total</td>
+                  <td className="amt">{inr(tr.purchaseValue)}</td>
+                  <td className="amt">{inr(tr.purchaseGst)}</td>
+                  <td className="amt">{inr(tr.purchaseTotal)}</td>
+                  <td className="amt">{inr(tr.saleValue)}</td>
+                  <td className="amt">{inr(tr.saleGst)}</td>
+                  <td className="amt">{inr(tr.saleTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </>
+        )}
+
+        <div className="rep-foot">Generated {genOn} · {brand.name}</div>
+      </div>
     </div>
   );
 }
