@@ -1371,9 +1371,16 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .att-pp-dedlink{display:block; margin-top:7px; font-size:12.5px}
 .att-pp-hint{margin-top:10px; font-size:13px; color:var(--ink-faint)}
 .att-bal-debt{display:block; font-family:var(--mono); font-size:10px; font-weight:700; color:var(--ochre-deep); opacity:.85}
-/* register: the separate Debt-account column (amber when they owe, dash when clear) */
+/* register: the separate Advance column (amber when they owe, dash when clear) */
 .att-debt-amt{color:var(--ochre-deep)}
 .att-debt-none{color:var(--ink-faint); opacity:.5}
+/* the AMOUNT line under each day cell — money taken that day, tap to pay for that day */
+.att-day-amt{display:block; margin:2px auto 0; background:none; border:0; padding:0 2px; cursor:pointer;
+  font-family:var(--mono); font-size:10px; font-weight:700; color:var(--danger); white-space:nowrap}
+.att-day-amt:hover{text-decoration:underline}
+.att-day-amt-add{color:var(--ink-faint); opacity:0; font-size:11px}
+td.att-day:hover .att-day-amt-add{opacity:.6}
+@media (max-width: 640px){ .att-day-amt-add{opacity:.35} .att-day-amt{font-size:10.5px} }
 /* explicit "Paid by Owner / Manager" picker on every money form */
 .att-paidby{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px}
 .att-paidby-lbl{font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-faint)}

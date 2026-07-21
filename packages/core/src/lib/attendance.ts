@@ -295,12 +295,15 @@ export interface WeekRow {
   marks: Record<string, number>;
   presentDays: number;
   earned: number;
-  /** wages SETTLED this week: wage payments + deductions (debt loans/repayments don't touch wages) */
+  /** wages SETTLED this week: wage payments + deductions (advance loans/repayments don't touch wages) */
   paid: number;
   /** earned − paid: >0 still owed to the worker · <0 paid over this week's wages */
   balance: number;
   /** this week's wage-settling entries (wage + deduct), oldest first */
   payments: WorkerEntry[];
+  /** iso → CASH handed to the worker that day (wages + advance loans) — the Excel's
+   *  AMOUNT row under each day, shown right in the register grid */
+  takenByDay: Record<string, number>;
 }
 
 export function weekRollup(
@@ -319,11 +322,20 @@ export function weekRollup(
       wm[m.date] = m.present;
       presentDays += +m.present || 0;
     }
-    const payments = workerPayments(expenses, worker.id)
-      .filter((x) => (x.kind === "wage" || x.kind === "deduct") && inWeek(dateSortKey(x.e.date) || (x.e.createdAt || "").slice(0, 10)))
+    const all = workerPayments(expenses, worker.id);
+    const dayIso = (x: WorkerEntry) => dateSortKey(x.e.date) || (x.e.createdAt || "").slice(0, 10);
+    const payments = all
+      .filter((x) => (x.kind === "wage" || x.kind === "deduct") && inWeek(dayIso(x)))
       .sort((a, b) => (a.e.createdAt || "").localeCompare(b.e.createdAt || ""));
+    const takenByDay: Record<string, number> = {};
+    for (const x of all) {
+      if (x.kind !== "wage" && x.kind !== "debt") continue; // real cash only
+      const iso = dayIso(x);
+      if (!inWeek(iso)) continue;
+      takenByDay[iso] = r2((takenByDay[iso] || 0) + (+x.e.amount || 0));
+    }
     const earned = r2(presentDays * (+worker.rate || 0));
     const paid = r2(payments.reduce((s, x) => s + (+x.e.amount || 0), 0));
-    return { worker, marks: wm, presentDays: r2(presentDays), earned, paid, balance: r2(earned - paid), payments };
+    return { worker, marks: wm, presentDays: r2(presentDays), earned, paid, balance: r2(earned - paid), payments, takenByDay };
   });
 }
