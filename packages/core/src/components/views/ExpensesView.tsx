@@ -197,6 +197,46 @@ export default function ExpensesView() {
   // cash carried in from the last confirmed close = this session's opening balance
   const carryIn = Math.round((closed[0]?.carried || 0) * 100) / 100;
   const inHand = Math.round((carryIn + t.net) * 100) / 100;
+
+  // ---- current session as a DAY-WISE STATEMENT ----
+  // dd-mm-yy → sortable key; each day gets received/paid subtotals and a RUNNING
+  // cash-in-hand balance (opening carry + every day so far), like a bank statement.
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const dkey = (d: string) => {
+    const [dd, mm, yy] = (d || "").split("-");
+    return dd && mm && yy ? `20${yy}${mm}${dd}` : "";
+  };
+  const weekday = (d: string) => {
+    const [dd, mm, yy] = (d || "").split("-");
+    const dt = new Date(2000 + +yy, +mm - 1, +dd);
+    return isNaN(+dt) ? "" : dt.toLocaleDateString("en-GB", { weekday: "long" });
+  };
+  const dayGroups = (() => {
+    const map = new Map<string, Expense[]>();
+    for (const e of list) {
+      const arr = map.get(e.date) || [];
+      arr.push(e);
+      map.set(e.date, arr);
+    }
+    const asc = [...map.entries()].sort((a, b) => dkey(a[0]).localeCompare(dkey(b[0])));
+    type DayGroup = { date: string; entries: Expense[]; recv: number; paid: number; bal: number };
+    const { rows } = asc.reduce<{ rows: DayGroup[]; bal: number }>(
+      (acc, [date, entries]) => {
+        const recv = r2(entries.reduce((s, e) => s + (isInflow(e.type) ? +e.amount || 0 : 0), 0));
+        const paid = r2(entries.reduce((s, e) => s + (isInflow(e.type) ? 0 : +e.amount || 0), 0));
+        const bal = r2(acc.bal + recv - paid);
+        return {
+          bal,
+          rows: [
+            ...acc.rows,
+            { date, entries: [...entries].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")), recv, paid, bal },
+          ],
+        };
+      },
+      { rows: [], bal: carryIn },
+    );
+    return rows.reverse(); // newest day first on screen
+  })();
   const flow = isInflow(type) ? "in" : "out";
   const setFlow = (f: "in" | "out") => setType(f === "in" ? "sale" : isInflow(type) ? "additional" : type);
 
@@ -352,25 +392,55 @@ export default function ExpensesView() {
         </div>
       ) : (
         <div className="panel-card" style={{ marginTop: 16 }}>
-          <div className="pc-head">Current session · {list.length} entries</div>
-          {list.map((e) => (
-            <div className="exprow" key={e.id}>
-              <span className={"exptag " + (isInflow(e.type) ? "in" : "out")}>{typeLabel(e.type).split(" ")[0]}</span>
-              <span className="expnote">
-                {e.note || typeLabel(e.type)}
-                <small>
-                  {e.date} · {userName(e.enteredBy)}
-                  {isInflow(e.type) && e.mode ? " · " + e.mode.toUpperCase() : ""}
-                </small>
-              </span>
-              <span className={"expamt " + (isInflow(e.type) ? "in" : "out")}>
-                {isInflow(e.type) ? "+" : "−"}₹ {inr(e.amount)}
-              </span>
-              {isOwner && (
-                <button className="x-row" title="Delete" onClick={() => remove(e)}>
-                  ×
-                </button>
-              )}
+          <div className="pc-head" style={{ justifyContent: "space-between" }}>
+            <span>Current session · {list.length} entries</span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
+              day-wise statement · running balance
+            </span>
+          </div>
+          {carryIn > 0 && (
+            <div className="db-day-sum db-carry">
+              <span>↩ Opening (carried from last session)</span>
+              <b>₹ {inr(carryIn)}</b>
+            </div>
+          )}
+          {dayGroups.map((g) => (
+            <div className="db-day" key={g.date}>
+              <div className="db-day-head">
+                <span className="db-day-date">
+                  {g.date} <small>· {weekday(g.date)}</small>
+                </span>
+                <span className="db-day-mini">{g.entries.length} entr{g.entries.length === 1 ? "y" : "ies"}</span>
+              </div>
+              {g.entries.map((e) => (
+                <div className="exprow" key={e.id}>
+                  <span className={"exptag " + (isInflow(e.type) ? "in" : "out")}>{typeLabel(e.type).split(" ")[0]}</span>
+                  <span className="expnote">
+                    {e.note || typeLabel(e.type)}
+                    <small>
+                      {userName(e.enteredBy)}
+                      {isInflow(e.type) && e.mode ? " · " + e.mode.toUpperCase() : ""}
+                    </small>
+                  </span>
+                  <span className={"expamt " + (isInflow(e.type) ? "in" : "out")}>
+                    {isInflow(e.type) ? "+" : "−"}₹ {inr(e.amount)}
+                  </span>
+                  {isOwner && (
+                    <button className="x-row" title="Delete" onClick={() => remove(e)}>
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              {/* the statement line: what came in, what went out, and the cash balance AFTER this day */}
+              <div className="db-day-sum">
+                <span className="in">Received ₹{inr(g.recv)}</span>
+                <span className="out">Paid ₹{inr(g.paid)}</span>
+                <span className={g.recv - g.paid < 0 ? "out" : "in"}>
+                  Day {g.recv - g.paid < 0 ? "−" : "+"}₹{inr(Math.abs(r2(g.recv - g.paid)))}
+                </span>
+                <b className={g.bal < 0 ? "out" : ""}>Balance ₹{inr(g.bal)}</b>
+              </div>
             </div>
           ))}
         </div>
