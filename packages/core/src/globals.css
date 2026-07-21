@@ -576,6 +576,8 @@ body{
 #sheet.inv.inv-tight .inv-foot{margin-top:8px}
 #sheet.inv.inv-tight .inv-bank, #sheet.inv.inv-tight .inv-terms{padding:5px 14px; line-height:1.32}
 #sheet.inv.inv-tight .inv-sign{padding:8px 22px 5px}
+/* even when squeezed to fit one page, never crush the signing space below ~1.3cm */
+#sheet.inv.inv-tight .sign-box{min-height:50px}
 #sheet.inv.inv-tight .inv-thanks{padding:3px}
 #sheet.inv .words{padding:8px 22px; font-size:12.5px}
 /* TAX-INVOICE tag centered above the box; masthead centered with a big bold name */
@@ -1106,9 +1108,10 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   #sheet.inv .mast-c .brand-row{min-height:1.35cm}
   #sheet.inv .inv-tag-top{margin-bottom:4px}
   #sheet.inv .inv-tag-top span{font-size:11px; padding:3px 12px}
-  /* compress the footer (bank / terms / signatures / thanks) so it never spills to page 2 */
-  #sheet.inv .inv-sign{padding:8px 22px 5px; gap:16px}
-  #sheet.inv .sign-box{min-height:34px}
+  /* compress the footer (bank / terms / thanks) so it never spills to page 2 —
+     but keep REAL signing room: ~1.7cm of clear space above each signature line */
+  #sheet.inv .inv-sign{padding:10px 22px 6px; gap:16px}
+  #sheet.inv .sign-box{min-height:64px}
   #sheet.inv .sign-line{margin-bottom:3px}
   #sheet.inv .sign-for{font-size:12px}
   #sheet.inv .sign-role{font-size:8.5px}
