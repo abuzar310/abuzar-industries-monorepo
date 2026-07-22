@@ -1,10 +1,12 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { quoteLedger } from "@/lib/payments";
 import { brandFor } from "@/lib/brand";
+import { printOrSavePdf } from "@/lib/pdf";
+import { toast } from "@/store/app-store";
 import { USERS } from "@/lib/local-auth";
 import { useFocusFlash } from "@/lib/use-focus-flash";
 import { useApp } from "@/store/useApp";
@@ -31,6 +33,7 @@ export default function StatementsView() {
   const brand = brandFor(brandMode);
   const router = useRouter();
   const flash = useFocusFlash(); // dashboard card → highlight the exact figure it meant
+  const printRef = useRef<HTMLDivElement>(null);
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [custs, setCusts] = useState<Customer[]>([]);
@@ -110,7 +113,13 @@ export default function StatementsView() {
       <div className="cd-screen">
       <div className="sectitle" style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <span>Statements <small>— every payment, per quotation</small></span>
-        <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => window.print()}>
+        <button
+          className="btn sm"
+          style={{ marginLeft: "auto" }}
+          onClick={async () => {
+            if ((await printOrSavePdf(printRef.current, "statements-" + genOn)) === "pdf") toast("Statement PDF downloaded \u2713");
+          }}
+        >
           Print / Save PDF
         </button>
       </div>
@@ -306,7 +315,7 @@ export default function StatementsView() {
       </div>
 
       {/* clean printable statement — only rendered on print, reflects the active filter */}
-      <div className="cd-print rep-doc">
+      <div className="cd-print rep-doc" ref={printRef}>
         <div className="rep-head">
           <div className="rep-brand">
             <h1>{brand.name || "Statements"}</h1>

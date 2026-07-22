@@ -17,7 +17,7 @@ import { getFeatures } from "@/lib/features";
 import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
 import { postInvoice } from "@/lib/ledger-autopost";
 import { reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
-import { generatePdf } from "@/lib/pdf";
+import { generatePdf, printOrSavePdf } from "@/lib/pdf";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { BoxRect, Customer, Doc, Expense, Row } from "@/lib/types";
@@ -482,7 +482,9 @@ export default function Editor({
   }
   async function onPrint() {
     await saveNow(); // never print an unsaved doc
-    window.print();
+    // Android / installed app: no print dialog — the sheet downloads as a PDF instead
+    if ((await printOrSavePdf(sheetRef.current, docRef.current.number || docRef.current.id)) === "pdf")
+      toast("PDF downloaded \u2713");
   }
   async function onPdf() {
     try {

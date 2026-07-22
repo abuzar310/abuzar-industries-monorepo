@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { allRec } from "@/lib/data";
 import { inr, pad } from "@/lib/calc";
 import { docTrade } from "@/lib/trading";
 import { brandFor } from "@/lib/brand";
+import { printOrSavePdf } from "@/lib/pdf";
+import { toast } from "@/store/app-store";
 import { useApp } from "@/store/useApp";
 import type { Doc } from "@/lib/types";
 
@@ -55,6 +57,7 @@ export default function ReportsView() {
   const brand = brandFor(brandMode);
   const [invoices, setInvoices] = useState<Doc[]>([]);
   const fy = useMemo(() => currentFY(), []);
+  const printRef = useRef<HTMLDivElement>(null);
   const [from, setFrom] = useState(fy.from);
   const [to, setTo] = useState(fy.to);
   const [type, setType] = useState<TradeFilter>("sell");
@@ -302,12 +305,19 @@ export default function ReportsView() {
               </button>
             ))}
           </div>
-          <button className="btn primary sm rep-print" onClick={() => window.print()}>Print / Save PDF</button>
+          <button
+            className="btn primary sm rep-print"
+            onClick={async () => {
+              if ((await printOrSavePdf(printRef.current, "report-" + fmtISO(from || "start") + "-to-" + fmtISO(to || "now"))) === "pdf") toast("Report PDF downloaded \u2713");
+            }}
+          >
+            Print / Save PDF
+          </button>
         </div>
       </div>
 
       {/* ---- the printable report ---- */}
-      <div className="rep-doc" id="report">
+      <div className="rep-doc" id="report" ref={printRef}>
         <div className="rep-head">
           <div className="rep-brand">
             <h1>{brand.name || "Report"}</h1>

@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, delRec, getRec } from "@/lib/data";
 import { computeDoc, inr } from "@/lib/calc";
 import { brandFor } from "@/lib/brand";
+import { printOrSavePdf } from "@/lib/pdf";
 import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/create";
 import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
@@ -24,6 +25,7 @@ export default function CustomerDetail({ id }: { id: string }) {
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [invs, setInvs] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
     Promise.all([
@@ -180,7 +182,13 @@ export default function CustomerDetail({ id }: { id: string }) {
       <div className="sectitle" style={{ marginTop: 24, fontSize: 22, display: "flex", alignItems: "center", gap: 12 }}>
         <span>Quotations <small>— {quotes.length}</small></span>
         {canPrint && (
-          <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => window.print()}>
+          <button
+            className="btn sm"
+            style={{ marginLeft: "auto" }}
+            onClick={async () => {
+              if ((await printOrSavePdf(printRef.current, (cust!.name || "customer") + "-statement")) === "pdf") toast("Statement PDF downloaded \u2713");
+            }}
+          >
             Print / Save PDF
           </button>
         )}
@@ -202,7 +210,7 @@ export default function CustomerDetail({ id }: { id: string }) {
       </div>
 
       {canPrint && (
-        <div className="cd-print rep-doc cd-qreport">
+        <div className="cd-print rep-doc cd-qreport" ref={printRef}>
           <div className="rep-head">
             <div className="rep-brand">
               <h1>{brand.name || "Quotations"}</h1>

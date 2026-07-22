@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { allRec } from "@/lib/data";
 import { dateSortKey, inr, pad } from "@/lib/calc";
 import { computeItc, computeTrading, docItc, docTrade, getStockConfig, MONTH_NAMES, monthKey, setStockConfig, type StockConfig } from "@/lib/trading";
 import { brandFor } from "@/lib/brand";
+import { printOrSavePdf } from "@/lib/pdf";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import type { Doc } from "@/lib/types";
@@ -48,6 +49,7 @@ export default function TradingView() {
   const [gpPct, setGpPct] = useState("10");
   const [editOpening, setEditOpening] = useState(false);
   const [showMonths, setShowMonths] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
   // what the printed Trading A/C shows: amounts, CFT quantities, or both tables
   const [printCols, setPrintCols] = useState<"amount" | "cft" | "both">("amount");
   // ITC opening-balance edit form (CGST / SGST / IGST)
@@ -319,7 +321,12 @@ export default function TradingView() {
             </button>
           ))}
         </div>
-        <button className="btn sm" onClick={() => window.print()}>
+        <button
+          className="btn sm"
+          onClick={async () => {
+            if ((await printOrSavePdf(printRef.current, "trading-account-" + genOn)) === "pdf") toast("Trading A/C PDF downloaded \u2713");
+          }}
+        >
           Print Trading A/C
         </button>
       </div>
@@ -599,7 +606,7 @@ export default function TradingView() {
       </div>
 
       {/* clean printable TRADING ACCOUNT — rendered only on print (Print Trading A/C button) */}
-      <div className="cd-print rep-doc">
+      <div className="cd-print rep-doc" ref={printRef}>
         <div className="rep-head">
           <div className="rep-brand">
             <h1>{brand.name || "Trading Account"}</h1>

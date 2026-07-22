@@ -8,6 +8,24 @@ export async function generatePdf(sheet: HTMLElement, fileBase: string) {
   pdf.save((fileBase || "document") + ".pdf");
 }
 
+/** Print — or, where the browser print dialog doesn't work (Android Chrome in an
+ *  installed PWA silently ignores window.print()), download the sheet as a PDF
+ *  instead. Returns which path ran so callers can toast accordingly. */
+export async function printOrSavePdf(el: HTMLElement | null, fileBase: string): Promise<"print" | "pdf"> {
+  const nav = typeof navigator !== "undefined" ? navigator : undefined;
+  const isAndroid = !!nav && /Android/i.test(nav.userAgent);
+  const standalone =
+    typeof window !== "undefined" &&
+    (window.matchMedia?.("(display-mode: standalone)").matches ||
+      (nav as unknown as { standalone?: boolean })?.standalone === true);
+  if ((isAndroid || standalone) && el) {
+    await generatePdf(el, fileBase);
+    return "pdf";
+  }
+  window.print();
+  return "print";
+}
+
 /** The document as a shareable File — used to attach the PDF straight into WhatsApp
  *  via the system share sheet (navigator.share), instead of download-then-attach. */
 export async function generatePdfFile(sheet: HTMLElement, fileBase: string): Promise<File> {
@@ -49,6 +67,8 @@ async function renderPdf(sheet: HTMLElement) {
   const width = Math.max(sheet.scrollWidth, 880);
   clone.style.width = width + "px";
   clone.style.background = "#FAF6EF";
+  // print-only nodes (.cd-print) are display:none on screen — the clone must lay out
+  clone.style.display = "block";
   // off-screen but fully laid out so html2canvas can measure & render it
   const holder = document.createElement("div");
   holder.style.cssText = "position:fixed;left:-10000px;top:0;width:" + width + "px;background:#FAF6EF";

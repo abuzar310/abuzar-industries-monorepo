@@ -7,6 +7,7 @@ import { createInvoice } from "@/lib/create";
 import { editSupplierDialog } from "@/lib/customer-form";
 import { seedSuppliersFromPurchases, upsertSupplierFromDoc } from "@/lib/suppliers";
 import { brandFor } from "@/lib/brand";
+import { printOrSavePdf } from "@/lib/pdf";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import CustomerPicker from "@/components/editor/CustomerPicker";
@@ -131,7 +132,7 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
 
   useEffect(() => {
     if (action === "print" && doc) {
-      const t = setTimeout(() => window.print(), 400);
+      const t = setTimeout(() => void printOrSavePdf(sheetRef.current, doc.number || doc.id), 400);
       return () => clearTimeout(t);
     }
   }, [action, doc]);
@@ -205,9 +206,9 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
     }
   }
 
-  function onPrint() {
+  async function onPrint() {
     if (!doc) return toast("Save first");
-    window.print();
+    if ((await printOrSavePdf(sheetRef.current, doc.number || doc.id)) === "pdf") toast("PDF downloaded \u2713");
   }
 
   return (
