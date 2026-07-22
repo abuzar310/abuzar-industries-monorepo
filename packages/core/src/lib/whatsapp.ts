@@ -60,30 +60,24 @@ export function customerFollowupMessage(name: string): string {
 }
 
 /**
- * Send the document on WhatsApp. Priority #1 is the RIGHT RECIPIENT:
- *  - PHONE (mobile/tablet) + customer number → open the WhatsApp chat IMMEDIATELY
- *    (number auto-selected, message prefilled). No PDF here: phone browsers hijack a
- *    blob "download" by opening the PDF viewer instead — which used to swallow the
- *    whole send — and an async pause before opening the chat trips popup blockers.
- *  - PHONE without a number → system share sheet with the PDF attached; pick the contact.
+ * Send the document on WhatsApp — the PDF must actually go with the message.
+ * WhatsApp links (wa.me) are a platform dead end here: they can ONLY carry text,
+ * never a file. So on phones the real path is the system share sheet:
+ *  - PHONE → build the PDF, share it (message attached as the caption/text) via
+ *    navigator.share; the user taps WhatsApp and picks the customer's chat.
+ *    File + text go together.
+ *  - PHONE where sharing is unavailable/blocked → download the PDF AND open the
+ *    customer's chat with the message, so the file is one attach away ("fallback").
  *  - DESKTOP → save the PDF (a real download) and open the chat with the message,
- *    so the file is ready to drop in. (WhatsApp links can't carry attachments —
- *    platform limit — so number-first is the closest to one-tap.)
+ *    so the file is ready to drop in ("direct").
  */
 export async function sendDocOnWhatsApp(
   sheet: HTMLElement,
   doc: Doc,
-): Promise<"direct" | "shared" | "cancelled"> {
+): Promise<"direct" | "shared" | "cancelled" | "fallback"> {
   const text = quoteMessage(doc);
-  const hasPhone = (doc.phone || "").replace(/\D/g, "").length >= 10;
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
   const mobile = !!nav && /Android|iPhone|iPad|iPod/i.test(nav.userAgent);
-
-  // phone + number: straight into the chat, synchronously (inside the tap gesture)
-  if (mobile && hasPhone) {
-    window.open(waLink(doc.phone, text), "_blank");
-    return "direct";
-  }
 
   const file = await generatePdfFile(sheet, doc.number || doc.id);
 
@@ -98,17 +92,19 @@ export async function sendDocOnWhatsApp(
     } catch (e) {
       // user closed the share sheet — do nothing (no duplicate sends)
       if ((e as Error)?.name === "AbortError") return "cancelled";
-      // share failed for another reason — fall through to the download path
+      // share blocked (e.g. the tap "expired" while the PDF rendered) — fall through
     }
   }
 
-  // desktop: save the PDF (lands in Downloads), then open the chat
+  // save the PDF (lands in Downloads), then open the chat with the message prefilled
   const url = URL.createObjectURL(file);
   const a = document.createElement("a");
   a.href = url;
   a.download = file.name;
+  document.body.appendChild(a);
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
   window.open(waLink(doc.phone, text), "_blank");
-  return "direct";
+  return mobile ? "fallback" : "direct";
 }

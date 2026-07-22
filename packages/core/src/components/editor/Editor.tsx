@@ -501,9 +501,11 @@ export default function Editor({
     await saveNow();
     if (!sheetRef.current) return;
     try {
+      toast("Preparing PDF…");
       const how = await sendDocOnWhatsApp(sheetRef.current, docRef.current);
-      if (how === "shared") toast("PDF attached — pick the contact in WhatsApp");
-      else if (how === "direct") toast("WhatsApp opened with the message ✓");
+      if (how === "shared") toast("PDF + message attached — pick the customer in WhatsApp");
+      else if (how === "direct") toast("PDF downloaded · WhatsApp opened with the message ✓");
+      else if (how === "fallback") toast("PDF downloaded — attach it in the WhatsApp chat that opened");
     } catch (e) {
       toast("WhatsApp send error: " + ((e as Error)?.message || e));
     }
