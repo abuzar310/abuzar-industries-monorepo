@@ -1787,8 +1787,13 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 }
 
 @media print{
-  .wrap{padding:0 !important}
-  .rep-doc{border:none; border-radius:0; box-shadow:none; padding:0}
+  .wrap{padding:0 !important; max-width:none !important}
+  /* phones: the on-screen rule (overflow-x + min-width 680px) leaked into the print
+     snapshot and clipped half the sheet — force the report to fit the paper instead */
+  .rep-doc{border:none; border-radius:0; box-shadow:none; padding:0;
+    overflow:visible !important; width:auto !important}
+  .rep-table{min-width:0 !important; width:100% !important; table-layout:fixed}
+  .rep-table td,.rep-table th{overflow-wrap:break-word; word-break:break-word}
   .rep-doc,.rep-table,.rep-summary>div,.rep-table thead th,
   .rep-table tbody tr:nth-child(even),.rep-table tfoot .rep-tot td{
     -webkit-print-color-adjust:exact; print-color-adjust:exact}
@@ -1825,7 +1830,8 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .cd-qreport .rep-table tbody tr:nth-child(10n){break-after:page; page-break-after:always}
   .cd-qreport .rep-table tbody tr:nth-child(10n):last-child{break-after:auto; page-break-after:auto}
   .cd-qreport .rep-table tbody tr.rep-tot{break-after:auto; page-break-after:auto}
-  @page{margin:10mm}
+  /* fixed A4 canvas so phone prints lay out exactly like PC (not the phone's screen width) */
+  @page{size:A4 portrait; margin:10mm}
 }
 
 /* ===== Rented invoice: single "Rent" line (no wood boxes) ===== */
