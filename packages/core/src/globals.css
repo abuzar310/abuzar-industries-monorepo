@@ -1734,6 +1734,11 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .gp-pct input{width:74px;padding:5px 8px;border:1px solid var(--line,#d8cdbb);border-radius:8px;font:inherit;background:#fff}
 .gp-how{margin-top:8px;font-size:13px;color:var(--ink-faint,#6f6455);background:rgba(176,124,40,.06);border-radius:8px;padding:8px 10px;line-height:1.5}
 
+/* trading account print: classic T-format — center rule between the two sides, roomy rows */
+.rep-tacct td:nth-child(2), .rep-tacct th:nth-child(2){border-right:2px solid #555}
+.rep-tacct td, .rep-tacct th{padding:8px 8px}
+.rep-tacct .rep-tot td{font-weight:800}
+
 /* month-wise report sections: clear headers on screen, one month per page on paper */
 .rep-month{margin-top:20px}
 .rep-month-head{font-size:15px;font-weight:700;border-bottom:2px solid var(--line, #d8cdbb);padding-bottom:4px;margin-bottom:10px}

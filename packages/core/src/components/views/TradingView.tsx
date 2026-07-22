@@ -48,6 +48,8 @@ export default function TradingView() {
   const [gpPct, setGpPct] = useState("10");
   const [editOpening, setEditOpening] = useState(false);
   const [showMonths, setShowMonths] = useState(false);
+  // what the printed Trading A/C shows: amounts, CFT quantities, or both tables
+  const [printCols, setPrintCols] = useState<"amount" | "cft" | "both">("amount");
   // ITC opening-balance edit form (CGST / SGST / IGST)
   const [editItc, setEditItc] = useState(false);
   const [iCgst, setICgst] = useState("");
@@ -220,13 +222,104 @@ export default function TradingView() {
   const genOn = `${p2(gToday.getDate())}-${p2(gToday.getMonth() + 1)}-${gToday.getFullYear()}`;
   const gpLabel =
     gpMode === "percent" ? `Gross Profit (${num(cfg.gpPercent ?? 10)}% of sales)` : "Gross Profit (from closing stock)";
+  // classic accountant wording: the period lives INSIDE the row labels
+  const rangeText = from && to ? `${fmtISO(from)} TO ${fmtISO(to)}` : from ? `FROM ${fmtISO(from)}` : to ? `UP TO ${fmtISO(to)}` : "";
+  const endText = to ? fmtISO(to) : genOn;
+  const acctTitle =
+    from === fy.from && to === fy.to ? "TRADING ACCOUNT " + fy.label.replace("FY ", "") : "TRADING ACCOUNT";
+
+  /** the classic two-sided T-account, one measure at a time (₹ or CFT) */
+  const tAccount = (measure: "amount" | "cft") => {
+    const v = (n: number) => (measure === "amount" ? inr(n) : num(n));
+    const leftRows: [string, string][] =
+      measure === "amount"
+        ? [
+            ["To Opening Stock" + (from ? " " + fmtISO(from) : ""), v(tr.openValue)],
+            ["To Purchases" + (rangeText ? " " + rangeText : ""), v(tr.purchaseValue)],
+            ["To " + gpLabel, v(tr.grossProfit)],
+          ]
+        : [
+            ["To Opening Stock" + (from ? " " + fmtISO(from) : ""), v(tr.openCft)],
+            ["To Purchases" + (rangeText ? " " + rangeText : ""), v(tr.purchaseCft)],
+          ];
+    const rightRows: [string, string][] =
+      measure === "amount"
+        ? [
+            ["By Sales" + (rangeText ? " " + rangeText : ""), v(tr.saleValue)],
+            ["By Closing Stock " + endText, v(tr.closingValue)],
+          ]
+        : [
+            ["By Sales" + (rangeText ? " " + rangeText : ""), v(tr.saleCft)],
+            ["By Closing Stock " + endText, v(tr.closingCft)],
+            ...(Math.abs(cftDiff) > 0.01
+              ? ([["By CFT difference (" + (cftDiff > 0 ? "shortage" : "excess") + ")", v(Math.abs(cftDiff))]] as [string, string][])
+              : []),
+          ];
+    const leftTotal = measure === "amount" ? inr(tr.totalAmount) : num(tr.availCft);
+    const rightTotal =
+      measure === "amount"
+        ? inr(Math.round((tr.saleValue + tr.closingValue) * 100) / 100)
+        : num(Math.round((rightCft + Math.max(0, cftDiff)) * 100) / 100);
+    const n = Math.max(leftRows.length, rightRows.length);
+    const cell = (r?: [string, string]) => (r ? r : ["", ""]);
+    return (
+      <table className="rep-table rep-tacct" key={measure}>
+        <colgroup>
+          <col style={{ width: "34%" }} />
+          <col style={{ width: "16%" }} />
+          <col style={{ width: "34%" }} />
+          <col style={{ width: "16%" }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Particulars</th>
+            <th className="amt">{measure === "amount" ? "Amount ₹" : "CFT"}</th>
+            <th>Particulars</th>
+            <th className="amt">{measure === "amount" ? "Amount ₹" : "CFT"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: n }, (_, i) => {
+            const L = cell(leftRows[i]);
+            const R = cell(rightRows[i]);
+            return (
+              <tr key={i}>
+                <td>{L[0]}</td>
+                <td className="amt">{L[1]}</td>
+                <td>{R[0]}</td>
+                <td className="amt">{R[1]}</td>
+              </tr>
+            );
+          })}
+          <tr className="rep-tot">
+            <td>Total</td>
+            <td className="amt">{leftTotal}</td>
+            <td>Total</td>
+            <td className="amt">{rightTotal}</td>
+          </tr>
+        </tbody>
+      </table>
+    );
+  };
 
   return (
     <div>
       <div className="cd-screen">
-      <div className="sectitle" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div className="sectitle" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <span>Stock <small>— opening + purchases − sold = closing</small></span>
-        <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => window.print()}>
+        <div className="rep-seg" style={{ marginLeft: "auto" }} role="group" aria-label="What the printed account shows">
+          {(["amount", "cft", "both"] as const).map((c) => (
+            <button
+              key={c}
+              className={printCols === c ? "on" : ""}
+              title={c === "amount" ? "Print amounts (₹) — the accountant's format" : c === "cft" ? "Print quantities (CFT)" : "Print both tables"}
+              onClick={() => setPrintCols(c)}
+            >
+              {c === "amount" ? "₹ Amount" : c === "cft" ? "CFT" : "Both"}
+            </button>
+          ))}
+        </div>
+        <button className="btn sm" onClick={() => window.print()}>
           Print Trading A/C
         </button>
       </div>
@@ -514,7 +607,7 @@ export default function TradingView() {
             {brand.gstin && <div>GSTIN: {brand.gstin}</div>}
           </div>
           <div className="rep-meta">
-            <div className="rep-title">Trading Account</div>
+            <div className="rep-title">{acctTitle}</div>
             <div className="rep-period">{periodLabel === "All time" ? "As on " + genOn : periodLabel}</div>
           </div>
         </div>
@@ -526,71 +619,12 @@ export default function TradingView() {
           <div><b>₹{inr(tr.grossProfit)}</b><span>Gross profit</span></div>
         </div>
 
-        {/* the classic two-sided account — ₹ AND CFT on both sides, both sides balance */}
-        <table className="rep-table">
-          <colgroup>
-            <col style={{ width: "22%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "16%" }} />
-            <col style={{ width: "22%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "16%" }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th>Particulars</th>
-              <th className="amt">CFT</th>
-              <th className="amt">Amount ₹</th>
-              <th>Particulars</th>
-              <th className="amt">CFT</th>
-              <th className="amt">Amount ₹</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Opening stock</td>
-              <td className="amt">{num(tr.openCft)}</td>
-              <td className="amt">{inr(tr.openValue)}</td>
-              <td>Sales</td>
-              <td className="amt">{num(tr.saleCft)}</td>
-              <td className="amt">{inr(tr.saleValue)}</td>
-            </tr>
-            <tr>
-              <td>Purchases</td>
-              <td className="amt">{num(tr.purchaseCft)}</td>
-              <td className="amt">{inr(tr.purchaseValue)}</td>
-              <td>Closing stock</td>
-              <td className="amt">{num(tr.closingCft)}</td>
-              <td className="amt">{inr(tr.closingValue)}</td>
-            </tr>
-            <tr>
-              <td>{gpLabel}</td>
-              <td className="amt">—</td>
-              <td className="amt">{inr(tr.grossProfit)}</td>
-              {Math.abs(cftDiff) > 0.01 ? (
-                <>
-                  <td>CFT difference ({cftDiff > 0 ? "shortage" : "excess"})</td>
-                  <td className="amt">{num(Math.abs(cftDiff))}</td>
-                  <td className="amt">—</td>
-                </>
-              ) : (
-                <>
-                  <td />
-                  <td />
-                  <td />
-                </>
-              )}
-            </tr>
-            <tr className="rep-tot">
-              <td>Total</td>
-              <td className="amt">{num(tr.availCft)}</td>
-              <td className="amt">{inr(tr.totalAmount)}</td>
-              <td>Total</td>
-              <td className="amt">{num(Math.round((rightCft + Math.max(0, cftDiff)) * 100) / 100)}</td>
-              <td className="amt">{inr(Math.round((tr.saleValue + tr.closingValue) * 100) / 100)}</td>
-            </tr>
-          </tbody>
-        </table>
+        {/* the classic two-sided account (period written into the rows) — ₹, CFT, or both */}
+        {(printCols === "amount" || printCols === "both") && tAccount("amount")}
+        {printCols === "both" && (
+          <div className="rep-title" style={{ marginTop: 14, marginBottom: 8 }}>Quantity (CFT)</div>
+        )}
+        {(printCols === "cft" || printCols === "both") && tAccount("cft")}
 
         <div className="rep-title" style={{ marginTop: 18, marginBottom: 8 }}>GST Input Tax Credit</div>
         <table className="rep-table">
