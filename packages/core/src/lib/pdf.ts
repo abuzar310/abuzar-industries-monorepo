@@ -2,28 +2,58 @@
 // across A4 pages (jsPDF). The previous jsPDF.html() path produced blank pages;
 // direct html2canvas + manual pagination renders exactly what you see/print.
 // Loaded dynamically so it stays out of the server bundle.
+import { toast } from "@/store/app-store";
 
 export async function generatePdf(sheet: HTMLElement, fileBase: string) {
   const pdf = await renderPdf(sheet);
   pdf.save((fileBase || "document") + ".pdf");
 }
 
-/** Print — or, where the browser print dialog doesn't work (Android Chrome in an
- *  installed PWA silently ignores window.print()), download the sheet as a PDF
- *  instead. Returns which path ran so callers can toast accordingly. */
-export async function printOrSavePdf(el: HTMLElement | null, fileBase: string): Promise<"print" | "pdf"> {
+/** Print — or, on Android / installed-app mode where the browser print dialog doesn't
+ *  exist (window.print() is silently ignored), build the PDF and hand it to the system
+ *  share sheet so the user can open, print, save, or send it. A plain download is the
+ *  fallback. Always gives visible feedback — rendering takes a few seconds, so a
+ *  "Preparing…" toast shows immediately. Returns which path ran. */
+export async function printOrSavePdf(
+  el: HTMLElement | null,
+  fileBase: string,
+): Promise<"print" | "pdf" | "shared" | "cancelled"> {
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
   const isAndroid = !!nav && /Android/i.test(nav.userAgent);
   const standalone =
     typeof window !== "undefined" &&
     (window.matchMedia?.("(display-mode: standalone)").matches ||
       (nav as unknown as { standalone?: boolean })?.standalone === true);
-  if ((isAndroid || standalone) && el) {
-    await generatePdf(el, fileBase);
-    return "pdf";
+
+  if (!((isAndroid || standalone) && el)) {
+    window.print();
+    return "print";
   }
-  window.print();
-  return "print";
+
+  toast("Preparing PDF…");
+  const file = await generatePdfFile(el, fileBase);
+
+  // Android share sheet — the reliable path: open in a PDF viewer, print, save, or send
+  if (nav?.canShare?.({ files: [file] })) {
+    try {
+      await nav.share({ files: [file], title: file.name });
+      return "shared";
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return "cancelled";
+      // any other share failure → fall through to the download
+    }
+  }
+
+  // fallback: direct download (anchor must be in the DOM for some Android browsers)
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return "pdf";
 }
 
 /** The document as a shareable File — used to attach the PDF straight into WhatsApp
