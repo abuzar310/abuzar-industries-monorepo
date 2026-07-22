@@ -4,7 +4,7 @@ import { allRec } from "@/lib/data";
 import { inr, pad } from "@/lib/calc";
 import { docTrade } from "@/lib/trading";
 import { brandFor } from "@/lib/brand";
-import { printOrSavePdf } from "@/lib/pdf";
+import { generatePdf } from "@/lib/pdf";
 import { toast } from "@/store/app-store";
 import { useApp } from "@/store/useApp";
 import type { Doc } from "@/lib/types";
@@ -305,13 +305,20 @@ export default function ReportsView() {
               </button>
             ))}
           </div>
+          {/* Print = the system print dialog (printer select) on every platform;
+              Save PDF = a straight download of the report file. */}
+          <button className="btn primary sm rep-print" onClick={() => window.print()}>
+            Print
+          </button>
           <button
-            className="btn primary sm rep-print"
+            className="btn sm rep-print"
             onClick={async () => {
-              if ((await printOrSavePdf(printRef.current, "report-" + fmtISO(from || "start") + "-to-" + fmtISO(to || "now"))) === "pdf") toast("Report PDF downloaded \u2713");
+              toast("Preparing PDF…");
+              await generatePdf(printRef.current!, "report-" + fmtISO(from || "start") + "-to-" + fmtISO(to || "now"));
+              toast("Report PDF downloaded \u2713");
             }}
           >
-            Print / Save PDF
+            Save PDF
           </button>
         </div>
       </div>
