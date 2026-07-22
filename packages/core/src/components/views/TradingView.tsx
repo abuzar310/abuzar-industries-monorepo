@@ -52,6 +52,8 @@ export default function TradingView() {
   const printRef = useRef<HTMLDivElement>(null);
   // what the printed Trading A/C shows: amounts, CFT quantities, or both tables
   const [printCols, setPrintCols] = useState<"amount" | "cft" | "both">("amount");
+  /** optionally append the month-wise purchase-vs-sell table to the print */
+  const [printMonths, setPrintMonths] = useState(false);
   // ITC opening-balance edit form (CGST / SGST / IGST)
   const [editItc, setEditItc] = useState(false);
   const [iCgst, setICgst] = useState("");
@@ -320,6 +322,13 @@ export default function TradingView() {
               {c === "amount" ? "₹ Amount" : c === "cft" ? "CFT" : "Both"}
             </button>
           ))}
+          <button
+            className={printMonths ? "on" : ""}
+            title="Also print the month-wise purchase vs sell table"
+            onClick={() => setPrintMonths((v) => !v)}
+          >
+            + Months
+          </button>
         </div>
         <button
           className="btn sm"
@@ -626,45 +635,14 @@ export default function TradingView() {
           <div><b>₹{inr(tr.grossProfit)}</b><span>Gross profit</span></div>
         </div>
 
-        {/* the classic two-sided account (period written into the rows) — ₹, CFT, or both */}
+        {/* ONLY the chosen table(s) print — ₹, CFT, or both (GST ITC stays on screen, not here) */}
         {(printCols === "amount" || printCols === "both") && tAccount("amount")}
         {printCols === "both" && (
           <div className="rep-title" style={{ marginTop: 14, marginBottom: 8 }}>Quantity (CFT)</div>
         )}
         {(printCols === "cft" || printCols === "both") && tAccount("cft")}
 
-        <div className="rep-title" style={{ marginTop: 18, marginBottom: 8 }}>GST Input Tax Credit</div>
-        <table className="rep-table">
-          <thead>
-            <tr>
-              <th>Head</th>
-              <th className="amt">Opening ₹</th>
-              <th className="amt">+ Input (purchases)</th>
-              <th className="amt">− Output (sales)</th>
-              <th className="amt">Closing ₹</th>
-            </tr>
-          </thead>
-          <tbody>
-            {([["CGST", itc.cgst], ["SGST", itc.sgst], ["IGST", itc.igst]] as const).map(([k, h]) => (
-              <tr key={k}>
-                <td>{k}</td>
-                <td className="amt">{inr(h.open)}</td>
-                <td className="amt">{inr(h.input)}</td>
-                <td className="amt">{inr(h.output)}</td>
-                <td className="amt">{inr(h.closing)}{h.closing < -0.005 ? " (payable)" : ""}</td>
-              </tr>
-            ))}
-            <tr className="rep-tot">
-              <td>Total</td>
-              <td className="amt">{inr(itc.total.open)}</td>
-              <td className="amt">{inr(itc.total.input)}</td>
-              <td className="amt">{inr(itc.total.output)}</td>
-              <td className="amt">{inr(itc.total.closing)}{itc.total.closing < -0.005 ? " (payable)" : ""}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        {mrows.length > 0 && (
+        {printMonths && mrows.length > 0 && (
           <>
             <div className="rep-title" style={{ marginTop: 18, marginBottom: 8 }}>Month-wise · Purchase vs Sell</div>
             <table className="rep-table">
