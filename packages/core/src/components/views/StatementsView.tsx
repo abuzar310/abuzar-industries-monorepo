@@ -247,7 +247,7 @@ export default function StatementsView() {
                   >
                     <div className={"stmt-ic " + (s.mode === "upi" ? "upi" : "cash")}>{s.mode === "upi" ? "UPI" : "₹"}</div>
                     <div className="stmt-main">
-                      <div className="stmt-to">{s.mode === "upi" ? s.account || "UPI account" : s.note || "Cash in hand"}</div>
+                      <div className="stmt-to">{s.mode === "upi" ? (s.account || "UPI account") + (s.note ? " · " + s.note : "") : s.note || "Cash in hand"}</div>
                       <div className="stmt-sub">
                         {s.mode === "upi" ? "UPI" : "Cash"} · {s.date}
                         {hhmm(s.at) ? " · " + hhmm(s.at) : ""}
@@ -279,7 +279,7 @@ export default function StatementsView() {
                 <div className="stmt-main">
                   <div className="stmt-to">{custName(e.custId)}</div>
                   <div className="stmt-sub">
-                    {e.mode === "upi" ? e.account || "UPI" : e.account ? e.account : e.toOwner ? "Cash → Owner" : e.label || "Cash"} · {e.date}
+                    {[e.mode === "upi" ? e.account || "UPI" : e.account || (e.toOwner ? "Cash → Owner" : "Cash"), e.label].filter(Boolean).join(" · ")} · {e.date}
                     {hhmm(e.createdAt) ? " · " + hhmm(e.createdAt) : ""} · by {userName(e.enteredBy)}
                   </div>
                 </div>
@@ -414,7 +414,7 @@ export default function StatementsView() {
                     <td className="c-n">{i + 1}</td>
                     <td className="c-date">{e.date}</td>
                     <td className="c-cust">{custName(e.custId)}</td>
-                    <td>{e.mode === "upi" ? e.account || "UPI" : e.account || (e.toOwner ? "Cash → Owner" : e.label || "Cash")}</td>
+                    <td>{[e.mode === "upi" ? e.account || "UPI" : e.account || (e.toOwner ? "Cash → Owner" : "Cash"), e.label].filter(Boolean).join(" · ")}</td>
                     <td className="amt">{inr(+e.amount || 0)}</td>
                   </tr>
                 ))}

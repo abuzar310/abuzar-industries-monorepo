@@ -180,7 +180,7 @@ function PartyCard({
                 <div className="stmt" key={s.id}>
                   <div className={"stmt-ic " + (s.mode === "upi" ? "upi" : "cash")}>{s.mode === "upi" ? "UPI" : "₹"}</div>
                   <div className="stmt-main">
-                    <div className="stmt-to">{s.mode === "upi" ? s.account || "UPI account" : "Cash in hand"}</div>
+                    <div className="stmt-to">{(s.mode === "upi" ? s.account || "UPI account" : s.toOwner ? "Cash → Owner" : "Cash in hand") + (!s.pieces && s.note ? " · " + s.note : "")}</div>
                     <div className="stmt-sub">
                       {s.pieces ? (s.note || "") + " · " : s.quoteNo ? "#" + s.quoteNo + " · " : ""}
                       {s.date}

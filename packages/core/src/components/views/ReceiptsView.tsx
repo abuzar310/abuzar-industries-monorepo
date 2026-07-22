@@ -1,12 +1,12 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, delRec, getRec, put } from "@/lib/data";
+import { allRec, getRec, put } from "@/lib/data";
 import { inr, nowIso } from "@/lib/calc";
 import { addExpense, upiAccounts } from "@/lib/expenses";
 import { listWorkers, payWorker, repayWorker, type Worker } from "@/lib/attendance";
 import { partyLedger } from "@/lib/payments";
-import { applyCustomerReceipt } from "@/lib/receipts";
+import { applyCustomerReceipt, unwindReceiptPieces } from "@/lib/receipts";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -46,6 +46,10 @@ export default function ReceiptsView() {
   const [date, setDate] = useState("");
   const [openCust, setOpenCust] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  /** editing a whole receipt (possibly split across quotes): its pieces get unwound + re-applied on save */
+  const [editRcpt, setEditRcpt] = useState<{ id: string; pieces: Expense[] } | null>(null);
+  /** where a received amount goes: waterfall over open quotations, or straight onto the account (old dues) */
+  const [applyTo, setApplyTo] = useState<"quotes" | "account">("quotes");
   // worker salary-account quick panel
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [showWkr, setShowWkr] = useState(false);
@@ -98,12 +102,39 @@ export default function ReceiptsView() {
     setDate("");
     setMode("cash");
     setEditId(null);
+    setEditRcpt(null);
+    setApplyTo("quotes");
   }
 
   async function record() {
     if (!picked) return toast("Pick an existing customer");
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return toast("Enter an amount");
+
+    if (editRcpt) {
+      // safest edit of a receipt: unwind every old piece (rolling quote totals back),
+      // then re-apply the corrected amount fresh — money can never be double-counted
+      const isUpiMode = mode === "upi" || mode === "uowner";
+      if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
+      const isCash = !isUpiMode;
+      await unwindReceiptPieces(editRcpt.pieces);
+      await applyCustomerReceipt({
+        custId: picked.id,
+        custName: picked.name,
+        amount: a,
+        mode: isUpiMode ? "upi" : "cash",
+        account: mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "",
+        toOwner: isUpiMode ? mode === "uowner" : mode === "owner" || isOwner,
+        note: note.trim(),
+        date: date ? toDmy(date) : editRcpt.pieces[0]?.date,
+        toAccount: applyTo === "account",
+        enteredBy: user?.id || "unknown",
+      });
+      resetForm();
+      load();
+      bumpData();
+      return toast("Receipt updated ✓");
+    }
 
     if (editId) {
       const e = await getRec<Expense>("expenses", editId);
@@ -120,7 +151,7 @@ export default function ReceiptsView() {
         e.mode = isUpiMode ? "upi" : "cash";
         e.account = mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "";
         e.toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
-        e.label = isCash ? note.trim() : "";
+        e.label = note.trim();
         e.date = date ? toDmy(date) : e.date;
       }
       e.updatedAt = nowIso();
@@ -161,8 +192,9 @@ export default function ReceiptsView() {
       // UPI → Owner needs no account (straight to the owner, not a collectable account)
       account: mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "",
       toOwner,
-      note: isCash ? note.trim() : "",
+      note: note.trim(),
       date: date ? toDmy(date) : undefined,
+      toAccount: applyTo === "account",
       enteredBy: user?.id || "unknown",
     });
     resetForm();
@@ -182,31 +214,48 @@ export default function ReceiptsView() {
     toast(msg);
   }
 
-  async function remove(e: Expense) {
+  async function remove(entry: Entry) {
+    const { e, pieces, settled } = entry;
     const label = e.charge ? "due" : "receipt";
+    const total = pieces ? r2(pieces.reduce((s, x) => s + (+x.amount || 0), 0)) : +e.amount || 0;
     const ok = await confirmDialog({
       title: "Delete " + label + "?",
-      message: custName(e.custId) + " — ₹" + inr(e.amount) + (e.charge ? "" : " · " + (e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : "Cash")),
+      message:
+        custName(entry.cid) + " — ₹" + inr(total) +
+        (e.charge ? "" : " · " + (e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : "Cash")) +
+        (settled ? "\nThis receipt " + settled + " — those quotations go back to due." : ""),
       confirmLabel: "Delete",
       danger: true,
     });
     if (!ok) return;
-    await delRec("expenses", e.id); // soft delete in the database — never resurrects
-    if (editId === e.id) resetForm();
+    // pieces linked to quotations roll the quote's paid totals back before the soft delete
+    await unwindReceiptPieces(pieces || [e]);
+    if (editId === e.id || (editRcpt && pieces && editRcpt.id === entry.key)) resetForm();
     load();
     bumpData();
     toast(label.charAt(0).toUpperCase() + label.slice(1) + " removed");
   }
 
-  function startEdit(e: Expense) {
-    setEditId(e.id);
-    setKind(e.charge ? "due" : "received");
-    setAmt(String(e.amount));
+  function startEdit(entry: Entry) {
+    const { e, pieces } = entry;
+    if (pieces) {
+      // a whole receipt (possibly split over quotes): edit re-applies it fresh on save
+      setEditRcpt({ id: entry.key, pieces });
+      setEditId(null);
+      setKind("received");
+      setAmt(String(r2(pieces.reduce((s, x) => s + (+x.amount || 0), 0))));
+      setApplyTo(pieces.some((x) => !!x.sourceId) ? "quotes" : "account");
+    } else {
+      setEditId(e.id);
+      setEditRcpt(null);
+      setKind(e.charge ? "due" : "received");
+      setAmt(String(e.amount));
+    }
     setMode(e.charge ? "cash" : e.mode === "upi" ? (e.toOwner ? "uowner" : "upi") : e.toOwner ? "owner" : "cash");
     setAcct(e.account || "");
     setNote(e.charge ? e.note || "" : e.label || "");
     setDate(e.date ? fromDmy(e.date) : "");
-    const c = customers.find((x) => x.id === e.custId);
+    const c = customers.find((x) => x.id === entry.cid);
     if (c) {
       setPicked(c);
       setName(c.name);
@@ -214,35 +263,63 @@ export default function ReceiptsView() {
   }
 
   // group every money event under its customer: account receipts/dues (custId, editable here)
-  // AND quote payments (sourceId → the quote's customer, shown read-only with a link to the quote,
-  // so a receipt applied to quotations still appears under the customer here).
+  // AND quote payments (sourceId → the quote's customer). Pieces of ONE receipt (same rcptId)
+  // are shown merged as the single amount the customer handed over — editable/deletable as a whole.
   const quoteById = new Map(quotes.map((q) => [q.id, q] as const));
   interface Entry {
-    e: Expense;
+    key: string; // stable render key: rcptId for merged receipts, expense id otherwise
+    cid: string;
+    e: Expense; // representative piece (display: mode/account/note/date/by)
+    amount: number;
+    /** all pieces of a merged receipt — present ⇒ editable via unwind + re-apply */
+    pieces?: Expense[];
+    /** "settled #12, #14 + account" text for merged receipts */
+    settled?: string;
     quoteNo?: string;
     quoteId?: string;
     locked: boolean;
   }
   const byCust = new Map<string, Entry[]>();
+  const rcptGroups = new Map<string, { cid: string; pieces: Expense[] }>();
   expenses
     .filter((e) => e.type === "sale")
     .forEach((e) => {
-      let cid = e.custId || "";
-      let entry: Entry | null = null;
-      if (cid) {
-        entry = { e, locked: false };
-      } else if (e.sourceId) {
-        const q = quoteById.get(e.sourceId);
-        if (q && q.customerId) {
-          cid = q.customerId;
-          entry = { e, quoteNo: q.number, quoteId: q.id, locked: true };
-        }
+      const q = e.sourceId ? quoteById.get(e.sourceId) : undefined;
+      const cid = e.custId || q?.customerId || "";
+      if (!cid) return;
+      if (e.rcptId && !e.charge) {
+        // piece of a receipt recorded on this tab — collect, merge below
+        const g = rcptGroups.get(e.rcptId) || { cid, pieces: [] };
+        g.pieces.push(e);
+        rcptGroups.set(e.rcptId, g);
+        return;
       }
-      if (!cid || !entry) return;
+      const entry: Entry = e.custId
+        ? { key: e.id, cid, e, amount: +e.amount || 0, locked: false }
+        : { key: e.id, cid, e, amount: +e.amount || 0, quoteNo: q!.number, quoteId: q!.id, locked: true };
       const arr = byCust.get(cid) || [];
       arr.push(entry);
       byCust.set(cid, arr);
     });
+  for (const [rid, g] of rcptGroups) {
+    const pieces = g.pieces.sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+    const quoteNos = pieces.map((x) => (x.sourceId ? quoteById.get(x.sourceId)?.number || "" : "")).filter(Boolean);
+    const onAccount = pieces.some((x) => !x.sourceId);
+    const settled =
+      (quoteNos.length ? "settled #" + quoteNos.join(", #") : "") +
+      (onAccount ? (quoteNos.length ? " + account" : "on account") : "");
+    const arr = byCust.get(g.cid) || [];
+    arr.push({
+      key: rid,
+      cid: g.cid,
+      e: pieces.find((x) => !x.sourceId) || pieces[0],
+      amount: r2(pieces.reduce((s, x) => s + (+x.amount || 0), 0)),
+      pieces,
+      settled,
+      locked: false,
+    });
+    byCust.set(g.cid, arr);
+  }
   const groups = [...byCust.entries()]
     .map(([cid, list]) => {
       const sorted = list.sort((a, b) => (b.e.createdAt || "").localeCompare(a.e.createdAt || ""));
@@ -251,14 +328,14 @@ export default function ReceiptsView() {
       return {
         cid,
         name: custName(cid),
-        received: r2(received.reduce((s, x) => s + (+x.e.amount || 0), 0)),
-        dueAdded: r2(dues.reduce((s, x) => s + (+x.e.amount || 0), 0)),
+        received: r2(received.reduce((s, x) => s + x.amount, 0)),
+        dueAdded: r2(dues.reduce((s, x) => s + x.amount, 0)),
         list: sorted,
       };
     })
     .sort((a, b) => b.received + b.dueAdded - (a.received + a.dueAdded));
 
-  const editing = !!editId;
+  const editing = !!editId || !!editRcpt;
   const showReceivedFields = kind === "received";
   const activeWorkers = workers.filter((w) => w.active).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -355,27 +432,48 @@ export default function ReceiptsView() {
           </div>
         )}
         {showReceivedFields && mode === "cash" && (
-          <>
-            <div className="modal-field acct-field" style={{ marginTop: 12, width: "100%" }}>
-              <span>Cash held by which account? <small style={{ color: "var(--ink-faint)" }}>(optional — blank = manager daybook)</small></span>
-              <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
-            </div>
-            <label className="modal-field" style={{ marginTop: 12, width: "100%" }}>
-              <span>Cash note (optional)</span>
-              <input type="text" placeholder="e.g. partial payment" value={note} onChange={(e) => setNote(e.target.value)} />
-            </label>
-          </>
+          <div className="modal-field acct-field" style={{ marginTop: 12, width: "100%" }}>
+            <span>Cash held by which account? <small style={{ color: "var(--ink-faint)" }}>(optional — blank = manager daybook)</small></span>
+            <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
+          </div>
         )}
-        {showReceivedFields && mode === "owner" && (
+        {showReceivedFields && (
           <label className="modal-field" style={{ marginTop: 12, width: "100%" }}>
-            <span>Note (optional)</span>
-            <input type="text" placeholder="e.g. handed to owner" value={note} onChange={(e) => setNote(e.target.value)} />
+            <span>Note (optional) <small style={{ color: "var(--ink-faint)" }}>— shows on the customer&apos;s statement PDF</small></span>
+            <input
+              type="text"
+              placeholder={mode === "upi" || mode === "uowner" ? "e.g. paid to Afsar's account" : "e.g. partial payment"}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
           </label>
+        )}
+
+        {showReceivedFields && (
+          <div className="modal-field" style={{ marginTop: 12, width: "100%" }}>
+            <span>Use this money for</span>
+            <div className="db-seg sm" style={{ marginTop: 4 }}>
+              <button className={"seg-btn" + (applyTo === "quotes" ? " on" : "")} type="button" onClick={() => setApplyTo("quotes")}>
+                Settle quotations (oldest first)
+              </button>
+              <button className={"seg-btn" + (applyTo === "account" ? " on" : "")} type="button" onClick={() => setApplyTo("account")}>
+                Account only (old dues)
+              </button>
+            </div>
+            <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
+              {applyTo === "quotes"
+                ? "The amount clears their open quotations oldest-first; anything beyond stays on the account."
+                : "Nothing is linked to any quotation — the whole amount pays down their account balance (e.g. an opening balance from before the app)."}
+            </small>
+          </div>
         )}
 
         {editing && (
           <div className="pb-editbar no-print" style={{ marginTop: 12 }}>
-            <span>Editing this {kind === "due" ? "due" : "receipt"}</span>
+            <span>
+              Editing this {kind === "due" ? "due" : "receipt"}
+              {editRcpt && editRcpt.pieces.some((x) => !!x.sourceId) ? " — saving re-applies it fresh (linked quotations adjust)" : ""}
+            </span>
             <button type="button" onClick={resetForm}>
               Cancel
             </button>
@@ -486,46 +584,51 @@ export default function ReceiptsView() {
                 </span>
               </div>
               {open &&
-                g.list.map(({ e, quoteNo, quoteId, locked }) => (
-                  <div className={"stmt" + (editId === e.id ? " pb-editing" : "")} key={e.id}>
-                    <div className={"stmt-ic " + (e.charge ? "due" : e.mode === "upi" ? "upi" : "cash")}>{e.charge ? "Due" : e.mode === "upi" ? "UPI" : "₹"}</div>
-                    <div className="stmt-main">
-                      <div className="stmt-to">
-                        {e.charge
-                          ? e.note || "Due added"
-                          : locked
-                            ? "On quote #" + quoteNo + (e.mode === "upi" ? " · UPI" + (e.account ? " · " + e.account : "") : " · Cash")
-                            : e.mode === "upi"
-                              ? e.account || "UPI"
-                              : e.account
-                                ? e.account + (e.label ? " · " + e.label : "")
-                                : e.toOwner
-                                  ? "Cash → Owner"
-                                  : e.label || "Cash · Daybook"}
+                g.list.map((entry) => {
+                  const { e, quoteNo, quoteId, locked, settled, amount } = entry;
+                  const editingThis = editId === e.id || (!!editRcpt && editRcpt.id === entry.key);
+                  return (
+                    <div className={"stmt" + (editingThis ? " pb-editing" : "")} key={entry.key}>
+                      <div className={"stmt-ic " + (e.charge ? "due" : e.mode === "upi" ? "upi" : "cash")}>{e.charge ? "Due" : e.mode === "upi" ? "UPI" : "₹"}</div>
+                      <div className="stmt-main">
+                        <div className="stmt-to">
+                          {e.charge
+                            ? e.note || "Due added"
+                            : locked
+                              ? "On quote #" + quoteNo + (e.mode === "upi" ? " · UPI" + (e.account ? " · " + e.account : "") : " · Cash")
+                              : e.mode === "upi"
+                                ? (e.account || "UPI") + (e.label ? " · " + e.label : "")
+                                : e.account
+                                  ? e.account + (e.label ? " · " + e.label : "")
+                                  : e.toOwner
+                                    ? "Cash → Owner" + (e.label ? " · " + e.label : "")
+                                    : e.label || "Cash · Daybook"}
+                        </div>
+                        <div className="stmt-sub">
+                          {settled ? settled + " · " : ""}
+                          {e.date} · by {userName(e.enteredBy)}
+                        </div>
                       </div>
-                      <div className="stmt-sub">
-                        {e.date} · by {userName(e.enteredBy)}
-                      </div>
+                      <div className={"stmt-amt" + (e.charge ? " due" : "")}>+₹{inr(amount)}</div>
+                      <span className="pb-rowacts">
+                        {locked ? (
+                          <button className="pb-x" title="Open quotation" type="button" onClick={() => router.push("/editor/" + quoteId)}>
+                            ↗
+                          </button>
+                        ) : (
+                          <>
+                            <button className="pb-x" title="Edit" type="button" onClick={() => startEdit(entry)}>
+                              ✎
+                            </button>
+                            <button className="pb-x" title="Delete" type="button" onClick={() => remove(entry)}>
+                              ×
+                            </button>
+                          </>
+                        )}
+                      </span>
                     </div>
-                    <div className={"stmt-amt" + (e.charge ? " due" : "")}>+₹{inr(e.amount)}</div>
-                    <span className="pb-rowacts">
-                      {locked ? (
-                        <button className="pb-x" title="Open quotation" type="button" onClick={() => router.push("/editor/" + quoteId)}>
-                          ↗
-                        </button>
-                      ) : (
-                        <>
-                          <button className="pb-x" title="Edit" type="button" onClick={() => startEdit(e)}>
-                            ✎
-                          </button>
-                          <button className="pb-x" title="Delete" type="button" onClick={() => remove(e)}>
-                            ×
-                          </button>
-                        </>
-                      )}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
           );
         })
