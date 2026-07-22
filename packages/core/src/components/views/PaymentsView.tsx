@@ -182,7 +182,7 @@ function PartyCard({
                   <div className="stmt-main">
                     <div className="stmt-to">{s.mode === "upi" ? s.account || "UPI account" : "Cash in hand"}</div>
                     <div className="stmt-sub">
-                      {s.quoteNo ? "#" + s.quoteNo + " · " : ""}
+                      {s.pieces ? (s.note || "") + " · " : s.quoteNo ? "#" + s.quoteNo + " · " : ""}
                       {s.date}
                       {hhmm(s.at) ? " · " + hhmm(s.at) : ""} · by {userName(s.by)}
                     </div>

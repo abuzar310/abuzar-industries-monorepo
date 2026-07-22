@@ -53,6 +53,8 @@ const isBillable = (d: Doc) =>
 export async function applyCustomerReceipt(inp: ReceiptInput): Promise<ReceiptResult> {
   let remaining = r2(Math.max(0, +inp.amount || 0));
   const applied: ReceiptResult["applied"] = [];
+  // one receipt id across every piece, so lists show the ONE amount the customer handed over
+  const rcptId = "RCP-" + uid();
 
   const open = (await allRec<Doc>("quotations"))
     .filter((d) => d.customerId === inp.custId && isBillable(d))
@@ -72,6 +74,7 @@ export async function applyCustomerReceipt(inp: ReceiptInput): Promise<ReceiptRe
       account: (inp.account || "").trim(),
       toOwner: inp.mode === "cash" ? !!inp.toOwner : false,
       sourceId: d.id,
+      rcptId,
       label: inp.mode === "cash" ? inp.note || "" : "",
       date: inp.date,
       enteredBy: inp.enteredBy,
@@ -103,6 +106,7 @@ export async function applyCustomerReceipt(inp: ReceiptInput): Promise<ReceiptRe
       account: (inp.account || "").trim(),
       toOwner: inp.mode === "cash" ? !!inp.toOwner : false,
       custId: inp.custId,
+      rcptId,
       note: inp.custName,
       label: inp.mode === "cash" ? inp.note || "" : "",
       date: inp.date,

@@ -8,6 +8,8 @@ import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/crea
 import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
+import { mergeReceiptPieces, type PartyStatement } from "@/lib/payments";
+import { USERS } from "@/lib/local-auth";
 import { customerFollowupMessage, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -31,9 +33,12 @@ export default function CustomerDetail({ id }: { id: string }) {
       allRec<Expense>("expenses"),
     ]).then(([c, q, i, e]) => {
       setCust(c ?? null);
-      setQuotes(q.filter((d) => d.customerId === id).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")));
+      const myQuotes = q.filter((d) => d.customerId === id);
+      const qids = new Set(myQuotes.map((d) => d.id));
+      setQuotes(myQuotes.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")));
       setInvs(i.filter((d) => d.customerId === id).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")));
-      setExpenses(e.filter((x) => x.custId === id));
+      // this customer's money: account receipts/dues (custId) + payments on their quotes (sourceId)
+      setExpenses(e.filter((x) => x.custId === id || (x.sourceId ? qids.has(x.sourceId) : false)));
     });
   }, [id]);
   useEffect(() => {
@@ -80,6 +85,28 @@ export default function CustomerDetail({ id }: { id: string }) {
     { cft: 0, total: 0 },
   );
   const grandTotal = Math.round((qtot.total + opening) * 100) / 100;
+  // every payment received from this customer — split receipts shown as the ONE amount taken
+  const quoteNoById = new Map(quotes.map((d) => [d.id, d.number] as const));
+  const payLines: PartyStatement[] = mergeReceiptPieces(
+    expenses
+      .filter((e) => e.type === "sale" && !e.charge)
+      .map((e) => ({
+        id: e.id,
+        amount: +e.amount || 0,
+        mode: e.mode,
+        account: e.account || "",
+        date: e.date,
+        at: e.createdAt || "",
+        by: e.enteredBy,
+        quoteNo: e.sourceId ? quoteNoById.get(e.sourceId) || "" : "",
+        note: e.label || "",
+        toOwner: !!e.toOwner,
+        rcptId: e.rcptId,
+      })),
+  ).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  const paidTotal = Math.round(payLines.reduce((s, l) => s + l.amount, 0) * 100) / 100;
+  const balanceDue = Math.round((grandTotal - paidTotal) * 100) / 100;
+  const payerName = (uid: string) => USERS.find((u) => u.id === uid)?.name || uid || "—";
   const canPrint = quotes.length > 0 || opening > 0;
   const today = new Date();
   const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -188,10 +215,11 @@ export default function CustomerDetail({ id }: { id: string }) {
             </div>
           </div>
 
-          <div className="rep-summary cols3">
+          <div className="rep-summary cols4">
             <div><b>{qreport.length}</b><span>Quotations</span></div>
-            <div><b>{inr(qtot.cft)}</b><span>Total CFT</span></div>
-            <div><b>₹{inr(grandTotal)}</b><span>Total{opening > 0 ? " (incl. opening)" : ""}</span></div>
+            <div><b>₹{inr(grandTotal)}</b><span>Billed{opening > 0 ? " (incl. opening)" : ""}</span></div>
+            <div><b>₹{inr(paidTotal)}</b><span>Paid</span></div>
+            <div><b>₹{inr(balanceDue)}</b><span>Balance due</span></div>
           </div>
 
           <table className="rep-table">
@@ -244,6 +272,56 @@ export default function CustomerDetail({ id }: { id: string }) {
               </tr>
             </tbody>
           </table>
+
+          {payLines.length > 0 && (
+            <>
+              <div className="rep-title" style={{ marginTop: 18, marginBottom: 8 }}>
+                Payments received — {payLines.length}
+              </div>
+              <table className="rep-table">
+                <colgroup>
+                  <col style={{ width: "5%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "42%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: "17%" }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className="c-n">#</th>
+                    <th>Date</th>
+                    <th>Via</th>
+                    <th>Detail</th>
+                    <th>By</th>
+                    <th className="amt">Amount ₹</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...payLines].reverse().map((l, i) => (
+                    <tr key={l.id}>
+                      <td className="c-n">{i + 1}</td>
+                      <td className="c-date">{l.date}</td>
+                      <td>{l.mode === "upi" ? "UPI" : "Cash"}</td>
+                      <td className="c-cust">
+                        {[l.account, l.quoteNo ? "#" + l.quoteNo : "", l.note].filter(Boolean).join(" · ") || "—"}
+                      </td>
+                      <td>{payerName(l.by)}</td>
+                      <td className="amt">{inr(l.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr className="rep-tot">
+                    <td colSpan={5}>Total paid</td>
+                    <td className="amt">{inr(paidTotal)}</td>
+                  </tr>
+                  <tr className="rep-tot">
+                    <td colSpan={5}>Balance due — billed ₹{inr(grandTotal)} − paid ₹{inr(paidTotal)}</td>
+                    <td className="amt">{inr(balanceDue)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </>
+          )}
 
           <div className="rep-foot">Generated {genOn} · {brand.name}</div>
         </div>

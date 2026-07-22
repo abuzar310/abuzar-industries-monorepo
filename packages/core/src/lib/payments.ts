@@ -21,6 +21,10 @@ export interface PartyStatement {
   toOwner?: boolean;
   /** derived from the quote's own payCash/payUpi (legacy payment never itemised as its own expense). */
   synthetic?: boolean;
+  /** groups the pieces of one split customer receipt (see receipts.ts). */
+  rcptId?: string;
+  /** merged line: how many pieces the one receipt was applied as. */
+  pieces?: number;
 }
 
 /** Build one statement line from a recorded sale expense (shared by party + quote rollups). */
@@ -35,7 +39,46 @@ const mkStatement = (e: Expense, quoteNo: string): PartyStatement => ({
   quoteNo,
   note: e.label || "",
   toOwner: !!e.toOwner,
+  rcptId: e.rcptId,
 });
+
+/** A split receipt is ONE handover of money: show its pieces back as the single amount,
+ *  with a note saying which quotations it settled. Display-only — the math elsewhere
+ *  (quote paid totals, party rollups) still works on the real pieces. */
+export function mergeReceiptPieces(statements: PartyStatement[]): PartyStatement[] {
+  const out: PartyStatement[] = [];
+  const groups = new Map<string, PartyStatement[]>();
+  for (const s of statements) {
+    if (s.rcptId) {
+      const g = groups.get(s.rcptId) || [];
+      g.push(s);
+      groups.set(s.rcptId, g);
+    } else {
+      out.push(s);
+    }
+  }
+  for (const [id, g] of groups) {
+    if (g.length === 1) {
+      out.push(g[0]);
+      continue;
+    }
+    const first = g[0];
+    const quoteNos = g.map((x) => x.quoteNo).filter(Boolean);
+    const rest = g.some((x) => !x.quoteNo);
+    const settled =
+      (quoteNos.length ? "settled #" + quoteNos.join(", #") : "") +
+      (rest ? (quoteNos.length ? " + account" : "on account") : "");
+    out.push({
+      ...first,
+      id,
+      amount: r2(g.reduce((t, x) => t + x.amount, 0)),
+      quoteNo: "",
+      pieces: g.length,
+      note: [first.note, settled].filter(Boolean).join(" · "),
+    });
+  }
+  return out;
+}
 
 /** Surface any paid amount recorded on the quote itself (payCash/payUpi) that was never written
  *  as its own expense — so an old cash payment still shows as a recorded statement. Never mutates. */
@@ -185,7 +228,8 @@ export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Custo
     cashPaid: r2(p.cashPaid),
     upiPaid: r2(p.upiPaid),
     balance: r2(p.billed - p.paid),
-    statements: p.statements.sort((a, b) => (b.at || "").localeCompare(a.at || "")),
+    // one receipt = one line, even when it was applied across several quotations
+    statements: mergeReceiptPieces(p.statements).sort((a, b) => (b.at || "").localeCompare(a.at || "")),
     quotes: p.quotes.sort((a, b) => (b.number || "").localeCompare(a.number || "")),
   }));
   parties.sort((a, b) => b.balance - a.balance);

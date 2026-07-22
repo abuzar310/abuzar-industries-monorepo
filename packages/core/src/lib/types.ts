@@ -202,6 +202,9 @@ export interface Expense {
   sourceId?: string;
   /** a standalone receipt/charge: the customer id this entry is credited/debited to (no source quote). */
   custId?: string;
+  /** one customer receipt may be split across quotes (waterfall) — every piece carries the
+   *  SAME receipt id so lists can show it back as the single amount that was actually taken. */
+  rcptId?: string;
   /** on a custId entry: true = a DUE added (debit, they owe more); false/absent = a payment received. */
   charge?: boolean;
   /** set once the entry is archived into a closed session; falsy = current open session */
