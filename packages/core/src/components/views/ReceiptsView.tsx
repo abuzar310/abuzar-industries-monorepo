@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, getRec, put } from "@/lib/data";
 import { inr, nowIso } from "@/lib/calc";
@@ -81,6 +81,36 @@ export default function ReceiptsView() {
     const cust = new URLSearchParams(window.location.search).get("cust");
     if (cust) setOpenCust(cust);
   }, []);
+
+  // arrived from Balances (✎ on a payment line): ?edit=<rcptId | expenseId> → prefill the form
+  const editConsumed = useRef(false);
+  useEffect(() => {
+    if (editConsumed.current || !expenses.length || !customers.length) return;
+    const editParam = new URLSearchParams(window.location.search).get("edit");
+    if (!editParam) {
+      editConsumed.current = true;
+      return;
+    }
+    const pieces = expenses.filter((e) => e.type === "sale" && !e.charge && e.rcptId === editParam);
+    const single = pieces.length ? null : expenses.find((e) => e.id === editParam && e.type === "sale");
+    const rep = pieces.find((x) => !!x.custId) || pieces[0] || single;
+    if (!rep) return; // data may still be loading — retry on next load
+    editConsumed.current = true;
+    window.history.replaceState(null, "", window.location.pathname);
+    const qById = new Map(quotes.map((q) => [q.id, q] as const));
+    const cid = rep.custId || (rep.sourceId ? qById.get(rep.sourceId)?.customerId || "" : "");
+    const t = setTimeout(() => {
+      startEdit(
+        pieces.length
+          ? { key: editParam, cid, e: pieces.find((x) => !x.sourceId) || pieces[0], amount: 0, pieces, locked: false }
+          : { key: rep.id, cid, e: rep, amount: +rep.amount || 0, locked: false },
+      );
+      setOpenCust(cid || null);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startEdit is stable enough for this one-shot prefill
+  }, [expenses, customers, quotes]);
 
   const ledger = partyLedger(quotes, expenses, customers);
   const party = picked ? ledger.parties.find((p) => p.custId === picked.id) : null;
