@@ -12,6 +12,17 @@ import { StatusBadge } from "./DocList";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+const thStyle: React.CSSProperties = {
+  padding: "6px 8px",
+  textAlign: "left",
+  fontFamily: "var(--disp)",
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: ".09em",
+  textTransform: "uppercase",
+  color: "var(--ink-faint)",
+};
+
 const MONTHS: [string, string][] = [
   ["01", "Jan"], ["02", "Feb"], ["03", "Mar"], ["04", "Apr"], ["05", "May"], ["06", "Jun"],
   ["07", "Jul"], ["08", "Aug"], ["09", "Sep"], ["10", "Oct"], ["11", "Nov"], ["12", "Dec"],
@@ -434,14 +445,14 @@ export default function DashboardView() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "var(--t-cream2, #f6f0e4)", borderBottom: "1px solid var(--line)" }}>
-                    <th style="padding: 6px 8px; text-align: left; font-family: var(--disp); font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint);">Date</th>
-                    <th style="padding: 6px 8px; text-align: left; font-family: var(--disp); font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint);">Type</th>
-                    <th style="padding: 6px 8px; text-align: left; font-family: var(--disp); font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint);">Party</th>
-                    <th style="padding: 6px 8px; text-align: right; font-family: var(--disp); font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint);">Amount</th>
-                    <th style="padding: 6px 8px; text-align: left; font-family: var(--disp); font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint);">Mode</th>
-                    <th style="padding: 6px 8px; text-align: left; font-family: var(--disp); font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint);">Note</th>
-                    <th style="padding: 6px 8px; text-align: left; font-family: var(--disp); font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint);">By</th>
-                    <th style="padding: 6px 8px; text-align: center; font-family: var(--disp); font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint);">Status</th>
+                    <th style={thStyle}>Date</th>
+                    <th style={thStyle}>Type</th>
+                    <th style={thStyle}>Party</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
+                    <th style={thStyle}>Mode</th>
+                    <th style={thStyle}>Note</th>
+                    <th style={thStyle}>By</th>
+                    <th style={{ ...thStyle, textAlign: "center" }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
