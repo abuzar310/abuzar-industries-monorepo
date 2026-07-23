@@ -19,13 +19,12 @@ export async function printOrSavePdf(
   fileBase: string,
 ): Promise<"print" | "pdf" | "shared" | "cancelled"> {
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
-  const isAndroid = !!nav && /Android/i.test(nav.userAgent);
-  const standalone =
-    typeof window !== "undefined" &&
-    (window.matchMedia?.("(display-mode: standalone)").matches ||
-      (nav as unknown as { standalone?: boolean })?.standalone === true);
+  // ONLY phones/tablets take the PDF path. Desktop — Windows/Mac/Linux, browser tab
+  // OR installed app — always gets the real system print dialog (printer select),
+  // which works fine there; the share sheet on a Windows laptop was wrong.
+  const isMobile = !!nav && /Android|iPhone|iPad|iPod/i.test(nav.userAgent);
 
-  if (!((isAndroid || standalone) && el)) {
+  if (!(isMobile && el)) {
     window.print();
     return "print";
   }
