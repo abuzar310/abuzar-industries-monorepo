@@ -165,6 +165,22 @@ async function nextNumberAtomic(
   });
 }
 
+// ---- All Transactions (unified dashboard view) ----
+
+async function allTransactions(schema: AppSchema): Promise<AnyRec[]> {
+  // All expenses including soft-deleted — the full financial history
+  const rows = await sql<Row>(
+    `select * from ${tableRef(schema, "expenses")} order by created_at desc limit 2000`,
+  );
+  return rows.map((r) => ({
+    _table: "expenses",
+    _deleted: !!r.deleted_at,
+    _createdAt: r.created_at,
+    _updatedAt: r.updated_at,
+    ...(r.data as AnyRec),
+  }));
+}
+
 // ---- the handler factory ----
 
 export function createDataApi(schema: AppSchema) {
@@ -288,6 +304,205 @@ export function createDataApi(schema: AppSchema) {
         return json({ number: await nextNumberAtomic(schema, series, exceptId) });
       }
       return err(404, "Unknown rpc");
+    }
+
+    // ---------- unified all-transactions (union of all money entries, incl. deleted) ----------
+    if (a === "all-transactions" && method === "GET") {
+      const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "500", 10), 2000);
+      const offset = parseInt(req.nextUrl.searchParams.get("offset") || "0", 10);
+      const typeFilter = req.nextUrl.searchParams.get("type") || ""; // empty = all
+      const dateFrom = req.nextUrl.searchParams.get("from") || ""; // dd-mm-yy
+      const dateTo = req.nextUrl.searchParams.get("to") || "";
+
+      // Helper to parse dd-mm-yy → ISO prefix for ordering
+      const dmyToIso = (dmy: string): string => {
+        const [dd = "", mm = "", yy = ""] = dmy.split("-");
+        return dd && mm && yy ? `20${yy}-${mm}-${dd}` : "";
+      };
+      const fromIso = dateFrom ? dmyToIso(dateFrom) : "";
+      const toIso = dateTo ? dmyToIso(dateTo) + " 23:59:59" : "";
+
+      type UnifiedTx = {
+        id: string;
+        type: "expense" | "receipt" | "session" | "session_handover" | "payment" | "advance" | "deduction" | "repayment";
+        date: string; // dd-mm-yy
+        amount: number;
+        party: string; // customer / supplier / worker / account
+        partyType: "customer" | "supplier" | "worker" | "account" | "";
+        mode: string; // cash, upi, ""
+        note: string;
+        enteredBy: string;
+        deleted: boolean;
+        createdAt: string;
+        sourceId?: string;
+        sourceType?: string;
+      };
+
+      // 1. expenses (daybook) - all types including deleted
+      const expRows = await sql<Row>(
+        `select * from ${tableRef(schema, "expenses")} order by created_at desc limit $1 offset $2`,
+        [limit * 3, offset], // fetch more to filter later
+      );
+
+      // 2. sessions (daybook handovers) - include pending/confirmed
+      const sessRows = await sql<Row>(
+        `select * from ${tableRef(schema, "sessions")} order by created_at desc limit $1 offset $2`,
+        [100, 0],
+      );
+
+      // 3. attendance payments (wage, advance, deduction, repayment)
+      const attRows = await sql<Row>(
+        `select * from ${tableRef(schema, "attendance")} order by created_at desc limit $1 offset $2`,
+        [200, 0],
+      );
+
+      // Load lookups
+      const [customers, suppliers, workers, payHolders] = await Promise.all([
+        sql<Row>(`select id, name from ${tableRef(schema, "customers")}`),
+        sql<Row>(`select id, name from ${tableRef(schema, "suppliers")}`),
+        sql<Row>(`select id, name from ${tableRef(schema, "workers")}`),
+        sql<Row>(`select id, name from ${tableRef(schema, "pay_holders")}`),
+      ]);
+      const custMap = new Map(customers.rows.map((r) => [r.id, r.data.name as string]));
+      const suppMap = new Map(suppliers.rows.map((r) => [r.id, r.data.name as string]));
+      const workMap = new Map(workers.rows.map((r) => [r.id, r.data.name as string]));
+      const phMap = new Map(payHolders.rows.map((r) => [r.id, r.data.name as string]));
+
+      const all: UnifiedTx[] = [];
+
+      // Expenses / Daybook entries
+      for (const r of expRows.rows) {
+        const e = r.data as AnyRec;
+        const dmy = e.date || "";
+        const iso = dmyToIso(dmy);
+        if (fromIso && iso < fromIso) continue;
+        if (toIso && iso > toIso.replace(" 23:59:59", "")) continue;
+        if (typeFilter && e.type !== typeFilter) continue;
+
+        let party = "";
+        let partyType: UnifiedTx["partyType"] = "";
+        if (e.custId) { party = custMap.get(e.custId) || e.custId; partyType = "customer"; }
+        else if ((e.data as AnyRec)?.supplierId) { party = suppMap.get(e.supplierId) || e.supplierId; partyType = "supplier"; }
+        else if (e.account) { party = e.account; partyType = "account"; }
+
+        all.push({
+          id: r.id,
+          type: e.type === "sale" && e.custId ? "receipt" : e.type as UnifiedTx["type"],
+          date: dmy,
+          amount: +e.amount || 0,
+          party,
+          partyType,
+          mode: e.mode || "",
+          note: e.note || e.label || "",
+          enteredBy: e.enteredBy || "",
+          deleted: !!r.deleted_at,
+          createdAt: r.created_at,
+          sourceId: e.sourceId,
+          sourceType: e.charge ? "due" : "payment",
+        });
+      }
+
+      // Session handovers
+      for (const r of sessRows.rows) {
+        const s = r.data as AnyRec;
+        const dmy = s.date || "";
+        const iso = dmyToIso(dmy);
+        if (fromIso && iso < fromIso) continue;
+        if (toIso && iso > toIso.replace(" 23:59:59", "")) continue;
+        if (typeFilter && typeFilter !== "session") continue;
+
+        all.push({
+          id: r.id,
+          type: "session_handover",
+          date: dmy,
+          amount: +s.given || 0,
+          party: `Session → ${phMap.get(s.by) || s.by}`,
+          partyType: "account",
+          mode: "cash",
+          note: s.pending ? "Pending owner confirmation" : "Confirmed",
+          enteredBy: s.by || "",
+          deleted: !!r.deleted_at,
+          createdAt: r.created_at,
+        });
+      }
+
+      // Attendance money (wage payments, advances, deductions, repayments)
+      const expenseRows = await sql<Row>(
+        `select * from ${tableRef(schema, "expenses")} where sourceId like 'wkr:%' or sourceId like 'wkradv:%' or sourceId like 'wkrded:%' order by created_at desc limit 300`,
+      );
+      const workerExpenses = expenseRows.rows.map((r) => r.data as AnyRec);
+
+      for (const e of workerExpenses) {
+        const dmy = e.date || "";
+        const iso = dmyToIso(dmy);
+        if (fromIso && iso < fromIso) continue;
+        if (toIso && iso > toIso.replace(" 23:59:59", "")) continue;
+        if (typeFilter) {
+          const src = e.sourceId || "";
+          const map: Record<string, string> = { "wkr:": "payment", "wkradv:": "advance", "wkrded:": "deduction" };
+          const matched = Object.entries(map).find(([k]) => src.startsWith(k));
+          if (matched && matched[1] !== typeFilter) continue;
+        }
+
+        const workerId = e.sourceId?.split(":")[1] || "";
+        const party = workMap.get(workerId) || workerId;
+
+        all.push({
+          id: e.id,
+          type: e.sourceId?.startsWith("wkr:") ? "payment" : e.sourceId?.startsWith("wkradv:") ? "advance" : "deduction",
+          date: dmy,
+          amount: +e.amount || 0,
+          party,
+          partyType: "worker",
+          mode: e.mode || "cash",
+          note: e.note || e.label || "",
+          enteredBy: e.enteredBy || "",
+          deleted: e.charge || false, // charge = deduction (no cash), show as deleted-like
+          createdAt: e.createdAt || e.updatedAt || "",
+          sourceId: e.sourceId,
+        });
+      }
+
+      // Repayments (sale type with wkr: sourceId)
+      for (const e of workerExpenses) {
+        if (e.type !== "sale" || !e.sourceId?.startsWith("wkr:")) continue;
+        const dmy = e.date || "";
+        const iso = dmyToIso(dmy);
+        if (fromIso && iso < fromIso) continue;
+        if (toIso && iso > toIso.replace(" 23:59:59", "")) continue;
+        if (typeFilter && typeFilter !== "repayment") continue;
+
+        const workerId = e.sourceId.split(":")[1] || "";
+        const party = workMap.get(workerId) || workerId;
+
+        all.push({
+          id: e.id,
+          type: "repayment",
+          date: dmy,
+          amount: +e.amount || 0,
+          party,
+          partyType: "worker",
+          mode: e.mode || "cash",
+          note: e.note || e.label || "",
+          enteredBy: e.enteredBy || "",
+          deleted: false,
+          createdAt: e.createdAt || e.updatedAt || "",
+          sourceId: e.sourceId,
+        });
+      }
+
+      // Sort by date desc, then createdAt desc
+      all.sort((a, b) => {
+        const da = dmyToIso(a.date);
+        const db = dmyToIso(b.date);
+        if (da !== db) return db.localeCompare(da);
+        return b.createdAt.localeCompare(a.createdAt);
+      });
+
+      const total = all.length;
+      const page = all.slice(0, limit);
+
+      return json({ transactions: page, total, limit, offset });
     }
 
     return err(404, "Unknown route");

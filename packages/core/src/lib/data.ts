@@ -401,3 +401,62 @@ export async function rpcNextInvoiceNumber(
   });
   return r.number;
 }
+
+// ---- All Transactions (unified dashboard view) ----
+
+export type AllTxnType =
+  | "expense"
+  | "receipt"
+  | "payment"
+  | "salary"
+  | "debt"
+  | "deduct"
+  | "repaid"
+  | "session"
+  | "session_handover"
+  | "advance"
+  | "deduction"
+  | "repayment"
+  | "receipt_charge";
+
+export interface AllTransaction {
+  id: string;
+  type: AllTxnType;
+  date: string; // dd-mm-yy
+  amount: number;
+  party: string;
+  partyType: "customer" | "supplier" | "worker" | "account" | "";
+  mode: string;
+  note: string;
+  enteredBy: string;
+  deleted: boolean;
+  createdAt: string;
+  sourceId?: string;
+  sourceType?: string;
+  sessionId?: string;
+}
+
+export interface AllTransactionsResponse {
+  transactions: AllTransaction[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function fetchAllTransactions(
+  limit = 500,
+  offset = 0,
+  typeFilter = "",
+  dateFrom = "",
+  dateTo = "",
+): Promise<AllTransactionsResponse> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  if (typeFilter) params.set("type", typeFilter);
+  if (dateFrom) params.set("from", dateFrom);
+  if (dateTo) params.set("to", dateTo);
+  const r = await call<AllTransactionsResponse>(`/all-transactions?${params.toString()}`);
+  return r;
+}
