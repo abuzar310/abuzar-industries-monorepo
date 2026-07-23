@@ -2,13 +2,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, fetchAllTransactions, type AllTransaction } from "@/lib/data";
-import { computeDoc, inr, r2 } from "@/lib/calc";
+import { computeDoc, inr } from "@/lib/calc";
 import { partyLedger, quoteBill, quoteLedger } from "@/lib/payments";
 import { computeTrading, docTrade, getStockConfig, type StockConfig } from "@/lib/trading";
 import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense, Stock } from "@/lib/types";
 import { StatusBadge } from "./DocList";
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 const MONTHS: [string, string][] = [
   ["01", "Jan"], ["02", "Feb"], ["03", "Mar"], ["04", "Apr"], ["05", "May"], ["06", "Jun"],
