@@ -61,6 +61,8 @@ export async function addExpense(fields: {
   sourceId?: string;
   custId?: string;
   charge?: boolean;
+  /** groups the pieces of one split customer receipt (see receipts.ts) */
+  rcptId?: string;
 }): Promise<Expense> {
   const mode = fields.charge ? "" : isInflow(fields.type) ? fields.mode || "cash" : "";
   const e: Expense = {
@@ -78,6 +80,7 @@ export async function addExpense(fields: {
     enteredBy: fields.enteredBy,
     sourceId: fields.sourceId,
     custId: fields.custId,
+    rcptId: fields.rcptId,
     charge: !!fields.charge,
     createdAt: nowIso(),
     updatedAt: nowIso(),

@@ -28,10 +28,13 @@ export interface ReceiptInput {
   account?: string;
   /** cash handed straight to the owner. */
   toOwner?: boolean;
-  /** free-text cash note. */
+  /** free-text note (any mode) — shows on lists and the customer's statement PDF. */
   note?: string;
   /** dd-mm-yy; defaults to today. */
   date?: string;
+  /** true = keep the whole amount on the customer's account (old/opening dues) —
+   *  never allocate it onto open quotations. */
+  toAccount?: boolean;
   enteredBy: string;
 }
 
@@ -53,12 +56,18 @@ const isBillable = (d: Doc) =>
 export async function applyCustomerReceipt(inp: ReceiptInput): Promise<ReceiptResult> {
   let remaining = r2(Math.max(0, +inp.amount || 0));
   const applied: ReceiptResult["applied"] = [];
+  // one receipt id across every piece, so lists show the ONE amount the customer handed over
+  const rcptId = "RCP-" + uid();
 
-  const open = (await allRec<Doc>("quotations"))
-    .filter((d) => d.customerId === inp.custId && isBillable(d))
-    .map((d) => ({ d, bal: r2(quoteBill(d) - (+d.amountPaid || 0)) }))
-    .filter((x) => x.bal > 0.5)
-    .sort((a, b) => (a.d.createdAt || "").localeCompare(b.d.createdAt || "")); // oldest first
+  // "account only" (e.g. paying down an opening balance whose bills predate the app):
+  // skip the quote waterfall entirely — the whole amount stays an account receipt
+  const open = inp.toAccount
+    ? []
+    : (await allRec<Doc>("quotations"))
+        .filter((d) => d.customerId === inp.custId && isBillable(d))
+        .map((d) => ({ d, bal: r2(quoteBill(d) - (+d.amountPaid || 0)) }))
+        .filter((x) => x.bal > 0.5)
+        .sort((a, b) => (a.d.createdAt || "").localeCompare(b.d.createdAt || "")); // oldest first
 
   for (const { d, bal } of open) {
     if (remaining <= 0.5) break;
@@ -72,7 +81,8 @@ export async function applyCustomerReceipt(inp: ReceiptInput): Promise<ReceiptRe
       account: (inp.account || "").trim(),
       toOwner: inp.mode === "cash" ? !!inp.toOwner : false,
       sourceId: d.id,
-      label: inp.mode === "cash" ? inp.note || "" : "",
+      rcptId,
+      label: inp.note || "",
       date: inp.date,
       enteredBy: inp.enteredBy,
     });
@@ -103,14 +113,39 @@ export async function applyCustomerReceipt(inp: ReceiptInput): Promise<ReceiptRe
       account: (inp.account || "").trim(),
       toOwner: inp.mode === "cash" ? !!inp.toOwner : false,
       custId: inp.custId,
+      rcptId,
       note: inp.custName,
-      label: inp.mode === "cash" ? inp.note || "" : "",
+      label: inp.note || "",
       date: inp.date,
       enteredBy: inp.enteredBy,
     });
   }
 
   return { applied, leftover: remaining };
+}
+
+/** Safely remove receipt pieces: every piece that was applied onto a quotation rolls the
+ *  quote's payCash/payUpi/paid totals back first, then the expense is soft-deleted.
+ *  Money is conserved — nothing is left half-deleted with a quote still showing "paid". */
+export async function unwindReceiptPieces(pieces: Expense[]): Promise<void> {
+  for (const e of pieces) {
+    if (e.sourceId) {
+      const d = await getRec<Doc>("quotations", e.sourceId);
+      if (d) {
+        const amt = r2(+e.amount || 0);
+        const isCash = e.mode !== "upi";
+        d.payCash = r2(Math.max(0, (+(d.payCash || 0) || 0) - (isCash ? amt : 0)));
+        d.payUpi = r2(Math.max(0, (+(d.payUpi || 0) || 0) - (!isCash ? amt : 0)));
+        d.amountPaid = r2(d.payCash + d.payUpi);
+        const fp = d.finalPrice != null && d.finalPrice > 0 ? d.finalPrice : computeDoc(d).grand;
+        d.paymentStatus = d.amountPaid <= 0 ? "Pending" : d.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
+        d.paidLogged = d.amountPaid > 0;
+        d.updatedAt = nowIso();
+        await put("quotations", d);
+      }
+    }
+    await delRec("expenses", e.id); // soft delete — recoverable in the database
+  }
 }
 
 export interface MigrationResult {

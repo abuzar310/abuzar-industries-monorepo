@@ -16,6 +16,15 @@ export function docTrade(d: Doc): TradeLine {
   return { cft: r2(docVolumeCft(d)), taxable: t.sub, gst: t.gstAmt, grand: t.grand, buy: d.tradeType === "buy" };
 }
 
+/** One invoice's GST line for the Input-Tax-Credit ledger. */
+export function docItc(d: Doc): import("./trading-calc").ItcLine {
+  return {
+    gst: computeDoc(d).gstAmt,
+    kind: d.gstKind === "igst" ? "igst" : "split",
+    buy: d.tradeType === "buy",
+  };
+}
+
 export interface StockConfig {
   /** opening stock value (₹) */
   value: number;
@@ -28,14 +37,19 @@ export interface StockConfig {
   gpMode?: "stock" | "percent";
   /** GP % of sales when gpMode is "percent" (e.g. 10). */
   gpPercent?: number;
+  /** GST Input-Tax-Credit opening balances (₹ credit held at the start), per head. */
+  itcOpen?: { cgst: number; sgst: number; igst: number };
 }
 
-const DEFAULT_CFG: StockConfig = { value: 0, cft: 0, closingCft: null, gpMode: "stock", gpPercent: 10 };
+const DEFAULT_CFG: StockConfig = {
+  value: 0, cft: 0, closingCft: null, gpMode: "stock", gpPercent: 10,
+  itcOpen: { cgst: 0, sgst: 0, igst: 0 },
+};
 
-export const getStockConfig = async (): Promise<StockConfig> => ({
-  ...DEFAULT_CFG,
-  ...(await metaGet<Partial<StockConfig>>("stockConfig", {})),
-});
+export const getStockConfig = async (): Promise<StockConfig> => {
+  const saved = await metaGet<Partial<StockConfig>>("stockConfig", {});
+  return { ...DEFAULT_CFG, ...saved, itcOpen: { ...DEFAULT_CFG.itcOpen!, ...(saved.itcOpen || {}) } };
+};
 export const setStockConfig = (c: StockConfig) =>
   metaSet("stockConfig", {
     value: r2(c.value),
@@ -43,4 +57,9 @@ export const setStockConfig = (c: StockConfig) =>
     closingCft: c.closingCft == null ? null : r2(c.closingCft),
     gpMode: c.gpMode === "percent" ? "percent" : "stock",
     gpPercent: r2(Math.max(0, Math.min(100, +(c.gpPercent ?? 10) || 0))),
+    itcOpen: {
+      cgst: r2(+(c.itcOpen?.cgst ?? 0) || 0),
+      sgst: r2(+(c.itcOpen?.sgst ?? 0) || 0),
+      igst: r2(+(c.itcOpen?.igst ?? 0) || 0),
+    },
   });

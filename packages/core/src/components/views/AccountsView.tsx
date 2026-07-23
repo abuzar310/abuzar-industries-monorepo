@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
@@ -34,6 +34,7 @@ import {
   type PayHolder,
 } from "@/lib/accounts";
 import { brandFor } from "@/lib/brand";
+import { printOrSavePdf } from "@/lib/pdf";
 import { waLink } from "@/lib/whatsapp";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
@@ -88,6 +89,7 @@ export default function AccountsView() {
   const brand = brandFor(brandMode);
   const router = useRouter();
   const [printDoc, setPrintDoc] = useState<PrintDoc | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -147,10 +149,12 @@ export default function AccountsView() {
   }, [ready, dataVersion, load]);
 
   // print the on-screen statement once the print doc has rendered, then clear it
+  // (Android/installed-app: the print dialog doesn't exist — download a PDF instead)
   useEffect(() => {
     if (!printDoc) return;
-    const t = setTimeout(() => {
-      window.print();
+    const t = setTimeout(async () => {
+      const how = await printOrSavePdf(printRef.current, (printDoc.title || "statement").replace(/\s+/g, "-").toLowerCase());
+      if (how === "pdf") toast("Statement PDF downloaded \u2713");
       setPrintDoc(null);
     }, 80);
     return () => clearTimeout(t);
@@ -1036,7 +1040,7 @@ export default function AccountsView() {
       </div>
 
       {printDoc && (
-        <div className="cd-print rep-doc">
+        <div className="cd-print rep-doc" ref={printRef}>
           <div className="rep-head">
             <div className="rep-brand">
               <h1>{brand.name || "Statement"}</h1>

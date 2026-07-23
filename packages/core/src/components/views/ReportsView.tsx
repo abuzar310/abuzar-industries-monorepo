@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { allRec } from "@/lib/data";
 import { inr, pad } from "@/lib/calc";
 import { docTrade } from "@/lib/trading";
 import { brandFor } from "@/lib/brand";
+import { generatePdf } from "@/lib/pdf";
+import { toast } from "@/store/app-store";
 import { useApp } from "@/store/useApp";
 import type { Doc } from "@/lib/types";
 
@@ -55,6 +57,7 @@ export default function ReportsView() {
   const brand = brandFor(brandMode);
   const [invoices, setInvoices] = useState<Doc[]>([]);
   const fy = useMemo(() => currentFY(), []);
+  const printRef = useRef<HTMLDivElement>(null);
   const [from, setFrom] = useState(fy.from);
   const [to, setTo] = useState(fy.to);
   const [type, setType] = useState<TradeFilter>("sell");
@@ -302,12 +305,26 @@ export default function ReportsView() {
               </button>
             ))}
           </div>
-          <button className="btn primary sm rep-print" onClick={() => window.print()}>Print / Save PDF</button>
+          {/* Print = the system print dialog (printer select) on every platform;
+              Save PDF = a straight download of the report file. */}
+          <button className="btn primary sm rep-print" onClick={() => window.print()}>
+            Print
+          </button>
+          <button
+            className="btn sm rep-print"
+            onClick={async () => {
+              toast("Preparing PDF…");
+              await generatePdf(printRef.current!, "report-" + fmtISO(from || "start") + "-to-" + fmtISO(to || "now"));
+              toast("Report PDF downloaded \u2713");
+            }}
+          >
+            Save PDF
+          </button>
         </div>
       </div>
 
       {/* ---- the printable report ---- */}
-      <div className="rep-doc" id="report">
+      <div className="rep-doc" id="report" ref={printRef}>
         <div className="rep-head">
           <div className="rep-brand">
             <h1>{brand.name || "Report"}</h1>

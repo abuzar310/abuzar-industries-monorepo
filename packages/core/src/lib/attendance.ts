@@ -237,13 +237,13 @@ export interface WorkerAccount {
   /** cash the worker returned (repays the debt) */
   repaidAll: number;
   opening: number;
-  /** wage cash taken BEYOND what was earned — automatically rolled onto the debt account
-   *  (it shrinks again as more days are worked). */
-  overflowAll: number;
-  /** WAGE pot: earnedAll − wagePaidAll − deductedAll, floored at 0 — any overpay
-   *  becomes debt (overflowAll), never a negative wage balance. */
+  /** WAGE pot: earnedAll − wagePaidAll − deductedAll. POSITIVE = to pay the worker ·
+   *  NEGATIVE = took more wage cash than earned (shown as a minus — it stays HERE and
+   *  self-corrects as more days are worked; it NEVER moves to the Advance on its own,
+   *  only via the explicit "cut from wages" action or re-entering it as an advance). */
   wageBalance: number;
-  /** DEBT pot: opening + debtGivenAll − repaidAll − deductedAll + overflowAll. */
+  /** ADVANCE pot: opening + debtGivenAll − repaidAll − deductedAll. Changes only by
+   *  explicit actions — never automatically. */
   debt: number;
 }
 
@@ -258,10 +258,6 @@ export function workerAccount(worker: Worker, marks: AttendanceMark[], expenses:
   const deductedAll = r2(sums.deduct);
   const repaidAll = r2(sums.repaid);
   const opening = r2(+(worker.opening || 0));
-  const rawWage = r2(earnedAll - wagePaidAll - deductedAll);
-  // took more wage cash than earned → the extra automatically rolls onto the debt
-  // account (and rolls back off as more days are worked — rawWage rises toward 0)
-  const overflowAll = rawWage < 0 ? r2(-rawWage) : 0;
   return {
     earnedAll,
     wagePaidAll,
@@ -269,9 +265,8 @@ export function workerAccount(worker: Worker, marks: AttendanceMark[], expenses:
     deductedAll,
     repaidAll,
     opening,
-    overflowAll,
-    wageBalance: rawWage < 0 ? 0 : rawWage,
-    debt: r2(opening + debtGivenAll - repaidAll - deductedAll + overflowAll),
+    wageBalance: r2(earnedAll - wagePaidAll - deductedAll),
+    debt: r2(opening + debtGivenAll - repaidAll - deductedAll),
   };
 }
 
@@ -295,12 +290,15 @@ export interface WeekRow {
   marks: Record<string, number>;
   presentDays: number;
   earned: number;
-  /** wages SETTLED this week: wage payments + deductions (debt loans/repayments don't touch wages) */
+  /** wages SETTLED this week: wage payments + deductions (advance loans/repayments don't touch wages) */
   paid: number;
   /** earned − paid: >0 still owed to the worker · <0 paid over this week's wages */
   balance: number;
   /** this week's wage-settling entries (wage + deduct), oldest first */
   payments: WorkerEntry[];
+  /** iso → CASH handed to the worker that day (wages + advance loans) — the Excel's
+   *  AMOUNT row under each day, shown right in the register grid */
+  takenByDay: Record<string, number>;
 }
 
 export function weekRollup(
@@ -319,11 +317,20 @@ export function weekRollup(
       wm[m.date] = m.present;
       presentDays += +m.present || 0;
     }
-    const payments = workerPayments(expenses, worker.id)
-      .filter((x) => (x.kind === "wage" || x.kind === "deduct") && inWeek(dateSortKey(x.e.date) || (x.e.createdAt || "").slice(0, 10)))
+    const all = workerPayments(expenses, worker.id);
+    const dayIso = (x: WorkerEntry) => dateSortKey(x.e.date) || (x.e.createdAt || "").slice(0, 10);
+    const payments = all
+      .filter((x) => (x.kind === "wage" || x.kind === "deduct") && inWeek(dayIso(x)))
       .sort((a, b) => (a.e.createdAt || "").localeCompare(b.e.createdAt || ""));
+    const takenByDay: Record<string, number> = {};
+    for (const x of all) {
+      if (x.kind !== "wage" && x.kind !== "debt") continue; // real cash only
+      const iso = dayIso(x);
+      if (!inWeek(iso)) continue;
+      takenByDay[iso] = r2((takenByDay[iso] || 0) + (+x.e.amount || 0));
+    }
     const earned = r2(presentDays * (+worker.rate || 0));
     const paid = r2(payments.reduce((s, x) => s + (+x.e.amount || 0), 0));
-    return { worker, marks: wm, presentDays: r2(presentDays), earned, paid, balance: r2(earned - paid), payments };
+    return { worker, marks: wm, presentDays: r2(presentDays), earned, paid, balance: r2(earned - paid), payments, takenByDay };
   });
 }

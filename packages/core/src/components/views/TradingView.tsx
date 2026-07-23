@@ -1,13 +1,32 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { allRec } from "@/lib/data";
-import { inr } from "@/lib/calc";
-import { computeTrading, docTrade, getStockConfig, MONTH_NAMES, monthKey, setStockConfig, type StockConfig } from "@/lib/trading";
+import { dateSortKey, inr, pad } from "@/lib/calc";
+import { computeItc, computeTrading, docItc, docTrade, getStockConfig, MONTH_NAMES, monthKey, setStockConfig, type StockConfig } from "@/lib/trading";
+import { brandFor } from "@/lib/brand";
+import { printOrSavePdf } from "@/lib/pdf";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import type { Doc } from "@/lib/types";
 
 const num = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// period helpers (same behavior as the Reports page)
+const docISO = (d: Doc) => dateSortKey(d.date) || (d.createdAt || "").slice(0, 10);
+const isoOf = (y: number, m: number, day: number) => `${y}-${pad(m)}-${pad(day)}`;
+const fmtISO = (iso: string) => {
+  const [y, m, d] = (iso || "").split("-");
+  return y && m && d ? `${d}-${m}-${y}` : iso;
+};
+function currentFY(now = new Date()): { from: string; to: string; label: string } {
+  const y = now.getFullYear();
+  const startY = now.getMonth() + 1 >= 4 ? y : y - 1;
+  return { from: isoOf(startY, 4, 1), to: isoOf(startY + 1, 3, 31), label: `FY ${startY}-${String(startY + 1).slice(2)}` };
+}
+const todayISO = () => {
+  const d = new Date();
+  return isoOf(d.getFullYear(), d.getMonth() + 1, d.getDate());
+};
 
 interface MRow {
   key: string;
@@ -20,7 +39,8 @@ interface MRow {
 }
 
 export default function TradingView() {
-  const { dataVersion } = useApp();
+  const { dataVersion, brandMode } = useApp();
+  const brand = brandFor(brandMode);
   const [invoices, setInvoices] = useState<Doc[]>([]);
   const [cfg, setCfg] = useState<StockConfig>({ value: 0, cft: 0, closingCft: null, gpMode: "stock", gpPercent: 10 });
   const [oVal, setOVal] = useState("");
@@ -29,6 +49,19 @@ export default function TradingView() {
   const [gpPct, setGpPct] = useState("10");
   const [editOpening, setEditOpening] = useState(false);
   const [showMonths, setShowMonths] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
+  // what the printed Trading A/C shows: amounts, CFT quantities, or both tables
+  const [printCols, setPrintCols] = useState<"amount" | "cft" | "both">("amount");
+  /** optionally append the month-wise purchase-vs-sell table to the print */
+  const [printMonths, setPrintMonths] = useState(false);
+  // ITC opening-balance edit form (CGST / SGST / IGST)
+  const [editItc, setEditItc] = useState(false);
+  const [iCgst, setICgst] = useState("");
+  const [iSgst, setISgst] = useState("");
+  const [iIgst, setIIgst] = useState("");
+  // period window ("" = open-ended) — default all time, presets like the Reports page
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
 
   const load = useCallback(() => {
     allRec<Doc>("invoices").then((arr) => setInvoices(arr.filter((d) => !d.deletedAt && !d.purgedAt)));
@@ -38,6 +71,9 @@ export default function TradingView() {
       setOCft(c.cft ? String(c.cft) : "");
       setCCft(c.closingCft != null ? String(c.closingCft) : "");
       setGpPct(String(c.gpPercent ?? 10));
+      setICgst(c.itcOpen?.cgst ? String(c.itcOpen.cgst) : "");
+      setISgst(c.itcOpen?.sgst ? String(c.itcOpen.sgst) : "");
+      setIIgst(c.itcOpen?.igst ? String(c.itcOpen.igst) : "");
     });
   }, []);
   useEffect(() => {
@@ -45,11 +81,64 @@ export default function TradingView() {
   }, [load, dataVersion]);
 
   const gpMode = cfg.gpMode === "percent" ? "percent" : "stock";
-  const lines = invoices.map(docTrade);
-  const tr = computeTrading(lines, { value: cfg.value, cft: cfg.cft }, cfg.closingCft, {
+
+  // period accounting: invoices BEFORE the window roll into a derived opening
+  // (configured opening + earlier purchases − earlier sales at cost), so any
+  // month/FY window is a correct standalone trading account.
+  const beforeDocs = from ? invoices.filter((d) => docISO(d) < from) : [];
+  const periodDocs = invoices.filter((d) => {
+    const iso = docISO(d);
+    if (from && iso < from) return false;
+    if (to && iso > to) return false;
+    return true;
+  });
+  const baseOpening = { value: cfg.value, cft: cfg.cft };
+  const opening = beforeDocs.length
+    ? (() => {
+        const pre = computeTrading(beforeDocs.map(docTrade), baseOpening, null); // at cost — GP method irrelevant here
+        return { value: pre.closingValue, cft: pre.closingCft };
+      })()
+    : baseOpening;
+  // the physical closing count describes TODAY's stock — only apply it when the window reaches today
+  const includesNow = !to || to >= todayISO();
+  const tr = computeTrading(periodDocs.map(docTrade), opening, includesNow ? cfg.closingCft : null, {
     mode: gpMode,
     percent: cfg.gpPercent ?? 10,
   });
+
+  // GST Input-Tax-Credit ledger, same rolling-window treatment as the stock:
+  // credits before the window fold into the period's opening balances
+  const itcBase = cfg.itcOpen || { cgst: 0, sgst: 0, igst: 0 };
+  const itcOpening = beforeDocs.length
+    ? (() => {
+        const pre = computeItc(beforeDocs.map(docItc), itcBase);
+        return { cgst: pre.cgst.closing, sgst: pre.sgst.closing, igst: pre.igst.closing };
+      })()
+    : itcBase;
+  const itc = computeItc(periodDocs.map(docItc), itcOpening);
+  const periodLabel =
+    from && to ? `${fmtISO(from)}  to  ${fmtISO(to)}` : from ? `From ${fmtISO(from)}` : to ? `Up to ${fmtISO(to)}` : "All time";
+  const fy = currentFY();
+  function preset(kind: "thisMonth" | "lastMonth" | "fy" | "all") {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    if (kind === "thisMonth") {
+      setFrom(isoOf(y, m, 1));
+      setTo(isoOf(y, m, new Date(y, m, 0).getDate()));
+    } else if (kind === "lastMonth") {
+      const lm = m === 1 ? 12 : m - 1;
+      const ly = m === 1 ? y - 1 : y;
+      setFrom(isoOf(ly, lm, 1));
+      setTo(isoOf(ly, lm, new Date(ly, lm, 0).getDate()));
+    } else if (kind === "fy") {
+      setFrom(fy.from);
+      setTo(fy.to);
+    } else {
+      setFrom("");
+      setTo("");
+    }
+  }
 
   async function saveGp(next: Partial<StockConfig>) {
     const merged = { ...cfg, ...next };
@@ -64,7 +153,7 @@ export default function TradingView() {
     return "20" + (yy || "") + (mm || "") + (dd || "");
   };
   let runCft = tr.openCft;
-  const moves = [...invoices]
+  const moves = [...periodDocs]
     .sort((a, b) => dsort(a.date).localeCompare(dsort(b.date)))
     .map((d) => {
       const it = docTrade(d);
@@ -75,7 +164,7 @@ export default function TradingView() {
 
   // month-wise Karnataka/GST/Total P.K vs Sell/Sell GST/Total Sell (like the Excel)
   const mmap = new Map<string, MRow>();
-  invoices.forEach((d) => {
+  periodDocs.forEach((d) => {
     const k = monthKey(d.date);
     const it = docTrade(d);
     const m = mmap.get(k) || { key: k, pTax: 0, pGst: 0, pTot: 0, sTax: 0, sGst: 0, sTot: 0 };
@@ -111,6 +200,15 @@ export default function TradingView() {
     toast("Stock opening saved");
   }
 
+  async function saveItc(e: React.FormEvent) {
+    e.preventDefault();
+    await setStockConfig({ ...cfg, itcOpen: { cgst: +iCgst || 0, sgst: +iSgst || 0, igst: +iIgst || 0 } });
+    setEditItc(false);
+    load();
+    bumpData();
+    toast("ITC opening balances saved");
+  }
+
   const stmt: { k: string; cft: number; val: number; sub?: boolean; tot?: boolean }[] = [
     { k: "Opening stock", cft: tr.openCft, val: tr.openValue },
     { k: "+ Purchases", cft: tr.purchaseCft, val: tr.purchaseValue },
@@ -119,17 +217,148 @@ export default function TradingView() {
     { k: "= Closing stock", cft: tr.closingCft, val: tr.closingValue, tot: true },
   ];
 
+  // printable Trading A/C: CFT on both sides must reconcile too — any gap between
+  // goods available and (sold + closing) is a physical shortage/excess, shown explicitly
+  const rightCft = Math.round((tr.saleCft + tr.closingCft) * 100) / 100;
+  const cftDiff = Math.round((tr.availCft - rightCft) * 100) / 100;
+  const gToday = new Date();
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  const genOn = `${p2(gToday.getDate())}-${p2(gToday.getMonth() + 1)}-${gToday.getFullYear()}`;
+  const gpLabel =
+    gpMode === "percent" ? `Gross Profit (${num(cfg.gpPercent ?? 10)}% of sales)` : "Gross Profit (from closing stock)";
+  // classic accountant wording: the period lives INSIDE the row labels
+  const rangeText = from && to ? `${fmtISO(from)} TO ${fmtISO(to)}` : from ? `FROM ${fmtISO(from)}` : to ? `UP TO ${fmtISO(to)}` : "";
+  const endText = to ? fmtISO(to) : genOn;
+  const acctTitle =
+    from === fy.from && to === fy.to ? "TRADING ACCOUNT " + fy.label.replace("FY ", "") : "TRADING ACCOUNT";
+
+  /** the classic two-sided T-account, one measure at a time (₹ or CFT) */
+  const tAccount = (measure: "amount" | "cft") => {
+    const v = (n: number) => (measure === "amount" ? inr(n) : num(n));
+    const leftRows: [string, string][] =
+      measure === "amount"
+        ? [
+            ["To Opening Stock" + (from ? " " + fmtISO(from) : ""), v(tr.openValue)],
+            ["To Purchases" + (rangeText ? " " + rangeText : ""), v(tr.purchaseValue)],
+            ["To " + gpLabel, v(tr.grossProfit)],
+          ]
+        : [
+            ["To Opening Stock" + (from ? " " + fmtISO(from) : ""), v(tr.openCft)],
+            ["To Purchases" + (rangeText ? " " + rangeText : ""), v(tr.purchaseCft)],
+          ];
+    const rightRows: [string, string][] =
+      measure === "amount"
+        ? [
+            ["By Sales" + (rangeText ? " " + rangeText : ""), v(tr.saleValue)],
+            ["By Closing Stock " + endText, v(tr.closingValue)],
+          ]
+        : [
+            ["By Sales" + (rangeText ? " " + rangeText : ""), v(tr.saleCft)],
+            ["By Closing Stock " + endText, v(tr.closingCft)],
+            ...(Math.abs(cftDiff) > 0.01
+              ? ([["By CFT difference (" + (cftDiff > 0 ? "shortage" : "excess") + ")", v(Math.abs(cftDiff))]] as [string, string][])
+              : []),
+          ];
+    const leftTotal = measure === "amount" ? inr(tr.totalAmount) : num(tr.availCft);
+    const rightTotal =
+      measure === "amount"
+        ? inr(Math.round((tr.saleValue + tr.closingValue) * 100) / 100)
+        : num(Math.round((rightCft + Math.max(0, cftDiff)) * 100) / 100);
+    const n = Math.max(leftRows.length, rightRows.length);
+    const cell = (r?: [string, string]) => (r ? r : ["", ""]);
+    return (
+      <table className="rep-table rep-tacct" key={measure}>
+        <colgroup>
+          <col style={{ width: "34%" }} />
+          <col style={{ width: "16%" }} />
+          <col style={{ width: "34%" }} />
+          <col style={{ width: "16%" }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Particulars</th>
+            <th className="amt">{measure === "amount" ? "Amount ₹" : "CFT"}</th>
+            <th>Particulars</th>
+            <th className="amt">{measure === "amount" ? "Amount ₹" : "CFT"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: n }, (_, i) => {
+            const L = cell(leftRows[i]);
+            const R = cell(rightRows[i]);
+            return (
+              <tr key={i}>
+                <td>{L[0]}</td>
+                <td className="amt">{L[1]}</td>
+                <td>{R[0]}</td>
+                <td className="amt">{R[1]}</td>
+              </tr>
+            );
+          })}
+          <tr className="rep-tot">
+            <td>Total</td>
+            <td className="amt">{leftTotal}</td>
+            <td>Total</td>
+            <td className="amt">{rightTotal}</td>
+          </tr>
+        </tbody>
+      </table>
+    );
+  };
+
   return (
     <div>
-      <div className="sectitle">
-        Stock <small>— opening + purchases − sold = closing</small>
+      <div className="cd-screen">
+      <div className="sectitle" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span>Stock <small>— opening + purchases − sold = closing</small></span>
+        <div className="rep-seg" style={{ marginLeft: "auto" }} role="group" aria-label="What the printed account shows">
+          {(["amount", "cft", "both"] as const).map((c) => (
+            <button
+              key={c}
+              className={printCols === c ? "on" : ""}
+              title={c === "amount" ? "Print amounts (₹) — the accountant's format" : c === "cft" ? "Print quantities (CFT)" : "Print both tables"}
+              onClick={() => setPrintCols(c)}
+            >
+              {c === "amount" ? "₹ Amount" : c === "cft" ? "CFT" : "Both"}
+            </button>
+          ))}
+          <button
+            className={printMonths ? "on" : ""}
+            title="Also print the month-wise purchase vs sell table"
+            onClick={() => setPrintMonths((v) => !v)}
+          >
+            + Months
+          </button>
+        </div>
+        <button
+          className="btn sm"
+          onClick={async () => {
+            if ((await printOrSavePdf(printRef.current, "trading-account-" + genOn)) === "pdf") toast("Trading A/C PDF downloaded \u2713");
+          }}
+        >
+          Print Trading A/C
+        </button>
+      </div>
+
+      {/* period window — same clean controls as Reports; earlier trade rolls into the opening */}
+      <div className="rep-controls">
+        <div className="rep-presets">
+          <button className="btn sm" onClick={() => preset("thisMonth")}>This month</button>
+          <button className="btn sm" onClick={() => preset("lastMonth")}>Last month</button>
+          <button className="btn sm" onClick={() => preset("fy")}>{fy.label}</button>
+          <button className="btn sm" onClick={() => preset("all")}>All time</button>
+        </div>
+        <div className="rep-range">
+          <label>From<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+          <label>To<input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+        </div>
       </div>
 
       {/* Stock Summary sheet */}
       <div className="tsheet">
         <div className="tsheet-head">
           <span>Stock Summary</span>
-          <small>avg ₹{inr(tr.avgRate)} / CFT</small>
+          <small>{periodLabel} · avg ₹{inr(tr.avgRate)} / CFT{from ? " · opening carried in from earlier trade" : ""}</small>
         </div>
         <div className="tsheet-body">
           <div className="tsum">
@@ -238,7 +467,8 @@ export default function TradingView() {
           <div style={{ marginTop: 10 }}>
             {!editOpening ? (
               <button className="tlink" onClick={() => setEditOpening(true)}>
-                Opening: {num(tr.openCft)} CFT · ₹{inr(tr.openValue)} — edit
+                Opening{from ? " (this period, carried in)" : ""}: {num(tr.openCft)} CFT · ₹{inr(tr.openValue)} — edit
+                {from ? " original" : ""}
               </button>
             ) : (
               <form className="tform" onSubmit={saveCfg}>
@@ -247,6 +477,71 @@ export default function TradingView() {
                 <label>Closing CFT (physical, optional)<input type="number" inputMode="decimal" placeholder={num(tr.availCft - tr.saleCft) + " auto"} value={cCft} onChange={(e) => setCCft(e.target.value)} /></label>
                 <button className="btn primary sm" type="submit">Save</button>
                 <button className="btn sm" type="button" onClick={() => setEditOpening(false)}>Cancel</button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* GST Input Tax Credit — purchases add credit, every sale's tax is set off (minus) */}
+      <div className="tsheet">
+        <div className="tsheet-head">
+          <span>GST Input Tax Credit</span>
+          <small>{periodLabel} · purchases add credit · sales minus · closing carries</small>
+        </div>
+        <div className="tsheet-body" style={{ overflowX: "auto" }}>
+          <table className="t-table narrow">
+            <thead>
+              <tr>
+                <th>Head</th>
+                <th className="amt">Opening ₹</th>
+                <th className="amt">+ Input (purchases)</th>
+                <th className="amt">− Output (sales)</th>
+                <th className="amt">Closing ₹</th>
+              </tr>
+            </thead>
+            <tbody>
+              {([["CGST", itc.cgst], ["SGST", itc.sgst], ["IGST", itc.igst]] as const).map(([k, h]) => (
+                <tr key={k}>
+                  <td>{k}</td>
+                  <td className="amt">{inr(h.open)}</td>
+                  <td className="amt">{inr(h.input)}</td>
+                  <td className="amt">{inr(h.output)}</td>
+                  <td className="amt" style={{ color: h.closing < -0.005 ? "var(--t-cr)" : "inherit", fontWeight: 700 }}>
+                    {inr(h.closing)}
+                    {h.closing < -0.005 ? " (payable)" : ""}
+                  </td>
+                </tr>
+              ))}
+              <tr className="tot">
+                <td>Total</td>
+                <td className="amt">{inr(itc.total.open)}</td>
+                <td className="amt">{inr(itc.total.input)}</td>
+                <td className="amt">{inr(itc.total.output)}</td>
+                <td className="amt" style={{ color: itc.total.closing < -0.005 ? "var(--t-cr)" : "inherit" }}>
+                  {inr(itc.total.closing)}
+                  {itc.total.closing < -0.005 ? " (payable)" : ""}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="gp-how" style={{ marginTop: 8 }}>
+            Closing credit = opening + tax paid on purchases − tax on sales, per head. A negative
+            closing means the credit is used up — that much is payable. Interstate (IGST) invoices
+            go to IGST; CGST+SGST invoices split half-half.
+          </div>
+          <div style={{ marginTop: 10 }}>
+            {!editItc ? (
+              <button className="tlink" onClick={() => setEditItc(true)}>
+                Opening credit{from ? " (this period, carried in)" : ""}: CGST ₹{inr(itcOpening.cgst)} · SGST ₹{inr(itcOpening.sgst)} · IGST ₹{inr(itcOpening.igst)} — edit{from ? " original" : ""}
+              </button>
+            ) : (
+              <form className="tform" onSubmit={saveItc}>
+                <label>CGST opening ₹<input type="number" inputMode="decimal" placeholder="0" value={iCgst} onChange={(e) => setICgst(e.target.value)} /></label>
+                <label>SGST opening ₹<input type="number" inputMode="decimal" placeholder="0" value={iSgst} onChange={(e) => setISgst(e.target.value)} /></label>
+                <label>IGST opening ₹<input type="number" inputMode="decimal" placeholder="0" value={iIgst} onChange={(e) => setIIgst(e.target.value)} /></label>
+                <button className="btn primary sm" type="submit">Save</button>
+                <button className="btn sm" type="button" onClick={() => setEditItc(false)}>Cancel</button>
               </form>
             )}
           </div>
@@ -317,6 +612,79 @@ export default function TradingView() {
           )}
         </div>
       )}
+      </div>
+
+      {/* clean printable TRADING ACCOUNT — rendered only on print (Print Trading A/C button) */}
+      <div className="cd-print rep-doc" ref={printRef}>
+        <div className="rep-head">
+          <div className="rep-brand">
+            <h1>{brand.name || "Trading Account"}</h1>
+            {brand.addr && <div>{brand.addr}</div>}
+            {brand.gstin && <div>GSTIN: {brand.gstin}</div>}
+          </div>
+          <div className="rep-meta">
+            <div className="rep-title">{acctTitle}</div>
+            <div className="rep-period">{periodLabel === "All time" ? "As on " + genOn : periodLabel}</div>
+          </div>
+        </div>
+
+        <div className="rep-summary cols4">
+          <div><b>{num(tr.closingCft)}</b><span>Closing CFT</span></div>
+          <div><b>₹{inr(tr.closingValue)}</b><span>Closing value</span></div>
+          <div><b>₹{inr(tr.avgRate)}</b><span>Avg rate / CFT</span></div>
+          <div><b>₹{inr(tr.grossProfit)}</b><span>Gross profit</span></div>
+        </div>
+
+        {/* ONLY the chosen table(s) print — ₹, CFT, or both (GST ITC stays on screen, not here) */}
+        {(printCols === "amount" || printCols === "both") && tAccount("amount")}
+        {printCols === "both" && (
+          <div className="rep-title" style={{ marginTop: 14, marginBottom: 8 }}>Quantity (CFT)</div>
+        )}
+        {(printCols === "cft" || printCols === "both") && tAccount("cft")}
+
+        {printMonths && mrows.length > 0 && (
+          <>
+            <div className="rep-title" style={{ marginTop: 18, marginBottom: 8 }}>Month-wise · Purchase vs Sell</div>
+            <table className="rep-table">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th className="amt">Purchase ₹</th>
+                  <th className="amt">GST ₹</th>
+                  <th className="amt">Total ₹</th>
+                  <th className="amt">Sell ₹</th>
+                  <th className="amt">Sell GST ₹</th>
+                  <th className="amt">Total ₹</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mrows.map((m) => (
+                  <tr key={m.key}>
+                    <td>{monthName(m.key)}</td>
+                    <td className="amt">{inr(m.pTax)}</td>
+                    <td className="amt">{inr(m.pGst)}</td>
+                    <td className="amt">{inr(m.pTot)}</td>
+                    <td className="amt">{inr(m.sTax)}</td>
+                    <td className="amt">{inr(m.sGst)}</td>
+                    <td className="amt">{inr(m.sTot)}</td>
+                  </tr>
+                ))}
+                <tr className="rep-tot">
+                  <td>Total</td>
+                  <td className="amt">{inr(tr.purchaseValue)}</td>
+                  <td className="amt">{inr(tr.purchaseGst)}</td>
+                  <td className="amt">{inr(tr.purchaseTotal)}</td>
+                  <td className="amt">{inr(tr.saleValue)}</td>
+                  <td className="amt">{inr(tr.saleGst)}</td>
+                  <td className="amt">{inr(tr.saleTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </>
+        )}
+
+        <div className="rep-foot">Generated {genOn} · {brand.name}</div>
+      </div>
     </div>
   );
 }

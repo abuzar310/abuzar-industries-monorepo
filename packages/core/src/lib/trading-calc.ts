@@ -125,6 +125,73 @@ export function computeTrading(
   };
 }
 
+// ---- GST Input Tax Credit (ITC) ledger ----
+// Purchases ADD input credit; sales' output tax is SET OFF against it (minus);
+// closing = opening + input − output, per head. Negative closing = payable.
+
+export interface ItcLine {
+  /** GST amount on the invoice */
+  gst: number;
+  /** "igst" = interstate (all into IGST) · anything else = split half CGST half SGST */
+  kind: "split" | "igst";
+  buy: boolean;
+}
+
+export interface ItcHead {
+  open: number;
+  input: number; // from purchases
+  output: number; // on sales (set off)
+  closing: number; // open + input − output
+}
+
+export interface Itc {
+  cgst: ItcHead;
+  sgst: ItcHead;
+  igst: ItcHead;
+  total: ItcHead;
+}
+
+export function computeItc(
+  lines: ItcLine[],
+  opening: { cgst: number; sgst: number; igst: number },
+): Itc {
+  const acc = {
+    cgst: { input: 0, output: 0 },
+    sgst: { input: 0, output: 0 },
+    igst: { input: 0, output: 0 },
+  };
+  for (const l of lines) {
+    const side = l.buy ? "input" : "output";
+    const g = +l.gst || 0;
+    if (l.kind === "igst") {
+      acc.igst[side] += g;
+    } else {
+      acc.cgst[side] += g / 2;
+      acc.sgst[side] += g / 2;
+    }
+  }
+  const head = (open: number, k: "cgst" | "sgst" | "igst"): ItcHead => ({
+    open: r2(open),
+    input: r2(acc[k].input),
+    output: r2(acc[k].output),
+    closing: r2(open + acc[k].input - acc[k].output),
+  });
+  const cgst = head(+opening.cgst || 0, "cgst");
+  const sgst = head(+opening.sgst || 0, "sgst");
+  const igst = head(+opening.igst || 0, "igst");
+  return {
+    cgst,
+    sgst,
+    igst,
+    total: {
+      open: r2(cgst.open + sgst.open + igst.open),
+      input: r2(cgst.input + sgst.input + igst.input),
+      output: r2(cgst.output + sgst.output + igst.output),
+      closing: r2(cgst.closing + sgst.closing + igst.closing),
+    },
+  };
+}
+
 /** "dd-mm-yy" (or any parseable date) -> "mm-yy" bucket for the month-wise breakdown.
  *  Uses the robust date parser first so slash/ISO/loose dates still bucket correctly
  *  instead of collapsing to "??". */

@@ -16,8 +16,8 @@ import { trashDoc } from "@/lib/trash";
 import { getFeatures } from "@/lib/features";
 import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
 import { postInvoice } from "@/lib/ledger-autopost";
-import { quoteMessage, reminderMessage, waLink } from "@/lib/whatsapp";
-import { generatePdf } from "@/lib/pdf";
+import { reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
+import { generatePdf, printOrSavePdf } from "@/lib/pdf";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { BoxRect, Customer, Doc, Expense, Row } from "@/lib/types";
@@ -482,7 +482,9 @@ export default function Editor({
   }
   async function onPrint() {
     await saveNow(); // never print an unsaved doc
-    window.print();
+    // Android / installed app: no print dialog — the sheet downloads as a PDF instead
+    if ((await printOrSavePdf(sheetRef.current, docRef.current.number || docRef.current.id)) === "pdf")
+      toast("PDF downloaded \u2713");
   }
   async function onPdf() {
     try {
@@ -497,7 +499,16 @@ export default function Editor({
   }
   async function onWaSend() {
     await saveNow();
-    window.open(waLink(docRef.current.phone, quoteMessage(docRef.current)), "_blank");
+    if (!sheetRef.current) return;
+    try {
+      toast("Preparing PDF…");
+      const how = await sendDocOnWhatsApp(sheetRef.current, docRef.current);
+      if (how === "shared") toast("PDF + message attached — pick the customer in WhatsApp");
+      else if (how === "direct") toast("PDF downloaded · WhatsApp opened with the message ✓");
+      else if (how === "fallback") toast("PDF downloaded — attach it in the WhatsApp chat that opened");
+    } catch (e) {
+      toast("WhatsApp send error: " + ((e as Error)?.message || e));
+    }
   }
   function onWaRemind() {
     window.open(waLink(doc.phone, reminderMessage(doc)), "_blank");
@@ -1193,6 +1204,7 @@ export default function Editor({
           by={user?.id || "unknown"}
           isOwner={user?.role === "owner"}
           onFinalPrice={onFinalPrice}
+          onShowFinalOnPrint={(v) => update((d) => (d.showFinalOnPrint = v))}
           setAggregates={setPayAggregates}
           onClearAll={onClearPayments}
           reload={loadExpenses}

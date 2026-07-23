@@ -2,8 +2,68 @@
 // across A4 pages (jsPDF). The previous jsPDF.html() path produced blank pages;
 // direct html2canvas + manual pagination renders exactly what you see/print.
 // Loaded dynamically so it stays out of the server bundle.
+import { toast } from "@/store/app-store";
 
 export async function generatePdf(sheet: HTMLElement, fileBase: string) {
+  const pdf = await renderPdf(sheet);
+  pdf.save((fileBase || "document") + ".pdf");
+}
+
+/** Print — or, on Android / installed-app mode where the browser print dialog doesn't
+ *  exist (window.print() is silently ignored), build the PDF and hand it to the system
+ *  share sheet so the user can open, print, save, or send it. A plain download is the
+ *  fallback. Always gives visible feedback — rendering takes a few seconds, so a
+ *  "Preparing…" toast shows immediately. Returns which path ran. */
+export async function printOrSavePdf(
+  el: HTMLElement | null,
+  fileBase: string,
+): Promise<"print" | "pdf" | "shared" | "cancelled"> {
+  const nav = typeof navigator !== "undefined" ? navigator : undefined;
+  // ONLY phones/tablets take the PDF path. Desktop — Windows/Mac/Linux, browser tab
+  // OR installed app — always gets the real system print dialog (printer select),
+  // which works fine there; the share sheet on a Windows laptop was wrong.
+  const isMobile = !!nav && /Android|iPhone|iPad|iPod/i.test(nav.userAgent);
+
+  if (!(isMobile && el)) {
+    window.print();
+    return "print";
+  }
+
+  toast("Preparing PDF…");
+  const file = await generatePdfFile(el, fileBase);
+
+  // Android share sheet — the reliable path: open in a PDF viewer, print, save, or send
+  if (nav?.canShare?.({ files: [file] })) {
+    try {
+      await nav.share({ files: [file], title: file.name });
+      return "shared";
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return "cancelled";
+      // any other share failure → fall through to the download
+    }
+  }
+
+  // fallback: direct download (anchor must be in the DOM for some Android browsers)
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return "pdf";
+}
+
+/** The document as a shareable File — used to attach the PDF straight into WhatsApp
+ *  via the system share sheet (navigator.share), instead of download-then-attach. */
+export async function generatePdfFile(sheet: HTMLElement, fileBase: string): Promise<File> {
+  const pdf = await renderPdf(sheet);
+  const blob = pdf.output("blob");
+  return new File([blob], (fileBase || "document") + ".pdf", { type: "application/pdf" });
+}
+
+async function renderPdf(sheet: HTMLElement) {
   const [{ jsPDF }, h2c] = await Promise.all([import("jspdf"), import("html2canvas")]);
   const html2canvas = h2c.default;
 
@@ -36,6 +96,8 @@ export async function generatePdf(sheet: HTMLElement, fileBase: string) {
   const width = Math.max(sheet.scrollWidth, 880);
   clone.style.width = width + "px";
   clone.style.background = "#FAF6EF";
+  // print-only nodes (.cd-print) are display:none on screen — the clone must lay out
+  clone.style.display = "block";
   // off-screen but fully laid out so html2canvas can measure & render it
   const holder = document.createElement("div");
   holder.style.cssText = "position:fixed;left:-10000px;top:0;width:" + width + "px;background:#FAF6EF";
@@ -82,7 +144,7 @@ export async function generatePdf(sheet: HTMLElement, fileBase: string) {
       pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
       heightLeft -= pageH;
     }
-    pdf.save((fileBase || "document") + ".pdf");
+    return pdf;
   } finally {
     if (holder.parentNode) holder.parentNode.removeChild(holder);
   }

@@ -3,10 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
-import { partyLedger, type Party } from "@/lib/payments";
+import { partyLedger, type Party, type PartyStatement } from "@/lib/payments";
+import { unwindReceiptPieces } from "@/lib/receipts";
 import { USERS } from "@/lib/local-auth";
 import { useFocusFlash } from "@/lib/use-focus-flash";
 import { useApp } from "@/store/useApp";
+import { bumpData, toast } from "@/store/app-store";
+import { confirmDialog } from "@/store/dialog-store";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
@@ -106,7 +109,9 @@ export default function PaymentsView() {
           </div>
         </div>
       ) : (
-        shown.map((p) => <PartyCard key={p.custId || p.name} p={p} open={open} setOpen={setOpen} router={router} balClass={balClass} balText={balText} balLbl={balLbl} />)
+        shown.map((p) => (
+          <PartyCard key={p.custId || p.name} p={p} open={open} setOpen={setOpen} router={router} balClass={balClass} balText={balText} balLbl={balLbl} expenses={expenses} reload={load} />
+        ))
       )}
     </div>
   );
@@ -120,6 +125,8 @@ function PartyCard({
   balClass,
   balText,
   balLbl,
+  expenses,
+  reload,
 }: {
   p: Party;
   open: string | null;
@@ -128,11 +135,44 @@ function PartyCard({
   balClass: (b: number) => string;
   balText: (b: number) => string;
   balLbl: (b: number) => string;
+  expenses: Expense[];
+  reload: () => void;
 }) {
   const pid = p.custId || p.name;
   const isOpen = open === pid;
   const settled = p.balance <= 0.5;
   const bc = balClass(p.balance);
+
+  /** the real expense rows behind one displayed payment line (merged receipts have several) */
+  const piecesOf = (s: PartyStatement): Expense[] =>
+    s.pieces ? expenses.filter((e) => e.rcptId === s.id) : expenses.filter((e) => e.id === s.id);
+
+  function editStatement(s: PartyStatement) {
+    const rid = s.pieces ? s.id : s.rcptId;
+    if (rid) return router.push("/receipts?edit=" + encodeURIComponent(rid)); // receipt → edit on the Receipts tab
+    const exp = expenses.find((e) => e.id === s.id);
+    if (exp?.custId) return router.push("/receipts?edit=" + encodeURIComponent(exp.id));
+    if (exp?.sourceId) return router.push("/editor/" + exp.sourceId + "?pay=" + encodeURIComponent(s.id)); // quote payment → edit inside the quote
+  }
+
+  async function deleteStatement(s: PartyStatement) {
+    const pieces = piecesOf(s);
+    if (!pieces.length) return toast("This line comes from the quote's own record — open the quote to change it");
+    const nQuotes = pieces.filter((x) => !!x.sourceId).length;
+    const ok = await confirmDialog({
+      title: "Delete payment?",
+      message:
+        p.name + " — ₹" + inr(s.amount) +
+        (nQuotes > 0 ? "\nIt was applied on " + nQuotes + " quotation" + (nQuotes === 1 ? "" : "s") + " — they go back to due." : ""),
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    await unwindReceiptPieces(pieces); // rolls linked quote totals back, then soft-deletes
+    reload();
+    bumpData();
+    toast("Payment removed — balances updated");
+  }
   return (
     <div>
       <button className={"party" + (isOpen ? " on" : "")} onClick={() => setOpen(isOpen ? null : pid)}>
@@ -180,14 +220,24 @@ function PartyCard({
                 <div className="stmt" key={s.id}>
                   <div className={"stmt-ic " + (s.mode === "upi" ? "upi" : "cash")}>{s.mode === "upi" ? "UPI" : "₹"}</div>
                   <div className="stmt-main">
-                    <div className="stmt-to">{s.mode === "upi" ? s.account || "UPI account" : "Cash in hand"}</div>
+                    <div className="stmt-to">{(s.mode === "upi" ? s.account || "UPI account" : s.toOwner ? "Cash → Owner" : "Cash in hand") + (!s.pieces && s.note ? " · " + s.note : "")}</div>
                     <div className="stmt-sub">
-                      {s.quoteNo ? "#" + s.quoteNo + " · " : ""}
+                      {s.pieces ? (s.note || "") + " · " : s.quoteNo ? "#" + s.quoteNo + " · " : ""}
                       {s.date}
                       {hhmm(s.at) ? " · " + hhmm(s.at) : ""} · by {userName(s.by)}
                     </div>
                   </div>
                   <div className="stmt-amt">+₹{inr(s.amount)}</div>
+                  {!s.synthetic && (
+                    <span className="pb-rowacts">
+                      <button className="pb-x" title="Edit" type="button" onClick={() => editStatement(s)}>
+                        ✎
+                      </button>
+                      <button className="pb-x" title="Delete" type="button" onClick={() => deleteStatement(s)}>
+                        ×
+                      </button>
+                    </span>
+                  )}
                 </div>
               ))}
             </>

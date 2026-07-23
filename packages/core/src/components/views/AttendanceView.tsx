@@ -62,15 +62,15 @@ const markCls = (v: number | undefined) => (v === 1 ? " f" : v === 0.5 ? " h" : 
 // WAGE pot convention: POSITIVE = still to pay the worker · NEGATIVE = paid over what was earned
 const balWords = (bal: number) =>
   bal < -0.5
-    ? { text: "took extra ₹" + inr(-bal), color: "var(--danger)" }
+    ? { text: "−₹" + inr(-bal) + " extra taken", color: "var(--danger)" }
     : bal > 0.5
       ? { text: "to pay ₹" + inr(bal), color: "var(--green)" }
       : { text: "✓ square", color: "var(--ink-faint)" };
 // statement line look, per pot
 const KIND_UI = {
   wage: { label: "Wage", color: "var(--danger)", sign: "−", ic: "₹", icCls: "att-given" },
-  debt: { label: "Debt given", color: "var(--ochre-deep)", sign: "−", ic: "₹", icCls: "att-debt" },
-  deduct: { label: "Cut from wages → debt", color: "var(--ink-faint)", sign: "−", ic: "✂", icCls: "att-ded" },
+  debt: { label: "Advance given", color: "var(--ochre-deep)", sign: "−", ic: "₹", icCls: "att-debt" },
+  deduct: { label: "Cut from wages → advance", color: "var(--ink-faint)", sign: "−", ic: "✂", icCls: "att-ded" },
   repaid: { label: "Repaid", color: "var(--green)", sign: "+", ic: "↑", icCls: "ok" },
 } as const;
 
@@ -139,7 +139,7 @@ export default function AttendanceView() {
   const acctOf = (id: string): WorkerAccount =>
     accounts.get(id) || {
       earnedAll: 0, wagePaidAll: 0, debtGivenAll: 0, deductedAll: 0, repaidAll: 0,
-      opening: 0, overflowAll: 0, wageBalance: 0, debt: 0,
+      opening: 0, wageBalance: 0, debt: 0,
     };
   // the pay panel always talks about the CURRENT calendar week
   const curDays = useMemo(() => weekDays(weekStart(new Date())), []);
@@ -198,7 +198,7 @@ export default function AttendanceView() {
         ...(isOwner
           ? [{
               name: "opening",
-              label: "Debt account opening ₹ (rarely used)",
+              label: "Advance account opening ₹ (rarely used)",
               type: "number" as const,
               inputMode: "decimal" as const,
               value: String(w.opening || 0),
@@ -252,6 +252,12 @@ export default function AttendanceView() {
     setDedAmt("");
     setDedNote("");
   }
+  /** tap a day's amount in the grid → pay panel opens for that worker, dated that day */
+  function payForDay(workerId: string, iso: string) {
+    if (payId !== workerId) pickPay(workerId);
+    setPayDate(iso);
+    document.querySelector(".att-pp")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   async function submitPay(w: Worker) {
     const amt = +payAmt || 0;
     if (amt <= 0) return toast("Enter an amount");
@@ -272,7 +278,7 @@ export default function AttendanceView() {
     load();
     bumpData();
     toast(
-      "₹" + inr(amt) + (payToDebt ? " put on " + w.name + "'s debt account" : " paid to " + w.name) +
+      "₹" + inr(amt) + (payToDebt ? " put on " + w.name + "'s Advance account" : " paid to " + w.name) +
         " — " + wentWords(by, "out"),
     );
   }
@@ -285,7 +291,7 @@ export default function AttendanceView() {
     setDedNote("");
     load();
     bumpData();
-    toast("₹" + inr(amt) + " cut from " + w.name + "'s wages against the debt — no cash moved");
+    toast("₹" + inr(amt) + " cut from " + w.name + "'s wages against the advance — no cash moved");
   }
 
   function toggleAcct(id: string) {
@@ -346,7 +352,7 @@ export default function AttendanceView() {
       message:
         `₹${inr(x.e.amount)} · ${x.e.date} — ` +
         (x.kind === "deduct"
-          ? "no cash moved; the wages and the debt both go back up."
+          ? "no cash moved; the wages and the advance both go back up."
           : "removes it from the Daybook too; the amount goes back onto the account."),
       confirmLabel: "Delete",
       danger: true,
@@ -401,7 +407,7 @@ export default function AttendanceView() {
                   </b>
                 </span>
               )}
-              {a.debt > 0.5 && <span className="att-debt-chip">Debt account: ₹{inr(a.debt)}</span>}
+              {a.debt > 0.5 && <span className="att-debt-chip">Advance: ₹{inr(a.debt)}</span>}
             </div>
 
             <div className="rec-grid" style={{ marginTop: 12 }}>
@@ -472,11 +478,11 @@ export default function AttendanceView() {
 
             <label className="att-pp-debtopt">
               <input type="checkbox" checked={payToDebt} onChange={(e) => setPayToDebt(e.target.checked)} />
-              Put this on the debt account instead (loan, not wages)
+              Put this on the Advance account instead (loan, not wages)
             </label>
             {a.debt > 0.5 && !showDeduct && (
               <button className="tlink att-pp-dedlink" type="button" onClick={() => setShowDeduct(true)}>
-                Cut ₹ from wages against the debt…
+                Cut ₹ from wages against the advance…
               </button>
             )}
             {a.debt > 0.5 && showDeduct && (
@@ -517,7 +523,7 @@ export default function AttendanceView() {
                   <button className="btn sm" type="button" onClick={() => { setShowDeduct(false); setDedAmt(""); setDedNote(""); }}>
                     Cancel
                   </button>
-                  <span className="att-give-where">settles wages against the debt — no cash moves</span>
+                  <span className="att-give-where">settles wages against the advance — no cash moves</span>
                 </div>
               </div>
             )}
@@ -528,7 +534,7 @@ export default function AttendanceView() {
               onClick={() => submitPay(w)}
               style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: 12 }}
             >
-              Pay{amt > 0 ? " ₹" + inr(amt) : ""}{payToDebt ? " onto the debt account" : ""}
+              Pay{amt > 0 ? " ₹" + inr(amt) : ""}{payToDebt ? " onto the Advance account" : ""}
               {" "}· by {(payBy ?? defaultBy()) === "owner" ? "Owner" : "Manager"}
             </button>
           </>
@@ -553,17 +559,17 @@ export default function AttendanceView() {
       if (x2.kind === "repaid") return n === "Repaid · " + w.name ? "" : n;
       return n === w.name ? "" : n.startsWith(w.name + " · ") ? n.slice(w.name.length + 3) : n;
     };
-    // live preview while typing a repayment: what the debt account becomes
+    // live preview while typing a repayment: what the Advance account becomes
     const amt = +fAmt || 0;
     const afterDebt = r2(a.debt - amt);
     const preview =
       amt <= 0
         ? ""
         : afterDebt > 0.5
-          ? "debt account becomes ₹" + inr(afterDebt)
+          ? "advance becomes ₹" + inr(afterDebt)
           : afterDebt < -0.5
-            ? "that's ₹" + inr(-afterDebt) + " more than the debt — it will go negative"
-            : "debt account clears ✓";
+            ? "that's ₹" + inr(-afterDebt) + " more than the advance — it will go negative"
+            : "advance clears ✓";
     return (
       <tr key={w.id + ":acct"}>
         <td colSpan={13} className="att-acct-cell">
@@ -576,7 +582,6 @@ export default function AttendanceView() {
                 <span className="att-hero-sub">
                   earned ₹{inr(a.earnedAll)} all-time · paid ₹{inr(a.wagePaidAll)}
                   {a.deductedAll > 0.5 ? " · cut ₹" + inr(a.deductedAll) : ""}
-                  {a.overflowAll > 0.5 ? " · ₹" + inr(a.overflowAll) + " taken extra → debt" : ""}
                 </span>
               </div>
               <div className="att-hero-acts">
@@ -585,7 +590,7 @@ export default function AttendanceView() {
                     <button
                       className="btn sm"
                       type="button"
-                      title="The worker returned money — cash comes back in, reduces the debt account"
+                      title="The worker returned money — cash comes back in, reduces the Advance account"
                       onClick={startRepay}
                     >
                       Received back
@@ -600,8 +605,7 @@ export default function AttendanceView() {
             {a.debt > 0.5 && (
               <div className="att-debt-line">
                 <span className="att-debt-chip">
-                  Debt account: opening ₹{inr(a.opening)} + given ₹{inr(a.debtGivenAll)}
-                  {a.overflowAll > 0.5 ? " + extra wages taken ₹" + inr(a.overflowAll) : ""}
+                  Advance: opening ₹{inr(a.opening)} + given ₹{inr(a.debtGivenAll)}
                   {" "}− cut ₹{inr(a.deductedAll)} − repaid ₹{inr(a.repaidAll)} = ₹{inr(a.debt)}
                 </span>
               </div>
@@ -833,7 +837,7 @@ export default function AttendanceView() {
                   <th className="amt">Days</th>
                   <th className="amt">Earned ₹<small className="att-th-sub">this week</small></th>
                   <th className="amt">Wage balance<small className="att-th-sub">all-time</small></th>
-                  <th className="amt">Debt account<small className="att-th-sub">owes us</small></th>
+                  <th className="amt">Advance<small className="att-th-sub">owes us</small></th>
                   <th />
                 </tr>
               </thead>
@@ -866,6 +870,26 @@ export default function AttendanceView() {
                             >
                               {markGlyph(x.marks[iso])}
                             </button>
+                            {/* the Excel's AMOUNT row, live: cash he took that day, right under the mark */}
+                            {(x.takenByDay[iso] || 0) > 0 ? (
+                              <button
+                                className="att-day-amt"
+                                type="button"
+                                title={"₹" + inr(x.takenByDay[iso]) + " taken this day — tap to add more / see the account"}
+                                onClick={() => payForDay(x.worker.id, iso)}
+                              >
+                                −{inr(x.takenByDay[iso])}
+                              </button>
+                            ) : (
+                              <button
+                                className="att-day-amt att-day-amt-add"
+                                type="button"
+                                title={"Give " + x.worker.name + " money for " + DAY_NAMES[i]}
+                                onClick={() => payForDay(x.worker.id, iso)}
+                              >
+                                +
+                              </button>
+                            )}
                           </td>
                         ))}
                         <td className="amt" style={{ fontWeight: 700 }}>{x.presentDays || ""}</td>
@@ -886,7 +910,7 @@ export default function AttendanceView() {
                             <button
                               className="att-bal att-debt-amt"
                               type="button"
-                              title="Open this worker's account — debt breakdown inside"
+                              title="Open this worker's account — advance breakdown inside"
                               onClick={() => toggleAcct(x.worker.id)}
                             >
                               ₹{inr(a.debt)}
