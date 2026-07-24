@@ -202,14 +202,14 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
         />
       </label>
       {/* default OFF — the printed quote stays clean unless this is ticked */}
-      <label className="fp-print-opt" title="Adds a 'Final price (agreed)' line to the printed sheet">
+      <label className="fp-print-opt" title="Prints the final price, every payment received, and the balance / Settled status on the sheet">
         <input
           type="checkbox"
           checked={!!doc.showFinalOnPrint}
           disabled={!(doc.finalPrice && doc.finalPrice > 0)}
           onChange={(e) => onShowFinalOnPrint(e.target.checked)}
         />
-        Show final price on the printed quotation
+        Show final price &amp; payments on the printed quotation
         {!(doc.finalPrice && doc.finalPrice > 0) && <small> (enter a final price first)</small>}
       </label>
 

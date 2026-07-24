@@ -1726,6 +1726,9 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .fp-print-opt:has(input:disabled){opacity:.6; cursor:default}
 /* the printed "Final price (agreed)" row — slightly separated from the computed grand */
 .t-row.final-print{border-top:2px solid rgba(255,255,255,.35)}
+/* settlement lines printed under the final price (payments + received + balance) */
+.t-row.pay-print{font-size:12px}
+.t-row.pay-print .lab{font-weight:400; opacity:.85}
 
 /* Stock: gross-profit method picker + transparent formula line */
 .gp-ctl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
