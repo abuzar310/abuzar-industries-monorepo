@@ -1739,8 +1739,11 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 
 /* trading account print: classic T-format — center rule between the two sides, roomy rows */
 .rep-tacct td:nth-child(2), .rep-tacct th:nth-child(2){border-right:2px solid #555}
-.rep-tacct td, .rep-tacct th{padding:8px 8px}
-.rep-tacct .rep-tot td{font-weight:800}
+/* the T-account is the whole page now (no summary cards) — bigger, airier type */
+.rep-tacct{font-size:14.5px}
+.rep-tacct td, .rep-tacct th{padding:12px 10px}
+.rep-tacct th{font-size:12px}
+.rep-tacct .rep-tot td{font-weight:800; font-size:15px}
 
 /* month-wise report sections: clear headers on screen, one month per page on paper */
 .rep-month{margin-top:20px}
