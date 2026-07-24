@@ -286,6 +286,9 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
         {view.length ? (
           view.map((d) => {
             const t = computeDoc(d);
+            // the agreed final price when fixed (matches Balances/Customers), else the computed total
+            const bill = d.kind === "invoice" ? t.grand : quoteBill(d);
+            const hasFinal = Math.abs(bill - t.grand) > 0.5;
             const act = (e: React.MouseEvent, suffix: string) => {
               e.stopPropagation();
               open(d, suffix);
@@ -320,7 +323,8 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                   <StatusBadge doc={d} />
                 </span>
                 <span>
-                  <div className="amt">₹ {inr(t.grand)}</div>
+                  <div className="amt">₹ {inr(bill)}</div>
+                  {hasFinal && <div className="mut" style={{ fontSize: 11 }}>final · quote ₹{inr(t.grand)}</div>}
                   <div className="acts">
                     <button className="btn sm" onClick={(e) => act(e, "")}>Open</button>
                     <button className="btn sm" onClick={(e) => act(e, "?action=print")}>Print</button>
