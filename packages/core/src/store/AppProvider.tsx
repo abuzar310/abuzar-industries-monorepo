@@ -2,7 +2,7 @@
 import { useEffect, useRef } from "react";
 import type { AppFeatures, Tab } from "@/lib/types";
 import { setFeatures } from "@/lib/features";
-import { bindUnloadGuard, bootData, pullChanges, resetData } from "@/lib/data";
+import { ApiError, bindUnloadGuard, bootData, pullChanges, resetData } from "@/lib/data";
 import { setBrandMode, setReady, setSyncState, setUser, toast as toastMsg, type BrandMode } from "./app-store";
 import { setDefaultBrand } from "./session";
 import { initPwa } from "@/lib/pwa";
@@ -45,10 +45,14 @@ export default function AppProvider({
       try {
         await pullChanges();
         await checkOwnerNotifications();
-      } catch {
-        setUser(null);
-        resetData();
-        setReady(true);
+      } catch (e) {
+        // ONLY a real session expiry logs out — a timeout / flaky network must
+        // never kick the user to the lock screen; the next poll simply retries.
+        if (e instanceof ApiError && e.status === 401) {
+          setUser(null);
+          resetData();
+          setReady(true);
+        }
       }
     };
 

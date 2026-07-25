@@ -45,7 +45,7 @@ export const clone = <T>(v: T): T => (v == null ? v : JSON.parse(JSON.stringify(
 
 // ---- low-level fetch ----
 
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
     super(message);
@@ -53,9 +53,17 @@ class ApiError extends Error {
   }
 }
 
+/** A request that hangs forever (phone switching Wi-Fi↔mobile data mid-flight) must
+ *  eventually FAIL — otherwise the poll/outbox in-flight guards never release and the
+ *  device silently stops syncing until the app is killed. 20s is generous for any payload. */
+const callTimeout = () =>
+  typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(20000) : undefined;
+
 async function call<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(API + path, {
     credentials: "same-origin",
+    cache: "no-store", // always the live server state — never a browser-cached copy
+    signal: callTimeout(),
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
   });
