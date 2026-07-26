@@ -422,6 +422,7 @@ export default function DashboardView() {
           <div className="pc-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
             <span>All Transactions</span>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <button className="dash-link" onClick={() => router.push("/transactions")}>Open full view →</button>
               <span className="sub" style={{ fontSize: 12, color: "var(--ink-faint)" }}>
                 {txnsTotal} total · page {txnsPage + 1} of {Math.ceil(txnsTotal / TXNS_PAGE_SIZE) || 1}
               </span>

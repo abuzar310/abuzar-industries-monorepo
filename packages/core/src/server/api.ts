@@ -324,7 +324,7 @@ export function createDataApi(schema: AppSchema) {
 
       type UnifiedTx = {
         id: string;
-        type: "expense" | "receipt" | "session" | "session_handover" | "payment" | "advance" | "deduction" | "repayment";
+        type: "expense" | "receipt" | "salary" | "session" | "session_handover" | "payment" | "advance" | "deduction" | "repayment";
         date: string; // dd-mm-yy
         amount: number;
         party: string; // customer / supplier / worker / account
@@ -387,7 +387,7 @@ export function createDataApi(schema: AppSchema) {
 
         all.push({
           id: r.id,
-          type: e.type === "sale" && e.custId ? "receipt" : e.type as UnifiedTx["type"],
+          type: e.type === "sale" && e.custId ? "receipt" : e.type === "salary" ? "salary" : (e.type === "food" || e.type === "additional" || e.type === "custom") ? "expense" : (e.type || "expense") as UnifiedTx["type"],
           date: dmy,
           amount: +e.amount || 0,
           party,

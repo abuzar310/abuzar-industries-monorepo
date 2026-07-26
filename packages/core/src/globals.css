@@ -80,7 +80,7 @@ body{
   font-size:13px; padding:7px 13px; border-radius:9px; cursor:pointer;
   border:1px solid transparent; background:transparent; color:var(--ink-soft);
   transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);
-  position:relative; text-decoration:none; display:inline-block;
+  position:relative; text-decoration:none; display:inline-flex; align-items:center; gap:5px;
 }
 .tab:hover{background:rgba(51,36,26,.05); color:var(--ink)}
 .tab:active{transform:translateY(1px)}

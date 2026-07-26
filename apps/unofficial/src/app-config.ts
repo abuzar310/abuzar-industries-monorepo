@@ -7,15 +7,16 @@ export const FEATURES: AppFeatures = { invoices: false, simpleQuote: true, accep
 // Data isolation lives server-side: this app's API routes use the "unofficial" schema.
 
 export const TABS: Tab[] = [
-  { label: "Dashboard", href: "/" },
-  { label: "Balances", href: "/payments" },
-  { label: "Receipts", href: "/receipts" },
-  { label: "Statements", href: "/statements" },
-  { label: "Accounts", href: "/accounts" },
-  { label: "Quotation", href: "/editor" },
-  { label: "Quotations", href: "/quotations" },
-  { label: "Customers", href: "/customers" },
-  { label: "Daybook", href: "/expenses", badge: true },
-  { label: "Attendance", href: "/attendance" },
-  { label: "Settings", href: "/settings", owner: true },
+  { label: "Dashboard", href: "/", icon: "home" },
+  { label: "Transactions", href: "/transactions", icon: "transactions", badge: true },
+  { label: "Balances", href: "/payments", icon: "scale" },
+  { label: "Receipts", href: "/receipts", icon: "receipt" },
+  { label: "Statements", href: "/statements", icon: "statement" },
+  { label: "Accounts", href: "/accounts", icon: "building" },
+  { label: "Quotation", href: "/editor", icon: "file-plus" },
+  { label: "Quotations", href: "/quotations", icon: "clipboard" },
+  { label: "Customers", href: "/customers", icon: "customers" },
+  { label: "Daybook", href: "/expenses", icon: "book", badge: true },
+  { label: "Attendance", href: "/attendance", icon: "calendar" },
+  { label: "Settings", href: "/settings", icon: "settings", owner: true },
 ];

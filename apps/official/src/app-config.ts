@@ -7,14 +7,14 @@ export const FEATURES: AppFeatures = { invoices: true, simpleQuote: false, accep
 // Data isolation lives server-side: this app's API routes use the "official" schema.
 
 export const TABS: Tab[] = [
-  { label: "Dashboard", href: "/" },
-  { label: "Quotation", href: "/editor" },
-  { label: "Quotations", href: "/quotations" },
-  { label: "Invoices", href: "/invoices" },
-  { label: "Customers", href: "/customers" },
-  { label: "Suppliers", href: "/suppliers" },
-  { label: "Stock", href: "/stock" },
-  { label: "Reports", href: "/reports" },
+  { label: "Dashboard", href: "/", icon: "home" },
+  { label: "Quotation", href: "/editor", icon: "file-plus" },
+  { label: "Quotations", href: "/quotations", icon: "clipboard" },
+  { label: "Invoices", href: "/invoices", icon: "invoices" },
+  { label: "Customers", href: "/customers", icon: "customers" },
+  { label: "Suppliers", href: "/suppliers", icon: "truck" },
+  { label: "Stock", href: "/stock", icon: "boxes" },
+  { label: "Reports", href: "/reports", icon: "chart" },
   // Ledger tab removed from the nav — the pages still exist at /ledger for direct access
-  { label: "Settings", href: "/settings", owner: true },
+  { label: "Settings", href: "/settings", icon: "settings", owner: true },
 ];

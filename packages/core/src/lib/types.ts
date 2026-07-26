@@ -166,6 +166,8 @@ export type StoreName =
 export interface Tab {
   label: string;
   href: string;
+  /** Icon key — maps to the SVG icon set in Icons.tsx */
+  icon?: string;
   badge?: boolean;
   owner?: boolean;
 }
