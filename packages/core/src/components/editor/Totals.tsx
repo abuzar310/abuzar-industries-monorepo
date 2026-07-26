@@ -1,5 +1,6 @@
 "use client";
 import { inr, rupeesInWords } from "@/lib/calc";
+import type { PartyStatement } from "@/lib/payments";
 import type { Doc } from "@/lib/types";
 
 interface Props {
@@ -10,13 +11,21 @@ interface Props {
   totalCft?: number;
   totalCbm?: number;
   totalPcs?: number;
+  /** this quote's recorded payments — printed under the final price when the toggle is on */
+  payLines?: PartyStatement[];
   onGst: (v: string) => void;
   onGstMode: (m: "percent" | "flat") => void;
 }
 
-export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, onGst, onGstMode }: Props) {
+export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, payLines, onGst, onGstMode }: Props) {
   const isInv = doc.kind === "invoice";
   const showFinal = !isInv && !!doc.showFinalOnPrint && (doc.finalPrice || 0) > 0;
+  // the settlement block: every payment + received + balance/settled — printed with the final price
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const pays = showFinal && payLines ? [...payLines].reverse() : []; // oldest first on paper
+  const received = r2(pays.reduce((s, l) => s + l.amount, 0));
+  const balance = r2((doc.finalPrice || 0) - received);
+  const settled = balance <= 0.5;
   const flat = doc.gstMode === "flat";
   const half = Math.round((+doc.gst || 0) * 50) / 100; // e.g. 18 -> 9
   const halfAmt = Math.round(gstAmt * 50) / 100;
@@ -86,6 +95,27 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
           <span className="lab">Final price (agreed)</span>
           <span className="val">₹ {inr(doc.finalPrice!)}</span>
         </div>
+      )}
+      {/* the full settlement: every payment, total received, and the balance / Settled ✓ */}
+      {showFinal && pays.length > 0 && (
+        <>
+          {pays.map((l) => (
+            <div className="t-row pay-print" key={l.id}>
+              <span className="lab">
+                Paid{l.date ? " · " + l.date : ""} · {l.mode === "upi" ? "UPI" + (l.account ? " · " + l.account : "") : "Cash"}
+              </span>
+              <span className="val">{inr(l.amount)}</span>
+            </div>
+          ))}
+          <div className="t-row pay-print">
+            <span className="lab">Total received</span>
+            <span className="val">{inr(received)}</span>
+          </div>
+          <div className="t-row grand final-print">
+            <span className="lab">{settled ? "Settled" : "Balance due"}</span>
+            <span className="val">{settled ? "✓ Paid in full" : "₹ " + inr(Math.max(0, balance))}</span>
+          </div>
+        </>
       )}
       </div>
       {/* amount-in-words lives OUTSIDE the totals box (which clips overflow) so it can never be cut off */}

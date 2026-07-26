@@ -628,13 +628,6 @@ export default function TradingView() {
           </div>
         </div>
 
-        <div className="rep-summary cols4">
-          <div><b>{num(tr.closingCft)}</b><span>Closing CFT</span></div>
-          <div><b>₹{inr(tr.closingValue)}</b><span>Closing value</span></div>
-          <div><b>₹{inr(tr.avgRate)}</b><span>Avg rate / CFT</span></div>
-          <div><b>₹{inr(tr.grossProfit)}</b><span>Gross profit</span></div>
-        </div>
-
         {/* ONLY the chosen table(s) print — ₹, CFT, or both (GST ITC stays on screen, not here) */}
         {(printCols === "amount" || printCols === "both") && tAccount("amount")}
         {printCols === "both" && (

@@ -15,6 +15,7 @@ import { findLiveByNumber } from "@/lib/durability";
 import { trashDoc } from "@/lib/trash";
 import { getFeatures } from "@/lib/features";
 import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
+import { statementsForQuote } from "@/lib/payments";
 import { postInvoice } from "@/lib/ledger-autopost";
 import { reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
 import { generatePdf, printOrSavePdf } from "@/lib/pdf";
@@ -704,6 +705,8 @@ export default function Editor({
       />
     );
   };
+  // this quote's recorded payments — printed as the settlement block when the toggle is on
+  const payLines = !isInv ? statementsForQuote(doc, expenses) : undefined;
   const billNode = (
     <Totals
       doc={doc}
@@ -713,6 +716,7 @@ export default function Editor({
       totalCft={totalCft}
       totalCbm={totalCbm}
       totalPcs={totalPcs}
+      payLines={payLines}
       onGst={(v) => setField("gst", v)}
       onGstMode={(m) => setField("gstMode", m)}
     />
@@ -1102,6 +1106,7 @@ export default function Editor({
             totalCft={totalCft}
             totalCbm={totalCbm}
             totalPcs={totalPcs}
+            payLines={payLines}
             onGst={(v) => setField("gst", v)}
             onGstMode={(m) => setField("gstMode", m)}
           />

@@ -1726,6 +1726,9 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .fp-print-opt:has(input:disabled){opacity:.6; cursor:default}
 /* the printed "Final price (agreed)" row — slightly separated from the computed grand */
 .t-row.final-print{border-top:2px solid rgba(255,255,255,.35)}
+/* settlement lines printed under the final price (payments + received + balance) */
+.t-row.pay-print{font-size:12px}
+.t-row.pay-print .lab{font-weight:400; opacity:.85}
 
 /* Stock: gross-profit method picker + transparent formula line */
 .gp-ctl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
@@ -1736,8 +1739,11 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 
 /* trading account print: classic T-format — center rule between the two sides, roomy rows */
 .rep-tacct td:nth-child(2), .rep-tacct th:nth-child(2){border-right:2px solid #555}
-.rep-tacct td, .rep-tacct th{padding:8px 8px}
-.rep-tacct .rep-tot td{font-weight:800}
+/* the T-account is the whole page now (no summary cards) — big, ledger-like type */
+.rep-tacct{font-size:17px; margin-top:10px}
+.rep-tacct td, .rep-tacct th{padding:16px 12px}
+.rep-tacct th{font-size:13px; letter-spacing:.06em}
+.rep-tacct .rep-tot td{font-weight:800; font-size:18px; padding:18px 12px}
 
 /* month-wise report sections: clear headers on screen, one month per page on paper */
 .rep-month{margin-top:20px}
