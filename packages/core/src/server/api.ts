@@ -430,7 +430,7 @@ export function createDataApi(schema: AppSchema) {
 
       // Attendance money (wage payments, advances, deductions, repayments)
       const expenseRows = await sql<Row>(
-        `select * from ${tableRef(schema, "expenses")} where sourceId like 'wkr:%' or sourceId like 'wkradv:%' or sourceId like 'wkrded:%' order by created_at desc limit 300`,
+        `select * from ${tableRef(schema, "expenses")} where data->>'sourceId' like 'wkr:%' or data->>'sourceId' like 'wkradv:%' or data->>'sourceId' like 'wkrded:%' order by created_at desc limit 300`,
       );
       const workerExpenses = expenseRows.map((r) => r.data as AnyRec);
 
