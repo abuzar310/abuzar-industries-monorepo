@@ -2,6 +2,7 @@
   "name": "abuzar-monorepo",
   "version": "0.1.0",
   "private": true,
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "next dev apps/unofficial -p 3010",
     "dev:unofficial": "next dev apps/unofficial -p 3010",
