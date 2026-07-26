@@ -398,7 +398,7 @@ export function createDataApi(schema: AppSchema) {
           note: e.note || e.label || "",
           enteredBy: e.enteredBy || "",
           deleted: !!r.deleted_at,
-          createdAt: r.created_at,
+          createdAt: String(r.created_at || ""),
           sourceId: e.sourceId,
           sourceType: e.charge ? "due" : "payment",
         });
@@ -424,7 +424,7 @@ export function createDataApi(schema: AppSchema) {
           note: s.pending ? "Pending owner confirmation" : "Confirmed",
           enteredBy: s.by || "",
           deleted: !!r.deleted_at,
-          createdAt: r.created_at,
+          createdAt: String(r.created_at || ""),
         });
       }
 
@@ -497,8 +497,8 @@ export function createDataApi(schema: AppSchema) {
       all.sort((a, b) => {
         const da = dmyToIso(a.date);
         const db = dmyToIso(b.date);
-        if (da !== db) return db.localeCompare(da);
-        return b.createdAt.localeCompare(a.createdAt);
+        if (da !== db) return (db || "").localeCompare(da || "");
+        return (b.createdAt || "").localeCompare(a.createdAt || "");
       });
 
       const total = all.length;
