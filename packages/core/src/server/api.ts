@@ -65,7 +65,9 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 
 const err = (status: number, message: string) => json({ error: message }, status);
 
-type AnyRec = Record<string, unknown>;
+/** JSONB data — user-entered, coerced at the UI layer. `any` is intentional
+ *  (the fields are validated at write time, not re-validated on read). */
+type AnyRec = Record<string, any>;
 
 /** Split raw document rows into the two client-facing stores. */
 function splitDocs(rows: Row[]): { quotations: AnyRec[]; invoices: AnyRec[] } {
@@ -363,17 +365,17 @@ export function createDataApi(schema: AppSchema) {
         sql<Row>(`select id, name from ${tableRef(schema, "workers")}`),
         sql<Row>(`select id, name from ${tableRef(schema, "pay_holders")}`),
       ]);
-      const custMap = new Map(customers.rows.map((r) => [r.id, r.data.name as string]));
-      const suppMap = new Map(suppliers.rows.map((r) => [r.id, r.data.name as string]));
-      const workMap = new Map(workers.rows.map((r) => [r.id, r.data.name as string]));
-      const phMap = new Map(payHolders.rows.map((r) => [r.id, r.data.name as string]));
+      const custMap = new Map(customers.map((r) => [r.id, r.data.name as string]));
+      const suppMap = new Map(suppliers.map((r) => [r.id, r.data.name as string]));
+      const workMap = new Map(workers.map((r) => [r.id, r.data.name as string]));
+      const phMap = new Map(payHolders.map((r) => [r.id, r.data.name as string]));
 
       const all: UnifiedTx[] = [];
 
       // Expenses / Daybook entries
-      for (const r of expRows.rows) {
+      for (const r of expRows) {
         const e = r.data as AnyRec;
-        const dmy = e.date || "";
+        const dmy = String(e.date || "");
         const iso = dmyToIso(dmy);
         if (fromIso && iso < fromIso) continue;
         if (toIso && iso > toIso.replace(" 23:59:59", "")) continue;
@@ -403,7 +405,7 @@ export function createDataApi(schema: AppSchema) {
       }
 
       // Session handovers
-      for (const r of sessRows.rows) {
+      for (const r of sessRows) {
         const s = r.data as AnyRec;
         const dmy = s.date || "";
         const iso = dmyToIso(dmy);
@@ -430,10 +432,10 @@ export function createDataApi(schema: AppSchema) {
       const expenseRows = await sql<Row>(
         `select * from ${tableRef(schema, "expenses")} where sourceId like 'wkr:%' or sourceId like 'wkradv:%' or sourceId like 'wkrded:%' order by created_at desc limit 300`,
       );
-      const workerExpenses = expenseRows.rows.map((r) => r.data as AnyRec);
+      const workerExpenses = expenseRows.map((r) => r.data as AnyRec);
 
       for (const e of workerExpenses) {
-        const dmy = e.date || "";
+        const dmy = String(e.date || "");
         const iso = dmyToIso(dmy);
         if (fromIso && iso < fromIso) continue;
         if (toIso && iso > toIso.replace(" 23:59:59", "")) continue;
@@ -466,7 +468,7 @@ export function createDataApi(schema: AppSchema) {
       // Repayments (sale type with wkr: sourceId)
       for (const e of workerExpenses) {
         if (e.type !== "sale" || !e.sourceId?.startsWith("wkr:")) continue;
-        const dmy = e.date || "";
+        const dmy = String(e.date || "");
         const iso = dmyToIso(dmy);
         if (fromIso && iso < fromIso) continue;
         if (toIso && iso > toIso.replace(" 23:59:59", "")) continue;
