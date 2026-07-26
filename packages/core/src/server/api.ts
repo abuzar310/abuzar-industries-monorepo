@@ -358,12 +358,12 @@ export function createDataApi(schema: AppSchema) {
         [200, 0],
       );
 
-      // Load lookups
+      // Load lookups (names are in JSONB data column)
       const [customers, suppliers, workers, payHolders] = await Promise.all([
-        sql<Row>(`select id, name from ${tableRef(schema, "customers")}`),
-        sql<Row>(`select id, name from ${tableRef(schema, "suppliers")}`),
-        sql<Row>(`select id, name from ${tableRef(schema, "workers")}`),
-        sql<Row>(`select id, name from ${tableRef(schema, "pay_holders")}`),
+        sql<Row>(`select * from ${tableRef(schema, "customers")}`),
+        sql<Row>(`select * from ${tableRef(schema, "suppliers")}`),
+        sql<Row>(`select * from ${tableRef(schema, "workers")}`),
+        sql<Row>(`select * from ${tableRef(schema, "pay_holders")}`),
       ]);
       const custMap = new Map(customers.map((r) => [r.id, r.data.name as string]));
       const suppMap = new Map(suppliers.map((r) => [r.id, r.data.name as string]));
