@@ -598,10 +598,10 @@ body{
 .inv-tag-top span{display:inline-block; font-family:var(--disp); text-transform:uppercase; letter-spacing:.22em;
   font-weight:800; font-size:13px; color:var(--ochre-deep); border:1.5px solid var(--ochre-deep); border-radius:6px; padding:5px 18px}
 /* invoice masthead: bold UPPERCASE name, centered (logo on top, name + address below) */
-#sheet.inv .co-name{font-weight:800; text-transform:uppercase; letter-spacing:.005em; font-size:40px}
+#sheet.inv .co-name{font-weight:800; text-transform:uppercase; letter-spacing:.005em; font-size:46px}
 /* compact invoice masthead so the editing preview matches the tighter print density */
 #sheet.inv .mast-top{padding:14px 22px 10px}
-#sheet.inv .logo{height:2.1cm}
+#sheet.inv .logo{height:2.5cm}
 /* logo stays on the left; the ABUZAR INDUSTRIES name is centered on that same line */
 .mast-c .mast-top{position:relative; justify-content:flex-start; align-items:center}
 .mast-c .brand-row{flex-direction:row; align-items:center; gap:0; flex:1 1 auto; min-height:1.7cm}
@@ -1068,8 +1068,8 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .logo{height:48px; filter:none}
   .co-name{font-size:30px}
   /* invoice header got compacted — spend the freed space on the brand */
-  #sheet.inv .logo{height:60px}
-  #sheet.inv .co-name{font-size:36px}
+  #sheet.inv .logo{height:72px}
+  #sheet.inv .co-name{font-size:42px}
   .kindtag{font-size:8px; padding:1px 6px; transform:none}
   .co-meta{font-size:9px}
   .meta .f,.cust-block .f{padding:3px 14px}
