@@ -950,7 +950,7 @@ export default function Editor({
             </div>
           )}
           {!feat.simpleQuote && (
-          <div className={"meta" + (showLink ? "" : " two")}>
+          <div className={"meta" + (isInv ? " invrow" : showLink ? "" : " two")}>
             <div className="f">
               <label>{isInv ? "Invoice No." : "Quotation No."}</label>
               {editingNo ? (
@@ -968,10 +968,34 @@ export default function Editor({
                 <input key="numro" className="ro" value={doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
               )}
             </div>
+            {isInv && (
+              <>
+                <div className="f">
+                  <label>Payment</label>
+                  <select value={doc.payType || ""} onChange={(e) => setField("payType", e.target.value)}>
+                    <option value="">—</option>
+                    <option>Cash</option>
+                    <option>UPI</option>
+                    <option>Bank Transfer</option>
+                    <option>Credit</option>
+                  </select>
+                </div>
+                <div className="f">
+                  <label>HSN Code</label>
+                  <input placeholder="—" value={doc.hsn || ""} onChange={(e) => setField("hsn", e.target.value)} />
+                </div>
+              </>
+            )}
             <div className="f">
               <label>{isBuy ? "Purchase Date" : "Date"}</label>
               <DateField value={doc.date} onChange={(v) => setField("date", v)} />
             </div>
+            {isInv && !isBuy && !isRent && (
+              <div className="f">
+                <label>Vehicle No.</label>
+                <input placeholder="—" value={doc.vehicleNo || ""} onChange={(e) => setField("vehicleNo", e.target.value)} />
+              </div>
+            )}
             {showLink && (
               <div className="f">
                 <label>Linked</label>
@@ -980,7 +1004,7 @@ export default function Editor({
             )}
           </div>
           )}
-          <div className="cust-block">
+          <div className={"cust-block" + (isInv && !isBuy && !isRent ? " c4" : "")}>
             <div className="f">
               <label>{isBuy ? "Supplier Name" : "Customer Name"}</label>
               <CustomerPicker value={doc.customerName} customers={customers} onType={onCustomerType} onPick={pickCustomer} />
@@ -1004,36 +1028,16 @@ export default function Editor({
                   onUseName={(name) => update((d) => (d.customerName = name))}
                   onUseAddress={(addr) => update((d) => (d.address = addr))}
                 />
+                {!isBuy && !isRent && (
+                  <div className="f">
+                    <label>Ship To (address)</label>
+                    <input placeholder="—" value={doc.shipTo || ""} onChange={(e) => setField("shipTo", e.target.value)} />
+                  </div>
+                )}
                 <div className="f" style={{ gridColumn: "1 / -1" }}>
                   <label>{isBuy ? "Supplier Address" : "Address"}</label>
                   <input placeholder="—" value={doc.address} onChange={(e) => setField("address", e.target.value)} />
                 </div>
-                <div className="f">
-                  <label>HSN Code</label>
-                  <input placeholder="—" value={doc.hsn || ""} onChange={(e) => setField("hsn", e.target.value)} />
-                </div>
-                <div className="f">
-                  <label>Payment</label>
-                  <select value={doc.payType || ""} onChange={(e) => setField("payType", e.target.value)}>
-                    <option value="">—</option>
-                    <option>Cash</option>
-                    <option>UPI</option>
-                    <option>Bank Transfer</option>
-                    <option>Credit</option>
-                  </select>
-                </div>
-                {!isBuy && !isRent && (
-                  <>
-                    <div className="f">
-                      <label>Vehicle No.</label>
-                      <input placeholder="—" value={doc.vehicleNo || ""} onChange={(e) => setField("vehicleNo", e.target.value)} />
-                    </div>
-                    <div className="f" style={{ gridColumn: "1 / -1" }}>
-                      <label>Ship To (address)</label>
-                      <input placeholder="—" value={doc.shipTo || ""} onChange={(e) => setField("shipTo", e.target.value)} />
-                    </div>
-                  </>
-                )}
               </>
             )}
           </div>

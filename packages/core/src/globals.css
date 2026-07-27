@@ -146,6 +146,13 @@ body{
   color:var(--ink-faint); font-weight:700; margin-bottom:3px; font-family:var(--disp); transition:color var(--t-fast);
 }
 .meta .f:focus-within label{color:var(--ochre)}
+/* invoice: one compact line — No · Payment · HSN · Date · Vehicle */
+.meta.invrow .f{flex:1 1 0; min-width:90px}
+.meta select{
+  width:100%; border:none; background:transparent; font-family:var(--mono);
+  font-size:15px; color:var(--ink); padding:0; cursor:pointer;
+}
+.meta select:focus{outline:none; box-shadow:0 2px 0 var(--ochre)}
 .meta input, .meta .ro{
   width:100%; border:none; background:transparent; font-family:var(--mono);
   font-size:15px; color:var(--ink); padding:0; transition:color var(--t-fast);
@@ -157,6 +164,8 @@ body{
 
 /* customer block */
 .cust-block{display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); position:relative; z-index:1}
+/* invoice: Name · Phone · GSTIN · Ship To on ONE line (address below, full width) */
+.cust-block.c4{grid-template-columns:repeat(4,1fr)}
 .cust-block .f{padding:13px 28px; border-right:1px solid var(--line)}
 .cust-block .f:last-child{border-right:none}
 .cust-block label{
@@ -171,7 +180,7 @@ body{
 .cust-block select{cursor:pointer}
 .cust-block input::placeholder{color:var(--ink-faint)}
 .cust-block input:focus, .cust-block select:focus{outline:none; box-shadow:0 2px 0 var(--ochre)}
-@media(max-width:560px){ .cust-block{grid-template-columns:1fr 1fr} }
+@media(max-width:560px){ .cust-block, .cust-block.c4{grid-template-columns:1fr 1fr} }
 
 /* searchable customer name picker (avoids duplicate customers) */
 .custpick{position:relative; width:100%}
@@ -550,6 +559,10 @@ body{
 /* bold, readable customer name / phone / address / invoice-no / date values */
 #sheet.inv .cust-block input, #sheet.inv .meta input, #sheet.inv .meta .ro{font-weight:700; color:var(--ink)}
 #sheet.inv .cust-block label, #sheet.inv .meta label{color:var(--ink-soft); font-weight:700}
+/* compact invoice masthead — the header block was eating half the page (print AND the
+   PDF renders these screen paddings, so tighten here, not just in @media print) */
+#sheet.inv .meta .f, #sheet.inv .cust-block .f{padding:7px 18px}
+#sheet.inv .meta label, #sheet.inv .cust-block label{margin-bottom:2px}
 /* invoice box is full width, but the value inputs stay regular-width, grouped on the
    left; a trailing spacer at the end keeps the row line running clean to the right edge */
 #sheet.inv .thead, #sheet.inv .row{grid-template-columns:26px 72px 72px 72px 72px 62px 22px 1fr}
