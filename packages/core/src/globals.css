@@ -726,13 +726,51 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   border:1px solid var(--line-2); border-radius:var(--radius-md); background:var(--panel-2); padding:16px 17px;
   box-shadow:var(--shadow-card); transition:transform var(--t-med),box-shadow var(--t-med); cursor:default; position:relative; overflow:hidden;
 }
-.stat::before{content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--brass); opacity:0; transition:opacity var(--t-med)}
+.stat::before{content:''; position:absolute; left:0; top:0; bottom:0; width:3px;}
 .stat:hover{transform:translateY(-3px); box-shadow:var(--shadow-lg)}
-.stat:hover::before{opacity:1}
 .stat .k{font-family:var(--disp); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; font-weight:700; color:var(--ink-faint)}
 .stat .v{font-family:var(--serif); font-weight:600; font-size:32px; line-height:1.05; margin-top:6px; color:var(--ink); letter-spacing:-.01em; font-variant-numeric:tabular-nums}
-.stat .v.money{color:var(--ochre-deep)}
 .stat .sub{font-family:var(--mono); font-size:11px; color:var(--ink-faint); margin-top:3px}
+/* semantic accent colors for stat cards — always visible left bar + matching value tint */
+.stat.accent-sales::before{background:var(--green); opacity:1}
+.stat.accent-sales .v{color:var(--green)}
+.stat.accent-billed::before{background:var(--ochre); opacity:1}
+.stat.accent-billed .v{color:var(--ochre-deep)}
+.stat.accent-outstanding::before{background:var(--danger); opacity:1}
+.stat.accent-outstanding .v{color:var(--danger)}
+.stat.accent-info::before{background:var(--blue); opacity:1}
+.stat.accent-info .v{color:var(--blue)}
+.stat.accent-stock::before{background:var(--ochre-deep); opacity:1}
+.stat.accent-stock .v{color:var(--ochre-deep)}
+.stat.accent-warning::before{background:var(--brass); opacity:1}
+.stat.accent-warning .v{color:var(--ochre-deep)}
+
+/* transaction type badges — pill style, replaces inline styles */
+.txn-badge{
+  display:inline-block; padding:1px 6px; border-radius:999px; font-size:10px;
+  font-weight:700; font-family:var(--disp); letter-spacing:.07em; text-transform:uppercase;
+}
+.txn-badge.receipt{background:rgba(76,175,80,0.12); color:var(--green)}
+.txn-badge.expense{background:var(--t-cream2); color:var(--ink)}
+.txn-badge.salary{background:rgba(255,152,0,0.12); color:var(--ochre-deep)}
+.txn-badge.payment{background:rgba(33,150,243,0.12); color:var(--blue)}
+.txn-badge.advance{background:rgba(255,152,0,0.12); color:var(--ochre)}
+.txn-badge.deduction{background:rgba(244,67,54,0.12); color:var(--danger)}
+.txn-badge.repayment{background:rgba(76,175,80,0.12); color:var(--green)}
+.txn-badge.session_handover{background:rgba(156,39,176,0.12); color:#7B1FA2}
+.txn-badge.receipt_charge{background:rgba(148,99,23,0.12); color:var(--ochre)}
+
+/* transaction type badges — replaces inline styles in TransactionsView */
+.txn-badge{display:inline-block; padding:1px 6px; border-radius:999px; font-size:10px; font-weight:700; font-family:var(--disp); letter-spacing:.07em; text-transform:uppercase}
+.txn-badge.receipt{background:rgba(76,175,80,0.12); color:var(--green)}
+.txn-badge.expense{background:var(--t-cream2); color:var(--ink)}
+.txn-badge.salary{background:rgba(255,152,0,0.12); color:var(--ochre-deep)}
+.txn-badge.session_handover{background:rgba(156,39,176,0.12); color:#7B1FA2}
+.txn-badge.payment{background:rgba(33,150,243,0.12); color:var(--blue)}
+.txn-badge.advance{background:rgba(255,152,0,0.12); color:var(--ochre)}
+.txn-badge.deduction{background:rgba(244,67,54,0.12); color:var(--danger)}
+.txn-badge.repayment{background:rgba(76,175,80,0.12); color:var(--green)}
+.txn-badge.receipt_charge{background:rgba(148,99,23,0.12); color:var(--ochre)}
 .panel-card{margin-top:20px; border:1px solid var(--line-2); border-radius:var(--radius-md); overflow:hidden; background:var(--panel-2); box-shadow:var(--shadow-card)}
 .pc-head{
   font-family:var(--disp); letter-spacing:.1em; text-transform:uppercase; font-size:12px; font-weight:700;

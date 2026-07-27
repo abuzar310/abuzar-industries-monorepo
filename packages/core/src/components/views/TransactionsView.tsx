@@ -24,18 +24,6 @@ const TYPE_LABELS: Record<string, string> = {
   receipt_charge: "Due",
 };
 
-const TYPE_COLORS: Record<string, { bg: string; fg: string }> = {
-  expense:          { bg: "var(--t-cream2)", fg: "var(--ink)" },
-  receipt:          { bg: "rgba(76,175,80,0.12)", fg: "var(--green)" },
-  salary:           { bg: "rgba(255,152,0,0.12)", fg: "var(--ochre-deep)" },
-  session_handover: { bg: "rgba(156,39,176,0.12)", fg: "#7B1FA2" },
-  payment:          { bg: "rgba(33,150,243,0.12)", fg: "var(--blue)" },
-  advance:          { bg: "rgba(255,152,0,0.12)", fg: "var(--ochre)" },
-  deduction:        { bg: "rgba(244,67,54,0.12)", fg: "var(--danger)" },
-  repayment:        { bg: "rgba(76,175,80,0.12)", fg: "var(--green)" },
-  receipt_charge:   { bg: "rgba(148,99,23,0.12)", fg: "var(--ochre)" },
-};
-
 export default function TransactionsView() {
   const { dataVersion, user } = useApp();
   const router = useRouter();
@@ -201,8 +189,10 @@ export default function TransactionsView() {
             Loading transactions…
           </div>
         ) : filtered.length === 0 ? (
-          <div className="empty" style={{ textAlign: "center", padding: 32 }}>
-            No transactions found.
+          <div className="empty">
+            <div className="empty-icon">📭</div>
+            <div className="empty-title">No transactions match</div>
+            <div className="empty-note">Adjust your filters or create a receipt, expense, or daybook entry</div>
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -221,7 +211,6 @@ export default function TransactionsView() {
               </thead>
               <tbody>
                 {filtered.map((t) => {
-                  const tc = TYPE_COLORS[t.type] || { bg: "transparent", fg: "var(--ink)" };
                   const isIn = isInflow(t);
                   return (
                     <tr
@@ -242,21 +231,10 @@ export default function TransactionsView() {
                         {t.date}
                       </td>
                       <td style={{ padding: "7px 10px" }}>
-                        <span style={{
-                          display: "inline-block",
-                          padding: "1px 6px",
-                          borderRadius: "999px",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          fontFamily: "var(--disp)",
-                          letterSpacing: ".07em",
-                          textTransform: "uppercase",
-                          background: tc.bg,
-                          color: tc.fg,
-                        }}>
-                          {TYPE_LABELS[t.type] || t.type}
-                        </span>
-                      </td>
+                    <span className={"txn-badge " + t.type}>
+                      {TYPE_LABELS[t.type] || t.type}
+                    </span>
+                  </td>
                       <td style={{ padding: "7px 10px", color: t.deleted ? "var(--ink-faint)" : "inherit" }}>
                         <div style={{ fontWeight: 600 }}>{t.party || "—"}</div>
                         {t.partyType && (

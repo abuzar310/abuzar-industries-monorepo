@@ -222,16 +222,15 @@ export default function DashboardView() {
     .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))
     .slice(0, 5);
 
-  type Card = { k: string; v: string; money?: boolean; danger?: boolean; sub?: string; onClick?: () => void };
+  type Card = { k: string; v: string; accent: "sales" | "billed" | "outstanding" | "info" | "stock" | "warning"; sub?: string; onClick?: () => void };
   const cards: Card[] = feat.simpleQuote
     ? [
-        // "Sales" = money actually RECEIVED in the period; what was merely quoted is "Billed"
         ...(feat.acceptPayment
           ? [
               {
                 k: "Sales (received)",
                 v: "₹ " + inr(periodReceived),
-                money: true,
+                accent: "sales" as const,
                 sub: `${periodPayCount} payment${periodPayCount === 1 ? "" : "s"} · ${periodLabel}`,
                 onClick: () => router.push("/statements?focus=received"),
               },
@@ -240,38 +239,36 @@ export default function DashboardView() {
         {
           k: "Billed (quotes)",
           v: "₹ " + inr(periodRev),
-          money: true,
+          accent: "billed" as const,
           sub: `${periodSaleCount} quote${periodSaleCount === 1 ? "" : "s"} · ${periodLabel}`,
           onClick: () => router.push("/quotations"),
         },
-        // the piece Balances adds on top of quotes — so Dashboard and Balances always agree:
-        // Total billed − Received = Outstanding, to the paisa
         ...(feat.acceptPayment && ledger && Math.abs(oldDues) > 0.5
           ? [
               {
                 k: "Old dues & charges",
                 v: "₹ " + inr(oldDues),
-                money: true,
+                accent: "outstanding" as const,
                 sub: "opening balances + added dues · overall",
                 onClick: () => router.push("/payments?focus=billed"),
               },
               {
                 k: "Total billed",
                 v: "₹ " + inr(ledger.totalBilled),
-                money: true,
+                accent: "billed" as const,
                 sub: "quotes + old dues · overall — same as Balances",
                 onClick: () => router.push("/payments?focus=billed"),
               },
             ]
           : []),
-        { k: "Quotes", v: String(periodSaleCount), sub: periodLabel, onClick: () => router.push("/quotations") },
-        { k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/quotations") },
+        { k: "Quotes", v: String(periodSaleCount), accent: "info" as const, sub: periodLabel, onClick: () => router.push("/quotations") },
+        { k: "CFT Sold", v: periodCft.toFixed(2), accent: "info" as const, sub: periodLabel, onClick: () => router.push("/quotations") },
         ...(feat.acceptPayment
           ? [
               {
                 k: "Outstanding",
                 v: "₹ " + inr(totalOutstanding),
-                money: true,
+                accent: "outstanding" as const,
                 sub: dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"} · overall` : "all clear",
                 onClick: () => router.push("/payments?focus=pending"),
               },
@@ -279,13 +276,13 @@ export default function DashboardView() {
           : []),
       ]
     : [
-        { k: "Sales", v: "₹ " + inr(periodRev), money: true, sub: `${periodSaleCount} invoice${periodSaleCount === 1 ? "" : "s"} · ${periodLabel}`, onClick: () => router.push("/invoices") },
-        { k: "Purchases", v: "₹ " + inr(periodPurchase), money: true, sub: `${periodBuyCount} bill${periodBuyCount === 1 ? "" : "s"} · ${periodLabel}`, onClick: () => router.push("/invoices") },
-        { k: "CFT Bought", v: periodBuyCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/stock") },
-        { k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/stock") },
-        { k: "Closing Stock", v: tr.closingCft.toFixed(2) + " CFT", sub: "₹ " + inr(tr.closingValue) + " · overall", onClick: () => router.push("/stock") },
-        { k: "Follow-ups", v: String(follow.length), sub: "to chase", onClick: () => router.push("/quotations") },
-        { k: "Low Stock", v: String(lowStock.length), danger: lowStock.length > 0, sub: "wood type(s)", onClick: () => router.push("/stock") },
+        { k: "Sales", v: "₹ " + inr(periodRev), accent: "sales" as const, sub: `${periodSaleCount} invoice${periodSaleCount === 1 ? "" : "s"} · ${periodLabel}`, onClick: () => router.push("/invoices") },
+        { k: "Purchases", v: "₹ " + inr(periodPurchase), accent: "outstanding" as const, sub: `${periodBuyCount} bill${periodBuyCount === 1 ? "" : "s"} · ${periodLabel}`, onClick: () => router.push("/invoices") },
+        { k: "CFT Bought", v: periodBuyCft.toFixed(2), accent: "info" as const, sub: periodLabel, onClick: () => router.push("/stock") },
+        { k: "CFT Sold", v: periodCft.toFixed(2), accent: "info" as const, sub: periodLabel, onClick: () => router.push("/stock") },
+        { k: "Closing Stock", v: tr.closingCft.toFixed(2) + " CFT", accent: "stock" as const, sub: "₹ " + inr(tr.closingValue) + " · overall", onClick: () => router.push("/stock") },
+        { k: "Follow-ups", v: String(follow.length), accent: "outstanding" as const, sub: "to chase", onClick: () => router.push("/quotations") },
+        { k: "Low Stock", v: String(lowStock.length), accent: "warning" as const, sub: "wood type(s)", onClick: () => router.push("/stock") },
       ];
   return (
     <div>
@@ -318,9 +315,9 @@ export default function DashboardView() {
 
       <div className="dash-grid">
         {cards.map((c) => (
-          <div className="stat" key={c.k} onClick={c.onClick} style={{ cursor: "pointer" }}>
+          <div className={"stat accent-" + c.accent} key={c.k} onClick={c.onClick} style={{ cursor: "pointer" }}>
             <div className="k">{c.k}</div>
-            <div className={"v" + (c.money ? " money" : "")} style={c.danger ? { color: "var(--danger)" } : undefined}>
+            <div className="v">
               {c.v}
             </div>
             {c.sub && <div className="sub">{c.sub}</div>}
@@ -337,22 +334,22 @@ export default function DashboardView() {
             </button>
           </div>
           <div className="dash-grid">
-            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+            <div className="stat accent-stock" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
               <div className="k">Opening</div>
               <div className="v">{tr.openCft.toFixed(2)}</div>
               <div className="sub">CFT · ₹ {inr(tr.openValue)}</div>
             </div>
-            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+            <div className="stat accent-billed" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
               <div className="k">+ Bought</div>
               <div className="v">{tr.purchaseCft.toFixed(2)}</div>
               <div className="sub">CFT · ₹ {inr(tr.purchaseTotal)}</div>
             </div>
-            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+            <div className="stat accent-outstanding" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
               <div className="k">− Sold</div>
               <div className="v">{tr.saleCft.toFixed(2)}</div>
               <div className="sub">CFT · ₹ {inr(tr.saleTotal)}</div>
             </div>
-            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+            <div className="stat accent-stock" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
               <div className="k">Closing</div>
               <div className="v money">{tr.closingCft.toFixed(2)}</div>
               <div className="sub">CFT · ₹ {inr(tr.closingValue)}</div>
@@ -388,7 +385,11 @@ export default function DashboardView() {
                 </div>
               ))
             ) : (
-              <div className="empty">No payments recorded yet.</div>
+              <div className="empty">
+                <div className="empty-icon">💸</div>
+                <div className="empty-title">No payments yet</div>
+                <div className="empty-note">Record a receipt or daybook entry to see money movement here</div>
+              </div>
             )}
           </div>
         </>
@@ -411,7 +412,11 @@ export default function DashboardView() {
               </div>
             ))
           ) : (
-            <div className="empty">No pending follow-ups. 🎉</div>
+            <div className="empty">
+              <div className="empty-icon">✨</div>
+              <div className="empty-title">All caught up</div>
+              <div className="empty-note">No pending follow-ups — every quote is moving</div>
+            </div>
           )}
         </div>
       )}
@@ -440,7 +445,11 @@ export default function DashboardView() {
           {txnsLoading ? (
             <div className="empty" style={{ textAlign: "center", padding: 24 }}>Loading transactions…</div>
           ) : allTxns.length === 0 ? (
-            <div className="empty">No transactions found.</div>
+            <div className="empty">
+              <div className="empty-icon">📭</div>
+              <div className="empty-title">No transactions found</div>
+              <div className="empty-note">Create a receipt, expense, or daybook entry to populate this view</div>
+            </div>
           ) : (
             <div className="txns-table" style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
