@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useEditorTabs, openTab, closeTab, setActive, takeAction, updateTab } from "@/lib/editor-tabs";
+import { useEditorTabs, openTab, closeTab, setActive, takeAction, takePayFocus, updateTab } from "@/lib/editor-tabs";
 import { loadDoc } from "@/lib/doc";
 import { createQuotation } from "@/lib/create";
 import { prefSet } from "@/lib/data";
@@ -14,6 +14,7 @@ interface TabDoc {
   id: string;
   doc: Doc | null;
   action?: string;
+  payFocus?: string;
 }
 
 export default function EditorView() {
@@ -29,6 +30,7 @@ export default function EditorView() {
       if (loaded.current.has(t.id)) continue;
       loaded.current.add(t.id);
       const action = takeAction(t.id);
+      const payFocus = takePayFocus(t.id);
       loadDoc(t.id).then((d) => {
         if (!d) {
           toast("Quotation not found: " + t.id);
@@ -38,23 +40,46 @@ export default function EditorView() {
         updateTab(t.id, d.number);
         setDocs((prev) => {
           const next = new Map(prev);
-          next.set(t.id, { id: t.id, doc: d, action });
+          next.set(t.id, { id: t.id, doc: d, action, payFocus });
           return next;
         });
       });
     }
   }, [tabs, ready]);
 
+  // Ctrl+Tab / Ctrl+Shift+Tab to cycle tabs
+  useEffect(() => {
+    if (!tabs.length) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "Tab") {
+        e.preventDefault();
+        const cur = tabs.findIndex((t) => t.id === activeId);
+        const nextIdx = e.shiftKey
+          ? (cur - 1 + tabs.length) % tabs.length
+          : (cur + 1) % tabs.length;
+        setActive(tabs[nextIdx].id);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [tabs, activeId]);
+
   if (!tabs.length) {
     return (
-      <div style={{ textAlign: "center", padding: "54px 20px" }}>
-        <div style={{ fontFamily: "var(--serif)", fontSize: 30, letterSpacing: "-.01em", color: "var(--walnut)", marginBottom: 8 }}>
-          No quotation open
+      <div className="editor-empty">
+        <div className="editor-empty-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
         </div>
-        <p className="note" style={{ margin: "0 0 20px" }}>
+        <div className="editor-empty-title">No quotation open</div>
+        <p className="editor-empty-note">
           Open one from the Quotations list, or start something new.
         </p>
-        <button className="btn primary" style={{ fontSize: 16, padding: "12px 24px" }} onClick={onNewQuote}>
+        <button className="btn primary" onClick={onNewQuote}>
           + Create a quotation
         </button>
       </div>
@@ -71,8 +96,8 @@ export default function EditorView() {
           const td = docs.get(t.id);
           const isSub = td?.doc?.parentId;
           return (
-            <div key={t.id} className={"editor-tab" + (active ? " active" : "") + (isSub ? " sub" : "")} onClick={() => setActive(t.id)}>
-              <span className="editor-tab-label">{t.number || t.id.slice(-6)}{isSub ? " · sub" : ""}</span>
+            <div key={t.id} className={"editor-tab" + (active ? " active" : "") + (isSub ? " sub" : "")} onClick={() => setActive(t.id)} onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(t.id); } }}>
+              <span className="editor-tab-label">{t.number || t.id.slice(-6)}</span>
               <button
                 className="editor-tab-close"
                 title="Close"
@@ -99,6 +124,7 @@ export default function EditorView() {
               key={td.doc.id}
               initialDoc={td.doc}
               action={td.action}
+              payFocus={td.payFocus}
             />
           </div>
         );

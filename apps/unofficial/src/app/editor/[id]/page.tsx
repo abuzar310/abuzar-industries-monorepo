@@ -15,7 +15,7 @@ export default function Page() {
   useEffect(() => {
     if (!ready || done.current) return;
     done.current = true;
-    openTab(id, "", sp.get("action") || undefined);
+    openTab(id, "", sp.get("action") || undefined, sp.get("pay") || undefined);
     router.replace("/editor");
   }, [ready, id, router, sp]);
 

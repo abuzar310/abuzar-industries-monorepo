@@ -13,6 +13,7 @@ let tabs: TabEntry[] = [];
 let activeId: string | null = null;
 const listeners = new Set<() => void>();
 const _actions = new Map<string, string>(); // one-shot actions per tab id
+const _payFocus = new Map<string, string>(); // payFocus param per tab id
 
 function emit() {
   // React's useSyncExternalStore compares the previous cached ref with the
@@ -42,17 +43,19 @@ export function useEditorTabs(): { tabs: readonly TabEntry[]; activeId: string |
 }
 
 /** Open or switch to a tab. If the id already exists, it becomes active. */
-export function openTab(id: string, number = "", action?: string) {
+export function openTab(id: string, number = "", action?: string, payFocus?: string) {
   const exist = tabs.findIndex((t) => t.id === id);
   if (exist >= 0) {
     activeId = id;
     if (action) _actions.set(id, action);
+    if (payFocus) _payFocus.set(id, payFocus);
     emit();
     return;
   }
   tabs = tabs.concat({ id, number });
   activeId = id;
   if (action) _actions.set(id, action);
+  if (payFocus) _payFocus.set(id, payFocus);
   emit();
 }
 
@@ -62,6 +65,7 @@ export function closeTab(id: string) {
   if (i < 0) return;
   tabs = tabs.filter((t) => t.id !== id);
   _actions.delete(id);
+  _payFocus.delete(id);
   if (activeId === id) activeId = tabs.length > 0 ? tabs[Math.min(i, tabs.length - 1)].id : null;
   emit();
 }
@@ -79,6 +83,13 @@ export function takeAction(id: string): string | undefined {
   const a = _actions.get(id);
   if (a !== undefined) _actions.delete(id);
   return a;
+}
+
+/** Consume a one-shot payFocus for a tab. Returns undefined once consumed. */
+export function takePayFocus(id: string): string | undefined {
+  const p = _payFocus.get(id);
+  if (p !== undefined) _payFocus.delete(id);
+  return p;
 }
 
 /** Update a tab's display number (called after the doc finishes loading). */
