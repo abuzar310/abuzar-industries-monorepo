@@ -17,7 +17,7 @@ import { getFeatures } from "@/lib/features";
 import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
 import { statementsForQuote } from "@/lib/payments";
 import { postInvoice } from "@/lib/ledger-autopost";
-import { reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
+import { balanceReminderMessage, reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
 import { generatePdf, printOrSavePdf } from "@/lib/pdf";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -514,6 +514,13 @@ export default function Editor({
   function onWaRemind() {
     window.open(waLink(doc.phone, reminderMessage(doc)), "_blank");
   }
+  /** Clean balance reminder: just Total / Received / Balance pending — no fluff. */
+  function onWaBalance() {
+    const total = docRef.current.finalPrice && docRef.current.finalPrice > 0 ? docRef.current.finalPrice : totals.grand;
+    const received = (payLines || []).reduce((s, l) => s + l.amount, 0);
+    const balance = Math.max(0, Math.round((total - received) * 100) / 100);
+    window.open(waLink(doc.phone, balanceReminderMessage(docRef.current, total, received, balance)), "_blank");
+  }
   async function onConvert() {
     if (docRef.current.kind === "invoice") return;
     const cur = clone(docRef.current);
@@ -707,6 +714,16 @@ export default function Editor({
   };
   // this quote's recorded payments — printed as the settlement block when the toggle is on
   const payLines = !isInv ? statementsForQuote(doc, expenses) : undefined;
+  // what's still pending on this quote (final price if agreed, else the computed total)
+  const remBalance = !isInv
+    ? Math.max(
+        0,
+        Math.round(
+          ((doc.finalPrice && doc.finalPrice > 0 ? doc.finalPrice : totals.grand) -
+            (payLines || []).reduce((s, l) => s + l.amount, 0)) * 100,
+        ) / 100,
+      )
+    : 0;
   const billNode = (
     <Totals
       doc={doc}
@@ -1170,6 +1187,11 @@ export default function Editor({
         <button className="btn wa" onClick={onWaSend}>
           WhatsApp
         </button>
+        {feat.acceptPayment && !isInv && remBalance > 0.5 && (
+          <button className="btn wa" onClick={onWaBalance} title="WhatsApp just the balance figures — total, received, pending">
+            Remind
+          </button>
+        )}
         <button className="btn go" onClick={onPrint}>
           Print
         </button>
