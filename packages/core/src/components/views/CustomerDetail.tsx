@@ -11,7 +11,7 @@ import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
 import { mergeReceiptPieces, quoteBill, type PartyStatement } from "@/lib/payments";
 import { USERS } from "@/lib/local-auth";
-import { customerFollowupMessage, waLink } from "@/lib/whatsapp";
+import { balanceReminderMessage, customerFollowupMessage, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -130,6 +130,25 @@ export default function CustomerDetail({ id }: { id: string }) {
   function whatsapp() {
     window.open(waLink(cust!.phone, customerFollowupMessage(cust!.name)), "_blank");
   }
+  /** Clean account-level balance reminder: total billed, every payment (with its note), balance. */
+  function remind() {
+    const msg = balanceReminderMessage({
+      name: cust!.name,
+      total: grandTotal,
+      received: paidTotal,
+      balance: balanceDue,
+      // oldest first; keep the typed note / account, drop internal allocation text ("settled #…")
+      pays: [...payLines].reverse().map((l) => ({
+        date: l.date,
+        amount: l.amount,
+        note: (l.note || l.account || "")
+          .split(" · ")
+          .filter((s) => s && !s.startsWith("settled") && !s.startsWith("on account"))
+          .join(" · "),
+      })),
+    });
+    window.open(waLink(cust!.phone, msg), "_blank");
+  }
   async function remove() {
     const ok = await confirmDialog({
       title: "Delete " + cust!.name + "?",
@@ -164,6 +183,11 @@ export default function CustomerDetail({ id }: { id: string }) {
           <div className="links" style={{ marginTop: 0 }}>
             <button className="btn primary sm" onClick={newDoc}>{invoiceMode ? "New invoice" : "New quote"}</button>
             <button className="btn wa sm" onClick={whatsapp}>WhatsApp</button>
+            {f.outstanding > 0.5 && (
+              <button className="btn wa sm" onClick={remind} title="WhatsApp just the balance figures — total, payments, pending">
+                Remind
+              </button>
+            )}
             <button className="btn sm" onClick={edit}>Edit</button>
             <button className="btn warn sm" onClick={remove}>Delete</button>
           </div>

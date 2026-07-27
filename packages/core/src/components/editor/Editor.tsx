@@ -514,12 +514,26 @@ export default function Editor({
   function onWaRemind() {
     window.open(waLink(doc.phone, reminderMessage(doc)), "_blank");
   }
-  /** Clean balance reminder: just Total / Received / Balance pending — no fluff. */
+  /** Clean balance reminder: Total / each payment (with its note) / Balance pending. */
   function onWaBalance() {
-    const total = docRef.current.finalPrice && docRef.current.finalPrice > 0 ? docRef.current.finalPrice : totals.grand;
+    const d = docRef.current;
+    const total = d.finalPrice && d.finalPrice > 0 ? d.finalPrice : totals.grand;
     const received = (payLines || []).reduce((s, l) => s + l.amount, 0);
     const balance = Math.max(0, Math.round((total - received) * 100) / 100);
-    window.open(waLink(doc.phone, balanceReminderMessage(docRef.current, total, received, balance)), "_blank");
+    const msg = balanceReminderMessage({
+      name: d.customerName,
+      ref: (d.kind === "invoice" ? "Invoice " : "Quotation ") + d.number,
+      total,
+      received,
+      balance,
+      // oldest first on the message; the note typed on the payment (else its account) rides along
+      pays: [...(payLines || [])].reverse().map((l) => ({
+        date: l.date,
+        amount: l.amount,
+        note: l.note || l.account || (l.toOwner ? "to owner" : ""),
+      })),
+    });
+    window.open(waLink(d.phone, msg), "_blank");
   }
   async function onConvert() {
     if (docRef.current.kind === "invoice") return;

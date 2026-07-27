@@ -55,11 +55,32 @@ This is ${b.name}.
 Regarding your timber enquiry and quotation ${doc.number}, we wanted to follow up. Please let us know if you would like to proceed. Thank you.`;
 }
 
-/** Bare-bones balance reminder — just the figures, no fluff, no signature. */
-export function balanceReminderMessage(doc: Doc, total: number, received: number, balance: number): string {
-  const kind = doc.kind === "invoice" ? "Invoice" : "Quotation";
-  return `${greet(doc.customerName)}
-${kind} ${doc.number} — Total: ₹${inr(total)}${received > 0.5 ? `\nReceived: ₹${inr(received)}` : ""}
+export interface ReminderPayLine {
+  date?: string;
+  amount: number;
+  /** the payment's note (or account) — shown next to the amount */
+  note?: string;
+}
+
+/** Bare-bones balance reminder — the figures plus each payment's note. No fluff, no signature. */
+export function balanceReminderMessage(opts: {
+  name?: string;
+  /** e.g. "Quotation 2026-27-097"; omit for a whole-account reminder */
+  ref?: string;
+  total: number;
+  received: number;
+  balance: number;
+  pays?: ReminderPayLine[];
+}): string {
+  const { name, ref, total, received, balance, pays = [] } = opts;
+  const payLines =
+    received > 0.5
+      ? pays
+          .filter((p) => (+p.amount || 0) > 0)
+          .map((p) => `• ${[p.date, "₹" + inr(p.amount)].filter(Boolean).join(" · ")}${p.note ? " — " + p.note : ""}`)
+      : [];
+  return `${greet(name)}
+${ref ? ref + " — " : ""}Total: ₹${inr(total)}${received > 0.5 ? `\nReceived: ₹${inr(received)}` : ""}${payLines.length ? "\n" + payLines.join("\n") : ""}
 Balance pending: ₹${inr(balance)}`;
 }
 
