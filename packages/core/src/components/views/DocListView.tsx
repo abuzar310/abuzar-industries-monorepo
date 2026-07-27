@@ -14,6 +14,7 @@ import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { Doc } from "@/lib/types";
+import { waLink, paymentReminderMessage } from "@/lib/whatsapp";
 import { StatusBadge } from "./DocList";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -328,10 +329,42 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                 <span>
                   <div className="amt">₹ {inr(bill)}</div>
                   {hasFinal && <div className="mut" style={{ fontSize: 11 }}>final · quote ₹{inr(t.grand)}</div>}
+                  {(() => {
+                    const paid = Math.round((+(d.amountPaid || 0)) * 100) / 100;
+                    const bal = Math.round((bill - paid) * 100) / 100;
+                    const owes = bal > 2;
+                    return (
+                      <div style={{ margin: "3px 0 4px", lineHeight: 1.3 }}>
+                        {owes ? (
+                          <span style={{ color: "var(--danger)", fontSize: 13, fontWeight: 700, fontFamily: "var(--mono)" }}>
+                            Due: ₹{inr(bal)}
+                          </span>
+                        ) : (
+                          <span style={{ color: "var(--green)", fontSize: 12, fontWeight: 700, fontFamily: "var(--mono)" }}>
+                            ✓ ₹{inr(paid)} paid
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="acts">
                     <button className="btn sm" onClick={(e) => act(e, "")}>Open</button>
                     <button className="btn sm" onClick={(e) => act(e, "?action=print")}>Print</button>
                     <button className="btn wa sm" onClick={(e) => act(e, "?action=wa")}>WhatsApp</button>
+                    {(() => {
+                      const paid = Math.round((+(d.amountPaid || 0)) * 100) / 100;
+                      const bal = Math.round((bill - paid) * 100) / 100;
+                      if (bal > 2 && d.phone) {
+                        const waUrl = waLink(d.phone, paymentReminderMessage(d, bal));
+                        return (
+                          <button className="btn sm" style={{ color: "var(--ochre-deep)", borderColor: "var(--ochre)" }}
+                            onClick={(e) => { e.stopPropagation(); window.open(waUrl, "_blank"); }}
+                            title="Send payment reminder on WhatsApp"
+                          >Remind</button>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 </span>
               </div>

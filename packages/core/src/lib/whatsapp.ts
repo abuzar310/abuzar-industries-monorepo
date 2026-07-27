@@ -55,6 +55,21 @@ This is ${b.name}.
 Regarding your timber enquiry and quotation ${doc.number}, we wanted to follow up. Please let us know if you would like to proceed. Thank you.`;
 }
 
+/** Payment reminder for quotations with outstanding balance */
+export function paymentReminderMessage(doc: Doc, balance: number): string {
+  const b = activeBrand();
+  const sign = [b.name, [b.phone, b.web].filter(Boolean).join(" · ")].filter(Boolean).join("\n");
+  return `${greet(doc.customerName)}
+This is a friendly reminder from ${b.name} regarding quotation #${doc.number}.
+
+Outstanding balance: ₹ ${inr(balance)}
+
+Please clear the due amount at your earliest convenience. You can pay via Cash or UPI.
+
+Thank you for your business.
+${sign}${reviewFooter()}`;
+}
+
 export function customerFollowupMessage(name: string): string {
   return `${greet(name)}\nThis is ${activeBrand().name}. Following up on your timber enquiry — please let us know if you would like to proceed. Thank you.`;
 }
