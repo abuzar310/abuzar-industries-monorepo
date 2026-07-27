@@ -514,7 +514,7 @@ export default function Editor({
   function onWaRemind() {
     window.open(waLink(doc.phone, reminderMessage(doc)), "_blank");
   }
-  /** Clean balance reminder: Total / each payment (with its note) / Balance pending. */
+  /** Standard automated reminder: the balance pending from the total — nothing else. */
   function onWaBalance() {
     const d = docRef.current;
     const total = d.finalPrice && d.finalPrice > 0 ? d.finalPrice : totals.grand;
@@ -526,12 +526,6 @@ export default function Editor({
       total,
       received,
       balance,
-      // oldest first on the message; the note typed on the payment (else its account) rides along
-      pays: [...(payLines || [])].reverse().map((l) => ({
-        date: l.date,
-        amount: l.amount,
-        note: l.note || l.account || (l.toOwner ? "to owner" : ""),
-      })),
     });
     window.open(waLink(d.phone, msg), "_blank");
   }

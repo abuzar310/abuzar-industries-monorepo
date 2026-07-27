@@ -130,22 +130,13 @@ export default function CustomerDetail({ id }: { id: string }) {
   function whatsapp() {
     window.open(waLink(cust!.phone, customerFollowupMessage(cust!.name)), "_blank");
   }
-  /** Clean account-level balance reminder: total billed, every payment (with its note), balance. */
+  /** Standard automated reminder: the account's balance pending from the total — nothing else. */
   function remind() {
     const msg = balanceReminderMessage({
       name: cust!.name,
       total: grandTotal,
       received: paidTotal,
       balance: balanceDue,
-      // oldest first; keep the typed note / account, drop internal allocation text ("settled #…")
-      pays: [...payLines].reverse().map((l) => ({
-        date: l.date,
-        amount: l.amount,
-        note: (l.note || l.account || "")
-          .split(" · ")
-          .filter((s) => s && !s.startsWith("settled") && !s.startsWith("on account"))
-          .join(" · "),
-      })),
     });
     window.open(waLink(cust!.phone, msg), "_blank");
   }

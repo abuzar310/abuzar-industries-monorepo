@@ -55,14 +55,7 @@ This is ${b.name}.
 Regarding your timber enquiry and quotation ${doc.number}, we wanted to follow up. Please let us know if you would like to proceed. Thank you.`;
 }
 
-export interface ReminderPayLine {
-  date?: string;
-  amount: number;
-  /** the payment's note (or account) — shown next to the amount */
-  note?: string;
-}
-
-/** Bare-bones balance reminder — the figures plus each payment's note. No fluff, no signature. */
+/** Standard automated company reminder — just the balance from the total. No dates, no notes. */
 export function balanceReminderMessage(opts: {
   name?: string;
   /** e.g. "Quotation 2026-27-097"; omit for a whole-account reminder */
@@ -70,18 +63,13 @@ export function balanceReminderMessage(opts: {
   total: number;
   received: number;
   balance: number;
-  pays?: ReminderPayLine[];
 }): string {
-  const { name, ref, total, received, balance, pays = [] } = opts;
-  const payLines =
-    received > 0.5
-      ? pays
-          .filter((p) => (+p.amount || 0) > 0)
-          .map((p) => `• ${[p.date, "₹" + inr(p.amount)].filter(Boolean).join(" · ")}${p.note ? " — " + p.note : ""}`)
-      : [];
-  return `${greet(name)}
-${ref ? ref + " — " : ""}Total: ₹${inr(total)}${received > 0.5 ? `\nReceived: ₹${inr(received)}` : ""}${payLines.length ? "\n" + payLines.join("\n") : ""}
-Balance pending: ₹${inr(balance)}`;
+  const { name, ref, total, balance } = opts;
+  const who = (name || "").trim() || "Customer";
+  return `Hello ${who},
+This is an automated payment reminder from ${activeBrand().name}.
+Your balance pending${ref ? " for " + ref : ""} is ₹${inr(balance)} (from a total of ₹${inr(total)}).
+Thank you.`;
 }
 
 export function customerFollowupMessage(name: string): string {
