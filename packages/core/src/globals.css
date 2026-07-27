@@ -1726,9 +1726,15 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .fp-print-opt:has(input:disabled){opacity:.6; cursor:default}
 /* the printed "Final price (agreed)" row — slightly separated from the computed grand */
 .t-row.final-print{border-top:2px solid rgba(255,255,255,.35)}
-/* settlement lines printed under the final price (payments + received + balance) */
-.t-row.pay-print{font-size:12px}
-.t-row.pay-print .lab{font-weight:400; opacity:.85}
+/* the settlement box printed below the totals when "Show final price & payments" is on:
+   every payment + total received + balance / Settled — the on-screen card, on paper */
+.pay-sheet{width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; margin-top:10px; background:var(--paper-2, #fff)}
+.pay-sheet th{font-size:10px; letter-spacing:.06em; text-transform:uppercase; text-align:left; color:var(--ink-faint,#777); border-bottom:1.5px solid var(--ink,#222); padding:6px 8px}
+.pay-sheet td{border-bottom:1px solid var(--line,#ddd); padding:6px 8px; font-family:var(--mono)}
+.pay-sheet .amt, .pay-sheet th.amt{text-align:right}
+.pay-sheet .ps-tot td{font-weight:700; border-top:1.5px solid var(--ink,#222)}
+.pay-sheet .ps-bal td{font-weight:800}
+.pay-sheet .ps-bal.ok td{color:var(--green,#2e7d32)}
 
 /* Stock: gross-profit method picker + transparent formula line */
 .gp-ctl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}

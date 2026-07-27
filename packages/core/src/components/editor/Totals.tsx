@@ -96,28 +96,45 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
           <span className="val">₹ {inr(doc.finalPrice!)}</span>
         </div>
       )}
-      {/* the full settlement: every payment, total received, and the balance / Settled ✓ */}
-      {showFinal && pays.length > 0 && (
-        <>
-          {pays.map((l) => (
-            <div className="t-row pay-print" key={l.id}>
-              <span className="lab">
-                Paid{l.date ? " · " + l.date : ""} · {l.mode === "upi" ? "UPI" + (l.account ? " · " + l.account : "") : "Cash"}
-              </span>
-              <span className="val">{inr(l.amount)}</span>
-            </div>
-          ))}
-          <div className="t-row pay-print">
-            <span className="lab">Total received</span>
-            <span className="val">{inr(received)}</span>
-          </div>
-          <div className="t-row grand final-print">
-            <span className="lab">{settled ? "Settled" : "Balance due"}</span>
-            <span className="val">{settled ? "✓ Paid in full" : "₹ " + inr(Math.max(0, balance))}</span>
-          </div>
-        </>
-      )}
       </div>
+      {/* the COMPLETE settlement box — its own box below the totals, mirroring the
+          on-screen payment card: every payment, total received, balance / Settled ✓ */}
+      {showFinal && pays.length > 0 && (
+        <table className="pay-sheet">
+          <colgroup>
+            <col style={{ width: "26%" }} />
+            <col style={{ width: "20%" }} />
+            <col style={{ width: "30%" }} />
+            <col style={{ width: "24%" }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Payment</th>
+              <th>Mode</th>
+              <th>Account</th>
+              <th className="amt">Amount ₹</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pays.map((l) => (
+              <tr key={l.id}>
+                <td>{l.date || "—"}</td>
+                <td>{l.mode === "upi" ? (l.toOwner ? "UPI → Owner" : "UPI") : l.toOwner ? "Cash → Owner" : "Cash"}</td>
+                <td>{l.account || "—"}</td>
+                <td className="amt">{inr(l.amount)}</td>
+              </tr>
+            ))}
+            <tr className="ps-tot">
+              <td colSpan={3}>Total received — of final price ₹{inr(doc.finalPrice!)}</td>
+              <td className="amt">{inr(received)}</td>
+            </tr>
+            <tr className={"ps-bal" + (settled ? " ok" : "")}>
+              <td colSpan={3}>{settled ? "Settled" : "Balance due"}</td>
+              <td className="amt">{settled ? "✓ Paid in full" : inr(Math.max(0, balance))}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
       {/* amount-in-words lives OUTSIDE the totals box (which clips overflow) so it can never be cut off */}
       <div className="words">
         Amount in words: <b>{rupeesInWords(showFinal ? doc.finalPrice! : grand)}</b>
