@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { computeDoc, docVolumeCft, inr } from "@/lib/calc";
 import { quoteBill } from "@/lib/payments";
+import { openTab } from "@/lib/editor-tabs";
 import type { Doc } from "@/lib/types";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -21,7 +22,10 @@ export function StatusBadge({ doc }: { doc: Doc }) {
 export default function DocList({ docs, empty }: { docs: Doc[]; empty: string }) {
   const router = useRouter();
   if (!docs.length) return <div className="empty">{empty}</div>;
-  const open = (id: string, suffix = "") => router.push("/editor/" + id + suffix);
+  const open = (id: string, suffix = "") => {
+    openTab(id, "", suffix.startsWith("?action=") ? suffix.slice(8) : undefined);
+    router.push("/editor");
+  };
   return (
     <>
       {docs.map((d) => {

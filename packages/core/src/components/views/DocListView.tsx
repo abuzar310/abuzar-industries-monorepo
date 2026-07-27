@@ -7,6 +7,7 @@ import { createInvoice, createQuotation } from "@/lib/create";
 import { seriesOf } from "@/lib/invoice-id";
 import { trashDoc } from "@/lib/trash";
 import { quoteBill } from "@/lib/payments";
+import { openTab } from "@/lib/editor-tabs";
 import { getFeatures } from "@/lib/features";
 import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
@@ -161,7 +162,8 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       router.push("/purchases/" + encodeURIComponent(d.id) + suffix);
       return;
     }
-    router.push("/editor/" + d.id + suffix);
+    openTab(d.id, d.number, suffix.startsWith("?action=") ? suffix.slice(8) : undefined);
+    router.push("/editor");
   };
   const toggle = (id: string) =>
     setSel((s) => {
@@ -181,7 +183,8 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     // numbering is allocated atomically by the server — no pre-pull needed
     const d = isInv ? await createInvoice() : await createQuotation();
     toast("New " + d.number + " created");
-    router.push("/editor/" + d.id);
+    openTab(d.id, d.number);
+    router.push("/editor");
   }
   function onNewPurchase() {
     router.push("/purchases");

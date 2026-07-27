@@ -69,6 +69,8 @@ export interface Doc {
   /** print the agreed final price on the sheet (default OFF — clean quote format). */
   showFinalOnPrint?: boolean;
   quotationId: string;
+  /** Parent quotation id — for sub-quotations grouped under the same quote number. */
+  parentId?: string;
   paymentStatus: string;
   amountPaid: number;
   /** App B (stock): a selling invoice reduces stock, a buying invoice adds to it. Default = sell.

@@ -15,6 +15,7 @@ import { findLiveByNumber } from "@/lib/durability";
 import { trashDoc } from "@/lib/trash";
 import { getFeatures } from "@/lib/features";
 import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
+import { openTab } from "@/lib/editor-tabs";
 import { statementsForQuote } from "@/lib/payments";
 import { postInvoice } from "@/lib/ledger-autopost";
 import { reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
@@ -582,12 +583,27 @@ export default function Editor({
   async function onNewQuote() {
     const d = await createQuotation();
     toast("New " + d.id + " created");
-    router.push("/editor/" + d.id);
+    openTab(d.id, d.number);
+    router.push("/editor");
+  }
+  async function onSubQuote() {
+    const d = await createQuotation({
+      customerId: doc.customerId,
+      customerName: doc.customerName,
+      phone: doc.phone,
+      site: doc.site,
+      address: doc.address,
+      parentId: doc.id,
+    });
+    toast("Sub-quotation " + d.number + " created");
+    openTab(d.id, d.number);
+    router.push("/editor");
   }
   async function onNewInvoice() {
     const d = await createInvoice();
     toast("New invoice " + d.id + " created");
-    router.push("/editor/" + d.id);
+    openTab(d.id, d.number);
+    router.push("/editor");
   }
 
   // ---- one-shot action requested from a list row (?action=print|wa) ----
@@ -760,6 +776,11 @@ export default function Editor({
         <button className="btn sm" onClick={onNewQuote}>
           + Quotation
         </button>
+        {!isInv && (
+          <button className="btn sm" onClick={onSubQuote} title="Create a sub-quotation under the same number group">
+            + Sub
+          </button>
+        )}
         {feat.invoices && (
           <button className="btn sm" onClick={onNewInvoice}>
             + Invoice
