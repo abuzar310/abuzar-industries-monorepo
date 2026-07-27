@@ -18,7 +18,7 @@ import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses
 import { openTab } from "@/lib/editor-tabs";
 import { statementsForQuote } from "@/lib/payments";
 import { postInvoice } from "@/lib/ledger-autopost";
-import { reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
+import { paymentReminderMessage, reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
 import { generatePdf, printOrSavePdf } from "@/lib/pdf";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -515,6 +515,24 @@ export default function Editor({
   function onWaRemind() {
     window.open(waLink(doc.phone, reminderMessage(doc)), "_blank");
   }
+  async function onWaRemindPdf() {
+    await saveNow();
+    if (!sheetRef.current) return;
+    try {
+      toast("Preparing PDF with payment reminder…");
+      const how = await sendDocOnWhatsApp(sheetRef.current, docRef.current, (d) => {
+        const bill = d.kind === "invoice" ? computeDoc(d).grand : (d.finalPrice && d.finalPrice > 0 ? d.finalPrice : computeDoc(d).grand);
+        const paid = Math.round((+(d.amountPaid || 0)) * 100) / 100;
+        const bal = Math.round((bill - paid) * 100) / 100;
+        return paymentReminderMessage(d, Math.max(0, bal));
+      });
+      if (how === "shared") toast("PDF + payment reminder attached — pick the customer in WhatsApp");
+      else if (how === "direct") toast("PDF downloaded · WhatsApp opened with payment reminder ✓");
+      else if (how === "fallback") toast("PDF downloaded — attach it in the WhatsApp chat with reminder message");
+    } catch (e) {
+      toast("WhatsApp error: " + ((e as Error)?.message || e));
+    }
+  }
   async function onConvert() {
     if (docRef.current.kind === "invoice") return;
     const cur = clone(docRef.current);
@@ -610,13 +628,15 @@ export default function Editor({
     router.push("/editor");
   }
 
-  // ---- one-shot action requested from a list row (?action=print|wa) ----
+  // ---- one-shot action requested from a list row (?action=print|wa|remind|remind-pdf) ----
   const ranAction = useRef(false);
   useEffect(() => {
     if (ranAction.current || !action) return;
     ranAction.current = true;
     if (action === "print") onPrint();
     else if (action === "wa") onWaSend();
+    else if (action === "remind") onWaRemind();
+    else if (action === "remind-pdf") onWaRemindPdf();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

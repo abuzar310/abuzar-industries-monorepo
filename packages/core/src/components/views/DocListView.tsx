@@ -14,7 +14,6 @@ import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { Doc } from "@/lib/types";
-import { waLink, paymentReminderMessage } from "@/lib/whatsapp";
 import { StatusBadge } from "./DocList";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -355,12 +354,11 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                       const paid = Math.round((+(d.amountPaid || 0)) * 100) / 100;
                       const bal = Math.round((bill - paid) * 100) / 100;
                       if (bal > 2 && d.phone) {
-                        const waUrl = waLink(d.phone, paymentReminderMessage(d, bal));
                         return (
                           <button className="btn sm" style={{ color: "var(--ochre-deep)", borderColor: "var(--ochre)" }}
-                            onClick={(e) => { e.stopPropagation(); window.open(waUrl, "_blank"); }}
-                            title="Send payment reminder on WhatsApp"
-                          >Remind</button>
+                            onClick={(e) => { e.stopPropagation(); act(e, "?action=remind-pdf"); }}
+                            title="Send PDF + payment reminder on WhatsApp"
+                          >💰 Remind</button>
                         );
                       }
                       return null;

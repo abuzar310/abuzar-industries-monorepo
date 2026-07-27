@@ -77,20 +77,15 @@ export function customerFollowupMessage(name: string): string {
 /**
  * Send the document on WhatsApp — the PDF must actually go with the message.
  * WhatsApp links (wa.me) are a platform dead end here: they can ONLY carry text,
- * never a file. So on phones the real path is the system share sheet:
- *  - PHONE → build the PDF, share it (message attached as the caption/text) via
- *    navigator.share; the user taps WhatsApp and picks the customer's chat.
- *    File + text go together.
- *  - PHONE where sharing is unavailable/blocked → download the PDF AND open the
- *    customer's chat with the message, so the file is one attach away ("fallback").
- *  - DESKTOP → save the PDF (a real download) and open the chat with the message,
- *    so the file is ready to drop in ("direct").
+ * never a file. So on phones the real path is the system share sheet.
+ * Accepts an optional messageFn to customise the text (default: quoteMessage).
  */
 export async function sendDocOnWhatsApp(
   sheet: HTMLElement,
   doc: Doc,
+  messageFn?: (d: Doc) => string,
 ): Promise<"direct" | "shared" | "cancelled" | "fallback"> {
-  const text = quoteMessage(doc);
+  const text = messageFn ? messageFn(doc) : quoteMessage(doc);
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
   const mobile = !!nav && /Android|iPhone|iPad|iPod/i.test(nav.userAgent);
 

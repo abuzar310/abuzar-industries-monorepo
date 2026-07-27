@@ -2,7 +2,6 @@
 import { useRouter } from "next/navigation";
 import { computeDoc, docVolumeCft, inr } from "@/lib/calc";
 import { quoteBill } from "@/lib/payments";
-import { waLink, paymentReminderMessage } from "@/lib/whatsapp";
 import { openTab } from "@/lib/editor-tabs";
 import type { Doc } from "@/lib/types";
 
@@ -88,12 +87,11 @@ export default function DocList({ docs, empty }: { docs: Doc[]; empty: string })
                   const paid = Math.round((+(d.amountPaid || 0)) * 100) / 100;
                   const bal = Math.round((bill - paid) * 100) / 100;
                   if (bal > 2 && d.phone) {
-                    const waUrl = waLink(d.phone, paymentReminderMessage(d, bal));
                     return (
                       <button className="btn sm" style={{ color: "var(--ochre-deep)", borderColor: "var(--ochre)" }}
-                        onClick={(e) => { e.stopPropagation(); window.open(waUrl, "_blank"); }}
-                        title="Send payment reminder on WhatsApp"
-                      >Remind</button>
+                        onClick={(e) => { e.stopPropagation(); act(e, "?action=remind-pdf"); }}
+                        title="Send PDF + payment reminder on WhatsApp"
+                      >💰 Remind</button>
                     );
                   }
                   return null;
