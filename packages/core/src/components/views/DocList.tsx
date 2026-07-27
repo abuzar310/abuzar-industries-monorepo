@@ -86,11 +86,12 @@ export default function DocList({ docs, empty }: { docs: Doc[]; empty: string })
                 {(() => {
                   const paid = Math.round((+(d.amountPaid || 0)) * 100) / 100;
                   const bal = Math.round((bill - paid) * 100) / 100;
-                  if (bal > 2 && d.phone) {
+                  if (bal > 2) {
+                    const hasPhone = d.phone?.trim().length > 5;
                     return (
-                      <button className="btn sm" style={{ color: "var(--ochre-deep)", borderColor: "var(--ochre)" }}
-                        onClick={(e) => { e.stopPropagation(); act(e, "?action=remind-pdf"); }}
-                        title="Send PDF + payment reminder on WhatsApp"
+                      <button className="btn sm" style={{ color: "var(--ochre-deep)", borderColor: hasPhone ? "var(--ochre)" : "var(--line-2)", opacity: hasPhone ? 1 : 0.5 }}
+                        onClick={(e) => { if (!hasPhone) return; e.stopPropagation(); act(e, "?action=remind-pdf"); }}
+                        title={hasPhone ? "Send PDF + payment reminder on WhatsApp" : "Add customer phone number to send reminder"}
                       >💰 Remind</button>
                     );
                   }
