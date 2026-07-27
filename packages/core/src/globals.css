@@ -70,7 +70,15 @@ body{
 .view{opacity:0; transform:translateY(8px); transition:opacity var(--t-med),transform var(--t-med); display:none}
 .view.active{opacity:1; transform:translateY(0); display:block}
 .sectitle,.dash-grid,.listwrap,.custgrid,.mast,.doctool,.setbox{animation:rise .45s cubic-bezier(.22,1,.36,1) both}
-@media(prefers-reduced-motion:reduce){*{animation:none !important; transition:none !important}}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.05s !important}
+  .lrow{animation:none !important}
+  .stat:hover{transform:none !important}
+  .lock-card{animation:none !important}
+  .lock-gate{animation:none !important}
+  .skeleton{animation:none !important; background:var(--line)}
+}
 
 /* ---------- top navigation — premium timber bar ---------- */
 .topnav{
