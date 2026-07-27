@@ -66,8 +66,10 @@ export function balanceReminderMessage(opts: {
 }): string {
   const { name, ref, total, balance } = opts;
   const who = (name || "").trim() || "Customer";
+  // reminders go out under the real business name — never the "Cut Size" app title
+  const from = activeBrand().name.toLowerCase().includes("abuzar") ? activeBrand().name : "ABUZAR TIMBERS, CHITRADURGA";
   return `Hello ${who},
-This is an automated payment reminder from ${activeBrand().name}.
+This is an automated payment reminder from ${from}.
 Your balance pending${ref ? " for " + ref : ""} is ₹${inr(balance)} (from a total of ₹${inr(total)}).
 Thank you.`;
 }
