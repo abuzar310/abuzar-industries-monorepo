@@ -412,13 +412,9 @@ body{
 @media print{
   #sheet.sq #sections .row.cf{height:var(--sqrow)}
   #sheet.sq #sections .row.cf .dim{padding:1px}
-  /* Ensure the quotation sheet fills the full A4 page with proper margins */
-  @page{size:A4 portrait; margin:8mm}
-  /* Disable browser default headers/footers (URL, date, title) */
-  @page{margin:8mm; @top-center{content:none}; @bottom-center{content:none}; @top-left{content:none}; @bottom-left{content:none}; @top-right{content:none}; @bottom-right{content:none}}
   /* Make the watermark visible in print */
   .print-watermark span{color:rgba(45,30,20,.04); -webkit-print-color-adjust:exact; print-color-adjust:exact}
-  /* Ensure the sheet fits the printable area */
+  /* Ensure the sheet fits the printable area — prevents right-side clipping */
   #sheet.sq{width:100%; max-width:none; box-sizing:border-box}
   .qcanvas{transform:none !important; width:100% !important; max-width:none !important}
   .qcanvas-wrap{overflow:visible !important}
@@ -834,7 +830,13 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .stockbar i.crit{background:var(--danger)}
 
 /* ---------- list / table — warm timber rows ---------- */
-.listwrap{margin-top:8px; border:1px solid var(--line-2); border-radius:var(--radius-lg); overflow:hidden; background:var(--cream-warm); box-shadow:0 1px 0 rgba(255,255,255,.8) inset, 0 2px 8px -4px rgba(40,28,16,.06), 0 8px 20px -16px rgba(40,28,16,.14)}
+.listwrap{margin-top:8px; border:1px solid var(--line-2); border-radius:var(--radius-lg); overflow:hidden; background:var(--cream-warm); box-shadow:0 1px 0 rgba(255,255,255,.8) inset, 0 2px 8px -4px rgba(40,28,16,.06), 0 8px 20px -16px rgba(40,28,16,.14);
+  position:relative}
+/* scroll shadow overlay on listwrap when content overflows — fades in/out on scroll */
+.listwrap::after{content:''; position:absolute; bottom:0; left:0; right:0; height:20px;
+  background:linear-gradient(0deg, rgba(250,247,240,.9), transparent);
+  pointer-events:none; opacity:0; transition:opacity var(--t-med)}
+.listwrap.can-scroll::after{opacity:1}
 .lhead, .lrow{display:grid; grid-template-columns:128px 1.3fr 1fr 96px 116px minmax(250px,1.3fr); gap:10px; align-items:center; padding:14px 16px}
 .lhead{font-family:var(--disp); text-transform:uppercase; letter-spacing:.08em; font-size:10px; font-weight:700;
   color:var(--ink-faint); background:var(--timber-light); border-bottom:1.5px solid var(--line-2);
@@ -1994,3 +1996,8 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 @media print{
   .print-watermark span{color:rgba(0,0,0,.018); -webkit-print-color-adjust:exact; print-color-adjust:exact}
 }
+
+/* Last @page wins globally — this must come after all @page declarations above.
+   Suppresses browser default print headers/footers (URL, date, page title).
+   Keeps 6mm margin to match general print layout. */
+@page{size:A4 portrait; margin:6mm; @top-center{content:none}; @bottom-center{content:none}; @top-left{content:none}; @bottom-left{content:none}; @top-right{content:none}; @bottom-right{content:none}}
