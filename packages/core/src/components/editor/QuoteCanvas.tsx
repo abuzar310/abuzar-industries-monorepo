@@ -73,6 +73,7 @@ export default function QuoteCanvas({
   return (
     <div className="qcanvas-wrap" ref={wrapRef} style={{ height: PAGE_H * scale }}>
       <div className="qcanvas" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scale})` }}>
+        <div className="print-watermark" aria-hidden="true"><span>CUT SIZE</span></div>
         <div className="qc-mast" style={{ height: MAST_H }}>
           {header}
         </div>

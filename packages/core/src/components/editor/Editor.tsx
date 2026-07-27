@@ -880,6 +880,7 @@ export default function Editor({
 
       {/* printable sheet */}
       <div id="sheet" className={(isInv ? "inv" : feat.simpleQuote ? "sq" : "") + (freeMode ? " free" : "")} ref={sheetRef}>
+        <div className="print-watermark" aria-hidden="true"><span>CUT SIZE</span></div>
         {isInv && !isBuy && (
           <div className="wmark" aria-hidden="true">
             <span>{brand.name}</span>
