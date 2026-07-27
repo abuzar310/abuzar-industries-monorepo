@@ -55,13 +55,12 @@ This is ${b.name}.
 Regarding your timber enquiry and quotation ${doc.number}, we wanted to follow up. Please let us know if you would like to proceed. Thank you.`;
 }
 
-/** Bare-bones balance reminder — just the figures, no fluff. */
+/** Bare-bones balance reminder — just the figures, no fluff, no signature. */
 export function balanceReminderMessage(doc: Doc, total: number, received: number, balance: number): string {
   const kind = doc.kind === "invoice" ? "Invoice" : "Quotation";
   return `${greet(doc.customerName)}
 ${kind} ${doc.number} — Total: ₹${inr(total)}${received > 0.5 ? `\nReceived: ₹${inr(received)}` : ""}
-Balance pending: ₹${inr(balance)}
-— ${activeBrand().name}`;
+Balance pending: ₹${inr(balance)}`;
 }
 
 export function customerFollowupMessage(name: string): string {
