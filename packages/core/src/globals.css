@@ -1084,8 +1084,10 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   #sheet.sq .row.cf .dim{font-size:14px; font-weight:700; padding:0 1px; text-align:center}
   #sheet.sq .row.cf .cft{font-size:14px; font-weight:700; text-align:left; padding-left:4px}
   #sheet.sq .row.cf .sl{font-size:12px; font-weight:700}
-  #sheet.sq .sec-pcs{display:inline; color:#F0E2C4}
-  #sheet.sq .sec-pcs b{color:#fff}
+  /* printers often drop the brown header bar (B&W / no background graphics) —
+     cream/white text would vanish, so the Total Pcs figure prints in dark ink */
+  #sheet.sq .sec-pcs{display:inline; color:#4a3b28}
+  #sheet.sq .sec-pcs b{color:#111}
   .sec-foot{padding:4px 10px}
   .sec-tot{font-size:11px}
   .totals{margin-top:8px}
