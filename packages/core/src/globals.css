@@ -797,19 +797,9 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .txn-badge.deduction{background:rgba(244,67,54,0.12); color:var(--danger)}
 .txn-badge.repayment{background:rgba(76,175,80,0.12); color:var(--green)}
 .txn-badge.session_handover{background:rgba(156,39,176,0.12); color:#7B1FA2}
+.txn-badge.session_handover{background:rgba(156,39,176,0.12); color:#7B1FA2}
 .txn-badge.receipt_charge{background:rgba(148,99,23,0.12); color:var(--ochre)}
 
-/* transaction type badges — replaces inline styles in TransactionsView */
-.txn-badge{display:inline-block; padding:1px 6px; border-radius:999px; font-size:10px; font-weight:700; font-family:var(--disp); letter-spacing:.07em; text-transform:uppercase}
-.txn-badge.receipt{background:rgba(76,175,80,0.12); color:var(--green)}
-.txn-badge.expense{background:var(--t-cream2); color:var(--ink)}
-.txn-badge.salary{background:rgba(255,152,0,0.12); color:var(--ochre-deep)}
-.txn-badge.session_handover{background:rgba(156,39,176,0.12); color:#7B1FA2}
-.txn-badge.payment{background:rgba(33,150,243,0.12); color:var(--blue)}
-.txn-badge.advance{background:rgba(255,152,0,0.12); color:var(--ochre)}
-.txn-badge.deduction{background:rgba(244,67,54,0.12); color:var(--danger)}
-.txn-badge.repayment{background:rgba(76,175,80,0.12); color:var(--green)}
-.txn-badge.receipt_charge{background:rgba(148,99,23,0.12); color:var(--ochre)}
 .panel-card{margin-top:20px; border:1px solid var(--line-2); border-radius:var(--radius-md); overflow:hidden; background:var(--cream-warm); box-shadow:0 1px 0 rgba(255,255,255,.8) inset, 0 2px 8px -4px rgba(40,28,16,.06), 0 8px 20px -16px rgba(40,28,16,.14)}
 .pc-head{
   font-family:var(--disp); letter-spacing:.08em; text-transform:uppercase; font-size:11px; font-weight:700;
