@@ -412,6 +412,16 @@ body{
 @media print{
   #sheet.sq #sections .row.cf{height:var(--sqrow)}
   #sheet.sq #sections .row.cf .dim{padding:1px}
+  /* Ensure the quotation sheet fills the full A4 page with proper margins */
+  @page{size:A4 portrait; margin:8mm}
+  /* Disable browser default headers/footers (URL, date, title) */
+  @page{margin:8mm; @top-center{content:none}; @bottom-center{content:none}; @top-left{content:none}; @bottom-left{content:none}; @top-right{content:none}; @bottom-right{content:none}}
+  /* Make the watermark visible in print */
+  .print-watermark span{color:rgba(45,30,20,.04); -webkit-print-color-adjust:exact; print-color-adjust:exact}
+  /* Ensure the sheet fits the printable area */
+  #sheet.sq{width:100%; max-width:none; box-sizing:border-box}
+  .qcanvas{transform:none !important; width:100% !important; max-width:none !important}
+  .qcanvas-wrap{overflow:visible !important}
 }
 #sheet.sq.a4fill{display:flex; flex-direction:column}
 #sheet.sq.a4fill .mast{flex:0 0 auto}
