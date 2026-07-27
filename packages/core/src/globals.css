@@ -1861,6 +1861,8 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .rentline .rl-amt input::-webkit-outer-spin-button,.rentline .rl-amt input::-webkit-inner-spin-button{-webkit-appearance:none; appearance:none; margin:0}
 
 /* ===== Editor tab bar (like browser tabs) ===== */
+/* break free of the 1000px wrap — editor fills the full window */
+.editor-tabs-wrap .wrap, .editor-pane .wrap{max-width:none; padding:0}
 .editor-tabs-wrap{display:flex; flex-direction:column; height:100%; flex:1; overflow:hidden; position:relative}
 .editor-tabbar{display:flex; align-items:stretch; gap:0; background:var(--panel-2); border-bottom:2px solid var(--line); overflow-x:auto; overflow-y:hidden; flex-shrink:0; min-height:var(--tabs-height,42px); padding:0 4px; scrollbar-width:thin; scrollbar-color:var(--line-2) transparent}
 .editor-tabbar::-webkit-scrollbar{height:4px}
@@ -1873,8 +1875,6 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .editor-tab:focus-visible{outline:none; box-shadow:var(--ring); z-index:1}
 .editor-tab.active{color:var(--walnut); border-bottom-color:var(--ochre); background:var(--paper); font-weight:600}
 .editor-tab.active .editor-tab-label{color:var(--walnut)}
-.editor-tab.sub .editor-tab-label::before{content:"↳"; margin-right:2px; font-size:11px; opacity:.6}
-.editor-tab.sub .editor-tab-label{opacity:.82; font-size:11.5px}
 .editor-tab-label{font-family:var(--mono); font-size:11px; letter-spacing:.02em; display:flex; align-items:center; gap:2px}
 .editor-tab-close{flex-shrink:0; width:22px; height:22px; border:none; background:transparent; border-radius:5px; font-size:15px; line-height:1; cursor:pointer; color:var(--ink-faint); display:flex; align-items:center; justify-content:center; padding:0; transition:background var(--t-fast),color var(--t-fast); margin:0 -2px}
 .editor-tab-close:hover{background:rgba(200,70,40,.12); color:var(--danger)}

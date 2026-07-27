@@ -587,17 +587,21 @@ export default function Editor({
     router.push("/editor");
   }
   async function onSubQuote() {
-    const d = await createQuotation({
-      customerId: doc.customerId,
-      customerName: doc.customerName,
-      phone: doc.phone,
-      site: doc.site,
-      address: doc.address,
-      parentId: doc.id,
+    // Add a new section group under the same quote, not a separate file.
+    // Prompt once for the group name; subsequent subs use the same group.
+    const existing = doc.sections.filter((s) => s.subGroup);
+    const groupName = existing.length
+      ? existing[0].subGroup!
+      : prompt("Sub-quotation name (e.g. Kitchen, Bedroom):") || "Sub Quotation";
+    update((d) => {
+      d.sections.push({
+        name: groupName + " " + (d.sections.filter((s) => s.subGroup === groupName).length + 1),
+        rate: 4000,
+        rows: [{ l: "", w: "", t: "", pcs: "" }],
+        subGroup: groupName,
+      });
     });
-    toast("Sub-quotation " + d.number + " created");
-    openTab(d.id, d.number);
-    router.push("/editor");
+    toast("Added " + groupName + " section");
   }
   async function onNewInvoice() {
     const d = await createInvoice();

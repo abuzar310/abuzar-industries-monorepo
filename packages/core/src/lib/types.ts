@@ -33,6 +33,10 @@ export interface Section {
   calcMode?: "cft" | "direct" | "rft" | "pcs" | "cbm";
   /** free-arrange: where/how big this box sits on the A4 page (unset = auto-placed). */
   box?: BoxRect;
+  /** Sub-quotation group heading. Sections with the same subGroup render
+   *  together under that name (e.g. "Kitchen", "Bedroom"). All share the
+   *  same quotation number — no separate file. */
+  subGroup?: string;
 }
 
 export interface Doc {
@@ -69,8 +73,6 @@ export interface Doc {
   /** print the agreed final price on the sheet (default OFF — clean quote format). */
   showFinalOnPrint?: boolean;
   quotationId: string;
-  /** Parent quotation id — for sub-quotations grouped under the same quote number. */
-  parentId?: string;
   paymentStatus: string;
   amountPaid: number;
   /** App B (stock): a selling invoice reduces stock, a buying invoice adds to it. Default = sell.

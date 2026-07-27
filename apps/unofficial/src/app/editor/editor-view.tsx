@@ -93,10 +93,8 @@ export default function EditorView() {
         <button className="editor-tab-new" title="New quotation" onClick={onNewQuote}>+</button>
         {tabs.map((t) => {
           const active = t.id === activeId;
-          const td = docs.get(t.id);
-          const isSub = td?.doc?.parentId;
           return (
-            <div key={t.id} className={"editor-tab" + (active ? " active" : "") + (isSub ? " sub" : "")} onClick={() => setActive(t.id)} onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(t.id); } }}>
+            <div key={t.id} className={"editor-tab" + (active ? " active" : "")} onClick={() => setActive(t.id)} onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(t.id); } }}>
               <span className="editor-tab-label">{t.number || t.id.slice(-6)}</span>
               <button
                 className="editor-tab-close"
