@@ -1,12 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Hanken_Grotesk, Spline_Sans_Mono } from "next/font/google";
+import { Poppins, Open_Sans, Space_Mono } from "next/font/google";
 import "@/globals.css";
 import AppProvider from "@/store/AppProvider";
 import { TABS, FEATURES } from "../app-config";
 
-const serif = Fraunces({ subsets: ["latin"], axes: ["opsz", "SOFT"], variable: "--font-serif" });
-const ui = Hanken_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-ui" });
-const mono = Spline_Sans_Mono({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-mono" });
+const heading = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-heading",
+});
+
+const body = Open_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-body",
+});
+
+const mono = Space_Mono({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-mono",
+});
 
 export const metadata: Metadata = {
   title: "Abuzar Industries — Quotation & Invoice",
@@ -15,11 +29,11 @@ export const metadata: Metadata = {
   icons: { icon: "/icon.png", apple: "/icon.png" },
 };
 
-export const viewport: Viewport = { themeColor: "#5A3D24" };
+export const viewport: Viewport = { themeColor: "#1E293B" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${serif.variable} ${ui.variable} ${mono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${heading.variable} ${body.variable} ${mono.variable}`}>
       <body>
         <AppProvider tabs={TABS} features={FEATURES} defaultBrand="real">{children}</AppProvider>
       </body>
