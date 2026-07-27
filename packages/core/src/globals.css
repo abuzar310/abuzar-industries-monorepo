@@ -52,7 +52,7 @@ body{
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px;border:2px solid var(--paper)}
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-faint)}
-.wrap{max-width:1000px; margin:0 auto; padding:26px 22px 140px}
+.wrap{max-width:min(1400px,96vw); margin:0 auto; padding:26px 22px 140px}
 
 /* ---------- view transition ---------- */
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -67,7 +67,7 @@ body{
   background:rgba(247,242,233,.82); backdrop-filter:blur(14px) saturate(1.4);
   border-bottom:1px solid var(--line);
 }
-.topnav-in{max-width:1000px; margin:0 auto; padding:11px 22px;
+.topnav-in{max-width:min(1400px,96vw); margin:0 auto; padding:11px 22px;
   display:flex; align-items:center; gap:14px; flex-wrap:wrap}
 .nav-brand{
   font-family:var(--serif); font-weight:600; letter-spacing:.01em;
