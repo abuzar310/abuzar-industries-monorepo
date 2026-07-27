@@ -62,6 +62,11 @@ body{
 
 /* ---------- view transition ---------- */
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+@keyframes card-in{from{opacity:0;transform:scale(.94) translateY(-8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes stagger-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
 .view{opacity:0; transform:translateY(8px); transition:opacity var(--t-med),transform var(--t-med); display:none}
 .view.active{opacity:1; transform:translateY(0); display:block}
 .sectitle,.dash-grid,.listwrap,.custgrid,.mast,.doctool,.setbox{animation:rise .45s cubic-bezier(.22,1,.36,1) both}
@@ -719,6 +724,31 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 @media(max-width:760px){.dash-grid,.dash-grid.g3{grid-template-columns:repeat(2,1fr); gap:10px}}
 @media(max-width:380px){.dash-grid,.dash-grid.g2,.dash-grid.g3{grid-template-columns:1fr}}
 
+/* stagger-in for list rows and cards */
+.lrow{animation:stagger-in .35s cubic-bezier(.22,1,.36,1) both}
+.lrow:nth-child(1){animation-delay:0ms}
+.lrow:nth-child(2){animation-delay:40ms}
+.lrow:nth-child(3){animation-delay:80ms}
+.lrow:nth-child(4){animation-delay:120ms}
+.lrow:nth-child(5){animation-delay:160ms}
+.lrow:nth-child(6){animation-delay:200ms}
+.lrow:nth-child(7){animation-delay:240ms}
+.lrow:nth-child(8){animation-delay:280ms}
+.lrow:nth-child(9){animation-delay:320ms}
+.lrow:nth-child(10){animation-delay:360ms}
+
+/* skeleton loading for cards and stats */
+.skeleton{background:linear-gradient(90deg,var(--line) 25%,var(--line-2) 50%,var(--line) 75%); background-size:200% 100%; animation:shimmer 1.4s ease-in-out infinite; border-radius:var(--radius-md)}
+.skeleton-card{height:120px}
+.skeleton-stat{height:100px}
+.skeleton-row{height:56px; border-radius:var(--radius-sm)}
+.skeleton-text{height:14px; border-radius:4px; width:80%}
+.skeleton-text.short{width:40%}
+.skeleton-text.medium{width:60%}
+
+/* page transition smoother */
+.wrap{animation:stagger-in .4s cubic-bezier(.22,1,.36,1) both}
+
 /* stock statement (CFT + value) */
 .stmt{display:grid; grid-template-columns:1fr auto auto; gap:8px 22px; padding:10px 16px; border-bottom:1px solid var(--line);
   font-family:var(--mono); font-size:13.5px; align-items:center; font-variant-numeric:tabular-nums}
@@ -795,18 +825,19 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .stockbar i.low{background:var(--ochre)}
 .stockbar i.crit{background:var(--danger)}
 
-/* ---------- list / table ---------- */
+/* ---------- list / table — warm timber rows ---------- */
 .listwrap{margin-top:8px; border:1px solid var(--line-2); border-radius:var(--radius-lg); overflow:hidden; background:var(--cream-warm); box-shadow:0 1px 0 rgba(255,255,255,.8) inset, 0 2px 8px -4px rgba(40,28,16,.06), 0 8px 20px -16px rgba(40,28,16,.14)}
 .lhead, .lrow{display:grid; grid-template-columns:128px 1.3fr 1fr 96px 116px minmax(250px,1.3fr); gap:10px; align-items:center; padding:14px 16px}
 .lhead{font-family:var(--disp); text-transform:uppercase; letter-spacing:.08em; font-size:10px; font-weight:700;
-  color:var(--ink-faint); background:var(--panel); border-bottom:1px solid var(--line-2)}
+  color:var(--ink-faint); background:var(--timber-light); border-bottom:1.5px solid var(--line-2);
+  position:sticky; top:0; z-index:2;}
 .lrow{border-bottom:1px solid var(--line); font-size:14px; transition:background var(--t-fast)}
 .lrow:last-child{border-bottom:none}
-.lrow:hover{background:rgba(176,124,40,.05)}
+.lrow:hover{background:rgba(184,134,45,.06)}
 .lrow .id{font-family:var(--mono); font-weight:600; color:var(--ochre-deep); font-size:13px}
-.lrow .nm{font-weight:600; color:var(--ink)}
+.lrow .nm{font-weight:600; color:var(--ink); font-size:15px}
 .lrow .mut{font-family:var(--mono); font-size:11px; color:var(--ink-soft)}
-.lrow .amt{font-family:var(--mono); font-weight:600; text-align:right; color:var(--walnut); font-variant-numeric:tabular-nums}
+.lrow .amt{font-family:var(--mono); font-weight:600; text-align:right; color:var(--walnut); font-variant-numeric:tabular-nums; font-size:15px}
 /* clean list search bar */
 .searchbar{display:flex; align-items:center; gap:9px; margin:12px 0 4px; padding:0 14px; height:46px;
   border:1px solid var(--line-2); border-radius:13px; background:var(--panel-2); box-shadow:var(--shadow-sm)}
@@ -951,32 +982,39 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .secline{display:flex; align-items:center; gap:9px; margin-top:14px; font-size:13px; color:var(--ink)}
 .secline input{width:auto}
 
-/* ---------- local lock screen ---------- */
+/* ---------- local lock screen — timber showroom welcome ---------- */
 .lock-gate{position:fixed; inset:0; z-index:210; display:flex; align-items:center; justify-content:center; padding:20px;
-  background:radial-gradient(120% 90% at 50% -10%, rgba(51,36,26,.5), rgba(36,27,18,.72));
-  backdrop-filter:blur(16px) saturate(1.2); animation:fade-in .3s ease}
-.lock-card{background:var(--panel-2); border:1px solid var(--line-2); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg);
-  width:min(400px,94vw); padding:34px 30px 28px; text-align:center; animation:card-in .4s cubic-bezier(.22,1,.36,1)}
-.lock-brand{font-family:var(--serif); font-weight:600; letter-spacing:-.01em; font-size:30px; color:var(--ink); line-height:1.05}
-.lock-brand span{display:block; font-family:var(--disp); font-size:11px; letter-spacing:.32em; font-weight:700; color:var(--ochre); margin-top:6px}
-.lock-sub{font-size:13.5px; color:var(--ink-soft); margin:18px 0 14px; display:flex; align-items:center; justify-content:center; gap:6px}
+  background:radial-gradient(120% 90% at 50% -10%, rgba(45,30,20,.45), rgba(29,22,16,.75));
+  backdrop-filter:blur(20px) saturate(1.3); animation:fade-in .4s ease}
+.lock-card{background:var(--cream-warm); border:1px solid var(--line-2); border-radius:var(--radius-lg); box-shadow:0 24px 48px -16px rgba(40,28,16,.3), 0 8px 18px -10px rgba(40,28,16,.18);
+  width:min(420px,94vw); padding:38px 34px 32px; text-align:center; animation:card-in .5s cubic-bezier(.22,1,.36,1);
+  position:relative; overflow:hidden}
+.lock-card::before{content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg,var(--walnut),var(--ochre),var(--brass),var(--walnut))}
+.lock-brand{font-family:var(--serif); font-weight:700; letter-spacing:-.02em; font-size:34px; color:var(--walnut); line-height:1.05}
+.lock-brand span{display:block; font-family:var(--disp); font-size:11px; letter-spacing:.28em; font-weight:700; color:var(--ochre); margin-top:8px}
+.lock-sub{font-size:14px; color:var(--ink-soft); margin:20px 0 18px; display:flex; align-items:center; justify-content:center; gap:6px}
 .lock-sub b{color:var(--ink)}
 .lock-users{display:grid; grid-template-columns:1fr 1fr; gap:12px}
-.lock-user{display:flex; flex-direction:column; align-items:center; gap:5px; padding:20px 12px; cursor:pointer;
-  background:#fff; border:1px solid var(--line-2); border-radius:var(--radius-md); transition:all var(--t-fast)}
-.lock-user:hover{border-color:var(--ochre); box-shadow:var(--shadow-md); transform:translateY(-2px)}
-.lock-user b{font-family:var(--disp); font-size:16px; font-weight:700; color:var(--ink)}
-.lock-user small{font-family:var(--disp); font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint)}
-.lock-avatar{width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-  font-family:var(--serif); font-size:24px; font-weight:600; color:#F4E9D8; margin-bottom:3px;
-  background:linear-gradient(180deg,var(--walnut),var(--walnut-2)); box-shadow:0 4px 12px -4px rgba(40,28,16,.4)}
-.lock-back{background:transparent; border:1px solid var(--line-2); border-radius:7px; width:24px; height:24px; cursor:pointer;
-  color:var(--ink-soft); font-size:16px; line-height:1; padding:0}
-.lock-back:hover{border-color:var(--ochre); color:var(--ochre)}
-.lock-card input{width:100%; font-family:var(--mono); font-size:15px; padding:12px; border:1px solid var(--line-2);
-  border-radius:10px; background:#fff; color:var(--ink)}
-.lock-card input:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}
-.lock-card .btn{margin-top:6px; width:100%; justify-content:center}
+.lock-user{display:flex; flex-direction:column; align-items:center; gap:6px; padding:22px 14px; cursor:pointer;
+  background:var(--paper); border:1px solid var(--line-2); border-radius:var(--radius-md); transition:all var(--t-fast);
+  position:relative; overflow:hidden}
+.lock-user::after{content:''; position:absolute; bottom:0; left:50%; width:0; height:2px;
+  background:var(--brass); transition:width var(--t-med),left var(--t-med)}
+.lock-user:hover{border-color:var(--ochre); box-shadow:0 8px 24px -8px rgba(40,28,16,.2); transform:translateY(-2px)}
+.lock-user:hover::after{width:80%; left:10%}
+.lock-user b{font-family:var(--serif); font-size:16px; font-weight:600; color:var(--ink)}
+.lock-user small{font-family:var(--disp); font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint)}
+.lock-avatar{width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-family:var(--serif); font-size:26px; font-weight:600; color:#F4E9D8; margin-bottom:4px;
+  background:linear-gradient(180deg,var(--walnut),var(--walnut-2)); box-shadow:0 4px 14px -4px rgba(40,28,16,.5)}
+.lock-back{background:transparent; border:1px solid var(--line-2); border-radius:7px; width:28px; height:28px; cursor:pointer;
+  color:var(--ink-soft); font-size:16px; line-height:1; padding:0; transition:all var(--t-fast)}
+.lock-back:hover{border-color:var(--ochre); color:var(--ochre); background:rgba(184,134,45,.08)}
+.lock-card input{width:100%; font-family:var(--mono); font-size:15px; padding:14px; border:1px solid var(--line-2);
+  border-radius:10px; background:var(--paper); color:var(--ink); transition:all var(--t-fast)}
+.lock-card input:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring); background:#fff}
+.lock-card .btn{margin-top:8px; width:100%; justify-content:center; padding:12px 0}
 
 /* nav user chip */
 .userchip{display:inline-flex; align-items:center; gap:7px; font-family:var(--disp); font-size:11px; font-weight:700;
