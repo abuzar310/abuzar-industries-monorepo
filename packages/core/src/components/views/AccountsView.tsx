@@ -633,17 +633,20 @@ export default function AccountsView() {
                 {isUpi && (row.l.at ? <> · <small>{hhmm(row.l.at)}</small></> : null)}
                 {isUpi && <span className="bl-acts">
                   <button className="bl-btn" title="Move to another account" type="button" onClick={(e) => { e.stopPropagation(); setMoveFor(moveFor === row.l.id ? null : row.l.id); }}>⇄</button>
-                  <button className="bl-btn" title="Delete" type="button" onClick={(e) => { e.stopPropagation(); delEntry(row.l.id, row.l.quoteNo); }}>×</button>
+                  <button className="bl-btn danger" title="Delete" type="button" onClick={(e) => { e.stopPropagation(); delEntry(row.l.id, row.l.quoteNo); }}>×</button>
                 </span>}
                 {row.kind === "collect" && !row.isClose && (
                   <span className="bl-acts">
-                    <button className="bl-btn" title="Delete collection" type="button" onClick={(e) => { e.stopPropagation(); delCollection(row.l.id); }}>×</button>
+                    <button className="bl-btn danger" title="Delete collection" type="button" onClick={(e) => { e.stopPropagation(); delCollection(row.l.id); }}>×</button>
                   </span>
                 )}
               </span>
               <span className={"bank-amt" + (row.debit > 0 ? " dr" : "")}>{row.debit > 0 ? "₹" + inr(row.debit) : ""}</span>
               <span className={"bank-amt" + (row.credit > 0 ? " cr" : "")}>{row.credit > 0 ? "₹" + inr(row.credit) : ""}</span>
-              <span className={"bank-amt bal" + (row.isClose ? (due ? " due" : " ok") : "")}>₹{inr(row.balance)}</span>
+              <span className={"bank-amt bal" + (row.isClose ? (due ? " due" : " ok") : "")}>
+                ₹{inr(Math.abs(row.balance))}
+                {!row.isOpen && <span className={"bal-tag " + (row.balance > 0.5 ? "dr" : "cr")}>{row.balance > 0.5 ? "Dr" : "Cr"}</span>}
+              </span>
             </div>
           );
         })}
@@ -934,7 +937,10 @@ export default function AccountsView() {
                               </span>
                               <span className="bank-amt dr">₹{inr(c.amount)}</span>
                               <span className="bank-amt cr"></span>
-                              <span className="bank-amt bal">₹{inr(balance - bal)}</span>
+                              <span className="bank-amt bal">
+                                ₹{inr(Math.abs(balance - bal))}
+                                <span className={"bal-tag " + (balance - bal > 0.5 ? "dr" : "cr")}>{balance - bal > 0.5 ? "Dr" : "Cr"}</span>
+                              </span>
                             </div>
                           );
                         })}

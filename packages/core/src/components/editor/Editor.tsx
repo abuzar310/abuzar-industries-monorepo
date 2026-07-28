@@ -53,11 +53,17 @@ export default function Editor({
   initialDoc,
   action,
   payFocus,
+  active = true,
+  onDirtyChange,
 }: {
   initialDoc: Doc;
   action?: string;
   /** a payment line (expense id) to scroll to + flash — set when arriving from Statements */
   payFocus?: string;
+  /** false when this editor sits in a background tab: its document-level shortcuts stay silent */
+  active?: boolean;
+  /** reports the unsaved-changes state so the tab bar can show a dirty dot */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
   const [doc, setDoc] = useState<Doc>(initialDoc);
@@ -140,9 +146,15 @@ export default function Editor({
   });
 
   // ---- persistence ----
+  // Several editors stay mounted at once (background tabs are hidden, not
+  // unmounted), so every document-level shortcut below must ignore the
+  // inactive ones — otherwise one Ctrl+Z undoes an edit in a tab you can't see.
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const markDirty = (v: boolean) => {
     dirtyRef.current = v;
     setDirty(v);
+    onDirtyChange?.(v);
   };
   function persist(d: Doc) {
     d.updatedAt = nowIso();
@@ -189,6 +201,7 @@ export default function Editor({
   // Ctrl/Cmd+S saves; navigating away (unmount) or closing the tab never loses edits.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!activeRef.current) return; // background tab — the visible editor owns the shortcut
       const ctrl = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
       if (ctrl && key === "s") {
@@ -304,6 +317,7 @@ export default function Editor({
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!activeRef.current) return; // background tab — don't paste into an invisible box
       if (!(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
       if (k !== "c" && k !== "v") return;

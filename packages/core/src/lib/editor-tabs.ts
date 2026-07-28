@@ -8,6 +8,10 @@ export interface TabEntry {
   id: string;
   number: string;
   displayNumber?: string;
+  /** customer name — shown next to the number so a row of tabs stays readable */
+  name?: string;
+  /** unsaved edits in this tab (drives the dirty dot on the tab bar) */
+  dirty?: boolean;
 }
 
 let tabs: TabEntry[] = [];
@@ -95,7 +99,16 @@ export function takePayFocus(id: string): string | undefined {
 }
 
 /** Update a tab's display number (called after the doc finishes loading). */
-export function updateTab(id: string, number: string) {
-  tabs = tabs.map((t) => (t.id === id ? { ...t, number } : t));
+export function updateTab(id: string, number: string, name?: string) {
+  tabs = tabs.map((t) => (t.id === id ? { ...t, number, name: name ?? t.name } : t));
+  emit();
+}
+
+/** Flag unsaved edits on a tab. No-op when the flag is already correct, so the
+ *  editor can call it on every keystroke without re-rendering the tab bar. */
+export function setTabDirty(id: string, dirty: boolean) {
+  const t = tabs.find((x) => x.id === id);
+  if (!t || !!t.dirty === dirty) return;
+  tabs = tabs.map((x) => (x.id === id ? { ...x, dirty } : x));
   emit();
 }

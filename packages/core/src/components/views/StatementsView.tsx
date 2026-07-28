@@ -556,7 +556,12 @@ function QuoteStatementCard({
                 {row.credit > 0 ? "₹" + inr(row.credit) : ""}
               </span>
               <span className={"bank-amt bal" + (row.isClose ? (balCls === "due" ? " due" : " ok") : "")}>
-                ₹{inr(row.balance)}
+                ₹{inr(Math.abs(row.balance))}
+                {!row.isBill && (
+                  <span className={"bal-tag " + (row.balance > 0.5 ? "dr" : "cr")}>
+                    {row.balance > 0.5 ? "Dr" : "Cr"}
+                  </span>
+                )}
               </span>
             </div>
           );

@@ -1819,33 +1819,60 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .pc-head .acct-tag.ok{background:rgba(168,206,120,.24); color:#e0f3c4}
 .pc-head .acct-collected-badge{color:#e0f3c4}
 
-/* ===== Bank account format — Balances & Statements ===== */
-.bank-ledger{border:1px solid var(--line-2); border-radius:var(--radius-md); overflow:hidden; background:var(--panel); margin-top:8px}
-.bank-ledger .bank-hdr{display:grid; grid-template-columns:48px 1fr 110px 110px 110px; gap:6px; padding:8px 12px; background:var(--panel-2); font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); border-bottom:2px solid var(--ochre)}
-.bank-row{display:grid; grid-template-columns:48px 1fr 110px 110px 110px; gap:6px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--ink)}
+/* ============================================================================
+   PASSBOOK LEDGER — bank-statement format (Balances · Statements · Accounts)
+   The format every owner/customer already trusts: Date · Particulars ·
+   Withdrawal(Dr) · Deposit(Cr) · Balance, with a Cr/Dr tag on the running
+   balance. Built from Heartwood Luxe materials; the closing row reuses the
+   app's walnut grand-total bar so the final figure reads as the answer.
+   ============================================================================ */
+.bank-ledger{border:1px solid var(--line-2); border-radius:var(--radius-md); overflow:hidden; background:var(--surface); margin-top:8px; box-shadow:var(--shadow-sm)}
+.bank-ledger .bank-hdr{display:grid; grid-template-columns:64px 1fr 108px 108px 128px; gap:6px; padding:9px 14px; background:linear-gradient(var(--panel-2),var(--surface-2)); font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-soft); border-bottom:1.5px solid var(--ochre)}
+.bank-row{display:grid; grid-template-columns:64px 1fr 108px 108px 128px; gap:6px; align-items:center; padding:9px 14px; border-bottom:1px solid var(--line); font-family:var(--mono); font-size:12.5px; color:var(--ink); position:relative; transition:background var(--t-fast)}
+.bank-row:nth-child(even of .bank-row){background:rgba(214,200,174,.10)}   /* zebra */
 .bank-row:last-child{border-bottom:none}
-.bank-row.bank-open{background:rgba(176,124,40,.06); font-weight:700}
-.bank-row.bank-close{background:rgba(86,107,59,.08); font-weight:700}
-.bank-row.bank-total{background:var(--panel-2); font-weight:700}
-.bank-date{color:var(--ink-soft); font-size:11px}
-.bank-parts{font-family:var(--disp); font-weight:600; font-size:13px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+.bank-row:not(.bank-open):not(.bank-close):not(.bank-total):hover{background:rgba(198,143,49,.09)}
+
+/* opening: soft ochre wash, no side-stripe */
+.bank-row.bank-open{background:rgba(184,134,45,.09); font-weight:700}
+.bank-row.bank-open .bank-parts{color:var(--ochre-deep); font-family:var(--disp); letter-spacing:.02em}
+/* closing / total: the walnut answer bar (matches grand-total language) */
+.bank-row.bank-close,.bank-row.bank-total{background:var(--walnut); color:#F4E9D8; font-weight:700; border-bottom:none}
+.bank-row.bank-close .bank-parts,.bank-row.bank-total .bank-parts{color:#F7EFE0; font-family:var(--disp); letter-spacing:.03em; text-transform:uppercase; font-size:12px}
+.bank-row.bank-close .bank-amt,.bank-row.bank-total .bank-amt{color:#F4E9D8}
+.bank-row.bank-close .bank-amt.bal,.bank-row.bank-total .bank-amt.bal{color:#fff}
+.bank-row.bank-close .bal-tag,.bank-row.bank-total .bal-tag{background:rgba(255,255,255,.16); color:#F4E9D8}
+
+.bank-date{color:var(--ink-soft); font-size:11px; font-family:var(--mono)}
+.bank-parts{font-family:var(--body); font-weight:600; font-size:13px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
 .bank-parts small{font-family:var(--mono); font-size:10px; color:var(--ink-faint); font-weight:400; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.bank-amt{text-align:right; font-weight:700; font-variant-numeric:tabular-nums}
+
+.bank-amt{text-align:right; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap}
 .bank-amt.dr{color:var(--danger)}
 .bank-amt.cr{color:var(--green)}
-.bank-amt.bal{color:var(--ink)}
+/* balance column: anchored by a hairline, carries the Cr/Dr tag */
+.bank-amt.bal{color:var(--ink); display:inline-flex; align-items:baseline; justify-content:flex-end; gap:5px; padding-left:8px; border-left:1px solid var(--line)}
+.bank-row.bank-close .bank-amt.bal,.bank-row.bank-total .bank-amt.bal{border-left-color:rgba(255,255,255,.18)}
 .bank-amt.bal.due{color:var(--danger)}
 .bank-amt.bal.ok{color:var(--green)}
+.bal-tag{font-family:var(--disp); font-size:8.5px; font-weight:700; letter-spacing:.04em; padding:1px 4px; border-radius:4px; background:var(--timber-light); color:var(--ink-soft); transform:translateY(-1px)}
+.bal-tag.cr{background:rgba(86,107,59,.16); color:var(--green)}
+.bal-tag.dr{background:rgba(165,61,41,.14); color:var(--danger)}
+
 @media(max-width:640px){
-  .bank-ledger .bank-hdr{grid-template-columns:1fr 90px 90px 90px}
-  .bank-row{grid-template-columns:1fr 90px 90px 90px}
+  .bank-ledger .bank-hdr{grid-template-columns:1fr 84px 84px 104px}
+  .bank-row{grid-template-columns:1fr 84px 84px 104px; padding:9px 11px}
   .bank-date{display:none}
 }
 
-/* inline action buttons inside bank-ledger rows */
-.bl-acts{display:inline-flex;align-items:center;gap:1px;margin-left:6px;vertical-align:middle}
-.bl-btn{background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;color:var(--ink-faint);transition:color .15s;border-radius:4px}
-.bl-btn:hover{color:var(--ink);background:var(--panel-2)}
+/* row action cluster — hover-revealed on desktop, always shown on touch */
+.bl-acts{display:inline-flex; align-items:center; gap:3px; margin-left:8px; vertical-align:middle; opacity:0; transition:opacity var(--t-fast)}
+.bank-row:hover .bl-acts,.bank-row:focus-within .bl-acts{opacity:1}
+.bl-btn{display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; background:var(--panel-2); border:1px solid var(--line-2); cursor:pointer; font-size:12px; line-height:1; color:var(--ink-soft); transition:all var(--t-fast); border-radius:6px}
+.bl-btn:hover{color:var(--ink); background:var(--surface); border-color:var(--ochre); box-shadow:var(--shadow-sm)}
+.bl-btn.danger:hover{color:#fff; background:var(--danger); border-color:var(--danger)}
+@media(hover:none){ .bl-acts{opacity:1} }
+@media(prefers-reduced-motion:reduce){ .bl-acts{transition:none} }
 
 /* move a payment to another account */
 .acct-move{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px; background:var(--panel-2); border-top:1px solid var(--line)}
@@ -2089,7 +2116,18 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .editor-tab-close{flex-shrink:0; width:22px; height:22px; border:none; background:transparent; border-radius:5px; font-size:15px; line-height:1; cursor:pointer; color:var(--ink-faint); display:flex; align-items:center; justify-content:center; padding:0; transition:background var(--t-fast),color var(--t-fast); margin:0 -2px}
 .editor-tab-close:hover{background:rgba(200,70,40,.12); color:var(--danger)}
 .editor-tab-close:active{transform:scale(.9)}
+/* customer name rides alongside the number so a full bar stays readable */
+.editor-tab-who{font-family:var(--body); font-style:normal; font-size:11px; font-weight:500; color:var(--ink-faint); max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:5px; padding-left:6px; border-left:1px solid var(--line-2)}
+.editor-tab.active .editor-tab-who{color:var(--ink-soft)}
+/* unsaved-changes dot — the close button takes its place on hover */
+.editor-tab-dot{flex-shrink:0; width:7px; height:7px; border-radius:50%; background:var(--ochre); margin:0 2px}
+.editor-tab.dirty .editor-tab-close{display:none}
+.editor-tab.dirty:hover .editor-tab-dot,.editor-tab.dirty:focus-within .editor-tab-dot{display:none}
+.editor-tab.dirty:hover .editor-tab-close,.editor-tab.dirty:focus-within .editor-tab-close{display:flex}
 .editor-pane{flex:1; overflow-y:auto; background:var(--paper)}
+.editor-pane-loading{display:flex; align-items:center; justify-content:center}
+.editor-loading{font-family:var(--disp); font-size:12px; letter-spacing:.04em; color:var(--ink-faint); padding:56px 24px}
+@media(hover:none){ .editor-tab.dirty .editor-tab-close{display:flex} .editor-tab.dirty .editor-tab-dot{display:none} }
 
 /* editor empty state */
 .editor-empty{text-align:center; padding:64px 24px 48px; max-width:420px; margin:0 auto}

@@ -405,7 +405,7 @@ function PartyCard({
                           ✎
                         </button>
                         <button
-                          className="bl-btn"
+                          className="bl-btn danger"
                           title="Delete"
                           type="button"
                           onClick={(e) => {
@@ -430,7 +430,12 @@ function PartyCard({
                       (row.isClosing ? (closingBalanceClass === "due" ? " due" : " ok") : "")
                     }
                   >
-                    ₹{inr(row.balance)}
+                    ₹{inr(Math.abs(row.balance))}
+                    {!row.isOpening && (
+                      <span className={"bal-tag " + (row.balance > 0.5 ? "dr" : "cr")}>
+                        {row.balance > 0.5 ? "Dr" : "Cr"}
+                      </span>
+                    )}
                   </span>
                 </div>
               );
