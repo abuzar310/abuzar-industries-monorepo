@@ -28,6 +28,7 @@ import QuoteCanvas from "./QuoteCanvas";
 import MoreMenu from "./MoreMenu";
 import PaymentBlock from "./PaymentBlock";
 import InvoicePayBlock from "./InvoicePayBlock";
+import { applyAdvancesToInvoice } from "@/lib/vouchers";
 import InvoicePrintA from "./InvoicePrintA";
 import CustomerPicker from "./CustomerPicker";
 import GstinField from "./GstinField";
@@ -562,7 +563,12 @@ export default function Editor({
     });
     cur.status = "Converted to Invoice";
     commit(cur, true); // saves the source quote before navigating away
-    toast("Invoice " + inv.number + " created · prices locked");
+    // any advance sitting on the customer's account clears onto the new invoice automatically
+    const adv = feat.vouchers ? await applyAdvancesToInvoice(inv, { persist: true }) : { applied: 0 };
+    toast(
+      "Invoice " + inv.number + " created · prices locked" +
+        (adv.applied > 0 ? " · ₹" + inr(adv.applied) + " advance applied" : ""),
+    );
     router.push("/editor/" + inv.id);
   }
   async function onDelete() {

@@ -6,7 +6,7 @@ import { inr, todayStr } from "@/lib/calc";
 import { addExpense } from "@/lib/expenses";
 import { delRec } from "@/lib/data";
 import { statementsForQuote, type PartyStatement } from "@/lib/payments";
-import { CASH_DAY_LIMIT, cashTakenFromCustomerOn, getBankAccounts } from "@/lib/vouchers";
+import { advanceBalance, applyAdvancesToInvoice, CASH_DAY_LIMIT, cashTakenFromCustomerOn, getBankAccounts } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import { bumpData, toast } from "@/store/app-store";
 import type { Doc, Expense } from "@/lib/types";
@@ -71,6 +71,17 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
     setAmt(v);
   }
 
+  // advance sitting on this customer's account — one tap clears it onto this invoice
+  const advBal = advanceBalance(expenses, doc.customerId || "");
+  async function applyAdv() {
+    const r = await applyAdvancesToInvoice(doc);
+    if (r.applied <= 0) return toast("Nothing to apply — the invoice may already be settled");
+    setAggregates(r.payCash, r.payUpi);
+    reload();
+    bumpData();
+    toast("₹" + inr(r.applied) + " advance applied to this invoice ✓");
+  }
+
   async function addLine() {
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return;
@@ -123,6 +134,15 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
           internal record — never printed on the invoice
         </small>
       </div>
+
+      {advBal > 0.5 && !settled && (
+        <div className="pb-editbar" style={{ marginBottom: 10 }}>
+          <span>
+            ₹{inr(advBal)} advance is sitting on {doc.customerName || "this customer"}&apos;s account
+          </span>
+          <button type="button" onClick={applyAdv}>Apply to this invoice</button>
+        </div>
+      )}
 
       <div className="paybook">
         <div className="pb-r pb-h">
