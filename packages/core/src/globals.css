@@ -1818,7 +1818,10 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .rep-presets{display:flex; flex-wrap:wrap; gap:8px}
 .rep-range{display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px}
 .rep-range>label{display:flex; flex-direction:column; gap:4px; font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft)}
-.rep-range input[type=date]{font-family:var(--mono); font-size:13px; padding:8px 10px; border:1px solid var(--line-2); border-radius:8px; background:var(--panel-2); color:var(--ink)}
+.rep-range input, .rep-range select{font-family:var(--mono); font-size:13px; padding:8px 10px; border:1px solid var(--line-2); border-radius:8px; background:var(--panel-2); color:var(--ink); min-width:130px}
+.rep-range select{cursor:pointer}
+.rep-range input:focus, .rep-range select:focus{outline:none; border-color:var(--ochre); box-shadow:0 0 0 2px rgba(176,124,40,.15)}
+.rep-range input::placeholder{color:var(--ink-faint)}
 .rep-seg{display:inline-flex; border:1px solid var(--line-2); border-radius:8px; overflow:hidden}
 .rep-seg button{border:0; background:var(--panel-2); padding:8px 14px; font-family:var(--disp); font-size:13px; font-weight:600; color:var(--ink-soft); cursor:pointer; border-left:1px solid var(--line-2)}
 .rep-seg button:first-child{border-left:0}
