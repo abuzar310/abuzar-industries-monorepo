@@ -641,7 +641,7 @@ export default function Editor({
       sections: clone(cur.sections),
     });
     toast("New " + (d.displayNumber || d.number) + " created from current");
-    openTab(d.id, d.displayNumber || d.number);
+    openTab(d.id, d.number, d.displayNumber);
     router.push("/editor");
   }
   async function onSubQuote() {
@@ -681,7 +681,7 @@ export default function Editor({
   async function onNewInvoice() {
     const d = await createInvoice();
     toast("New invoice " + d.id + " created");
-    openTab(d.id, d.displayNumber || d.number);
+    openTab(d.id, d.number, d.displayNumber);
     router.push("/editor");
   }
 

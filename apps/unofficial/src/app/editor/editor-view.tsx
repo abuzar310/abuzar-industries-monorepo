@@ -37,7 +37,7 @@ export default function EditorView() {
           closeTab(t.id);
           return;
         }
-        updateTab(t.id, d.number);
+        updateTab(t.id, d.displayNumber || d.number);
         setDocs((prev) => {
           const next = new Map(prev);
           next.set(t.id, { id: t.id, doc: d, action, payFocus });
@@ -97,7 +97,7 @@ export default function EditorView() {
           const active = t.id === activeId;
           return (
             <div key={t.id} className={"editor-tab" + (active ? " active" : "")} onClick={() => setActive(t.id)} onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(t.id); } }}>
-              <span className="editor-tab-label">{t.number || t.id.slice(-6)}</span>
+              <span className="editor-tab-label">{t.displayNumber || t.number || t.id.slice(-6)}</span>
               <button
                 className="editor-tab-close"
                 title="Close"

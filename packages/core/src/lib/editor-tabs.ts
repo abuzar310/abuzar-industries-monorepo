@@ -7,6 +7,7 @@ import { useSyncExternalStore } from "react";
 export interface TabEntry {
   id: string;
   number: string;
+  displayNumber?: string;
 }
 
 let tabs: TabEntry[] = [];
@@ -43,16 +44,17 @@ export function useEditorTabs(): { tabs: readonly TabEntry[]; activeId: string |
 }
 
 /** Open or switch to a tab. If the id already exists, it becomes active. */
-export function openTab(id: string, number = "", action?: string, payFocus?: string) {
+export function openTab(id: string, number = "", displayNumber?: string, action?: string, payFocus?: string) {
   const exist = tabs.findIndex((t) => t.id === id);
   if (exist >= 0) {
     activeId = id;
+    if (displayNumber) tabs = tabs.map((t) => (t.id === id ? { ...t, displayNumber } : t));
     if (action) _actions.set(id, action);
     if (payFocus) _payFocus.set(id, payFocus);
     emit();
     return;
   }
-  tabs = tabs.concat({ id, number });
+  tabs = tabs.concat({ id, number, displayNumber });
   activeId = id;
   if (action) _actions.set(id, action);
   if (payFocus) _payFocus.set(id, payFocus);
