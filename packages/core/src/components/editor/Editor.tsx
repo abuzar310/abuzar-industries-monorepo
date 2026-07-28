@@ -27,6 +27,7 @@ import Totals from "./Totals";
 import QuoteCanvas from "./QuoteCanvas";
 import MoreMenu from "./MoreMenu";
 import PaymentBlock from "./PaymentBlock";
+import InvoicePrintA from "./InvoicePrintA";
 import CustomerPicker from "./CustomerPicker";
 import GstinField from "./GstinField";
 import DateField from "./DateField";
@@ -66,6 +67,7 @@ export default function Editor({
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const inv3aRef = useRef<HTMLDivElement>(null); // the print-only 3A invoice (sell invoices)
   const secRef = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<{ si: number; ri: number; k: string } | null>(null);
   const [editingNo, setEditingNo] = useState(false);
@@ -481,10 +483,13 @@ export default function Editor({
       "Saved ✓  " + next.number + " — reopen from " + (next.kind === "invoice" ? "Invoices" : "Quotations") + " to edit",
     );
   }
+  /** What Print / PDF / WhatsApp render: sell invoices use the printed 3A Woodmark
+   *  sheet; everything else keeps rendering the on-screen sheet. */
+  const printNode = () => (inv3aRef.current ? inv3aRef.current : sheetRef.current);
   async function onPrint() {
     await saveNow(); // never print an unsaved doc
     // Android / installed app: no print dialog — the sheet downloads as a PDF instead
-    if ((await printOrSavePdf(sheetRef.current, docRef.current.number || docRef.current.id)) === "pdf")
+    if ((await printOrSavePdf(printNode(), docRef.current.number || docRef.current.id)) === "pdf")
       toast("PDF downloaded \u2713");
   }
   async function onPdf() {
@@ -492,7 +497,7 @@ export default function Editor({
       await saveNow();
     } catch {}
     try {
-      if (sheetRef.current) await generatePdf(sheetRef.current, docRef.current.number);
+      if (printNode()) await generatePdf(printNode()!, docRef.current.number);
       toast("PDF downloaded ✓");
     } catch (e) {
       toast("PDF error: " + ((e as Error)?.message || e));
@@ -500,10 +505,10 @@ export default function Editor({
   }
   async function onWaSend() {
     await saveNow();
-    if (!sheetRef.current) return;
+    if (!printNode()) return;
     try {
       toast("Preparing PDF…");
-      const how = await sendDocOnWhatsApp(sheetRef.current, docRef.current);
+      const how = await sendDocOnWhatsApp(printNode()!, docRef.current);
       if (how === "shared") toast("PDF + message attached — pick the customer in WhatsApp");
       else if (how === "direct") toast("PDF downloaded · WhatsApp opened with the message ✓");
       else if (how === "fallback") toast("PDF downloaded — attach it in the WhatsApp chat that opened");
@@ -859,7 +864,11 @@ export default function Editor({
       </div>
 
       {/* printable sheet */}
-      <div id="sheet" className={(isInv ? "inv" : feat.simpleQuote ? "sq" : "") + (freeMode ? " free" : "")} ref={sheetRef}>
+      <div
+        id="sheet"
+        className={(isInv ? "inv" : feat.simpleQuote ? "sq" : "") + (freeMode ? " free" : "") + (isInv && !isBuy && !isRent ? " p3a" : "")}
+        ref={sheetRef}
+      >
         {isInv && !isBuy && (
           <div className="wmark" aria-hidden="true">
             <span>{brand.name}</span>
@@ -1232,6 +1241,11 @@ export default function Editor({
           </MoreMenu>
         </div>
       </div>
+
+      {/* the PRINTED tax invoice (3A Woodmark) — print & Save-PDF only, never on screen */}
+      {isInv && !isBuy && !isRent && (
+        <InvoicePrintA ref={inv3aRef} doc={doc} totals={totals} brand={brand} bank={invBank} totalCft={totalCft || 0} />
+      )}
 
       {/* App A: accept payment on a created quotation → final price + cash/UPI → Daybook */}
       {feat.acceptPayment && !isInv && (

@@ -110,6 +110,45 @@ export default function CustomerDetail({ id }: { id: string }) {
   ).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
   const paidTotal = Math.round(payLines.reduce((s, l) => s + l.amount, 0) * 100) / 100;
   const balanceDue = Math.round((grandTotal - paidTotal) * 100) / 100;
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  // Daybook-style account statement: opening → every bill & payment chronologically,
+  // with a running balance after each line (ends exactly at the Outstanding figure)
+  interface StmtEv {
+    key: string; // sortable timestamp
+    kind: "quote" | "pay";
+    date: string;
+    label: string;
+    sub: string;
+    amount: number;
+    id: string;
+  }
+  const stmtEvents: StmtEv[] = [
+    ...quotes.map((d): StmtEv => ({
+      key: d.createdAt || "",
+      kind: "quote",
+      date: d.date,
+      label: "Quotation #" + (d.number || d.id),
+      sub: d.site ? "Carpenter: " + d.site : "",
+      amount: quoteBill(d),
+      id: d.id,
+    })),
+    ...payLines.map((l): StmtEv => ({
+      key: l.at || "",
+      kind: "pay",
+      date: l.date,
+      label: l.mode === "upi" ? l.account || "UPI" : l.toOwner ? "Cash → Owner" : "Cash",
+      sub: (l.note || "").split(" · ").filter((s) => !s.startsWith("settled") && !s.startsWith("on account")).join(" · "),
+      amount: l.amount,
+      id: l.id,
+    })),
+  ].sort((a, b) => a.key.localeCompare(b.key));
+  const stmtRows = stmtEvents.reduce<{ rows: (StmtEv & { bal: number })[]; bal: number }>(
+    (acc, ev) => {
+      const bal = r2(acc.bal + (ev.kind === "quote" ? ev.amount : -ev.amount));
+      return { rows: [...acc.rows, { ...ev, bal }], bal };
+    },
+    { rows: [], bal: opening },
+  ).rows;
   const payerName = (uid: string) => USERS.find((u) => u.id === uid)?.name || uid || "—";
   const canPrint = quotes.length > 0 || opening > 0;
   const today = new Date();
@@ -195,6 +234,63 @@ export default function CustomerDetail({ id }: { id: string }) {
           </div>
         ))}
       </div>
+
+      {(stmtRows.length > 0 || opening > 0) && (
+        <>
+          <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+            Account statement <small>— every bill &amp; payment, running balance</small>
+          </div>
+          <div className="panel-card" style={{ padding: 0, overflow: "hidden" }}>
+            <div className="db-srow db-shead">
+              <span>Type</span>
+              <span>Entry</span>
+              <span className="amt">Billed ₹</span>
+              <span className="amt">Received ₹</span>
+              <span className="amt">Balance ₹</span>
+              <span />
+            </div>
+            {opening > 0 && (
+              <div className="db-srow">
+                <span className="exptag out">Open</span>
+                <div>
+                  <div className="stmt-to">Opening balance</div>
+                  <div className="stmt-sub">old dues from before</div>
+                </div>
+                <span className="amt out">{inr(opening)}</span>
+                <span className="amt" />
+                <span className={"amt bal" + (opening > 0.5 ? " out" : "")}>{inr(opening)}</span>
+                <span />
+              </div>
+            )}
+            {stmtRows.map((ev) => (
+              <div
+                className="db-srow"
+                key={ev.kind + ev.id}
+                style={ev.kind === "quote" ? { cursor: "pointer" } : undefined}
+                onClick={ev.kind === "quote" ? () => router.push("/editor/" + ev.id) : undefined}
+                title={ev.kind === "quote" ? "Open this quotation" : undefined}
+              >
+                <span className={"exptag " + (ev.kind === "quote" ? "out" : "in")}>{ev.kind === "quote" ? "Bill" : "Paid"}</span>
+                <div>
+                  <div className="stmt-to">{ev.label}{ev.sub ? <span className="acct-overall-hint"> · {ev.sub}</span> : null}</div>
+                  <div className="stmt-sub">{ev.date}</div>
+                </div>
+                <span className="amt out">{ev.kind === "quote" ? inr(ev.amount) : ""}</span>
+                <span className="amt in">{ev.kind === "pay" ? inr(ev.amount) : ""}</span>
+                <span className={"amt bal" + (ev.bal > 0.5 ? " out" : "")}>{inr(ev.bal)}</span>
+                <span />
+              </div>
+            ))}
+            <div className="db-day-sum">
+              <span className="out">billed ₹{inr(grandTotal)}</span>
+              <span className="in">received ₹{inr(paidTotal)}</span>
+              <b className={balanceDue > 0.5 ? "out" : ""}>
+                {balanceDue > 0.5 ? "Balance due ₹" + inr(balanceDue) : balanceDue < -0.5 ? "Advance ₹" + inr(-balanceDue) : "Settled ✓"}
+              </b>
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="sectitle" style={{ marginTop: 24, fontSize: 22, display: "flex", alignItems: "center", gap: 12 }}>
         <span>Quotations <small>— {quotes.length}</small></span>
