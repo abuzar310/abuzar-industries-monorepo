@@ -18,6 +18,7 @@ import {
   isContra,
   isJournal,
   isPaymentVoucher,
+  recordAdvanceCashSplit,
   recordAdvanceReceipt,
   recordContra,
   recordJournal,
@@ -107,6 +108,8 @@ export default function VouchersView() {
   const [advDate, setAdvDate] = useState("");
   const [advNote, setAdvNote] = useState("");
   const [advTaken, setAdvTaken] = useState(0);
+  /** big cash split mode: book ₹10k/day automatically from the chosen date forward */
+  const [advSplit, setAdvSplit] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
@@ -138,9 +141,10 @@ export default function VouchersView() {
   const advRoom = advCust ? Math.max(0, r2(CASH_DAY_LIMIT - advTaken)) : CASH_DAY_LIMIT;
   function onAdvAmt(v: string) {
     const n = +v || 0;
-    if (advVia === "cash" && n > advRoom) {
+    // split mode lifts the clamp — the amount gets booked as ₹10k/day automatically
+    if (advVia === "cash" && !advSplit && n > advRoom) {
       setAdvAmt(String(advRoom));
-      toast("Cash cap: only ₹" + inr(advRoom) + " more allowed from this customer on " + advDateStr + " — take the rest by bank");
+      toast("Cash cap: only ₹" + inr(advRoom) + " more allowed from this customer on " + advDateStr + " — split across days or take bank");
       return;
     }
     setAdvAmt(v);
@@ -241,12 +245,37 @@ export default function VouchersView() {
     bumpData();
   }
 
-  // ---- record: advance receipt ----
+  // ---- record: advance receipt (single, or split into ₹10k/day cash entries) ----
   async function recordAdvance() {
     if (!advCust) return toast("Pick an existing customer");
     const a = Math.max(0, +advAmt || 0);
     if (a <= 0) return toast("Enter an amount");
     if (advVia === "bank" && !advBank.trim()) return toast("Pick the bank account");
+
+    if (advVia === "cash" && advSplit && a > CASH_DAY_LIMIT) {
+      // split mode: book ₹10k/day starting from the chosen date, instantly
+      const fromIso = advDate || isoOf(new Date());
+      const made = await recordAdvanceCashSplit({
+        custId: advCust.id,
+        custName: advCust.name,
+        amount: a,
+        fromIso,
+        note: advNote.trim(),
+        by: user?.id || "unknown",
+        expenses,
+      });
+      setAdvAmt("");
+      setAdvNote("");
+      setAdvDate("");
+      load();
+      bumpData();
+      const total = r2(made.reduce((s, m) => s + m.amount, 0));
+      return toast(
+        "₹" + inr(total) + " booked as " + made.length + " daily cash entries (" +
+          (made[0]?.date || "—") + " → " + (made[made.length - 1]?.date || "—") + ")",
+      );
+    }
+
     if (advVia === "cash") {
       const taken = await cashTakenFromCustomerOn(advCust.id, advDateStr, expenses);
       if (taken + a > CASH_DAY_LIMIT + 0.005)
@@ -564,11 +593,16 @@ export default function VouchersView() {
                 />
               </label>
               <label className="modal-field">
-                <span>Amount ₹ {advVia === "cash" && advCust ? <small style={{ color: advRoom <= 0 ? "var(--danger)" : "var(--ink-faint)" }}>(cash room ₹{inr(advRoom)} today)</small> : null}</span>
+                <span>
+                  Amount ₹{" "}
+                  {advVia === "cash" && advCust && !advSplit ? (
+                    <small style={{ color: advRoom <= 0 ? "var(--danger)" : "var(--ink-faint)" }}>(cash room ₹{inr(advRoom)} today)</small>
+                  ) : null}
+                </span>
                 <input type="number" inputMode="decimal" placeholder="0" value={advAmt} onChange={(e) => onAdvAmt(e.target.value)} />
               </label>
               <label className="modal-field">
-                <span>Date (optional)</span>
+                <span>{advVia === "cash" && advSplit ? "From date" : "Date (optional)"}</span>
                 <input type="date" value={advDate} onChange={(e) => setAdvDate(e.target.value)} />
               </label>
               <label className="modal-field">
@@ -591,8 +625,21 @@ export default function VouchersView() {
                 </select>
               )}
             </div>
+            {advVia === "cash" && (
+              <label className="fp-print-opt" style={{ marginTop: 10 }} title="Big cash gets booked as ₹10,000-per-day entries automatically, walking forward from the chosen date">
+                <input type="checkbox" checked={advSplit} onChange={(e) => setAdvSplit(e.target.checked)} />
+                Split across days — ₹{inr(CASH_DAY_LIMIT)}/day booked automatically from the date
+                {advSplit && +advAmt > CASH_DAY_LIMIT && (
+                  <small>
+                    {" "}→ ₹{inr(+advAmt || 0)} ≈ {Math.ceil((+advAmt || 0) / CASH_DAY_LIMIT)} daily entries
+                  </small>
+                )}
+              </label>
+            )}
             <button className="btn primary" type="button" onClick={recordAdvance} style={{ width: "100%", justifyContent: "center", marginTop: 12, padding: 12 }}>
-              Record receipt
+              {advVia === "cash" && advSplit && +advAmt > CASH_DAY_LIMIT
+                ? "Record " + Math.ceil((+advAmt || 0) / CASH_DAY_LIMIT) + " daily receipts"
+                : "Record receipt"}
             </button>
           </div>
 

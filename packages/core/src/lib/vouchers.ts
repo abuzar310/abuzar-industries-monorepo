@@ -226,6 +226,48 @@ export async function recordAdvanceReceipt(f: {
   });
 }
 
+/** Split a big CASH advance into daily entries that respect the ₹10k/day cap — starting
+ *  at `fromIso` (yyyy-mm-dd) and walking forward day by day, skipping days already full.
+ *  ₹50,000 from 1 Aug → 10k on the 1st, 2nd, 3rd, 4th, 5th — booked instantly. */
+export async function recordAdvanceCashSplit(f: {
+  custId: string;
+  custName: string;
+  amount: number;
+  /** yyyy-mm-dd start day */
+  fromIso: string;
+  note?: string;
+  by: string;
+  expenses: Expense[];
+}): Promise<{ date: string; amount: number }[]> {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  let remaining = r2(Math.max(0, f.amount));
+  const made: { date: string; amount: number }[] = [];
+  const d = new Date(f.fromIso + "T00:00:00");
+  if (isNaN(+d)) return made;
+  // hard stop at 90 days so a typo can never spin forever
+  for (let i = 0; i < 90 && remaining > 0.5; i++) {
+    const dmy = pad(d.getDate()) + "-" + pad(d.getMonth() + 1) + "-" + String(d.getFullYear()).slice(2);
+    const taken = await cashTakenFromCustomerOn(f.custId, dmy, f.expenses);
+    const room = Math.max(0, r2(CASH_DAY_LIMIT - taken));
+    if (room > 0.5) {
+      const amt = r2(Math.min(room, remaining));
+      await recordAdvanceReceipt({
+        custId: f.custId,
+        custName: f.custName,
+        amount: amt,
+        via: "cash",
+        date: dmy,
+        note: f.note,
+        by: f.by,
+      });
+      made.push({ date: dmy, amount: amt });
+      remaining = r2(remaining - amt);
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return made;
+}
+
 /** A customer's unapplied advances, oldest first. */
 export const advancesOf = (expenses: Expense[], custId: string): Expense[] =>
   expenses
