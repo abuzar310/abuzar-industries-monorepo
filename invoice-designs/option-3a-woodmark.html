@@ -47,14 +47,15 @@
 
   /* ---- ticket chips ---- */
   .chips{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:8px 10mm 0}
-  .chip{background:var(--bone);border:1px solid var(--hair);padding:7px 10px;
+  .chip{background:var(--bone);border:1px solid var(--hair);padding:7px 10px;border-radius:7px;
         -webkit-print-color-adjust:exact;print-color-adjust:exact}
   .chip span{display:block;font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft)}
   .chip b{font-family:"Space Mono",monospace;font-size:12.5px;font-weight:700;color:var(--maroon)}
 
   /* ---- parties ---- */
   .parties{display:grid;grid-template-columns:1.5fr 1fr;gap:8px;padding:8px 10mm 0}
-  .pbox{border:1px solid var(--hair);border-top:4px solid var(--maroon);padding:9px 12px}
+  .pbox{border:1px solid var(--hair);border-top:4px solid var(--maroon);padding:9px 12px;
+        border-radius:0 0 7px 7px;background:#FFFDF8}
   .pbox .lbl{font-size:8.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-soft)}
   .pbox .nm{font-family:"Oswald",sans-serif;font-size:17px;font-weight:600;letter-spacing:.02em;margin-top:2px}
   .pbox .ln{font-size:11px;color:var(--ink-soft);line-height:1.55;margin-top:2px}
@@ -80,10 +81,10 @@
 
   /* ---- totals band ---- */
   .totband{margin:12px 10mm 0;display:grid;grid-template-columns:1fr 88mm;gap:8px;align-items:stretch}
-  .wordsbox{border:1px solid var(--hair);padding:10px 12px;font-size:11px;color:var(--ink-soft);line-height:1.65}
+  .wordsbox{border:1px solid var(--hair);padding:10px 12px;font-size:11px;color:var(--ink-soft);line-height:1.65;border-radius:7px}
   .wordsbox b{color:var(--ink)}
   .wordsbox .h{font-size:8.5px;letter-spacing:.24em;text-transform:uppercase;display:block;margin-bottom:4px}
-  .tots{border:1px solid var(--hair)}
+  .tots{border:1px solid var(--hair);border-radius:7px;overflow:hidden}
   .trow{display:flex;justify-content:space-between;padding:5.5px 12px;font-size:12px;border-bottom:1px solid var(--hair)}
   .trow .v{font-family:"Space Mono",monospace;font-weight:700}
   .grand{background:var(--maroon-2);color:var(--bone);display:flex;justify-content:space-between;align-items:center;
@@ -93,13 +94,15 @@
 
   /* ---- perforation + office strip ---- */
   .tear{border-top:2px dashed var(--hair);margin:14px 10mm 0}
-  .office{display:grid;grid-template-columns:1.1fr 1.4fr 1fr;gap:18px;padding:10px 10mm 8mm;align-items:end}
+  .office{display:grid;grid-template-columns:1.1fr 1.6fr;gap:18px;padding:10px 10mm 0;align-items:start}
   .oh{font-size:8.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:5px}
   .bank div{font-size:11px;line-height:1.65}
   .bank .mono{font-family:"Space Mono",monospace;font-size:10.5px;font-weight:700}
   .terms ol{padding-left:14px}
   .terms li{font-size:10px;color:var(--ink-soft);line-height:1.6}
-  .sig{text-align:center}
+  /* signatures: customer bottom-left, proprietor bottom-right */
+  .signs{display:flex;justify-content:space-between;align-items:flex-end;padding:26px 10mm 8mm;gap:24px}
+  .sig{width:58mm;text-align:center}
   .sig .for{font-family:"Oswald",sans-serif;font-size:13px;font-weight:600;margin-bottom:26px;color:var(--maroon)}
   .sig .line{border-top:1.5px solid var(--maroon);padding-top:4px;font-size:8.5px;
              letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft)}
@@ -208,9 +211,16 @@
         <li>Payment due on delivery unless agreed otherwise · Disputes subject to Chitradurga jurisdiction.</li>
       </ol>
     </div>
+  </div>
+
+  <div class="signs">
+    <div class="sig">
+      <div class="for">&nbsp;</div>
+      <div class="line">Customer Signature</div>
+    </div>
     <div class="sig">
       <div class="for">For Abuzar Industries</div>
-      <div class="line">Authorised Signature</div>
+      <div class="line">Proprietor · Authorised Signature</div>
     </div>
   </div>
 
