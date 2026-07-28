@@ -115,6 +115,8 @@ export default function CustomerDetail({ id }: { id: string }) {
   interface StmtEv {
     key: string; // sortable timestamp
     kind: "quote" | "pay";
+    /** payment mode — picks the icon (UPI / ₹ cash) */
+    pay?: "upi" | "cash";
     date: string;
     label: string;
     sub: string;
@@ -134,8 +136,9 @@ export default function CustomerDetail({ id }: { id: string }) {
     ...payLines.map((l): StmtEv => ({
       key: l.at || "",
       kind: "pay",
+      pay: l.mode === "upi" ? "upi" : "cash",
       date: l.date,
-      label: l.mode === "upi" ? l.account || "UPI" : l.toOwner ? "Cash → Owner" : "Cash",
+      label: l.mode === "upi" ? l.account || "UPI account" : l.toOwner ? "Cash → Owner" : "Cash",
       sub: (l.note || "").split(" · ").filter((s) => !s.startsWith("settled") && !s.startsWith("on account")).join(" · "),
       amount: l.amount,
       id: l.id,
@@ -250,40 +253,40 @@ export default function CustomerDetail({ id }: { id: string }) {
             )}
           </div>
           <div className="panel-card cs-card">
-            <div className="cs-row cs-head">
-              <span />
-              <span>Entry</span>
-              <span className="amt">Billed ₹</span>
-              <span className="amt">Received ₹</span>
-              <span className="amt">Balance ₹</span>
-            </div>
             {opening > 0 && (
-              <div className="cs-row">
-                <span className="cs-tag">Open</span>
-                <div className="cs-main">
-                  <div className="cs-lbl">Opening balance</div>
-                  <div className="cs-sub">old dues from before</div>
+              <div className="stmt">
+                <div className="stmt-ic due">₹</div>
+                <div className="stmt-main">
+                  <div className="stmt-to">Opening balance</div>
+                  <div className="stmt-sub">old dues from before the app</div>
                 </div>
-                <span className="amt">{inr(opening)}</span>
-                <span className="amt cs-dim">—</span>
-                <span className="amt cs-bal">{inr(opening)}</span>
+                <div className="cs-amt">
+                  <div className="stmt-amt due">+₹{inr(opening)}</div>
+                  <small className="cs-runbal">bal ₹{inr(opening)}</small>
+                </div>
               </div>
             )}
             {stmtRows.map((ev) => (
               <div
-                className={"cs-row" + (ev.kind === "quote" ? " cs-click" : "")}
+                className="stmt"
                 key={ev.kind + ev.id}
+                style={ev.kind === "quote" ? { cursor: "pointer" } : undefined}
                 onClick={ev.kind === "quote" ? () => router.push("/editor/" + ev.id) : undefined}
                 title={ev.kind === "quote" ? "Open this quotation" : undefined}
               >
-                <span className={"cs-tag" + (ev.kind === "pay" ? " in" : "")}>{ev.kind === "quote" ? "Bill" : "Paid"}</span>
-                <div className="cs-main">
-                  <div className="cs-lbl">{ev.label}{ev.sub ? <small> · {ev.sub}</small> : null}</div>
-                  <div className="cs-sub">{ev.date}</div>
+                <div className={"stmt-ic " + (ev.kind === "quote" ? "due" : ev.pay === "upi" ? "upi" : "cash")}>
+                  {ev.kind === "quote" ? "Bill" : ev.pay === "upi" ? "UPI" : "₹"}
                 </div>
-                <span className="amt">{ev.kind === "quote" ? inr(ev.amount) : ""}</span>
-                <span className={"amt" + (ev.kind === "pay" ? " in" : " cs-dim")}>{ev.kind === "pay" ? inr(ev.amount) : ""}</span>
-                <span className="amt cs-bal">{inr(ev.bal)}</span>
+                <div className="stmt-main">
+                  <div className="stmt-to">{ev.label}{ev.sub ? <span className="acct-overall-hint"> · {ev.sub}</span> : null}</div>
+                  <div className="stmt-sub">{ev.date}</div>
+                </div>
+                <div className="cs-amt">
+                  <div className={"stmt-amt" + (ev.kind === "quote" ? " due" : "")}>
+                    {ev.kind === "quote" ? "+" : "−"}₹{inr(ev.amount)}
+                  </div>
+                  <small className="cs-runbal">bal ₹{inr(ev.bal)}</small>
+                </div>
               </div>
             ))}
             <div className="cs-sum">

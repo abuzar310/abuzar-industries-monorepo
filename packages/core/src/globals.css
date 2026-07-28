@@ -1824,39 +1824,16 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .db-srow .amt{font-family:var(--mono); font-size:12.5px; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-faint); opacity:.45}
 .db-srow .amt.in{color:var(--green); font-weight:700; opacity:1}
 .db-srow .amt.out{color:var(--danger); font-weight:700; opacity:1}
-/* ---------- customer account statement (its own clean ledger, not the daybook grid) ---------- */
-.cs-card{padding:0; overflow:hidden}
-.cs-row{display:grid; grid-template-columns:54px minmax(0,1fr) 110px 110px 122px;
-  gap:12px; align-items:center; padding:11px 16px; border-top:1px solid var(--line)}
-.cs-row:first-child{border-top:0}
-.cs-head{padding:9px 16px; background:var(--t-cream2,#f6f0e4); border-top:0; border-bottom:1px solid var(--line)}
-.cs-head span{font-family:var(--disp); font-size:9.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-faint)}
-.cs-row .amt{font-family:var(--mono); font-size:13px; font-weight:700; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink)}
-.cs-row .amt.in{color:var(--green)}
-.cs-row .amt.cs-dim{color:var(--ink-faint); font-weight:400; opacity:.5}
-.cs-row .amt.cs-bal{font-weight:800; color:var(--walnut); background:rgba(148,99,23,.07); border-radius:8px; padding:5px 10px}
-.cs-tag{justify-self:start; font-family:var(--disp); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:700;
-  background:var(--paper-2,#f2ead9); color:var(--ink-soft); border:1px solid var(--line); border-radius:999px; padding:3px 9px}
-.cs-tag.in{background:#e2efd7; color:#3f5a2a; border-color:#cfe0bd}
-.cs-main{min-width:0}
-.cs-lbl{font-weight:700; font-size:13.5px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.cs-lbl small{font-weight:500; color:var(--ink-faint); font-size:12px}
-.cs-sub{font-family:var(--mono); font-size:11px; color:var(--ink-faint); margin-top:2px}
-.cs-click{cursor:pointer; transition:background .12s}
-.cs-click:hover{background:rgba(176,124,40,.05)}
-.cs-sum{display:flex; align-items:center; gap:18px; flex-wrap:wrap; padding:11px 16px;
-  background:rgba(148,99,23,.05); border-top:1px dashed var(--line); font-size:12.5px; color:var(--ink-soft)}
+/* ---------- customer account statement — the familiar Statements look + a running balance ---------- */
+.cs-card{padding:4px 14px 0}
+.cs-amt{text-align:right}
+.cs-runbal{display:block; font-family:var(--mono); font-size:10.5px; color:var(--ink-faint); margin-top:2px; white-space:nowrap}
+.cs-sum{display:flex; align-items:center; gap:18px; flex-wrap:wrap; padding:12px 2px;
+  border-top:1px dashed var(--line); margin-top:4px; font-size:12.5px; color:var(--ink-soft)}
 .cs-sum b{font-family:var(--mono); font-size:13px; color:var(--ink)}
 .cs-sum b.in{color:var(--green)}
 .cs-sum .cs-due{margin-left:auto; font-family:var(--mono); font-size:13px; font-weight:800; color:#fff;
   background:var(--walnut,#4a3a26); border-radius:999px; padding:5px 14px; box-shadow:0 1px 2px rgba(0,0,0,.12)}
-@media (max-width:640px){
-  .cs-row{grid-template-columns:44px minmax(0,1fr) 76px 76px 88px; gap:7px; padding:9px 10px}
-  .cs-row .amt{font-size:11.5px}
-  .cs-row .amt.cs-bal{padding:4px 6px}
-  .cs-lbl{font-size:12.5px}
-  .cs-tag{padding:2px 6px; font-size:8.5px}
-}
 .db-srow .amt.bal{opacity:1}
 /* the balance column reads like a ledger's: its own tinted rail */
 .db-srow .amt.bal{font-weight:800; color:var(--walnut);
