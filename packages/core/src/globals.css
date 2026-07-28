@@ -1352,6 +1352,9 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .att-hist-toggle{display:flex; align-items:center; gap:6px; width:100%; background:none; border:0; border-top:1px dashed var(--line); margin-top:8px; padding:10px 2px 6px; font:inherit; font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; text-align:left}
 .att-hist-toggle:hover{color:var(--ink)}
 .att-hist-toggle b{font-family:var(--mono); font-size:12px; white-space:nowrap}
+/* one old week inside the expanded history — its own mini statement header */
+.att-hist-week{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px; padding:4px 2px; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-faint); border-bottom:1px solid var(--line)}
+.att-hist-week b{font-family:var(--mono); font-size:11px; letter-spacing:0; text-transform:none; color:var(--ink-soft)}
 /* the register breathes: roomier numeric cells, no cramped wrapping */
 .att-table th.amt, .att-table td.amt{min-width:92px; padding-left:10px; padding-right:10px}
 .att-table td{padding-top:9px; padding-bottom:9px}

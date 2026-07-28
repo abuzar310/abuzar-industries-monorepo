@@ -563,6 +563,31 @@ export default function AttendanceView() {
     const curStmt = stmt.filter((s) => { const i = isoOfEntry(s); return i >= days[0] && i <= days[6]; });
     const pastStmt = stmt.filter((s) => isoOfEntry(s) < days[0]);
     const laterStmt = stmt.filter((s) => isoOfEntry(s) > days[6]);
+    // expanded history reads week by week — each old week its own mini statement
+    const groupByWeek = (list: WorkerEntry[]) => {
+      const m = new Map<string, { days: string[]; entries: WorkerEntry[] }>();
+      for (const s of list) {
+        const [y, mo, d] = isoOfEntry(s).split("-").map(Number);
+        const wdays = weekDays(weekStart(new Date(y, (mo || 1) - 1, d || 1)));
+        const g = m.get(wdays[0]) || { days: wdays, entries: [] };
+        g.entries.push(s);
+        m.set(wdays[0], g);
+      }
+      return [...m.values()]
+        .sort((a, b) => b.days[0].localeCompare(a.days[0])) // newest week first
+        .map((g) => ({
+          key: g.days[0],
+          label: fmtWeekLabel(g.days),
+          paid: r2(
+            g.entries
+              .filter((s) => s.kind === "wage" || s.kind === "deduct")
+              .reduce((t, s) => t + (+s.e.amount || 0), 0),
+          ),
+          entries: g.entries,
+        }));
+    };
+    const pastGroups = groupByWeek(pastStmt);
+    const laterGroups = groupByWeek(laterStmt);
     const stmtRow = (x2: WorkerEntry) => {
       const ui = KIND_UI[x2.kind];
       return (
@@ -740,7 +765,16 @@ export default function AttendanceView() {
                           : "settled ✓"}
                     </b>
                   </button>
-                  {histOpen && pastStmt.map(stmtRow)}
+                  {histOpen &&
+                    pastGroups.map((g) => (
+                      <div key={g.key}>
+                        <div className="att-hist-week">
+                          <span>Week {g.label}</span>
+                          {g.paid > 0.5 && <b>paid ₹{inr(g.paid)}</b>}
+                        </div>
+                        {g.entries.map(stmtRow)}
+                      </div>
+                    ))}
                 </>
               )}
               {laterStmt.length > 0 && (
@@ -749,7 +783,16 @@ export default function AttendanceView() {
                     <span className="um-caret">{histOpen ? "▾" : "▸"}</span>
                     After this week · {laterStmt.length} {laterStmt.length === 1 ? "entry" : "entries"}
                   </button>
-                  {histOpen && laterStmt.map(stmtRow)}
+                  {histOpen &&
+                    laterGroups.map((g) => (
+                      <div key={g.key}>
+                        <div className="att-hist-week">
+                          <span>Week {g.label}</span>
+                          {g.paid > 0.5 && <b>paid ₹{inr(g.paid)}</b>}
+                        </div>
+                        {g.entries.map(stmtRow)}
+                      </div>
+                    ))}
                 </>
               )}
             </div>
