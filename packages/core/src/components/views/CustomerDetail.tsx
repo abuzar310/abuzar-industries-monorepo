@@ -10,7 +10,6 @@ import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
 import { mergeReceiptPieces, quoteBill, type PartyStatement } from "@/lib/payments";
-import { USERS } from "@/lib/local-auth";
 import { balanceReminderMessage, customerFollowupMessage, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -149,7 +148,6 @@ export default function CustomerDetail({ id }: { id: string }) {
     },
     { rows: [], bal: opening },
   ).rows;
-  const payerName = (uid: string) => USERS.find((u) => u.id === uid)?.name || uid || "—";
   const canPrint = quotes.length > 0 || opening > 0;
   const today = new Date();
   const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -237,8 +235,19 @@ export default function CustomerDetail({ id }: { id: string }) {
 
       {(stmtRows.length > 0 || opening > 0) && (
         <>
-          <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
-            Account statement <small>— every bill &amp; payment, running balance</small>
+          <div className="sectitle" style={{ marginTop: 24, fontSize: 22, display: "flex", alignItems: "center", gap: 12 }}>
+            <span>Account statement <small>— every bill &amp; payment, running balance</small></span>
+            {canPrint && (
+              <button
+                className="btn sm"
+                style={{ marginLeft: "auto" }}
+                onClick={async () => {
+                  if ((await printOrSavePdf(printRef.current, (cust!.name || "customer") + "-statement")) === "pdf") toast("Statement PDF downloaded \u2713");
+                }}
+              >
+                Print / Save PDF
+              </button>
+            )}
           </div>
           <div className="panel-card" style={{ padding: 0, overflow: "hidden" }}>
             <div className="db-srow db-shead">
@@ -251,14 +260,14 @@ export default function CustomerDetail({ id }: { id: string }) {
             </div>
             {opening > 0 && (
               <div className="db-srow">
-                <span className="exptag out">Open</span>
+                <span className="exptag">Open</span>
                 <div>
                   <div className="stmt-to">Opening balance</div>
                   <div className="stmt-sub">old dues from before</div>
                 </div>
-                <span className="amt out">{inr(opening)}</span>
+                <span className="amt billq">{inr(opening)}</span>
                 <span className="amt" />
-                <span className={"amt bal" + (opening > 0.5 ? " out" : "")}>{inr(opening)}</span>
+                <span className="amt bal">{inr(opening)}</span>
                 <span />
               </div>
             )}
@@ -270,21 +279,21 @@ export default function CustomerDetail({ id }: { id: string }) {
                 onClick={ev.kind === "quote" ? () => router.push("/editor/" + ev.id) : undefined}
                 title={ev.kind === "quote" ? "Open this quotation" : undefined}
               >
-                <span className={"exptag " + (ev.kind === "quote" ? "out" : "in")}>{ev.kind === "quote" ? "Bill" : "Paid"}</span>
+                <span className={"exptag" + (ev.kind === "pay" ? " in" : "")}>{ev.kind === "quote" ? "Bill" : "Paid"}</span>
                 <div>
                   <div className="stmt-to">{ev.label}{ev.sub ? <span className="acct-overall-hint"> · {ev.sub}</span> : null}</div>
                   <div className="stmt-sub">{ev.date}</div>
                 </div>
-                <span className="amt out">{ev.kind === "quote" ? inr(ev.amount) : ""}</span>
+                <span className="amt billq">{ev.kind === "quote" ? inr(ev.amount) : ""}</span>
                 <span className="amt in">{ev.kind === "pay" ? inr(ev.amount) : ""}</span>
-                <span className={"amt bal" + (ev.bal > 0.5 ? " out" : "")}>{inr(ev.bal)}</span>
+                <span className="amt bal">{inr(ev.bal)}</span>
                 <span />
               </div>
             ))}
             <div className="db-day-sum">
-              <span className="out">billed ₹{inr(grandTotal)}</span>
+              <span>billed ₹{inr(grandTotal)}</span>
               <span className="in">received ₹{inr(paidTotal)}</span>
-              <b className={balanceDue > 0.5 ? "out" : ""}>
+              <b>
                 {balanceDue > 0.5 ? "Balance due ₹" + inr(balanceDue) : balanceDue < -0.5 ? "Advance ₹" + inr(-balanceDue) : "Settled ✓"}
               </b>
             </div>
@@ -292,19 +301,8 @@ export default function CustomerDetail({ id }: { id: string }) {
         </>
       )}
 
-      <div className="sectitle" style={{ marginTop: 24, fontSize: 22, display: "flex", alignItems: "center", gap: 12 }}>
+      <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
         <span>Quotations <small>— {quotes.length}</small></span>
-        {canPrint && (
-          <button
-            className="btn sm"
-            style={{ marginLeft: "auto" }}
-            onClick={async () => {
-              if ((await printOrSavePdf(printRef.current, (cust!.name || "customer") + "-statement")) === "pdf") toast("Statement PDF downloaded \u2713");
-            }}
-          >
-            Print / Save PDF
-          </button>
-        )}
       </div>
       <div className="listwrap">
         <DocList docs={quotes} empty="No quotations for this customer yet." />
@@ -331,7 +329,7 @@ export default function CustomerDetail({ id }: { id: string }) {
               {brand.gstin && <div>GSTIN: {brand.gstin}</div>}
             </div>
             <div className="rep-meta">
-              <div className="rep-title">Quotations</div>
+              <div className="rep-title">Account Statement</div>
               <div className="rep-period">{cust.name}{cust.phone ? " · " + cust.phone : ""}</div>
             </div>
           </div>
@@ -339,27 +337,28 @@ export default function CustomerDetail({ id }: { id: string }) {
           <div className="rep-summary cols4">
             <div><b>{qreport.length}</b><span>Quotations</span></div>
             <div><b>₹{inr(grandTotal)}</b><span>Billed{opening > 0 ? " (incl. opening)" : ""}</span></div>
-            <div><b>₹{inr(paidTotal)}</b><span>Paid</span></div>
+            <div><b>₹{inr(paidTotal)}</b><span>Received</span></div>
             <div><b>₹{inr(balanceDue)}</b><span>Balance due</span></div>
           </div>
 
+          {/* the SAME statement as on screen: opening → every bill & payment, running balance */}
           <table className="rep-table">
             <colgroup>
               <col style={{ width: "5%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "22%" }} />
-              <col style={{ width: "31%" }} />
-              <col style={{ width: "12%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "34%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "16%" }} />
               <col style={{ width: "16%" }} />
             </colgroup>
             <thead>
               <tr>
                 <th className="c-n">#</th>
                 <th>Date</th>
-                <th>Quote No</th>
-                <th>Carpenter</th>
-                <th className="amt">CFT</th>
-                <th className="amt">Total ₹</th>
+                <th>Entry</th>
+                <th className="amt">Billed ₹</th>
+                <th className="amt">Received ₹</th>
+                <th className="amt">Balance ₹</th>
               </tr>
             </thead>
             <tbody>
@@ -368,81 +367,35 @@ export default function CustomerDetail({ id }: { id: string }) {
                   <td className="c-n">—</td>
                   <td className="c-date">—</td>
                   <td className="c-no">Opening Balance</td>
-                  <td className="c-cust">—</td>
+                  <td className="amt">{inr(opening)}</td>
                   <td className="amt">—</td>
                   <td className="amt">{inr(opening)}</td>
                 </tr>
               )}
-              {qreport.map((r) => (
-                <tr key={r.no + "-" + r.i}>
-                  <td className="c-n">{r.i}</td>
-                  <td className="c-date">{r.date}</td>
-                  <td className="c-no">{r.no}</td>
-                  <td className="c-cust">{r.carpenter || "—"}</td>
-                  <td className="amt">{inr(r.cft)}</td>
-                  <td className="amt">{inr(r.total)}</td>
+              {stmtRows.map((ev, i) => (
+                <tr key={ev.kind + ev.id}>
+                  <td className="c-n">{i + 1}</td>
+                  <td className="c-date">{ev.date}</td>
+                  <td className="c-cust">
+                    {ev.kind === "quote" ? ev.label + (ev.sub ? " · " + ev.sub : "") : "Received · " + [ev.label, ev.sub].filter(Boolean).join(" · ")}
+                  </td>
+                  <td className="amt">{ev.kind === "quote" ? inr(ev.amount) : ""}</td>
+                  <td className="amt">{ev.kind === "pay" ? inr(ev.amount) : ""}</td>
+                  <td className="amt">{inr(ev.bal)}</td>
                 </tr>
               ))}
               <tr className="rep-tot">
-                <td colSpan={4}>
-                  Total
-                  {opening > 0 ? ` — opening + ${qreport.length} quotation${qreport.length === 1 ? "" : "s"}` : ` — ${qreport.length} quotation${qreport.length === 1 ? "" : "s"}`}
-                </td>
-                <td className="amt">{inr(qtot.cft)}</td>
+                <td colSpan={3}>Total</td>
                 <td className="amt">{inr(grandTotal)}</td>
+                <td className="amt">{inr(paidTotal)}</td>
+                <td className="amt">{inr(balanceDue)}</td>
+              </tr>
+              <tr className="rep-tot">
+                <td colSpan={5}>{balanceDue > 0.5 ? "Balance due" : balanceDue < -0.5 ? "Advance held" : "Settled"}</td>
+                <td className="amt">{inr(Math.abs(balanceDue))}</td>
               </tr>
             </tbody>
           </table>
-
-          {payLines.length > 0 && (
-            <>
-              <div className="rep-title" style={{ marginTop: 18, marginBottom: 8 }}>
-                Payments received — {payLines.length}
-              </div>
-              <table className="rep-table">
-                <colgroup>
-                  <col style={{ width: "5%" }} />
-                  <col style={{ width: "13%" }} />
-                  <col style={{ width: "10%" }} />
-                  <col style={{ width: "42%" }} />
-                  <col style={{ width: "13%" }} />
-                  <col style={{ width: "17%" }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className="c-n">#</th>
-                    <th>Date</th>
-                    <th>Via</th>
-                    <th>Detail</th>
-                    <th>By</th>
-                    <th className="amt">Amount ₹</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...payLines].reverse().map((l, i) => (
-                    <tr key={l.id}>
-                      <td className="c-n">{i + 1}</td>
-                      <td className="c-date">{l.date}</td>
-                      <td>{l.mode === "upi" ? "UPI" : "Cash"}</td>
-                      <td className="c-cust">
-                        {[l.account, l.quoteNo ? "#" + l.quoteNo : "", l.note].filter(Boolean).join(" · ") || "—"}
-                      </td>
-                      <td>{payerName(l.by)}</td>
-                      <td className="amt">{inr(l.amount)}</td>
-                    </tr>
-                  ))}
-                  <tr className="rep-tot">
-                    <td colSpan={5}>Total paid</td>
-                    <td className="amt">{inr(paidTotal)}</td>
-                  </tr>
-                  <tr className="rep-tot">
-                    <td colSpan={5}>Balance due — billed ₹{inr(grandTotal)} − paid ₹{inr(paidTotal)}</td>
-                    <td className="amt">{inr(balanceDue)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </>
-          )}
 
           <div className="rep-foot">Generated {genOn} · {brand.name}</div>
         </div>

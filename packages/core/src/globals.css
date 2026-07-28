@@ -1048,33 +1048,34 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   background:var(--i3-paper); color:var(--i3-ink); font-family:var(--body, sans-serif);
   width:100%; --i3-pad:24px; -webkit-print-color-adjust:exact; print-color-adjust:exact}
 .inv3a .i3-num,.inv3a .i3-dim,.inv3a .i3-mono,.inv3a .i3-amt,.inv3a .i3-cft,.inv3a .i3-sl{font-family:var(--mono); font-variant-numeric:tabular-nums}
-.inv3a .i3-kindtop{text-align:center; padding:14px 0 2px}
+.inv3a .i3-kindtop{text-align:center; padding:10px 0 2px}
 .inv3a .i3-kindtop span{font-family:var(--disp); font-size:14px; letter-spacing:.4em; color:var(--i3-soft);
   text-transform:uppercase; border-bottom:2.5px solid var(--i3-gold); padding:0 6px 4px; font-weight:700}
-.inv3a .i3-mast{display:flex; align-items:center; gap:20px; padding:10px var(--i3-pad) 12px}
-.inv3a .i3-mast img{height:112px; width:auto}
-.inv3a .i3-nm{font-family:var(--disp); font-size:44px; font-weight:800; letter-spacing:.12em;
+.inv3a .i3-mast{display:flex; align-items:center; gap:16px; padding:6px var(--i3-pad) 8px}
+.inv3a .i3-mast img{height:88px; width:auto}
+.inv3a .i3-nm{font-family:var(--disp); font-size:36px; font-weight:800; letter-spacing:.12em;
   font-stretch:expanded; line-height:1; color:var(--i3-maroon); text-transform:uppercase; white-space:nowrap}
-.inv3a .i3-tg{font-family:var(--disp); font-size:12.5px; letter-spacing:.42em; color:var(--i3-gold);
-  text-transform:uppercase; margin-top:6px; font-weight:700}
-.inv3a .i3-ad{font-size:11px; color:var(--i3-soft); margin-top:7px; line-height:1.6}
+.inv3a .i3-tg{font-family:var(--disp); font-size:11.5px; letter-spacing:.42em; color:var(--i3-gold);
+  text-transform:uppercase; margin-top:5px; font-weight:700}
+.inv3a .i3-ad{font-size:10.5px; color:var(--i3-soft); margin-top:5px; line-height:1.55}
 .inv3a .i3-gs{font-family:var(--mono); font-size:11px; font-weight:700; margin-top:2px}
 .inv3a .i3-dbl{height:6px; border-top:3px solid var(--i3-maroon); border-bottom:1.5px solid var(--i3-gold); margin:0 var(--i3-pad)}
 .inv3a .i3-chips{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; padding:10px var(--i3-pad) 0}
-.inv3a .i3-chip{background:var(--i3-bone); border:1px solid var(--i3-hair); padding:7px 10px; border-radius:7px}
+.inv3a .i3-chip{background:var(--i3-bone); border:1px solid var(--i3-hair); padding:5px 9px; border-radius:7px}
 .inv3a .i3-chip span{display:block; font-size:8.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--i3-soft)}
-.inv3a .i3-chip b{font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--i3-maroon)}
+.inv3a .i3-chip b{font-family:var(--mono); font-size:12px; font-weight:700; color:var(--i3-maroon)}
 .inv3a .i3-parties{display:grid; grid-template-columns:1.5fr 1fr; gap:8px; padding:8px var(--i3-pad) 0}
 .inv3a .i3-pbox{border:1px solid var(--i3-hair); border-top:4px solid var(--i3-maroon);
-  padding:9px 12px; border-radius:0 0 7px 7px; background:#FFFDF8}
+  padding:7px 11px; border-radius:0 0 7px 7px; background:#FFFDF8}
 .inv3a .i3-lbl{font-size:8.5px; letter-spacing:.24em; text-transform:uppercase; color:var(--i3-soft); margin-bottom:3px}
 .inv3a .i3-pnm{font-family:var(--disp); font-size:17px; font-weight:700; letter-spacing:.02em; margin-top:2px}
 .inv3a .i3-ln{font-size:11px; color:var(--i3-soft); line-height:1.55; margin-top:2px}
 .inv3a .i3-ln.i3-mono{font-size:10.5px; color:var(--i3-ink)}
-/* the classic wood CFT box — brown header, ruled rows (min 6), footer strip */
-.inv3a .i3-box{margin:10px var(--i3-pad) 0; border:1px solid var(--i3-hair); border-radius:7px; overflow:hidden; background:#FFFDF8}
+/* the classic wood CFT boxes — HALF page wide, two per row (single box leaves the right half empty) */
+.inv3a .i3-boxes{display:grid; grid-template-columns:1fr 1fr; gap:8px; align-items:start; margin:10px var(--i3-pad) 0}
+.inv3a .i3-box{border:1px solid var(--i3-hair); border-radius:7px; overflow:hidden; background:#FFFDF8}
 .inv3a .i3-bhead{background:var(--i3-wood); color:#FDF9EE; display:flex; justify-content:space-between; align-items:center;
-  padding:7px 12px; font-family:var(--disp); font-size:14px; letter-spacing:.1em; text-transform:uppercase; font-weight:700}
+  padding:5px 10px; font-family:var(--disp); font-size:13px; letter-spacing:.1em; text-transform:uppercase; font-weight:700}
 .inv3a .i3-bhead em{font-style:normal; font-family:var(--mono); font-size:11px; letter-spacing:.04em; color:#F2DCA9}
 .inv3a .i3-btbl{width:100%; border-collapse:collapse}
 .inv3a .i3-btbl thead th{background:var(--i3-bone); color:var(--i3-soft); font-family:var(--disp);
@@ -1082,35 +1083,36 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   text-align:left; border-bottom:1.5px solid var(--i3-hair)}
 .inv3a .i3-btbl th small{display:block; font-size:7px; letter-spacing:.1em; color:var(--i3-soft); font-weight:600}
 .inv3a .i3-btbl th.c,.inv3a .i3-btbl td.c{text-align:center}
-.inv3a .i3-btbl tbody td{padding:5.5px 8px; font-size:13px; border-bottom:1px solid var(--i3-hair); height:24px}
+.inv3a .i3-btbl tbody td{padding:4px 8px; font-size:12.5px; border-bottom:1px solid var(--i3-hair); height:20px}
+.inv3a .i3-btbl tbody tr:nth-child(even) td{background:var(--i3-bone)}  /* zebra continues through the blank ruled lines */
 .inv3a .i3-btbl tbody tr:last-child td{border-bottom:none}
 .inv3a .i3-sl{font-size:11px; color:var(--i3-soft)}
 .inv3a .i3-cft{font-weight:700}
 .inv3a .i3-dim{font-weight:600}
-.inv3a .i3-bfoot{display:flex; justify-content:space-between; align-items:center; gap:24px;
-  background:var(--i3-bone); border-top:1.5px solid var(--i3-hair); padding:7px 12px}
+.inv3a .i3-bfoot{display:flex; justify-content:space-between; align-items:center; gap:18px;
+  background:var(--i3-bone); border-top:1.5px solid var(--i3-hair); padding:5px 10px}
 .inv3a .i3-bfoot span{display:block; font-size:8.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--i3-soft)}
 .inv3a .i3-bfoot b{font-family:var(--mono); font-size:14px; font-weight:700}
 .inv3a .i3-bfoot .tp{text-align:right; margin-left:auto}
 .inv3a .i3-bfoot .tp b{font-size:16px; color:var(--i3-maroon)}
 /* totals sit right; the words are ONE slim line under them (no empty box) */
 .inv3a .i3-tots{border:1px solid var(--i3-hair); border-radius:7px; overflow:hidden;
-  width:340px; margin:12px var(--i3-pad) 0 auto}
+  width:340px; margin:10px var(--i3-pad) 0 auto}
 .inv3a .i3-words{margin:8px var(--i3-pad) 0; font-size:11px; color:var(--i3-soft); line-height:1.6; text-align:right}
 .inv3a .i3-words b{color:var(--i3-ink)}
-.inv3a .i3-trow{display:flex; justify-content:space-between; padding:5.5px 12px; font-size:12px; border-bottom:1px solid var(--i3-hair)}
+.inv3a .i3-trow{display:flex; justify-content:space-between; padding:4.5px 12px; font-size:12px; border-bottom:1px solid var(--i3-hair)}
 .inv3a .i3-trow .v{font-family:var(--mono); font-weight:700}
 .inv3a .i3-grand{background:var(--i3-maroon2); color:var(--i3-bone); display:flex; justify-content:space-between;
-  align-items:center; padding:12px 14px}
+  align-items:center; padding:10px 14px}
 .inv3a .i3-grand .l{font-family:var(--disp); font-size:12px; letter-spacing:.3em; text-transform:uppercase; font-weight:700}
 .inv3a .i3-grand .v{font-family:var(--mono); font-size:21px; font-weight:700; color:var(--i3-gold)}
-.inv3a .i3-tear{border-top:2px dashed var(--i3-hair); margin:16px var(--i3-pad) 0}
+.inv3a .i3-tear{border-top:2px dashed var(--i3-hair); margin:12px var(--i3-pad) 0}
 .inv3a .i3-office{display:grid; grid-template-columns:1.1fr 1.6fr; gap:18px; padding:10px var(--i3-pad) 0; align-items:start}
 .inv3a .i3-bank div{font-size:11px; line-height:1.65}
 .inv3a .i3-bank .i3-mono{font-size:10.5px; font-weight:700}
 .inv3a .i3-terms ol{padding-left:14px}
 .inv3a .i3-terms li{font-size:10px; color:var(--i3-soft); line-height:1.6}
-.inv3a .i3-signs{display:flex; justify-content:space-between; align-items:flex-end; padding:30px var(--i3-pad) 18px; gap:24px}
+.inv3a .i3-signs{display:flex; justify-content:space-between; align-items:flex-end; padding:22px var(--i3-pad) 14px; gap:24px}
 .inv3a .i3-sig{width:220px; text-align:center}
 .inv3a .i3-sig .for{font-family:var(--disp); font-size:13px; font-weight:700; margin-bottom:28px; color:var(--i3-maroon)}
 .inv3a .i3-sig .line{border-top:1.5px solid var(--i3-maroon); padding-top:4px; font-size:8.5px;
@@ -1809,6 +1811,8 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .db-srow .amt{font-family:var(--mono); font-size:12.5px; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-faint); opacity:.45}
 .db-srow .amt.in{color:var(--green); font-weight:700; opacity:1}
 .db-srow .amt.out{color:var(--danger); font-weight:700; opacity:1}
+/* customer statement: billed figures in plain ink — a bill isn't an alarm */
+.db-srow .amt.billq{color:var(--ink-soft); font-weight:700; opacity:1}
 .db-srow .amt.bal{opacity:1}
 /* the balance column reads like a ledger's: its own tinted rail */
 .db-srow .amt.bal{font-weight:800; color:var(--walnut);

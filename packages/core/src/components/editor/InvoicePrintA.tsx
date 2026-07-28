@@ -32,6 +32,7 @@ function WoodBox({ sec, measure }: { sec: Section; measure: number }) {
   const rows = (sec.rows || []).filter((r) => measurer(r) > 0);
   const amount = amountOf(sec, measure);
   const totalPcs = rows.reduce((s, r) => s + (+r.pcs || 0), 0);
+  const hasPcs = totalPcs > 0; // direct/CBM boxes drop the Pcs column when nothing uses it
   const n = Math.max(rows.length, MIN_ROWS);
   const cell = (r: Row | undefined, v: (r: Row) => string) => (r ? v(r) : "\u00A0");
   return (
@@ -42,24 +43,29 @@ function WoodBox({ sec, measure }: { sec: Section; measure: number }) {
       </div>
       <table className="i3-btbl">
         {bySize ? (
+          /* sizes first (L · W · T · Pcs), the computed CFT LAST on the right */
           <colgroup>
-            <col style={{ width: "8%" }} /><col style={{ width: "20%" }} /><col style={{ width: "18%" }} />
-            <col style={{ width: "18%" }} /><col style={{ width: "18%" }} /><col style={{ width: "18%" }} />
+            <col style={{ width: "7%" }} /><col style={{ width: "16%" }} /><col style={{ width: "16%" }} />
+            <col style={{ width: "16%" }} /><col style={{ width: "15%" }} /><col style={{ width: "30%" }} />
           </colgroup>
         ) : (
+          /* just a quantity: the ruled line runs the width, the figure sits at the right */
           <colgroup>
-            <col style={{ width: "10%" }} /><col style={{ width: "60%" }} /><col style={{ width: "30%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: hasPcs ? "48%" : "63%" }} />
+            {hasPcs && <col style={{ width: "15%" }} />}
+            <col style={{ width: "30%" }} />
           </colgroup>
         )}
         <thead>
           {bySize ? (
             <tr>
-              <th className="c">#</th><th>CFT</th><th className="c">L <small>feet</small></th>
-              <th className="c">W <small>inch</small></th><th className="c">T <small>inch</small></th><th className="c">Pcs <small>qty</small></th>
+              <th className="c">#</th><th className="c">L <small>feet</small></th><th className="c">W <small>inch</small></th>
+              <th className="c">T <small>inch</small></th><th className="c">Pcs <small>qty</small></th><th className="r">CFT</th>
             </tr>
           ) : (
             <tr>
-              <th className="c">#</th><th>{unit}</th><th className="c">Pcs</th>
+              <th className="c">#</th><th>&nbsp;</th>{hasPcs && <th className="c">Pcs</th>}<th className="r">{unit}</th>
             </tr>
           )}
         </thead>
@@ -69,17 +75,18 @@ function WoodBox({ sec, measure }: { sec: Section; measure: number }) {
             return bySize ? (
               <tr key={i}>
                 <td className="c i3-sl">{i + 1}</td>
-                <td className="i3-cft">{cell(r, (x) => inr(cftOf(x)))}</td>
                 <td className="c i3-dim">{cell(r, (x) => String(x.l ?? ""))}</td>
                 <td className="c i3-dim">{cell(r, (x) => String(x.w ?? ""))}</td>
                 <td className="c i3-dim">{cell(r, (x) => String(x.t ?? ""))}</td>
                 <td className="c i3-dim">{cell(r, (x) => String(x.pcs ?? ""))}</td>
+                <td className="r i3-cft">{cell(r, (x) => inr(cftOf(x)))}</td>
               </tr>
             ) : (
               <tr key={i}>
                 <td className="c i3-sl">{i + 1}</td>
-                <td className="i3-cft">{cell(r, (x) => inr(measurer(x)))}</td>
-                <td className="c i3-dim">{cell(r, (x) => String(x.pcs || "\u00A0"))}</td>
+                <td>&nbsp;</td>
+                {hasPcs && <td className="c i3-dim">{cell(r, (x) => String(x.pcs || "\u00A0"))}</td>}
+                <td className="r i3-cft">{cell(r, (x) => inr(measurer(x)))}</td>
               </tr>
             );
           })}
@@ -143,10 +150,12 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
         </div>
       </div>
 
-      {/* the classic wood CFT boxes — always at least 6 ruled lines each */}
-      {(doc.sections || []).map((sec, si) => (
-        <WoodBox key={si} sec={sec} measure={totals.secCft[si] ?? 0} />
-      ))}
+      {/* the classic wood CFT boxes — half-page wide, two per row, min 6 ruled lines each */}
+      <div className="i3-boxes">
+        {(doc.sections || []).map((sec, si) => (
+          <WoodBox key={si} sec={sec} measure={totals.secCft[si] ?? 0} />
+        ))}
+      </div>
 
       {/* totals (right) + a slim amount-in-words strip */}
       <div className="i3-tots">
