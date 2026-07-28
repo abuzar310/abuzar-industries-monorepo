@@ -66,6 +66,25 @@ export default function EditorView() {
     return () => document.removeEventListener("keydown", onKey);
   }, [tabs, activeId]);
 
+  // Ctrl+Alt+ArrowRight / ArrowLeft — alternative tab cycling
+  useEffect(() => {
+    if (!tabs.length) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey && e.altKey)) return;
+      const cur = tabs.findIndex((t) => t.id === activeId);
+      if (cur < 0) return;
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setActive(tabs[(cur + 1) % tabs.length].id);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setActive(tabs[(cur - 1 + tabs.length) % tabs.length].id);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [tabs, activeId]);
+
   if (!tabs.length) {
     return (
       <div className="editor-empty">
