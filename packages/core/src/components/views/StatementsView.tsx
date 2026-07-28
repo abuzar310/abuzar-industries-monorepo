@@ -208,7 +208,7 @@ export default function StatementsView() {
         shown.map((r) => (
           <div className="panel-card" key={r.id} style={{ marginTop: 12 }}>
             <div className="stmt-qhead" onClick={() => router.push("/editor/" + r.id)} title="Open quotation">
-              <span className="sq-no">#{r.number}</span>
+              <span className="sq-no">#{r.displayNumber || r.number}</span>
               <span className="sq-name">{r.name}</span>
               <small className="sq-date">
                 {r.date}
@@ -242,7 +242,7 @@ export default function StatementsView() {
                     className="stmt"
                     key={s.id}
                     style={{ cursor: "pointer" }}
-                    title={"Open #" + r.number + " at this payment"}
+                    title={"Open #" + (r.displayNumber || r.number) + " at this payment"}
                     onClick={() => router.push("/editor/" + r.id + "?pay=" + encodeURIComponent(s.id))}
                   >
                     <div className={"stmt-ic " + (s.mode === "upi" ? "upi" : "cash")}>{s.mode === "upi" ? "UPI" : "₹"}</div>

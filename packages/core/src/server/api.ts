@@ -97,6 +97,72 @@ function checkRole(user: AppUser | null, minRole: "owner" | "manager"): Response
   }
 }
 
+// ---- quotation number recycling ----
+// Deleted quotation numbers are kept in a pool so new quotations can reuse them
+// for display (gap-free sequential numbering). The backend ID always increments
+// to avoid collision; the displayNumber field shows the recycled number.
+
+/** Extract the numeric serial from a quotation number like "2026-27-116" → 116. */
+function serialFromQuotationNumber(num: string): number {
+  const m = String(num || "").match(/-(\d+)$/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/** Read recycled pool using a locked client (inside advisory lock). */
+async function getRecycledSerialsWithClient(
+  client: import("pg").PoolClient,
+  schema: AppSchema,
+): Promise<number[]> {
+  const r = await client.query(
+    `select v from ${tableRef(schema, "meta")} where k = 'quotation_recycled'`,
+  );
+  const arr = (r.rows[0]?.v as number[]) || [];
+  return arr.sort((a, b) => a - b);
+}
+
+/** Write recycled pool using a locked client (inside advisory lock). */
+async function setRecycledSerialsWithClient(
+  client: import("pg").PoolClient,
+  schema: AppSchema,
+  serials: number[],
+): Promise<void> {
+  await client.query(
+    `insert into ${tableRef(schema, "meta")} (k, v) values ('quotation_recycled', $1::jsonb)
+     on conflict (k) do update set v = excluded.v, updated_at = now()`,
+    [JSON.stringify(serials)],
+  );
+}
+
+/** Read the recycled serials pool (sorted ascending). Uses the default pool. */
+async function getRecycledSerials(schema: AppSchema): Promise<number[]> {
+  const rows = await sql<{ v: unknown }>(
+    `select v from ${tableRef(schema, "meta")} where k = 'quotation_recycled'`,
+  );
+  const arr = (rows[0]?.v as number[]) || [];
+  return arr.sort((a, b) => a - b);
+}
+
+/** Add a serial to the recycled pool (if not already there). Uses default pool. */
+async function addToRecycled(schema: AppSchema, serial: number): Promise<void> {
+  if (serial <= 0) return;
+  const pool = await getRecycledSerials(schema);
+  if (!pool.includes(serial)) {
+    pool.push(serial);
+    await metaSet(schema, "quotation_recycled", pool.sort((a, b) => a - b));
+  }
+}
+
+/** Remove a serial from the recycled pool. Uses default pool. */
+async function removeFromRecycled(schema: AppSchema, serial: number): Promise<void> {
+  if (serial <= 0) return;
+  const pool = await getRecycledSerials(schema);
+  const idx = pool.indexOf(serial);
+  if (idx >= 0) {
+    pool.splice(idx, 1);
+    await metaSet(schema, "quotation_recycled", pool);
+  }
+}
+
 // ---- atomic document creation (collision-proof numbering) ----
 
 const isLive = (d: AnyRec) => !d.deletedAt && !d.purgedAt;
@@ -138,12 +204,26 @@ async function createDocAtomic(schema: AppSchema, data: AnyRec): Promise<AnyRec>
         `select coalesce(max((substring(id from '^${fy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d+)$'))::int), 0) as mx
            from ${t} where data->>'kind' = 'quotation'`,
       );
-      const n = (parseInt(r.rows[0]?.mx, 10) || 0) + 1;
-      const id = fy + "-" + pad(n, 3);
-      const doc = { ...data, id, number: id, kind };
+      const realN = (parseInt(r.rows[0]?.mx, 10) || 0) + 1;
+      const realId = fy + "-" + pad(realN, 3);
+      // Check recycled pool for a display number (soft-deleted quotation's serial)
+      const recycled = await getRecycledSerialsWithClient(client, schema);
+      let displayId = realId;
+      if (recycled.length > 0) {
+        const serial = recycled[0]; // lowest recycled serial
+        displayId = fy + "-" + pad(serial, 3);
+        await setRecycledSerialsWithClient(client, schema, recycled.slice(1));
+      }
+      const doc = {
+        ...data,
+        id: realId,
+        number: realId,
+        ...(displayId !== realId ? { displayNumber: displayId } : {}),
+        kind,
+      };
       const ins = await client.query(
         `insert into ${t} (id, data) values ($1, $2::jsonb) returning data`,
-        [id, JSON.stringify(doc)],
+        [realId, JSON.stringify(doc)],
       );
       return ins.rows[0].data as AnyRec;
     }
@@ -292,6 +372,20 @@ export function createDataApi(schema: AppSchema) {
       if (method === "PUT") {
         const data = (await req.json().catch(() => null)) as AnyRec | null;
         if (!data || typeof data !== "object") return err(400, "Bad record");
+
+        // Quotation recycle: detect trash/restore transitions
+        if (data.kind === "quotation" && data.number) {
+          const serial = serialFromQuotationNumber(String(data.number));
+          if (serial > 0) {
+            // Check current DB state to detect transition
+            const currentRow = await getRow(schema, table, id).catch(() => null);
+            const wasDeleted = currentRow?.data?.deletedAt ? true : false;
+            const nowDeleted = data.deletedAt ? true : false;
+            if (!wasDeleted && nowDeleted)   await addToRecycled(schema, serial);  // → trashed
+            else if (wasDeleted && !nowDeleted) await removeFromRecycled(schema, serial); // → restored
+          }
+        }
+
         const row = await (await import("./db")).upsertRow(schema, table, id, data);
         return json({ data: row.data, updatedAt: row.updated_at });
       }

@@ -248,7 +248,7 @@ function PartyCard({
             const qsettled = qd.balance <= 0.5;
             return (
               <div className="pbd-q" key={qd.id} onClick={() => router.push("/editor/" + qd.id)}>
-                <span className="no">#{qd.number}</span>
+                <span className="no">#{qd.displayNumber || qd.number}</span>
                 <span className="info">
                   Bill ₹{inr(qd.bill)} · paid ₹{inr(qd.paid)}
                 </span>

@@ -43,6 +43,11 @@ export interface Doc {
   id: string;
   kind: Kind;
   number: string;
+  /** Recycled display number — when a quotation is created, the backend assigns
+   *  the next sequential number (e.g. 117), but the frontend shows a recycled
+   *  number from a deleted quotation (e.g. 116) for gap-free sequential display.
+   *  Use displayNumber || number everywhere the user sees a quotation number. */
+  displayNumber?: string;
   status: string;
   customerId: string;
   customerName: string;

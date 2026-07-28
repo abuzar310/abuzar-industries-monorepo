@@ -74,7 +74,7 @@ interface DbUser extends AppUser {
 
 const DEFAULT_USERS: { id: string; name: string; role: "owner" | "manager"; pw: string }[] = [
   { id: "afsar", name: "Owner", role: "owner", pw: "afsar786" },
-  { id: "ajju", name: "Manager", role: "manager", pw: "ajju123" },
+  { id: "ajju", name: "Manager", role: "manager", pw: "ajju786" },
 ];
 
 const seeded: Partial<Record<AppSchema, boolean>> = {};

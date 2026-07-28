@@ -75,7 +75,7 @@ export default function CustomerDetail({ id }: { id: string }) {
     const t = computeDoc(d);
     return {
       i: i + 1,
-      no: d.number || d.id,
+      no: d.displayNumber || d.number || d.id,
       date: d.date,
       carpenter: d.site || "",
       cft: t.secCft.reduce((s, c) => s + c, 0),

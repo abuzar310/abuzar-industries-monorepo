@@ -104,7 +104,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       if (store === "invoices") {
         // invoices: newest number on top (falls back to createdAt when numbers tie / are non-numeric)
         const num = (d: Doc) => {
-          const m = String(d.number || d.id || "").match(/(\d+)\D*$/);
+          const m = String(d.displayNumber || d.number || d.id || "").match(/(\d+)\D*$/);
           return m ? parseInt(m[1], 10) : 0;
         };
         active.sort((a, b) => num(b) - num(a) || (b.createdAt || "").localeCompare(a.createdAt || ""));
@@ -308,7 +308,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                       aria-label={"Select " + d.id}
                     />
                   )}
-                  {isInv && d.tradeType === "buy" ? d.supplierBillNo || d.number || d.id : d.number || d.id}
+                  {isInv && d.tradeType === "buy" ? d.supplierBillNo || (d.displayNumber || d.number) || d.id : (d.displayNumber || d.number) || d.id}
                   {isInv && d.tradeType === "buy" ? (
                     <span className="mut" style={{ display: "block", fontSize: 11 }}>
                       Purchase{d.number ? ` · #${d.number}` : ""}
@@ -441,7 +441,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                     <tr key={d.id} style={isBillable(d) ? undefined : { color: "#8a7f6d" }}>
                       <td className="c-n">{i + 1}</td>
                       <td className="c-date">{d.date}</td>
-                      <td className="c-no">{d.number}</td>
+                      <td className="c-no">{d.displayNumber || d.number}</td>
                       <td className="c-cust">{d.customerName || "Walk-in"}</td>
                       <td>{isBillable(d) ? d.status : "Draft — not counted"}</td>
                       <td className="amt">{isBillable(d) ? inr(quoteBill(d)) : "(" + inr(quoteBill(d)) + ")"}</td>

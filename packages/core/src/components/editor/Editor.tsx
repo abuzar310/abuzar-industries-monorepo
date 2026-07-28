@@ -479,7 +479,7 @@ export default function Editor({
     toast(msg);
   }
   const onSaveDraft = () => setStatusAndSave("Draft", "Saved as draft");
-  const onCreate = () => setStatusAndSave("Created", "Quotation " + docRef.current.number + " saved ✓");
+  const onCreate = () => setStatusAndSave("Created", "Quotation " + (docRef.current.displayNumber || docRef.current.number) + " saved ✓");
 
   // final accepted price override (round figure); autosaved, doesn't change the itemised total
   const onFinalPrice = (v: string) =>
@@ -506,13 +506,13 @@ export default function Editor({
     await saveNow();
     const next = docRef.current;
     toast(
-      "Saved ✓  " + next.number + " — reopen from " + (next.kind === "invoice" ? "Invoices" : "Quotations") + " to edit",
+      "Saved ✓  " + (next.displayNumber || next.number) + " — reopen from " + (next.kind === "invoice" ? "Invoices" : "Quotations") + " to edit",
     );
   }
   async function onPrint() {
     await saveNow(); // never print an unsaved doc
     // Android / installed app: no print dialog — the sheet downloads as a PDF instead
-    if ((await printOrSavePdf(sheetRef.current, docRef.current.number || docRef.current.id)) === "pdf")
+    if ((await printOrSavePdf(sheetRef.current, docRef.current.displayNumber || docRef.current.number || docRef.current.id)) === "pdf")
       toast("PDF downloaded \u2713");
   }
   async function onPdf() {
@@ -520,7 +520,7 @@ export default function Editor({
       await saveNow();
     } catch {}
     try {
-      if (sheetRef.current) await generatePdf(sheetRef.current, docRef.current.number);
+      if (sheetRef.current) await generatePdf(sheetRef.current, docRef.current.displayNumber || docRef.current.number);
       toast("PDF downloaded ✓");
     } catch (e) {
       toast("PDF error: " + ((e as Error)?.message || e));
@@ -592,7 +592,7 @@ export default function Editor({
   }
   async function onDelete() {
     const ok = await confirmDialog({
-      title: "Move " + doc.number + " to Recycle bin?",
+      title: "Move " + (doc.displayNumber || doc.number) + " to Recycle bin?",
       message: "It leaves your lists but isn't lost — restore it anytime from Settings → Recycle bin.",
       confirmLabel: "Move to bin",
     });
@@ -602,7 +602,7 @@ export default function Editor({
     await trashDoc(st, docRef.current.id); // soft-delete: kept in the cloud, always recoverable
     prefSet("lastOpen", null);
     bumpData();
-    toast(doc.number + " moved to Recycle bin");
+    toast((doc.displayNumber || doc.number) + " moved to Recycle bin");
     router.push(st === "invoices" ? "/invoices" : "/quotations");
   }
   async function onClearPayments() {
@@ -640,8 +640,8 @@ export default function Editor({
       gstMode: cur.gstMode,
       sections: clone(cur.sections),
     });
-    toast("New " + d.number + " created from current");
-    openTab(d.id, d.number);
+    toast("New " + (d.displayNumber || d.number) + " created from current");
+    openTab(d.id, d.displayNumber || d.number);
     router.push("/editor");
   }
   async function onSubQuote() {
@@ -681,7 +681,7 @@ export default function Editor({
   async function onNewInvoice() {
     const d = await createInvoice();
     toast("New invoice " + d.id + " created");
-    openTab(d.id, d.number);
+    openTab(d.id, d.displayNumber || d.number);
     router.push("/editor");
   }
 
@@ -824,7 +824,7 @@ export default function Editor({
       <div className="mast-top sq-head">
         <div className="mh-side mh-no">
           <label>Quotation No.</label>
-          <input key="numro" className="ro" value={doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
+          <input key="numro" className="ro" value={doc.displayNumber || doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
         </div>
         <div className="co-name">Wood Quotation</div>
         <div className="mh-side mh-date">
@@ -977,7 +977,7 @@ export default function Editor({
                     }}
                   />
                 ) : (
-                  <input key="numro" className="ro" value={doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
+                  <input key="numro" className="ro" value={doc.displayNumber || doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
                 )}
               </div>
               <div className="co-name">Wood Quotation</div>
@@ -1043,7 +1043,7 @@ export default function Editor({
                   }}
                 />
               ) : (
-                <input key="numro" className="ro" value={doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
+                <input key="numro" className="ro" value={doc.displayNumber || doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
               )}
             </div>
             <div className="f">
