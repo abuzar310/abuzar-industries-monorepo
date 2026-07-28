@@ -23,6 +23,7 @@ import {
   recordJournal,
   recordPaymentVoucher,
   removeBankAccount,
+  liveInvoices,
 } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
@@ -145,7 +146,8 @@ export default function VouchersView() {
     setAdvAmt(v);
   }
 
-  const invById = useMemo(() => new Map(invoices.map((d) => [d.id, d] as const)), [invoices]);
+  // trashed invoices drop out — their payments hide with them (and return on restore)
+  const invById = useMemo(() => new Map(liveInvoices(invoices).map((d) => [d.id, d] as const)), [invoices]);
   const custName = (id?: string) => customers.find((c) => c.id === id)?.name || "—";
 
   // ---- filter machinery ----

@@ -178,11 +178,15 @@ export function bankBook(expenses: Expense[], invoiceById: Map<string, Doc>, ban
 
 // ---- the ₹10k/day cash rule ----
 
+/** Only invoices that still EXIST for the business — Recycle-bin (trashed/purged) invoices
+ *  drop out of every book, cap and statement; restoring one brings its payments back. */
+export const liveInvoices = (docs: Doc[]): Doc[] => docs.filter((d) => !d.deletedAt && !d.purgedAt);
+
 /** ₹ cash already received from this customer on `date` (dd-mm-yy) — invoice payments
  *  AND account advances both count toward the daily cap. */
 export async function cashTakenFromCustomerOn(customerId: string, date: string, expenses: Expense[]): Promise<number> {
   if (!customerId) return 0;
-  const invs = await allRec<Doc>("invoices");
+  const invs = liveInvoices(await allRec<Doc>("invoices"));
   const ids = new Set(invs.filter((d) => d.customerId === customerId).map((d) => d.id));
   return r2(
     expenses

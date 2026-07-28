@@ -8,7 +8,7 @@ import { dateSortKey, inr } from "@/lib/calc";
 import { allExpenses } from "@/lib/expenses";
 import { brandFor } from "@/lib/brand";
 import { generatePdf, printOrSavePdf } from "@/lib/pdf";
-import { bankBook, cashBook, getBankAccounts, type BookEntry } from "@/lib/vouchers";
+import { bankBook, cashBook, getBankAccounts, liveInvoices, type BookEntry } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { toast } from "@/store/app-store";
@@ -50,7 +50,8 @@ export default function AccountBooksView() {
     if (ready) load();
   }, [ready, dataVersion, load]);
 
-  const invById = new Map(invoices.map((d) => [d.id, d] as const));
+  // trashed invoices drop out — their payments hide with them (and return on restore)
+  const invById = new Map(liveInvoices(invoices).map((d) => [d.id, d] as const));
   const activeBank = bank || banks[0] || "";
   const bookName = seg === "cash" ? "Cash book" : activeBank || "Bank book";
 
