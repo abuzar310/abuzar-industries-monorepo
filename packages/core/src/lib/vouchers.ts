@@ -3,7 +3,7 @@
 // out (cash or a named bank account). Backed by the expenses store — no double-entry.
 import { allRec, delRec, metaGet, metaSet, put } from "./data";
 import { addExpense } from "./expenses";
-import { computeDoc, nowIso, uid } from "./calc";
+import { computeDoc, dateSortKey, nowIso, uid } from "./calc";
 import type { Doc, Expense } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -59,6 +59,121 @@ export async function recordPaymentVoucher(f: {
     date: f.date,
     enteredBy: f.by,
   });
+}
+
+// ---- contra vouchers (cash ⇄ bank) ----
+
+export const CV_DEP_PREFIX = "cv:dep:"; // cash deposited INTO a bank
+export const CV_WD_PREFIX = "cv:wd:"; // cash withdrawn FROM a bank
+export const isContra = (e: Expense) =>
+  e.type === "custom" && ((e.sourceId || "").startsWith(CV_DEP_PREFIX) || (e.sourceId || "").startsWith(CV_WD_PREFIX));
+export const contraDir = (e: Expense): "dep" | "wd" => ((e.sourceId || "").startsWith(CV_DEP_PREFIX) ? "dep" : "wd");
+
+/** Cash → bank (deposit) or bank → cash (withdraw). Shows in BOTH books automatically. */
+export async function recordContra(f: {
+  dir: "dep" | "wd";
+  bank: string;
+  amount: number;
+  /** dd-mm-yy */
+  date?: string;
+  note?: string;
+  by: string;
+}): Promise<Expense> {
+  return addExpense({
+    type: "custom",
+    label: f.dir === "dep" ? "Cash deposit" : "Cash withdrawal",
+    amount: f.amount,
+    mode: "cash",
+    account: (f.bank || "").trim(),
+    note: f.note,
+    sourceId: (f.dir === "dep" ? CV_DEP_PREFIX : CV_WD_PREFIX) + uid(),
+    date: f.date,
+    enteredBy: f.by,
+  });
+}
+
+// ---- journal vouchers (bank → bank) ----
+
+export const JV_PREFIX = "jv:";
+export const isJournal = (e: Expense) => e.type === "custom" && (e.sourceId || "").startsWith(JV_PREFIX);
+
+/** Move money between our own banks: OUT of `from`'s statement, IN on `to`'s. */
+export async function recordJournal(f: {
+  from: string;
+  to: string;
+  amount: number;
+  /** dd-mm-yy */
+  date?: string;
+  note?: string;
+  by: string;
+}): Promise<Expense> {
+  return addExpense({
+    type: "custom",
+    label: "Bank transfer",
+    amount: f.amount,
+    mode: "cash",
+    account: (f.from || "").trim(),
+    account2: (f.to || "").trim(),
+    note: f.note,
+    sourceId: JV_PREFIX + uid(),
+    date: f.date,
+    enteredBy: f.by,
+  });
+}
+
+// ---- the account books (cash book + one statement per bank) ----
+
+export interface BookEntry {
+  e: Expense;
+  /** money came IN to this book */
+  in: boolean;
+  /** where it came from / went to — the particulars line */
+  what: string;
+}
+
+const oldestFirst = (a: BookEntry, b: BookEntry) =>
+  (dateSortKey(a.e.date) || "").localeCompare(dateSortKey(b.e.date) || "") ||
+  (a.e.createdAt || "").localeCompare(b.e.createdAt || "");
+
+/** Every cash movement, oldest first: cash receipts/advances in, cash payment vouchers out,
+ *  contra deposits out, contra withdrawals in. */
+export function cashBook(expenses: Expense[], invoiceById: Map<string, Doc>): BookEntry[] {
+  const out: BookEntry[] = [];
+  for (const e of expenses) {
+    if (e.type === "sale" && !e.charge && e.mode === "cash" && ((!!e.sourceId && invoiceById.has(e.sourceId)) || !!e.custId)) {
+      const inv = e.sourceId ? invoiceById.get(e.sourceId) : undefined;
+      out.push({ e, in: true, what: inv ? (inv.customerName || "Walk-in") + " · #" + inv.number : "Advance · " + (e.note || "customer") });
+    } else if (isPaymentVoucher(e) && !e.account) {
+      out.push({ e, in: false, what: "Paid · " + (e.label || "—") });
+    } else if (isContra(e)) {
+      if (contraDir(e) === "dep") out.push({ e, in: false, what: "Deposited → " + (e.account || "bank") });
+      else out.push({ e, in: true, what: "Withdrawn ← " + (e.account || "bank") });
+    }
+  }
+  return out.sort(oldestFirst);
+}
+
+/** One bank's statement, oldest first: receipts in, payment vouchers out, contra deposits in,
+ *  withdrawals out, journal transfers both ways. */
+export function bankBook(expenses: Expense[], invoiceById: Map<string, Doc>, bank: string): BookEntry[] {
+  const b = (bank || "").trim();
+  if (!b) return [];
+  const out: BookEntry[] = [];
+  for (const e of expenses) {
+    if (e.type === "sale" && !e.charge && e.mode === "upi" && e.account === b && ((!!e.sourceId && invoiceById.has(e.sourceId)) || !!e.custId)) {
+      const inv = e.sourceId ? invoiceById.get(e.sourceId) : undefined;
+      out.push({ e, in: true, what: inv ? (inv.customerName || "Walk-in") + " · #" + inv.number : "Advance · " + (e.note || "customer") });
+    } else if (isPaymentVoucher(e) && e.account === b) {
+      out.push({ e, in: false, what: "Paid · " + (e.label || "—") });
+    } else if (isContra(e) && e.account === b) {
+      if (contraDir(e) === "dep") out.push({ e, in: true, what: "Cash deposit" });
+      else out.push({ e, in: false, what: "Withdrawn to cash" });
+    } else if (isJournal(e)) {
+      if (e.account === b) out.push({ e, in: false, what: "Transfer → " + (e.account2 || "bank") });
+      else if (e.account2 === b) out.push({ e, in: true, what: "Transfer ← " + (e.account || "bank") });
+    }
+  }
+  return out.sort(oldestFirst);
 }
 
 // ---- the ₹10k/day cash rule ----

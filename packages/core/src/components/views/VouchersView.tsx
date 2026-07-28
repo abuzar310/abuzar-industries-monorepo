@@ -13,9 +13,14 @@ import {
   addBankAccount,
   CASH_DAY_LIMIT,
   cashTakenFromCustomerOn,
+  contraDir,
   getBankAccounts,
+  isContra,
+  isJournal,
   isPaymentVoucher,
   recordAdvanceReceipt,
+  recordContra,
+  recordJournal,
   recordPaymentVoucher,
   removeBankAccount,
 } from "@/lib/vouchers";
@@ -61,7 +66,7 @@ function groupByDay(list: Expense[]): DayGroup[] {
 export default function VouchersView() {
   const { ready, dataVersion, user, brandMode } = useApp();
   const router = useRouter();
-  const [seg, setSeg] = useState<"receipts" | "payments">("receipts");
+  const [seg, setSeg] = useState<"receipts" | "payments" | "contra" | "journal">("receipts");
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [invoices, setInvoices] = useState<Doc[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -80,6 +85,18 @@ export default function VouchersView() {
   const [date, setDate] = useState("");
   const [note, setNote] = useState("");
   const [newBank, setNewBank] = useState("");
+  // ---- contra form (cash ⇄ bank) ----
+  const [cvDir, setCvDir] = useState<"dep" | "wd">("dep");
+  const [cvBank, setCvBank] = useState("");
+  const [cvAmt, setCvAmt] = useState("");
+  const [cvDate, setCvDate] = useState("");
+  const [cvNote, setCvNote] = useState("");
+  // ---- journal form (bank → bank) ----
+  const [jvFrom, setJvFrom] = useState("");
+  const [jvTo, setJvTo] = useState("");
+  const [jvAmt, setJvAmt] = useState("");
+  const [jvDate, setJvDate] = useState("");
+  const [jvNote, setJvNote] = useState("");
   // ---- advance-receipt form (Receipts tab) ----
   const [advName, setAdvName] = useState("");
   const [advCust, setAdvCust] = useState<Customer | null>(null);
@@ -157,12 +174,33 @@ export default function VouchersView() {
       inRange(e) && viaOk(e) && bankOk(e) && qOk(e, "in"),
   );
   const pvs = expenses.filter((e) => isPaymentVoucher(e) && inRange(e) && viaOk(e) && bankOk(e) && qOk(e, "out"));
+  const qTextOk = (e: Expense, txt: string) => !q.trim() || txt.toLowerCase().includes(q.trim().toLowerCase());
+  const cvs = expenses.filter(
+    (e) => isContra(e) && inRange(e) && bankOk(e) && qTextOk(e, [e.label, e.account, e.note].filter(Boolean).join(" ")),
+  );
+  const jvs = expenses.filter(
+    (e) =>
+      isJournal(e) && inRange(e) && (!bankF || e.account === bankF || e.account2 === bankF) &&
+      qTextOk(e, [e.account, e.account2, e.note].filter(Boolean).join(" ")),
+  );
   const rGroups = groupByDay(receipts);
   const pGroups = groupByDay(pvs);
+  const cGroups = groupByDay(cvs);
+  const jGroups = groupByDay(jvs);
   const rTotal = r2(receipts.reduce((s, e) => s + (+e.amount || 0), 0));
   const pTotal = r2(pvs.reduce((s, e) => s + (+e.amount || 0), 0));
+  const cTotal = r2(cvs.reduce((s, e) => s + (+e.amount || 0), 0));
+  const jTotal = r2(jvs.reduce((s, e) => s + (+e.amount || 0), 0));
 
-  const shown = seg === "receipts" ? receipts : pvs;
+  const shown = seg === "receipts" ? receipts : seg === "payments" ? pvs : seg === "contra" ? cvs : jvs;
+  const segTotal = seg === "receipts" ? rTotal : seg === "payments" ? pTotal : seg === "contra" ? cTotal : jTotal;
+  // the movement text for a contra / journal row (books + print)
+  const moveText = (e: Expense) =>
+    isJournal(e)
+      ? (e.account || "?") + " → " + (e.account2 || "?")
+      : contraDir(e) === "dep"
+        ? "Cash → " + (e.account || "bank")
+        : (e.account || "bank") + " → Cash";
   const shownOldestFirst = [...shown].sort(
     (a, b) =>
       (dateSortKey(a.date) || "").localeCompare(dateSortKey(b.date) || "") ||
@@ -268,6 +306,90 @@ export default function VouchersView() {
     toast("Voucher removed");
   }
 
+  // ---- record: contra (cash ⇄ bank) ----
+  async function recordCv() {
+    const a = Math.max(0, +cvAmt || 0);
+    if (a <= 0) return toast("Enter an amount");
+    if (!cvBank.trim()) return toast("Pick the bank account");
+    await recordContra({
+      dir: cvDir,
+      bank: cvBank,
+      amount: a,
+      date: cvDate ? toDmy(cvDate) : undefined,
+      note: cvNote.trim(),
+      by: user?.id || "unknown",
+    });
+    setCvAmt("");
+    setCvNote("");
+    setCvDate("");
+    load();
+    bumpData();
+    toast("₹" + inr(a) + (cvDir === "dep" ? " deposited: Cash → " + cvBank : " withdrawn: " + cvBank + " → Cash"));
+  }
+
+  // ---- record: journal (bank → bank) ----
+  async function recordJv() {
+    const a = Math.max(0, +jvAmt || 0);
+    if (a <= 0) return toast("Enter an amount");
+    if (!jvFrom.trim() || !jvTo.trim()) return toast("Pick both bank accounts");
+    if (jvFrom === jvTo) return toast("From and To must be different banks");
+    await recordJournal({
+      from: jvFrom,
+      to: jvTo,
+      amount: a,
+      date: jvDate ? toDmy(jvDate) : undefined,
+      note: jvNote.trim(),
+      by: user?.id || "unknown",
+    });
+    setJvAmt("");
+    setJvNote("");
+    setJvDate("");
+    load();
+    bumpData();
+    toast("₹" + inr(a) + " transferred: " + jvFrom + " → " + jvTo);
+  }
+
+  async function removeMove(e: Expense) {
+    const ok = await confirmDialog({
+      title: "Delete " + (isJournal(e) ? "journal" : "contra") + " voucher?",
+      message: moveText(e) + " — ₹" + inr(e.amount),
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    await delRec("expenses", e.id); // soft delete
+    load();
+    bumpData();
+    toast("Voucher removed");
+  }
+
+  /** contra / journal book: one movement row per entry */
+  const moveDayBlock = (g: DayGroup) => (
+    <div className="db-day" key={g.date}>
+      <div className="db-day-head">
+        <span className="db-day-date">{g.date}</span>
+        <span className="db-day-mini">
+          {g.entries.length} {g.entries.length === 1 ? "entry" : "entries"} · moved ₹{inr(g.total)}
+        </span>
+      </div>
+      {g.entries.map((e) => (
+        <div className="stmt" key={e.id}>
+          <div className="stmt-ic upi">⇄</div>
+          <div className="stmt-main">
+            <div className="stmt-to">{moveText(e)}</div>
+            <div className="stmt-sub">
+              {e.note ? e.note + " · " : ""}by {userName(e.enteredBy)}
+            </div>
+          </div>
+          <div className="stmt-amt">₹{inr(e.amount)}</div>
+          <span className="pb-rowacts">
+            <button className="pb-x" title="Delete voucher" onClick={() => removeMove(e)}>×</button>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+
   const dayBlock = (g: DayGroup, kind: "in" | "out") => (
     <div className="db-day" key={g.date}>
       <div className="db-day-head">
@@ -366,12 +488,18 @@ export default function VouchersView() {
         </div>
       </div>
 
-      <div className="db-seg" style={{ marginBottom: 12 }}>
+      <div className="db-seg" style={{ marginBottom: 12, flexWrap: "wrap" }}>
         <button className={"seg-btn" + (seg === "receipts" ? " on" : "")} type="button" onClick={() => setSeg("receipts")}>
-          Receipt vouchers · ₹{inr(rTotal)}
+          Receipts · ₹{inr(rTotal)}
         </button>
         <button className={"seg-btn" + (seg === "payments" ? " on" : "")} type="button" onClick={() => setSeg("payments")}>
-          Payment vouchers · ₹{inr(pTotal)}
+          Payments · ₹{inr(pTotal)}
+        </button>
+        <button className={"seg-btn" + (seg === "contra" ? " on" : "")} type="button" onClick={() => setSeg("contra")} title="Cash ⇄ bank: deposits and withdrawals">
+          Contra · ₹{inr(cTotal)}
+        </button>
+        <button className={"seg-btn" + (seg === "journal" ? " on" : "")} type="button" onClick={() => setSeg("journal")} title="Bank → bank transfers between our own accounts">
+          Journal · ₹{inr(jTotal)}
         </button>
       </div>
 
@@ -477,7 +605,7 @@ export default function VouchersView() {
             )}
           </div>
         </>
-      ) : (
+      ) : seg === "payments" ? (
         <>
           {/* bank accounts — managed HERE, one clean place */}
           <div className="panel-card" style={{ padding: 14 }}>
@@ -580,6 +708,126 @@ export default function VouchersView() {
             )}
           </div>
         </>
+      ) : seg === "contra" ? (
+        <>
+          {/* contra: cash ⇄ bank — one entry lands in BOTH books automatically */}
+          <div className="panel-card" style={{ padding: 14 }}>
+            <div className="pc-head" style={{ paddingLeft: 0 }}>
+              New contra entry
+              <small style={{ marginLeft: 8, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>
+                cash deposited into a bank, or withdrawn back to cash — recorded in both books
+              </small>
+            </div>
+            <div className="att-paidby" style={{ marginTop: 4 }}>
+              <span className="att-paidby-lbl">Direction</span>
+              <div className="db-seg sm">
+                <button className={"seg-btn" + (cvDir === "dep" ? " on" : "")} type="button" onClick={() => setCvDir("dep")}>
+                  Cash → Bank (deposit)
+                </button>
+                <button className={"seg-btn" + (cvDir === "wd" ? " on" : "")} type="button" onClick={() => setCvDir("wd")}>
+                  Bank → Cash (withdraw)
+                </button>
+              </div>
+            </div>
+            <div className="rec-grid" style={{ marginTop: 10 }}>
+              <label className="modal-field">
+                <span>Bank account</span>
+                <select value={cvBank} onChange={(e) => setCvBank(e.target.value)}>
+                  <option value="">— pick —</option>
+                  {banks.map((b) => (
+                    <option key={b}>{b}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="modal-field">
+                <span>Amount ₹</span>
+                <input type="number" inputMode="decimal" placeholder="0" value={cvAmt} onChange={(e) => setCvAmt(e.target.value)} />
+              </label>
+              <label className="modal-field">
+                <span>Date (optional)</span>
+                <input type="date" value={cvDate} onChange={(e) => setCvDate(e.target.value)} />
+              </label>
+            </div>
+            <label className="modal-field" style={{ marginTop: 10, width: "100%" }}>
+              <span>Note (optional)</span>
+              <input type="text" placeholder="e.g. week's cash banked" value={cvNote} onChange={(e) => setCvNote(e.target.value)} />
+            </label>
+            <button className="btn primary" type="button" onClick={recordCv} style={{ width: "100%", justifyContent: "center", marginTop: 12, padding: 12 }}>
+              {cvDir === "dep" ? "Record deposit — Cash → " + (cvBank || "bank") : "Record withdrawal — " + (cvBank || "bank") + " → Cash"}
+            </button>
+          </div>
+
+          <div className="panel-card" style={{ padding: "0 0 4px", marginTop: 14 }}>
+            {cGroups.length ? (
+              cGroups.map(moveDayBlock)
+            ) : (
+              <div className="empty">
+                <div className="empty-title">No contra entries{from || to || q ? " in this filter" : " yet"}</div>
+                <div className="empty-note">Deposits and withdrawals show in the Cash book AND the bank&apos;s statement automatically.</div>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* journal: our bank → our bank */}
+          <div className="panel-card" style={{ padding: 14 }}>
+            <div className="pc-head" style={{ paddingLeft: 0 }}>
+              New journal entry
+              <small style={{ marginLeft: 8, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>
+                move money between our own banks — recorded on both statements
+              </small>
+            </div>
+            <div className="rec-grid" style={{ marginTop: 4 }}>
+              <label className="modal-field">
+                <span>From bank</span>
+                <select value={jvFrom} onChange={(e) => setJvFrom(e.target.value)}>
+                  <option value="">— pick —</option>
+                  {banks.map((b) => (
+                    <option key={b}>{b}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="modal-field">
+                <span>To bank</span>
+                <select value={jvTo} onChange={(e) => setJvTo(e.target.value)}>
+                  <option value="">— pick —</option>
+                  {banks
+                    .filter((b) => b !== jvFrom)
+                    .map((b) => (
+                      <option key={b}>{b}</option>
+                    ))}
+                </select>
+              </label>
+              <label className="modal-field">
+                <span>Amount ₹</span>
+                <input type="number" inputMode="decimal" placeholder="0" value={jvAmt} onChange={(e) => setJvAmt(e.target.value)} />
+              </label>
+              <label className="modal-field">
+                <span>Date (optional)</span>
+                <input type="date" value={jvDate} onChange={(e) => setJvDate(e.target.value)} />
+              </label>
+            </div>
+            <label className="modal-field" style={{ marginTop: 10, width: "100%" }}>
+              <span>Note (optional)</span>
+              <input type="text" placeholder="e.g. moved for supplier NEFT" value={jvNote} onChange={(e) => setJvNote(e.target.value)} />
+            </label>
+            <button className="btn primary" type="button" onClick={recordJv} style={{ width: "100%", justifyContent: "center", marginTop: 12, padding: 12 }}>
+              Record transfer{jvFrom && jvTo ? " — " + jvFrom + " → " + jvTo : ""}
+            </button>
+          </div>
+
+          <div className="panel-card" style={{ padding: "0 0 4px", marginTop: 14 }}>
+            {jGroups.length ? (
+              jGroups.map(moveDayBlock)
+            ) : (
+              <div className="empty">
+                <div className="empty-title">No journal entries{from || to || q ? " in this filter" : " yet"}</div>
+                <div className="empty-note">Bank-to-bank transfers show on BOTH banks&apos; statements automatically.</div>
+              </div>
+            )}
+          </div>
+        </>
       )}
       </div>
 
@@ -592,7 +840,9 @@ export default function VouchersView() {
             {brand.gstin && <div>GSTIN: {brand.gstin}</div>}
           </div>
           <div className="rep-meta">
-            <div className="rep-title">{seg === "receipts" ? "Receipt Vouchers" : "Payment Vouchers"}</div>
+            <div className="rep-title">
+              {seg === "receipts" ? "Receipt Vouchers" : seg === "payments" ? "Payment Vouchers" : seg === "contra" ? "Contra Vouchers" : "Journal Vouchers"}
+            </div>
             <div className="rep-period">
               {periodLabel}
               {viaF !== "all" ? " · " + (viaF === "cash" ? "Cash only" : bankF || "Bank only") : ""}
@@ -602,7 +852,7 @@ export default function VouchersView() {
 
         <div className="rep-summary cols3">
           <div><b>{shownOldestFirst.length}</b><span>Vouchers</span></div>
-          <div><b>₹{inr(seg === "receipts" ? rTotal : pTotal)}</b><span>{seg === "receipts" ? "Received" : "Paid"}</span></div>
+          <div><b>₹{inr(segTotal)}</b><span>{seg === "receipts" ? "Received" : seg === "payments" ? "Paid" : "Moved"}</span></div>
           <div><b>{periodLabel}</b><span>Period</span></div>
         </div>
 
@@ -619,9 +869,9 @@ export default function VouchersView() {
             <tr>
               <th className="c-n">#</th>
               <th>Date</th>
-              <th>{seg === "receipts" ? "Customer · Invoice" : "Paid to"}</th>
+              <th>{seg === "receipts" ? "Customer · Invoice" : seg === "payments" ? "Paid to" : "Movement"}</th>
               <th>Via</th>
-              <th>{seg === "receipts" ? "Note" : "Note"}</th>
+              <th>Note</th>
               <th className="amt">Amount ₹</th>
             </tr>
           </thead>
@@ -633,21 +883,25 @@ export default function VouchersView() {
                   ? inv
                     ? (inv.customerName || "Walk-in") + " · #" + inv.number
                     : (e.note || custName(e.custId)) + " · Advance"
-                  : e.label || "—";
+                  : seg === "payments"
+                    ? e.label || "—"
+                    : moveText(e);
+              const viaTxt =
+                seg === "contra" || seg === "journal" ? (isJournal(e) ? "Transfer" : contraDir(e) === "dep" ? "Deposit" : "Withdrawal") : e.account || "Cash";
               return (
                 <tr key={e.id}>
                   <td className="c-n">{i + 1}</td>
                   <td className="c-date">{e.date}</td>
                   <td className="c-cust">{who}</td>
-                  <td>{e.account || "Cash"}</td>
-                  <td className="c-cust">{seg === "receipts" ? e.label || "—" : e.note || "—"}</td>
+                  <td>{viaTxt}</td>
+                  <td className="c-cust">{(seg === "receipts" ? e.label : e.note) || "—"}</td>
                   <td className="amt">{inr(e.amount)}</td>
                 </tr>
               );
             })}
             <tr className="rep-tot">
               <td colSpan={5}>Total — {shownOldestFirst.length} voucher{shownOldestFirst.length === 1 ? "" : "s"}</td>
-              <td className="amt">{inr(seg === "receipts" ? rTotal : pTotal)}</td>
+              <td className="amt">{inr(segTotal)}</td>
             </tr>
           </tbody>
         </table>

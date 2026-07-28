@@ -55,6 +55,8 @@ export async function addExpense(fields: {
   note?: string;
   label?: string;
   account?: string;
+  /** transfer counter-account (journal voucher's TO-bank) */
+  account2?: string;
   toOwner?: boolean;
   enteredBy: string;
   date?: string;
@@ -74,6 +76,7 @@ export async function addExpense(fields: {
     amount: r2(fields.amount),
     note: fields.note || "",
     account: (fields.account || "").trim(),
+    account2: (fields.account2 || "").trim() || undefined,
     // outflows (mode "") can also be owner-paid — e.g. the owner hands a worker money
     // from his own pocket; inDaybook() then keeps it out of the manager's cash book.
     toOwner: mode === "cash" || mode === "" ? !!fields.toOwner : false,

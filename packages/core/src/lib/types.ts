@@ -195,6 +195,8 @@ export interface Expense {
   note?: string;
   /** UPI recipient / account this money went to (only for mode "upi"); "" for cash. */
   account?: string;
+  /** counter-account for transfers: journal voucher's TO-bank (account = FROM-bank). */
+  account2?: string;
   /** cash that went straight to the owner (owner recorded it, or "Cash → Owner"): kept OUT of the
    *  manager's cash daybook, but still a recorded payment. */
   toOwner?: boolean;
