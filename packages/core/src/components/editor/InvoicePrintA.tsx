@@ -49,12 +49,13 @@ function WoodBox({ sec, measure }: { sec: Section; measure: number }) {
             <col style={{ width: "16%" }} /><col style={{ width: "15%" }} /><col style={{ width: "30%" }} />
           </colgroup>
         ) : (
-          /* just a quantity: the ruled line runs the width, the figure sits at the right */
+          /* just a quantity: ruled line runs out, the figure sits at ~65%, price column closes the right */
           <colgroup>
             <col style={{ width: "7%" }} />
-            <col style={{ width: hasPcs ? "48%" : "63%" }} />
+            <col style={{ width: hasPcs ? "31%" : "46%" }} />
             {hasPcs && <col style={{ width: "15%" }} />}
-            <col style={{ width: "30%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "29%" }} />
           </colgroup>
         )}
         <thead>
@@ -65,7 +66,7 @@ function WoodBox({ sec, measure }: { sec: Section; measure: number }) {
             </tr>
           ) : (
             <tr>
-              <th className="c">#</th><th>&nbsp;</th>{hasPcs && <th className="c">Pcs</th>}<th className="r">{unit}</th>
+              <th className="c">#</th><th>&nbsp;</th>{hasPcs && <th className="c">Pcs</th>}<th className="c">{unit}</th><th>&nbsp;</th>
             </tr>
           )}
         </thead>
@@ -86,17 +87,35 @@ function WoodBox({ sec, measure }: { sec: Section; measure: number }) {
                 <td className="c i3-sl">{i + 1}</td>
                 <td>&nbsp;</td>
                 {hasPcs && <td className="c i3-dim">{cell(r, (x) => String(x.pcs || "\u00A0"))}</td>}
-                <td className="r i3-cft">{cell(r, (x) => inr(measurer(x)))}</td>
+                <td className="c i3-cft">{cell(r, (x) => inr(measurer(x)))}</td>
+                <td>&nbsp;</td>
               </tr>
             );
           })}
         </tbody>
+        {!bySize && (
+          /* footer INSIDE the table: Total CFT exactly under the CFT column, rate beside, price at the edge */
+          <tfoot>
+            <tr>
+              {/* Rate sits LEFT of Total CFT; Total CFT stays under its column; price closes the row */}
+              <td colSpan={hasPcs ? 3 : 2} className="ft-rate">
+                <span className="fl">Rate ₹/{unit}</span><b>{inr(+sec.rate || 0)}</b>
+              </td>
+              <td className="c"><span className="fl">Total {unit}</span><b>{inr(measure)}</b></td>
+              <td className="ft-tail">
+                <span className="fl">Total Price</span><b>₹ {inr(amount)}</b>
+              </td>
+            </tr>
+          </tfoot>
+        )}
       </table>
-      <div className="i3-bfoot">
-        <div><span>Total {unit}</span><b>{inr(measure)}</b></div>
-        <div><span>Rate ₹/{unit}</span><b>{inr(+sec.rate || 0)}</b></div>
-        <div className="tp"><span>Total Price</span><b>₹ {inr(amount)}</b></div>
-      </div>
+      {bySize && (
+        <div className="i3-bfoot">
+          <div><span>Total {unit}</span><b>{inr(measure)}</b></div>
+          <div><span>Rate ₹/{unit}</span><b>{inr(+sec.rate || 0)}</b></div>
+          <div className="tp"><span>Total Price</span><b>₹ {inr(amount)}</b></div>
+        </div>
+      )}
     </div>
   );
 }
@@ -157,23 +176,28 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
         ))}
       </div>
 
-      {/* totals (right) + a slim amount-in-words strip */}
-      <div className="i3-tots">
-        {totalCft > 0 && (
-          <div className="i3-trow"><span>Total CFT</span><span className="v">{inr(totalCft)}</span></div>
-        )}
-        <div className="i3-trow"><span>Taxable Amount</span><span className="v">{inr(totals.sub)}</span></div>
-        {igst ? (
-          <div className="i3-trow"><span>IGST {+doc.gst || 0}%</span><span className="v">{inr(totals.gstAmt)}</span></div>
-        ) : (
-          <>
-            <div className="i3-trow"><span>SGST {half}%</span><span className="v">{inr(halfAmt)}</span></div>
-            <div className="i3-trow"><span>CGST {half}%</span><span className="v">{inr(halfAmt)}</span></div>
-          </>
-        )}
-        <div className="i3-grand"><span className="l">Grand Total</span><span className="v">₹ {inr(totals.grand)}</span></div>
+      {/* amount-in-words fills the left; the totals box sits right, under the price column */}
+      <div className="i3-totrow">
+        <div className="i3-words">
+          <span className="i3-lbl">Amount in Words</span>
+          <b>{rupeesInWords(totals.grand)}</b>
+        </div>
+        <div className="i3-tots">
+          {totalCft > 0 && (
+            <div className="i3-trow"><span>Total CFT</span><span className="v">{inr(totalCft)}</span></div>
+          )}
+          <div className="i3-trow"><span>Taxable Amount</span><span className="v">{inr(totals.sub)}</span></div>
+          {igst ? (
+            <div className="i3-trow"><span>IGST {+doc.gst || 0}%</span><span className="v">{inr(totals.gstAmt)}</span></div>
+          ) : (
+            <>
+              <div className="i3-trow"><span>SGST {half}%</span><span className="v">{inr(halfAmt)}</span></div>
+              <div className="i3-trow"><span>CGST {half}%</span><span className="v">{inr(halfAmt)}</span></div>
+            </>
+          )}
+          <div className="i3-grand"><span className="l">Grand Total</span><span className="v">₹ {inr(totals.grand)}</span></div>
+        </div>
       </div>
-      <div className="i3-words">Amount in words: <b>{rupeesInWords(totals.grand)}</b></div>
 
       {/* tear line + office strip */}
       <div className="i3-tear" />

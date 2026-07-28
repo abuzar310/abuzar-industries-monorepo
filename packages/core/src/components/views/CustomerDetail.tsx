@@ -249,53 +249,49 @@ export default function CustomerDetail({ id }: { id: string }) {
               </button>
             )}
           </div>
-          <div className="panel-card" style={{ padding: 0, overflow: "hidden" }}>
-            <div className="db-srow db-shead">
-              <span>Type</span>
+          <div className="panel-card cs-card">
+            <div className="cs-row cs-head">
+              <span />
               <span>Entry</span>
               <span className="amt">Billed ₹</span>
               <span className="amt">Received ₹</span>
               <span className="amt">Balance ₹</span>
-              <span />
             </div>
             {opening > 0 && (
-              <div className="db-srow">
-                <span className="exptag">Open</span>
-                <div>
-                  <div className="stmt-to">Opening balance</div>
-                  <div className="stmt-sub">old dues from before</div>
+              <div className="cs-row">
+                <span className="cs-tag">Open</span>
+                <div className="cs-main">
+                  <div className="cs-lbl">Opening balance</div>
+                  <div className="cs-sub">old dues from before</div>
                 </div>
-                <span className="amt billq">{inr(opening)}</span>
-                <span className="amt" />
-                <span className="amt bal">{inr(opening)}</span>
-                <span />
+                <span className="amt">{inr(opening)}</span>
+                <span className="amt cs-dim">—</span>
+                <span className="amt cs-bal">{inr(opening)}</span>
               </div>
             )}
             {stmtRows.map((ev) => (
               <div
-                className="db-srow"
+                className={"cs-row" + (ev.kind === "quote" ? " cs-click" : "")}
                 key={ev.kind + ev.id}
-                style={ev.kind === "quote" ? { cursor: "pointer" } : undefined}
                 onClick={ev.kind === "quote" ? () => router.push("/editor/" + ev.id) : undefined}
                 title={ev.kind === "quote" ? "Open this quotation" : undefined}
               >
-                <span className={"exptag" + (ev.kind === "pay" ? " in" : "")}>{ev.kind === "quote" ? "Bill" : "Paid"}</span>
-                <div>
-                  <div className="stmt-to">{ev.label}{ev.sub ? <span className="acct-overall-hint"> · {ev.sub}</span> : null}</div>
-                  <div className="stmt-sub">{ev.date}</div>
+                <span className={"cs-tag" + (ev.kind === "pay" ? " in" : "")}>{ev.kind === "quote" ? "Bill" : "Paid"}</span>
+                <div className="cs-main">
+                  <div className="cs-lbl">{ev.label}{ev.sub ? <small> · {ev.sub}</small> : null}</div>
+                  <div className="cs-sub">{ev.date}</div>
                 </div>
-                <span className="amt billq">{ev.kind === "quote" ? inr(ev.amount) : ""}</span>
-                <span className="amt in">{ev.kind === "pay" ? inr(ev.amount) : ""}</span>
-                <span className="amt bal">{inr(ev.bal)}</span>
-                <span />
+                <span className="amt">{ev.kind === "quote" ? inr(ev.amount) : ""}</span>
+                <span className={"amt" + (ev.kind === "pay" ? " in" : " cs-dim")}>{ev.kind === "pay" ? inr(ev.amount) : ""}</span>
+                <span className="amt cs-bal">{inr(ev.bal)}</span>
               </div>
             ))}
-            <div className="db-day-sum">
-              <span>billed ₹{inr(grandTotal)}</span>
-              <span className="in">received ₹{inr(paidTotal)}</span>
-              <b>
+            <div className="cs-sum">
+              <span>Billed <b>₹{inr(grandTotal)}</b></span>
+              <span>Received <b className="in">₹{inr(paidTotal)}</b></span>
+              <span className="cs-due">
                 {balanceDue > 0.5 ? "Balance due ₹" + inr(balanceDue) : balanceDue < -0.5 ? "Advance ₹" + inr(-balanceDue) : "Settled ✓"}
-              </b>
+              </span>
             </div>
           </div>
         </>
