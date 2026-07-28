@@ -1,26 +1,31 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { prefGet } from "@/lib/data";
-import { openTab } from "@/lib/editor-tabs";
+import { useEffect, useRef } from "react";
+import { createQuotation } from "@/lib/create";
+import { openTab, useEditorTabs } from "@/lib/editor-tabs";
 import { useApp } from "@/store/useApp";
+import { toast } from "@/store/app-store";
 import EditorView from "./editor-view";
 
 export default function Page() {
   const { ready } = useApp();
-  const router = useRouter();
-  const [loaded, setLoaded] = useState(false);
+  const { tabs } = useEditorTabs();
+  const done = useRef(false);
 
   useEffect(() => {
-    if (!ready) return;
-    // Restore last-open quotation as a tab if there are no tabs yet
-    const last = prefGet<{ store: string; id: string } | null>("lastOpen", null);
-    if (last && last.id) {
-      openTab(last.id);
-    }
-    setLoaded(true);
-  }, [ready]);
+    if (!ready || done.current) return;
+    done.current = true;
 
-  if (!loaded) return null;
+    // If tabs were already opened (e.g. clicking a quote from the list),
+    // just show them — no auto-create.
+    if (tabs.length > 0) return;
+
+    // Fresh visit to /editor: auto-create a new quotation.
+    createQuotation().then((d) => {
+      openTab(d.id, d.number);
+    }).catch(() => {
+      toast("Could not create quotation");
+    });
+  }, [ready, tabs.length]);
+
   return <EditorView />;
 }

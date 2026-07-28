@@ -19,6 +19,7 @@
 // No Supabase client keys, no anon access, no client-side SQL: the only secret
 // is DATABASE_URL and it never leaves the server.
 import type { NextRequest } from "next/server";
+import { rateLimitByIp, rateLimitByUser, rateLimitResponse } from "./rate-limit";
 import {
   changedRows,
   getRow,
@@ -42,6 +43,7 @@ import {
   clearSessionCookie,
   makeSessionToken,
   readSessionToken,
+  requireRole as authRequireRole,
   sessionCookie,
   SESSION_COOKIE,
   type AppUser,
@@ -82,6 +84,17 @@ function splitDocs(rows: Row[]): { quotations: AnyRec[]; invoices: AnyRec[] } {
 
 function userFrom(req: NextRequest): AppUser | null {
   return readSessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+}
+
+/** Role-check that returns a 403 Response on failure (safe — never throws on
+ *  insufficient privilege). Returns null when caller should short-circuit. */
+function checkRole(user: AppUser | null, minRole: "owner" | "manager"): Response | null {
+  try {
+    authRequireRole(user, minRole);
+    return null;
+  } catch {
+    return err(403, "Forbidden — " + (minRole === "owner" ? "owner" : "manager") + " role required");
+  }
 }
 
 // ---- atomic document creation (collision-proof numbering) ----
@@ -193,6 +206,9 @@ export function createDataApi(schema: AppSchema) {
     // ---------- auth (no session required) ----------
     if (a === "auth") {
       if (b === "login" && method === "POST") {
+        // Rate limit: 5 login attempts per IP per minute
+        const rl = rateLimitByIp(req, 5);
+        if (!rl.ok) return rateLimitResponse(rl.resetIn);
         const body = (await req.json().catch(() => ({}))) as AnyRec;
         const user = await checkLogin(schema, String(body.userId || ""), String(body.password || ""));
         if (!user) return err(401, "Wrong password");
@@ -204,6 +220,8 @@ export function createDataApi(schema: AppSchema) {
       if (b === "password" && method === "POST") {
         const user = userFrom(req);
         if (!user) return err(401, "Not signed in");
+        const rl = rateLimitByUser(user.id, 3);
+        if (!rl.ok) return rateLimitResponse(rl.resetIn);
         const body = (await req.json().catch(() => ({}))) as AnyRec;
         const pw = String(body.password || "").trim();
         if (pw.length < 4) return err(400, "Password too short");
@@ -218,6 +236,8 @@ export function createDataApi(schema: AppSchema) {
     if (!user) return err(401, "Not signed in");
 
     if (a === "bootstrap" && method === "GET") {
+      const rl = rateLimitByUser(user.id, 5);
+      if (!rl.ok) return rateLimitResponse(rl.resetIn);
       const out: AnyRec = {};
       for (const table of SYNC_TABLES) {
         const rows = await listRows(schema, table);
@@ -262,6 +282,13 @@ export function createDataApi(schema: AppSchema) {
       if (!table) return err(404, "Unknown store: " + b);
       const id = decodeURIComponent(c || "");
       if (!id) return err(400, "Missing id");
+      if (method === "PUT" || method === "DELETE") {
+        const rl = rateLimitByUser(user.id, 60);
+        if (!rl.ok) return rateLimitResponse(rl.resetIn);
+        // Sensitive stores (financial/operational core): owner-only writes
+        const ownerStores = ["sessions", "ledgers", "vouchers", "collections", "payHolders", "workers", "attendance"];
+        if (ownerStores.includes(b)) authRequireRole(user, "owner");
+      }
       if (method === "PUT") {
         const data = (await req.json().catch(() => null)) as AnyRec | null;
         if (!data || typeof data !== "object") return err(400, "Bad record");
@@ -281,6 +308,7 @@ export function createDataApi(schema: AppSchema) {
     }
 
     if (a === "meta" && b && method === "PUT") {
+      authRequireRole(user, "owner");
       const body = (await req.json().catch(() => ({}))) as AnyRec;
       await metaSet(schema, decodeURIComponent(b), body.v);
       return json({ ok: true });
@@ -308,8 +336,9 @@ export function createDataApi(schema: AppSchema) {
       return err(404, "Unknown rpc");
     }
 
-    // ---------- unified all-transactions (union of all money entries, incl. deleted) ----------
+    // ---------- unified all-transactions (owner-only, includes deleted) ----------
     if (a === "all-transactions" && method === "GET") {
+      authRequireRole(user, "owner");
       const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "500", 10), 2000);
       const offset = parseInt(req.nextUrl.searchParams.get("offset") || "0", 10);
       const typeFilter = req.nextUrl.searchParams.get("type") || ""; // empty = all

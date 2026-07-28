@@ -2,7 +2,7 @@
 // client-side navigations (Next.js SPA), so tabs survive moving between
 // /editor <-> /quotations and back.  A hard page refresh loses them — the
 // same as browser tabs.
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 export interface TabEntry {
   id: string;
@@ -35,11 +35,11 @@ function getSnapshot() {
   return cached;
 }
 
-/** React hook: { tabs, activeId } for the editor view. */
+/** React hook: { tabs, activeId } for the editor view.
+ *  Uses useSyncExternalStore so React 19 always sees the latest external
+ *  state synchronously — no stale `tabs.length === 0` race on mount. */
 export function useEditorTabs(): { tabs: readonly TabEntry[]; activeId: string | null } {
-  const [s, set] = useState(getSnapshot);
-  useEffect(() => subscribe(() => set(getSnapshot())));
-  return s;
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /** Open or switch to a tab. If the id already exists, it becomes active. */

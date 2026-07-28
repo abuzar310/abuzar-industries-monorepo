@@ -13,15 +13,9 @@ const SESSION_DAYS = 30;
 export const SESSION_COOKIE = "app_session";
 
 function secret(): string {
-  return (
-    process.env.APP_SESSION_SECRET ||
-    // derived fallback so dev works out of the box; set APP_SESSION_SECRET in prod
-    createHmac("sha256", "app-session").update(process.env.DATABASE_URL || "dev").digest("hex")
-  );
-}
-
-function masterPassword(): string {
-  return (process.env.APP_MASTER_PASSWORD || "").trim();
+  const s = process.env.APP_SESSION_SECRET;
+  if (!s) throw new Error("APP_SESSION_SECRET must be set in environment");
+  return s;
 }
 
 // ---- password hashing ----
@@ -65,7 +59,8 @@ export function readSessionToken(token: string | undefined): AppUser | null {
 
 export function sessionCookie(token: string): string {
   const maxAge = SESSION_DAYS * 86400;
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
+  const secure = process.env.NODE_ENV === "production" ? "Secure; " : "";
+  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; ${secure}SameSite=Lax; Max-Age=${maxAge}`;
 }
 
 export const clearSessionCookie = () =>
@@ -105,7 +100,7 @@ export async function listUsers(schema: AppSchema): Promise<AppUser[]> {
   return rows.map((r) => ({ id: r.id, name: r.name, role: r.role }));
 }
 
-/** Check a user's password (their own, or the master password). Returns the user on success. */
+/** Check a user's password. Returns the user on success. */
 export async function checkLogin(
   schema: AppSchema,
   userId: string,
@@ -119,9 +114,16 @@ export async function checkLogin(
   const u = rows[0];
   if (!u) return null;
   const pw = (password || "").trim();
-  const master = masterPassword();
-  if (!verifyPassword(pw, u.password) && !(master && pw === master)) return null;
+  if (!verifyPassword(pw, u.password)) return null;
   return { id: u.id, name: u.name, role: u.role };
+}
+
+/** Require a minimum role. Throws if the user lacks it. */
+export function requireRole(user: AppUser | null, minRole: "manager" | "owner"): AppUser {
+  if (!user) throw new Error("Not signed in");
+  if (minRole === "owner" && user.role !== "owner") throw new Error("Owner role required");
+  if (minRole === "manager" && user.role !== "owner" && user.role !== "manager") throw new Error("Manager role required");
+  return user;
 }
 
 export async function changeUserPassword(

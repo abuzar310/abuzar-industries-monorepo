@@ -476,6 +476,9 @@ body{
   #sheet.sq{width:100%; max-width:none; box-sizing:border-box}
   .qcanvas{transform:none !important; width:100% !important; max-width:none !important}
   .qcanvas-wrap{overflow:visible !important}
+  /* Hide editor chrome but keep the printable sheet visible */
+  .doctool,.editor-tabbar,.editor-tab,.editor-tab-new,.editor-tab-close,
+  .topnav,.navsearch,.syncdot,.usermenu,.topnav-in{display:none !important}
 }
 #sheet.sq.a4fill{display:flex; flex-direction:column}
 #sheet.sq.a4fill .mast{flex:0 0 auto}
@@ -501,6 +504,28 @@ body{
    amount-in-words line. */
 #sheet.sq .words{display:none}
 #sheet.sq #sections .totals{flex:0 0 auto; margin-top:auto}
+
+/* ---- Sub-quotation pages (Kitchen, Bedroom, etc.) — each on its own sheet in print ---- */
+/* When #sections contains sub-pages, override the default two-column grid to stack pages */
+#sheet.sq #sections:has(.sub-page).twocol{display:block}
+#sheet.sq #sections:has(.sub-page) .sub-page-sections{display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:stretch}
+.sub-page + .sub-page{margin-top:20px}
+.sub-page-head{padding:8px 14px; background:var(--ochre); color:#fff; font-family:var(--disp);
+  font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border-radius:8px 8px 0 0;
+  margin-bottom:6px; -webkit-print-color-adjust:exact; print-color-adjust:exact}
+.sub-page-title{display:flex; align-items:center; gap:8px}
+.sub-page-title::before{content:''; display:inline-block; width:16px; height:2px; background:rgba(255,255,255,.5)}
+.sub-page-sections{display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:stretch}
+#sheet.sq .sub-page-sections .scol{display:flex; flex-direction:column; gap:10px; min-width:0}
+#sheet.sq .sub-page-sections .totals{flex:0 0 auto; margin-top:auto}
+.sub-page-sections .section{margin-top:0}
+#sheet.sq .sub-page-sections .words{display:none}
+@media print{
+  .sub-page{break-inside:avoid; page-break-inside:avoid}
+  .sub-page + .sub-page{break-before:page; page-break-before:always; margin-top:0}
+  .sub-page-head{background:var(--ochre) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact}
+  .sub-page-sections{break-inside:avoid}
+}
 /* ---- Cut Size quote — MOBILE data entry (screen only). `@media screen` + max-width keeps this
    OUT of print (A4 ≈ 794px > 760px) and off desktop screens, so it NEVER changes the quote/print
    sizing — it only makes the phone form usable: one full-width column with tap-friendly rows. ---- */
@@ -1189,7 +1214,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 @media print{
   body{background:#fff; background-image:none}
   .wrap{padding:0; max-width:none}
-  .topnav,#toast{display:none !important}
+  .topnav,.navsearch,.syncdot,.usermenu,.topnav-in,#toast{display:none !important}
   .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint,.mode-btn,.mode-seg,.no-print{display:none !important}
   .print-only{display:block !important}
   /* line-selection highlight is a screen-only editing aid — never print it */
@@ -1241,8 +1266,8 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   #sheet.sq .row.cf .dim{font-size:14px; font-weight:700; padding:0 1px; text-align:center}
   #sheet.sq .row.cf .cft{font-size:14px; font-weight:700; text-align:left; padding-left:4px}
   #sheet.sq .row.cf .sl{font-size:12px; font-weight:700}
-  #sheet.sq .sec-pcs{display:inline; color:#F0E2C4}
-  #sheet.sq .sec-pcs b{color:#fff}
+  #sheet.sq .sec-pcs{display:inline; color:#4a3a26}
+  #sheet.sq .sec-pcs b{color:#241b12}
   .sec-foot{padding:4px 10px}
   .sec-tot{font-size:11px}
   .totals{margin-top:8px}

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, clone, prefSet, put, rpcNextInvoiceNumber } from "@/lib/data";
 import { seriesOf } from "@/lib/invoice-id";
-import { cftOf, computeDoc, inr, nowIso } from "@/lib/calc";
+import { amountOf, cftOf, computeDoc, directOf, inr, nowIso, pcsOf, rftOf } from "@/lib/calc";
 import { getLineClip, setLineClip } from "@/lib/lineClipboard";
 import { STATUSES } from "@/lib/constants";
 import { brandFor } from "@/lib/brand";
@@ -66,6 +66,9 @@ export default function Editor({
   // the Save button (or Ctrl/Cmd+S, or any action that uses the doc) persists.
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
+  // Undo history stack (Ctrl+Z). Each edit pushes current state before the change.
+  const historyRef = useRef<Doc[]>([]);
+  const UNDO_MAX = 50;
   const sheetRef = useRef<HTMLDivElement>(null);
   const secRef = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<{ si: number; ri: number; k: string } | null>(null);
@@ -104,6 +107,7 @@ export default function Editor({
   const totalPcs = isRent
     ? 0
     : doc.sections.reduce((s, sec) => s + sec.rows.reduce((p, r) => p + (Math.round(+r.pcs) || 0), 0), 0);
+  const hasSubGroups = doc.sections.some((s) => s.subGroup);
   const { brandMode, user } = useApp();
   const brand = brandFor(brandMode);
   const invBank = brand.banks?.[doc.bankIdx ?? 0] || brand.bank; // chosen bank for this invoice
@@ -154,9 +158,26 @@ export default function Editor({
     else markDirty(true);
   }
   function update(producer: (d: Doc) => void) {
+    // Push current state onto undo stack before mutating
+    const stack = historyRef.current;
+    stack.push(clone(docRef.current));
+    if (stack.length > UNDO_MAX) stack.shift();
     const next = clone(docRef.current);
     producer(next);
     commit(next);
+  }
+  /** Undo the last edit — Ctrl+Z restores the previous doc state. */
+  function undo() {
+    const stack = historyRef.current;
+    if (!stack.length) {
+      toast("Nothing to undo");
+      return;
+    }
+    const prev = stack.pop()!;
+    docRef.current = prev;
+    setDoc(prev);
+    markDirty(true);
+    toast("Undone ↶");
   }
   /** The Save button / Ctrl+S: link the customer record, then persist. */
   async function saveNow() {
@@ -168,9 +189,15 @@ export default function Editor({
   // Ctrl/Cmd+S saves; navigating away (unmount) or closing the tab never loses edits.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      const ctrl = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      if (ctrl && key === "s") {
         e.preventDefault();
         if (dirtyRef.current) saveNow().then(() => toast("Saved ✓"));
+      }
+      if (ctrl && key === "z") {
+        e.preventDefault();
+        undo();
       }
     };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -599,27 +626,57 @@ export default function Editor({
     toast("Payments cleared");
   }
   async function onNewQuote() {
-    const d = await createQuotation();
-    toast("New " + d.id + " created");
+    // Copy current quotation's data as starting point (sections, customer, rates, etc.)
+    const cur = docRef.current;
+    const d = await createQuotation({
+      customerId: cur.customerId,
+      customerName: cur.customerName,
+      phone: cur.phone,
+      site: cur.site,
+      address: cur.address,
+      notes: cur.notes,
+      custGstin: cur.custGstin,
+      gst: cur.gst,
+      gstMode: cur.gstMode,
+      sections: clone(cur.sections),
+    });
+    toast("New " + d.number + " created from current");
     openTab(d.id, d.number);
     router.push("/editor");
   }
   async function onSubQuote() {
-    // Add a new section group under the same quote, not a separate file.
-    // Prompt once for the group name; subsequent subs use the same group.
+    // Add a new section as part of a named sub-group (Kitchen, Bedroom, etc.).
+    // Each sub-group renders on its own printed page under the same quotation number.
     const existing = doc.sections.filter((s) => s.subGroup);
-    const groupName = existing.length
-      ? existing[0].subGroup!
-      : prompt("Sub-quotation name (e.g. Kitchen, Bedroom):") || "Sub Quotation";
+    const groups = Array.from(new Set(existing.map((s) => s.subGroup!)));
+    let groupName: string;
+    if (groups.length === 0) {
+      groupName = prompt("Sub-quotation name (e.g. Kitchen, Bedroom):") || "";
+      if (!groupName) return;
+    } else {
+      // Offer existing groups, or let them type a new one
+      const groupList = groups.map((g, i) => `${i + 1}. ${g}`).join("\n");
+      const input = prompt(
+        `Existing sub-groups:\n${groupList}\n\nType a number to add to one, or type a new name:`,
+      );
+      if (!input) return;
+      const num = parseInt(input, 10);
+      if (num > 0 && num <= groups.length) {
+        groupName = groups[num - 1];
+      } else {
+        groupName = input.trim();
+        if (!groupName) return;
+      }
+    }
     update((d) => {
       d.sections.push({
-        name: groupName + " " + (d.sections.filter((s) => s.subGroup === groupName).length + 1),
+        name: "Teak",
         rate: 4000,
         rows: [{ l: "", w: "", t: "", pcs: "" }],
         subGroup: groupName,
       });
     });
-    toast("Added " + groupName + " section");
+    toast(`Added section to "${groupName}"`);
   }
   async function onNewInvoice() {
     const d = await createInvoice();
@@ -801,8 +858,8 @@ export default function Editor({
           + Quotation
         </button>
         {!isInv && (
-          <button className="btn sm" onClick={onSubQuote} title="Create a sub-quotation under the same number group">
-            + Sub
+          <button className="btn sm" onClick={onSubQuote} title="Add a new sub-page (Kitchen, Bedroom, etc.) under the same quotation number">
+            + Sub page
           </button>
         )}
         {feat.invoices && (
@@ -1060,7 +1117,7 @@ export default function Editor({
           </div>
         </div>
 
-        <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} onFocus={onSecFocusIn} className={feat.simpleQuote ? "twocol" : ""}>
+        <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} onFocus={onSecFocusIn} className={feat.simpleQuote ? (hasSubGroups ? "" : "twocol") : ""}>
           {(() => {
             // rented invoice: a single custom "Rent" line instead of wood boxes.
             if (isRent)
@@ -1097,37 +1154,95 @@ export default function Editor({
                   </div>
                 </div>
               );
-            // Cut Size quote: split the wood boxes into EXACTLY two columns — FILL THE LEFT COLUMN
-            // first (each box stacks directly below the previous one), and only start the right column
-            // once the left is full (~one page of compact 0.72cm rows ≈ 30 lines). Never three columns.
+            // Official app: no sub-pages, just list sections (one-column layout)
             if (!feat.simpleQuote) return doc.sections.map((_, si) => renderCard(si));
-            // box height ≈ header/footer chrome + rows×0.72cm; a printable column is ~25cm tall.
-            const COL_CM = 25;
-            const boxCm = (sec: (typeof doc.sections)[number]) => 3 + (sec.rows.length || 1) * 0.72;
-            const c1: number[] = [];
-            const c2: number[] = [];
-            let h1 = 0;
-            let filled = false; // once the left column is full, everything else goes to the right
+            // Sub-page grouping: sections without subGroup go to "Main" page,
+            // sections with subGroup get their own page per unique subGroup name.
+            // Each page gets its own two-column layout + sub-total; a grand-total
+            // appears only on the last page.
+            const subGroups: Map<string, number[]> = new Map(); // subGroup -> section indices
             doc.sections.forEach((sec, i) => {
-              const bc = boxCm(sec);
-              if (!filled && (c1.length === 0 || h1 + bc <= COL_CM)) {
-                c1.push(i);
-                h1 += bc;
-              } else {
-                filled = true;
-                c2.push(i);
-              }
+              const g = sec.subGroup?.trim() || "Main";
+              const arr = subGroups.get(g) || [];
+              arr.push(i);
+              subGroups.set(g, arr);
             });
-            // the bill sits at the BOTTOM of the right column (aligned with the taller column's bottom)
-            return (
-              <>
-                <div className="scol">{c1.map(renderCard)}</div>
-                <div className="scol">
-                  {c2.map(renderCard)}
-                  {billNode}
+            // "Main" first, then other groups in order of first appearance
+            const groupNames = ["Main", ...Array.from(subGroups.keys()).filter((k) => k !== "Main")];
+
+            // Per-group two-column layout + sub-total computation
+            const groupNodes = groupNames.map((gName, gi) => {
+              const indices = subGroups.get(gName) || [];
+              const isLastGroup = gi === groupNames.length - 1;
+              // Two-column fill for this group
+              const COL_CM = 25;
+              const boxCm = (si: number) => 3 + (doc.sections[si].rows.length || 1) * 0.72;
+              const c1: number[] = [];
+              const c2: number[] = [];
+              let h1 = 0;
+              let filled = false;
+              indices.forEach((si) => {
+                const bc = boxCm(si);
+                if (!filled && (c1.length === 0 || h1 + bc <= COL_CM)) {
+                  c1.push(si);
+                  h1 += bc;
+                } else {
+                  filled = true;
+                  c2.push(si);
+                }
+              });
+              // Sub-total for this group (use same GST logic as main total)
+              const groupCft = indices.reduce((s, si) => s + (totals.secCft[si] || 0), 0);
+              const groupSub = indices.reduce((s, si) => {
+                const sec = doc.sections[si];
+                const measureOf =
+                  sec.calcMode === "rft"
+                    ? (r: Row) => rftOf(r)
+                    : sec.calcMode === "direct" || sec.calcMode === "cbm"
+                      ? (r: Row) => directOf(r)
+                      : sec.calcMode === "pcs"
+                        ? (r: Row) => pcsOf(r)
+                        : (r: Row) => cftOf(r);
+                let m = 0;
+                (sec.rows || []).forEach((r) => (m += measureOf(r)));
+                return s + amountOf(sec, m);
+              }, 0);
+              const groupGst = doc.gstMode === "flat"
+                ? Math.round((+doc.gst || 0) * 100) / 100
+                : Math.round(groupSub * (+doc.gst || 0)) / 100;
+              const groupGrand = Math.round((groupSub + groupGst) * 100) / 100;
+
+              return (
+                <div key={gName} className="sub-page" data-subgroup={gName}>
+                  {gName !== "Main" && (
+                    <div className="sub-page-head">
+                      <span className="sub-page-title">{gName}</span>
+                    </div>
+                  )}
+                  <div className="sub-page-sections">
+                    <div className="scol">{c1.map(renderCard)}</div>
+                    <div className="scol">
+                      {c2.map(renderCard)}
+                      {/* Sub-total bill for this group — only the full GST/grand on the last page */}
+                      <Totals
+                        doc={doc}
+                        sub={groupSub}
+                        gstAmt={isLastGroup ? totals.gstAmt : 0}
+                        grand={isLastGroup ? totals.grand : groupSub}
+                        totalCft={isLastGroup ? totalCft : groupCft}
+                        totalCbm={totalCbm}
+                        totalPcs={totalPcs}
+                        payLines={isLastGroup ? payLines : undefined}
+                        onGst={(v) => setField("gst", v)}
+                        onGstMode={(m) => setField("gstMode", m)}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </>
-            );
+              );
+            });
+
+            return <>{groupNodes}</>;
           })()}
         </div>
           </>
