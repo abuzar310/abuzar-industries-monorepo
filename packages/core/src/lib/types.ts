@@ -116,6 +116,8 @@ export interface AppFeatures {
   soloLogin?: boolean;
   /** Tally-style double-entry ledger section (official). */
   ledger?: boolean;
+  /** simple business vouchers: receipt/payment books + invoice payment acceptance (official). */
+  vouchers?: boolean;
 }
 
 export interface Customer {

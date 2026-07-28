@@ -52,7 +52,10 @@ body{
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px;border:2px solid var(--paper)}
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-faint)}
-.wrap{max-width:1000px; margin:0 auto; padding:26px 22px 140px}
+.wrap{max-width:1360px; margin:0 auto; padding:26px 22px 140px}
+/* the editor keeps its original narrow canvas — the quotation/invoice sheet is an A4 page,
+   stretching it would distort the document (every other view breathes wider) */
+.wrap:has(#sheet){max-width:1000px}
 
 /* ---------- view transition ---------- */
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -67,7 +70,7 @@ body{
   background:rgba(247,242,233,.82); backdrop-filter:blur(14px) saturate(1.4);
   border-bottom:1px solid var(--line);
 }
-.topnav-in{max-width:1000px; margin:0 auto; padding:11px 22px;
+.topnav-in{max-width:1360px; margin:0 auto; padding:11px 22px;
   display:flex; align-items:center; gap:14px; flex-wrap:wrap}
 .nav-brand{
   font-family:var(--serif); font-weight:600; letter-spacing:.01em;
@@ -1048,12 +1051,12 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   background:var(--i3-paper); color:var(--i3-ink); font-family:var(--body, sans-serif);
   width:100%; --i3-pad:24px; -webkit-print-color-adjust:exact; print-color-adjust:exact}
 .inv3a .i3-num,.inv3a .i3-dim,.inv3a .i3-mono,.inv3a .i3-amt,.inv3a .i3-cft,.inv3a .i3-sl{font-family:var(--mono); font-variant-numeric:tabular-nums}
-.inv3a .i3-kindtop{text-align:center; padding:10px 0 2px}
-.inv3a .i3-kindtop span{font-family:var(--disp); font-size:14px; letter-spacing:.4em; color:var(--i3-soft);
-  text-transform:uppercase; border-bottom:2.5px solid var(--i3-gold); padding:0 6px 4px; font-weight:700}
+.inv3a .i3-kindtop{text-align:center; padding:3px 0 0}
+.inv3a .i3-kindtop span{font-family:var(--disp); font-size:12px; letter-spacing:.4em; color:var(--i3-soft);
+  text-transform:uppercase; border-bottom:2px solid var(--i3-gold); padding:0 6px 3px; font-weight:700}
 .inv3a .i3-mast{display:flex; align-items:center; gap:16px; padding:6px var(--i3-pad) 8px}
-.inv3a .i3-mast img{height:88px; width:auto}
-.inv3a .i3-nm{font-family:var(--disp); font-size:36px; font-weight:800; letter-spacing:.12em;
+.inv3a .i3-mast img{height:106px; width:auto; margin:-9px 0}
+.inv3a .i3-nm{font-family:var(--disp); font-size:42px; font-weight:800; letter-spacing:.17em;
   font-stretch:expanded; line-height:1; color:var(--i3-maroon); text-transform:uppercase; white-space:nowrap}
 .inv3a .i3-tg{font-family:var(--disp); font-size:11.5px; letter-spacing:.42em; color:var(--i3-gold);
   text-transform:uppercase; margin-top:5px; font-weight:700}
@@ -1126,6 +1129,40 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .inv3a .i3-terms ol{padding-left:14px}
 .inv3a .i3-terms li{font-size:10px; color:var(--i3-soft); line-height:1.6}
 .inv3a .i3-signs{display:flex; justify-content:space-between; align-items:flex-end; padding:22px var(--i3-pad) 14px; gap:24px}
+/* density tier 1 (2 boxes OR 10+ rows): everything tightens so one page still fits */
+.inv3a.i3-c1 .i3-kindtop{padding:2px 0 0}
+.inv3a.i3-c1 .i3-mast{padding:4px var(--i3-pad) 6px; gap:12px}
+.inv3a.i3-c1 .i3-mast img{height:94px; margin:-12px 0}
+.inv3a.i3-c1 .i3-nm{font-size:36px; letter-spacing:.16em}
+.inv3a.i3-c1 .i3-tg{margin-top:3px; font-size:10.5px}
+.inv3a.i3-c1 .i3-ad{font-size:10px; margin-top:3px}
+.inv3a.i3-c1 .i3-chip{padding:4px 8px}
+.inv3a.i3-c1 .i3-pbox{padding:5px 10px}
+.inv3a.i3-c1 .i3-pnm{font-size:15px}
+.inv3a.i3-c1 .i3-boxes{margin-top:8px}
+.inv3a.i3-c1 .i3-box + .i3-box{margin-top:6px}
+.inv3a.i3-c1 .i3-bhead{padding:3.5px 10px; font-size:12px}
+.inv3a.i3-c1 .i3-btbl thead th{padding:3px 8px}
+.inv3a.i3-c1 .i3-btbl tbody td{height:15px; padding:2.5px 8px; font-size:12px}
+.inv3a.i3-c1 .i3-bfoot{padding:4px 10px}
+.inv3a.i3-c1 .i3-bfoot b{font-size:13px}
+.inv3a.i3-c1 .i3-btbl tfoot td{padding:4px 10px}
+.inv3a.i3-c1 .i3-btbl tfoot b{font-size:13px}
+.inv3a.i3-c1 .i3-totrow{margin-top:8px}
+.inv3a.i3-c1 .i3-trow{padding:3.5px 12px}
+.inv3a.i3-c1 .i3-grand{padding:8px 12px}
+.inv3a.i3-c1 .i3-grand .v{font-size:18px}
+.inv3a.i3-c1 .i3-tear{margin-top:8px}
+.inv3a.i3-c1 .i3-office{gap:14px; padding-top:6px}
+.inv3a.i3-c1 .i3-terms li{font-size:9.5px; line-height:1.5}
+.inv3a.i3-c1 .i3-signs{padding:12px var(--i3-pad) 10px}
+/* density tier 2 (3+ boxes OR 16+ rows): tightest, still readable */
+.inv3a.i3-c2 .i3-mast img{height:78px; margin:-10px 0}
+.inv3a.i3-c2 .i3-nm{font-size:30px}
+.inv3a.i3-c2 .i3-btbl thead th{padding:2.5px 8px; font-size:8.5px}
+.inv3a.i3-c2 .i3-btbl tbody td{height:12px; padding:1.5px 8px; font-size:11px}
+.inv3a.i3-c2 .i3-sl{font-size:10px}
+.inv3a.i3-c2 .i3-chip b{font-size:11px}
 .inv3a .i3-sig{width:220px; text-align:center}
 .inv3a .i3-sig .for{font-family:var(--disp); font-size:13px; font-weight:700; margin-bottom:28px; color:var(--i3-maroon)}
 .inv3a .i3-sig .line{border-top:1.5px solid var(--i3-maroon); padding-top:4px; font-size:8.5px;
@@ -1156,9 +1193,11 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   #sheet{zoom:1}
   /* sell invoices print the 3A Woodmark sheet (.inv3a via .cd-print) instead of the editor sheet */
   #sheet.p3a{display:none !important}
-  /* fill the page: slimmer side padding, sheet stretches to the foot, signatures pinned at the bottom */
-  .cd-print.inv3a{display:flex !important; flex-direction:column; min-height:282mm; --i3-pad:12px}
+  /* fill the page: slimmer side padding, sheet stretches toward the foot, signatures pinned low.
+     272mm (not 282) — the browser needs slack under the sheet or the signature row clips to page 2 */
+  .cd-print.inv3a{display:flex !important; flex-direction:column; min-height:272mm; --i3-pad:12px}
   .inv3a .i3-signs{margin-top:auto}
+  .inv3a{break-inside:avoid-page}
   .mast{border-radius:0}
   .mast-top{padding:6px 14px}
   .logo{height:48px; filter:none}

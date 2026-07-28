@@ -22,10 +22,11 @@ const UNIT: Record<string, string> = { cbm: "CBM", rft: "RFT", pcs: "Pcs" };
 const unitOf = (m?: string) => UNIT[m || ""] || "CFT";
 const measurerOf = (m?: string) =>
   m === "rft" ? rftOf : m === "direct" || m === "cbm" ? directOf : m === "pcs" ? pcsOf : cftOf;
-/** the box always shows at least this many ruled lines — a real ledger box */
-const MIN_ROWS = 6;
+/** ruled lines per box: one box gets the full 6-line ledger; more boxes shrink so
+ *  everything still holds ONE printed page (2 boxes → 4 lines, 3 → 3, 4+ → no padding) */
+const minRowsFor = (boxes: number) => (boxes <= 1 ? 6 : boxes === 2 ? 4 : boxes === 3 ? 3 : 1);
 
-function WoodBox({ sec, measure }: { sec: Section; measure: number }) {
+function WoodBox({ sec, measure, minRows }: { sec: Section; measure: number; minRows: number }) {
   const bySize = !sec.calcMode || sec.calcMode === "cft";
   const unit = unitOf(sec.calcMode);
   const measurer = measurerOf(sec.calcMode);
@@ -33,7 +34,7 @@ function WoodBox({ sec, measure }: { sec: Section; measure: number }) {
   const amount = amountOf(sec, measure);
   const totalPcs = rows.reduce((s, r) => s + (+r.pcs || 0), 0);
   const hasPcs = totalPcs > 0; // direct/CBM boxes drop the Pcs column when nothing uses it
-  const n = Math.max(rows.length, MIN_ROWS);
+  const n = Math.max(rows.length, minRows);
   const cell = (r: Row | undefined, v: (r: Row) => string) => (r ? v(r) : "\u00A0");
   return (
     <div className="i3-box">
@@ -127,8 +128,16 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
   const half = Math.round((+doc.gst || 0) * 50) / 100;
   const halfAmt = Math.round(totals.gstAmt * 50) / 100;
   const igst = doc.gstKind === "igst";
+  // density: more rows / boxes → tighter type + spacing so ONE printed page always fits
+  const boxes = (doc.sections || []).length;
+  const minRows = minRowsFor(boxes);
+  const rowsTotal = (doc.sections || []).reduce((s, sec) => {
+    const measurer = measurerOf(sec.calcMode);
+    return s + Math.max((sec.rows || []).filter((r) => measurer(r) > 0).length, minRows);
+  }, 0);
+  const dense = boxes >= 2 || rowsTotal >= 8 ? (rowsTotal >= 14 || boxes >= 3 ? " i3-c1 i3-c2" : " i3-c1") : "";
   return (
-    <div className="cd-print inv3a" ref={ref}>
+    <div className={"cd-print inv3a" + dense} ref={ref}>
       {/* TAX INVOICE — centred on top */}
       <div className="i3-kindtop"><span>Tax Invoice</span></div>
 
@@ -169,10 +178,10 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
         </div>
       </div>
 
-      {/* the classic wood CFT boxes — half-page wide, two per row, min 6 ruled lines each */}
+      {/* the classic wood CFT boxes — ruled lines scale with the box count so ONE page always fits */}
       <div className="i3-boxes">
         {(doc.sections || []).map((sec, si) => (
-          <WoodBox key={si} sec={sec} measure={totals.secCft[si] ?? 0} />
+          <WoodBox key={si} sec={sec} measure={totals.secCft[si] ?? 0} minRows={minRows} />
         ))}
       </div>
 

@@ -27,6 +27,7 @@ import Totals from "./Totals";
 import QuoteCanvas from "./QuoteCanvas";
 import MoreMenu from "./MoreMenu";
 import PaymentBlock from "./PaymentBlock";
+import InvoicePayBlock from "./InvoicePayBlock";
 import InvoicePrintA from "./InvoicePrintA";
 import CustomerPicker from "./CustomerPicker";
 import GstinField from "./GstinField";
@@ -114,10 +115,10 @@ export default function Editor({
     if (feat.acceptPayment) upiAccounts().then(setUpiAccts);
   }, [feat.acceptPayment]);
 
-  // accept-payment: load this quote's recorded payments for the mini statements
+  // accept-payment / invoice vouchers: load recorded payments for the mini statements
   const loadExpenses = useCallback(() => {
-    if (feat.acceptPayment) allExpenses().then(setExpenses);
-  }, [feat.acceptPayment]);
+    if (feat.acceptPayment || feat.vouchers) allExpenses().then(setExpenses);
+  }, [feat.acceptPayment, feat.vouchers]);
   useEffect(() => {
     loadExpenses();
   }, [loadExpenses, doc.id]);
@@ -1262,6 +1263,18 @@ export default function Editor({
           onClearAll={onClearPayments}
           reload={loadExpenses}
           highlightId={payFocus}
+        />
+      )}
+
+      {/* official: record money received against this invoice (cash capped ₹10k/day) — internal, never printed */}
+      {feat.vouchers && isInv && !isBuy && !isRent && (
+        <InvoicePayBlock
+          doc={doc}
+          grand={totals.grand}
+          expenses={expenses}
+          by={user?.id || "unknown"}
+          setAggregates={setPayAggregates}
+          reload={loadExpenses}
         />
       )}
 
