@@ -1863,6 +1863,12 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .db-srow .amt{font-family:var(--mono); font-size:12.5px; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-faint); opacity:.45}
 .db-srow .amt.in{color:var(--green); font-weight:700; opacity:1}
 .db-srow .amt.out{color:var(--danger); font-weight:700; opacity:1}
+/* ---------- vouchers: bank account chips ---------- */
+.vch-banks{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px}
+.vch-bank{display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:12.5px; font-weight:700;
+  color:var(--walnut); background:var(--paper-2,#f2ead9); border:1px solid var(--line); border-radius:999px; padding:5px 6px 5px 12px}
+.vch-bank .pb-x{font-size:13px}
+
 /* ---------- customer account statement — the familiar Statements look + a running balance ---------- */
 .cs-card{padding:4px 14px 0}
 .cs-amt{text-align:right}

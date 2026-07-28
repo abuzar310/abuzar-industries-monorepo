@@ -24,6 +24,14 @@ export async function addBankAccount(name: string): Promise<string[]> {
   return next;
 }
 
+/** Remove a bank account from the quick-pick (old vouchers keep the name they recorded). */
+export async function removeBankAccount(name: string): Promise<string[]> {
+  const cur = await getBankAccounts();
+  const next = cur.filter((x) => x !== name);
+  await metaSet(BANKS_KEY, next);
+  return next;
+}
+
 // ---- payment vouchers (money OUT) ----
 
 /** Payment vouchers are "custom" expenses tagged by this sourceId prefix. */

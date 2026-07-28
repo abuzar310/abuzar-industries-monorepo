@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { allRec, delRec } from "@/lib/data";
 import { dateSortKey, inr } from "@/lib/calc";
 import { allExpenses } from "@/lib/expenses";
-import { addBankAccount, getBankAccounts, isPaymentVoucher, recordPaymentVoucher } from "@/lib/vouchers";
+import { addBankAccount, getBankAccounts, isPaymentVoucher, recordPaymentVoucher, removeBankAccount } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -200,7 +200,53 @@ export default function VouchersView() {
         </div>
       ) : (
         <>
+          {/* bank accounts — managed HERE, one clean place */}
           <div className="panel-card" style={{ padding: 14 }}>
+            <div className="pc-head" style={{ paddingLeft: 0 }}>
+              Bank accounts
+              <small style={{ marginLeft: 8, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>
+                used for payment vouchers and invoice receipts
+              </small>
+            </div>
+            {banks.length > 0 && (
+              <div className="vch-banks">
+                {banks.map((b) => (
+                  <span className="vch-bank" key={b}>
+                    {b}
+                    <button
+                      className="pb-x"
+                      type="button"
+                      title={"Remove " + b + " from the pick list (old vouchers keep it)"}
+                      onClick={async () => {
+                        setBanks(await removeBankAccount(b));
+                        if (bank === b) setBank("");
+                        bumpData();
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="acct-add-row" style={{ alignItems: "flex-end", marginTop: banks.length ? 10 : 4 }}>
+              <label className="modal-field" style={{ flex: "2 1 220px" }}>
+                <span>Add a bank account</span>
+                <input
+                  type="text"
+                  placeholder="e.g. HDFC Chitradurga · 50200006429458"
+                  value={newBank}
+                  onChange={(e) => setNewBank(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addBank()}
+                />
+              </label>
+              <button className="btn primary sm" type="button" onClick={addBank} disabled={!newBank.trim()}>
+                Add bank
+              </button>
+            </div>
+          </div>
+
+          <div className="panel-card" style={{ padding: 14, marginTop: 14 }}>
             <div className="pc-head" style={{ paddingLeft: 0 }}>New payment voucher</div>
             <div className="rec-grid">
               <label className="modal-field">
@@ -235,23 +281,6 @@ export default function VouchersView() {
                 </select>
               )}
             </div>
-            {via === "bank" && (
-              <div className="acct-add-row" style={{ marginTop: 8, alignItems: "flex-end" }}>
-                <label className="modal-field" style={{ flex: "2 1 200px" }}>
-                  <span>New bank account</span>
-                  <input
-                    type="text"
-                    placeholder="e.g. HDFC Chitradurga"
-                    value={newBank}
-                    onChange={(e) => setNewBank(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addBank()}
-                  />
-                </label>
-                <button className="btn sm" type="button" onClick={addBank} disabled={!newBank.trim()}>
-                  Add bank
-                </button>
-              </div>
-            )}
             <label className="modal-field" style={{ marginTop: 10, width: "100%" }}>
               <span>Note (optional)</span>
               <input type="text" placeholder="e.g. lorry freight for teak load" value={note} onChange={(e) => setNote(e.target.value)} />

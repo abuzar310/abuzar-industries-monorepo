@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, delRec, getRec } from "@/lib/data";
+import { allRec, delRec, getRec, prefGet, prefSet } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/create";
 import { getFeatures } from "@/lib/features";
@@ -26,6 +26,12 @@ export default function CustomersView() {
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [invs, setInvs] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  /** list order — device preference: "az" alphabetical · "due" biggest outstanding first */
+  const [sortBy, setSortBy] = useState<"az" | "due">(() => prefGet<"az" | "due">("custSort", "az"));
+  const pickSort = (v: "az" | "due") => {
+    setSortBy(v);
+    prefSet("custSort", v);
+  };
 
   const load = useCallback(() => {
     Promise.all([
@@ -79,22 +85,34 @@ export default function CustomersView() {
     load();
   }
 
-  const shown = applySearch(list, searchTerm);
+  // financials once per customer, so the list can sort by outstanding
+  const entries = applySearch(list, searchTerm).map((c) => ({
+    c,
+    f: customerFinancials(c.id, quotes, invs, c.opening || 0, expenses, quotesAsBills),
+  }));
+  if (sortBy === "due") entries.sort((a, b) => b.f.outstanding - a.f.outstanding || (a.c.name || "").localeCompare(b.c.name || ""));
 
   return (
     <div>
       <div className="sectitle">
         Customers <small>— {list.length} contact{list.length === 1 ? "" : "s"}</small>
       </div>
-      <div className="rowbtns">
+      <div className="rowbtns" style={{ alignItems: "center", gap: 10 }}>
         <button className="btn primary sm" onClick={add}>
           + Add customer
         </button>
+        <div className="db-seg sm" style={{ marginLeft: "auto" }} role="group" aria-label="Sort customers">
+          <button className={"seg-btn" + (sortBy === "az" ? " on" : "")} type="button" onClick={() => pickSort("az")}>
+            A–Z
+          </button>
+          <button className={"seg-btn" + (sortBy === "due" ? " on" : "")} type="button" onClick={() => pickSort("due")}>
+            Outstanding first
+          </button>
+        </div>
       </div>
       <div className="custgrid">
-        {shown.length ? (
-          shown.map((c) => {
-            const f = customerFinancials(c.id, quotes, invs, c.opening || 0, expenses, quotesAsBills);
+        {entries.length ? (
+          entries.map(({ c, f }) => {
             return (
               <div className="custcard" key={c.id} onClick={() => router.push("/customers/" + c.id)} style={{ cursor: "pointer" }}>
                 <h3>{c.name}</h3>

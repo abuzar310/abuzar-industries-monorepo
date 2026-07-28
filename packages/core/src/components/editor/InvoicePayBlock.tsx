@@ -6,7 +6,7 @@ import { inr, todayStr } from "@/lib/calc";
 import { addExpense } from "@/lib/expenses";
 import { delRec } from "@/lib/data";
 import { statementsForQuote, type PartyStatement } from "@/lib/payments";
-import { addBankAccount, CASH_DAY_LIMIT, cashTakenFromCustomerOn, getBankAccounts } from "@/lib/vouchers";
+import { CASH_DAY_LIMIT, cashTakenFromCustomerOn, getBankAccounts } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import { bumpData, toast } from "@/store/app-store";
 import type { Doc, Expense } from "@/lib/types";
@@ -35,7 +35,6 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
   const [via, setVia] = useState<"cash" | "bank">("cash");
   const [bank, setBank] = useState("");
   const [banks, setBanks] = useState<string[]>([]);
-  const [newBank, setNewBank] = useState("");
   const [payDate, setPayDate] = useState(""); // yyyy-mm-dd (blank = today)
   const [note, setNote] = useState("");
 
@@ -48,23 +47,38 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
   const balance = r2(grand - received);
   const settled = balance <= 0.5;
 
-  async function addBank() {
-    const next = await addBankAccount(newBank);
-    setBanks(next);
-    const n = newBank.trim();
-    if (n) setBank(next.find((x) => x.toLowerCase() === n.toLowerCase()) || n);
-    setNewBank("");
+  // STRUCTURAL cash cap: how much cash room this customer has left for the chosen day.
+  // The input itself is clamped to this — an over-limit amount can never be typed in.
+  const [cashRoom, setCashRoom] = useState(CASH_DAY_LIMIT);
+  const dateStr = payDate ? toDmy(payDate) : todayStr();
+  useEffect(() => {
+    let alive = true;
+    cashTakenFromCustomerOn(doc.customerId || "", dateStr, expenses).then((taken) => {
+      if (alive) setCashRoom(Math.max(0, r2(CASH_DAY_LIMIT - taken)));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [doc.customerId, dateStr, expenses]);
+
+  function onAmt(v: string) {
+    const n = +v || 0;
+    if (via === "cash" && n > cashRoom) {
+      setAmt(String(cashRoom)); // hard clamp — the rest must come by bank
+      toast("Cash cap: only ₹" + inr(cashRoom) + " more allowed from this customer on " + dateStr + " — take the rest by bank");
+      return;
+    }
+    setAmt(v);
   }
 
   async function addLine() {
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return;
     if (via === "bank" && !bank.trim()) return toast("Pick the bank account");
-    const dateStr = payDate ? toDmy(payDate) : todayStr();
     if (via === "cash") {
-      // the ₹10k rule: cash from one customer is capped per day — the rest must come by bank
+      // re-check against the live figure (belt and braces on top of the clamped input)
       const taken = await cashTakenFromCustomerOn(doc.customerId || "", dateStr, expenses);
-      if (taken + a > CASH_DAY_LIMIT)
+      if (taken + a > CASH_DAY_LIMIT + 0.005)
         return toast(
           "Cash limit — max ₹" + inr(CASH_DAY_LIMIT) + " from one customer per day. ₹" + inr(taken) +
             " already taken on " + dateStr + "; take the rest by bank.",
@@ -139,8 +153,9 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
                 type="number"
                 inputMode="decimal"
                 placeholder="0"
+                max={via === "cash" ? cashRoom : undefined}
                 value={amt}
-                onChange={(e) => setAmt(e.target.value)}
+                onChange={(e) => onAmt(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
@@ -160,8 +175,8 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
                   ))}
                 </select>
               ) : (
-                <span className="pb-in" style={{ color: "var(--ink-faint)", fontSize: 13 }}>
-                  max ₹{inr(CASH_DAY_LIMIT)}/day
+                <span className="pb-in" style={{ color: cashRoom <= 0 ? "var(--danger)" : "var(--ink-faint)", fontSize: 13 }}>
+                  {cashRoom <= 0 ? "cash cap reached today" : "cash room ₹" + inr(cashRoom) + " today"}
                 </span>
               )}
               <input
@@ -171,24 +186,21 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
                 value={payDate}
                 onChange={(e) => setPayDate(e.target.value)}
               />
-              <button className="pb-plus" type="button" title="Record payment" onClick={addLine} disabled={!(+amt > 0)}>
+              <button
+                className="pb-plus"
+                type="button"
+                title="Record payment"
+                onClick={addLine}
+                disabled={!(+amt > 0) || (via === "cash" && +amt > cashRoom + 0.005)}
+              >
                 +
               </button>
             </div>
-            {via === "bank" && (
+            {via === "bank" && banks.length === 0 && (
               <div className="pb-r pb-note">
-                <input
-                  className="pb-in"
-                  type="text"
-                  placeholder="+ new bank account (e.g. HDFC Chitradurga)"
-                  value={newBank}
-                  onChange={(e) => setNewBank(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addBank()}
-                  style={{ gridColumn: "1 / 4" }}
-                />
-                <button className="btn sm" type="button" onClick={addBank} disabled={!newBank.trim()} style={{ gridColumn: "4 / -1", justifySelf: "start" }}>
-                  Add bank
-                </button>
+                <span className="pb-in" style={{ color: "var(--ink-faint)", fontSize: 12.5, gridColumn: "1 / -1" }}>
+                  No bank accounts yet — add them on the Vouchers tab → Payment vouchers.
+                </span>
               </div>
             )}
             <div className="pb-r pb-note">
@@ -215,9 +227,9 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
             <button
               className="pb-bal due"
               type="button"
-              title="Tap to fill this balance into the amount"
+              title="Tap to fill this balance into the amount (cash: capped to today's room)"
               style={{ border: "none", background: "transparent", cursor: "pointer" }}
-              onClick={() => setAmt(String(balance))}
+              onClick={() => setAmt(String(via === "cash" ? Math.min(balance, cashRoom) : balance))}
             >
               Bal ₹{inr(balance)}
             </button>
