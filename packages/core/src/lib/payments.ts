@@ -106,6 +106,7 @@ export interface PartyQuote {
   number: string;
   /** Recycled display number (shown to user). Falls back to number if not set. */
   displayNumber?: string;
+  date: string;
   bill: number;
   paid: number;
   balance: number;
@@ -176,7 +177,7 @@ export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Custo
     p.cashPaid += d.payCash || 0;
     p.upiPaid += d.payUpi || 0;
     p.quoteCount++;
-    p.quotes.push({ id: d.id, number: d.number, displayNumber: d.displayNumber, bill: r2(b), paid: r2(pd), balance: r2(b - pd), status: d.status });
+    p.quotes.push({ id: d.id, number: d.number, displayNumber: d.displayNumber, date: d.date, bill: r2(b), paid: r2(pd), balance: r2(b - pd), status: d.status });
     if (!p.custId) p.custId = d.customerId || "";
     if (!p.phone) p.phone = d.phone || "";
     quoteOwner.set(d.id, k);
