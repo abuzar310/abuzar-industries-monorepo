@@ -294,6 +294,13 @@ export interface WeekRow {
   paid: number;
   /** earned − paid: >0 still owed to the worker · <0 paid over this week's wages */
   balance: number;
+  /** balance brought FORWARD into this week: everything earned before the week − everything
+   *  settled before it. Each week is a closed statement — pay on payout day, and whatever
+   *  is left rolls into the next week as ITS carry-in. */
+  carryIn: number;
+  /** the week's CLOSING: carryIn + earned − paid. This is what the next week starts from.
+   *  Frozen for old weeks — later payments belong to later weeks, they never rewrite history. */
+  closing: number;
   /** this week's wage-settling entries (wage + deduct), oldest first */
   payments: WorkerEntry[];
   /** iso → CASH handed to the worker that day (wages + advance loans) — the Excel's
@@ -312,16 +319,27 @@ export function weekRollup(
   return workers.map((worker) => {
     const wm: Record<string, number> = {};
     let presentDays = 0;
+    let daysBefore = 0; // attendance before this week — feeds the carry-in
     for (const m of marks) {
-      if (m.workerId !== worker.id || !inWeek(m.date)) continue;
-      wm[m.date] = m.present;
-      presentDays += +m.present || 0;
+      if (m.workerId !== worker.id) continue;
+      if (inWeek(m.date)) {
+        wm[m.date] = m.present;
+        presentDays += +m.present || 0;
+      } else if (m.date && m.date < from) {
+        daysBefore += +m.present || 0;
+      }
     }
     const all = workerPayments(expenses, worker.id);
     const dayIso = (x: WorkerEntry) => dateSortKey(x.e.date) || (x.e.createdAt || "").slice(0, 10);
     const payments = all
       .filter((x) => (x.kind === "wage" || x.kind === "deduct") && inWeek(dayIso(x)))
       .sort((a, b) => (a.e.createdAt || "").localeCompare(b.e.createdAt || ""));
+    // everything settled BEFORE this week (wage cash + deductions)
+    const paidBefore = r2(
+      all
+        .filter((x) => (x.kind === "wage" || x.kind === "deduct") && dayIso(x) < from)
+        .reduce((s, x) => s + (+x.e.amount || 0), 0),
+    );
     const takenByDay: Record<string, number> = {};
     for (const x of all) {
       if (x.kind !== "wage" && x.kind !== "debt") continue; // real cash only
@@ -331,6 +349,18 @@ export function weekRollup(
     }
     const earned = r2(presentDays * (+worker.rate || 0));
     const paid = r2(payments.reduce((s, x) => s + (+x.e.amount || 0), 0));
-    return { worker, marks: wm, presentDays: r2(presentDays), earned, paid, balance: r2(earned - paid), payments, takenByDay };
+    const carryIn = r2(daysBefore * (+worker.rate || 0) - paidBefore);
+    return {
+      worker,
+      marks: wm,
+      presentDays: r2(presentDays),
+      earned,
+      paid,
+      balance: r2(earned - paid),
+      carryIn,
+      closing: r2(carryIn + earned - paid),
+      payments,
+      takenByDay,
+    };
   });
 }

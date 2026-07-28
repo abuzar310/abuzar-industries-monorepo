@@ -148,6 +148,7 @@ export default function AttendanceView() {
   const totDays = r2(rows.reduce((s, x) => s + x.presentDays, 0));
   const totEarned = r2(rows.reduce((s, x) => s + x.earned, 0));
   const totPaid = r2(rows.reduce((s, x) => s + x.paid, 0));
+  const totClosing = r2(rows.reduce((s, x) => s + x.closing, 0)); // what this week carries forward
   const totNet = r2(rows.reduce((s, x) => s + acctOf(x.worker.id).wageBalance, 0));
   // "due" = unpaid wages (the wage pot is positive)
   const due = rows.filter((x) => acctOf(x.worker.id).wageBalance > 0.5);
@@ -811,6 +812,11 @@ export default function AttendanceView() {
           <div className="sub">this week</div>
         </div>
         <div className="stat">
+          <div className="k">Week closing</div>
+          <div className="v" style={{ color: balWords(totClosing).color }}>₹ {inr(Math.abs(totClosing))}</div>
+          <div className="sub">{totClosing > 0.5 ? "carries to next week" : totClosing < -0.5 ? "taken extra — carries" : "week settled ✓"}</div>
+        </div>
+        <div className="stat">
           <div className="k">Wages net</div>
           <div className="v" style={{ color: balWords(totNet).color }}>₹ {inr(Math.abs(totNet))}</div>
           <div className="sub">{totNet > 0.5 ? "to pay overall" : totNet < -0.5 ? "taken extra overall" : "all square"}</div>
@@ -820,7 +826,7 @@ export default function AttendanceView() {
       <div className="tsheet">
         <div className="tsheet-head">
           <span>Wage register</span>
-          <small>tap a day: 1 → ½ → 0 → blank · tap a name or balance for the account · payout {PAYDAY_NAMES[cfg.payday]}</small>
+          <small>tap a day: 1 → ½ → 0 → blank · each week closes on {PAYDAY_NAMES[cfg.payday]} — the closing carries into next week</small>
         </div>
         <div className="tsheet-body" style={{ overflowX: "auto" }}>
           {rows.length ? (
@@ -836,7 +842,8 @@ export default function AttendanceView() {
                   ))}
                   <th className="amt">Days</th>
                   <th className="amt">Earned ₹<small className="att-th-sub">this week</small></th>
-                  <th className="amt">Wage balance<small className="att-th-sub">all-time</small></th>
+                  <th className="amt">Paid ₹<small className="att-th-sub">this week</small></th>
+                  <th className="amt">Week closing<small className="att-th-sub">carries forward</small></th>
                   <th className="amt">Advance<small className="att-th-sub">owes us</small></th>
                   <th />
                 </tr>
@@ -844,7 +851,7 @@ export default function AttendanceView() {
               <tbody>
                 {rows.map((x) => {
                   const a = acctOf(x.worker.id);
-                  const bw = balWords(a.wageBalance);
+                  const bw = balWords(x.closing); // the WEEK'S closing — frozen for old weeks
                   const open = openAcct === x.worker.id;
                   return (
                     <Fragment key={x.worker.id}>
@@ -894,16 +901,22 @@ export default function AttendanceView() {
                         ))}
                         <td className="amt" style={{ fontWeight: 700 }}>{x.presentDays || ""}</td>
                         <td className="amt">{x.earned ? inr(x.earned) : ""}</td>
+                        <td className="amt">{x.paid ? inr(x.paid) : ""}</td>
                         <td className="amt">
                           <button
                             className="att-bal"
                             type="button"
                             style={{ color: bw.color }}
-                            title="Open this worker's account"
+                            title="This week's closing (carry-in + earned − paid) — carries into next week. Tap for the account."
                             onClick={() => toggleAcct(x.worker.id)}
                           >
                             {bw.text}
                           </button>
+                          {Math.abs(x.carryIn) > 0.5 && (
+                            <small className="att-carry">
+                              {x.carryIn > 0 ? "incl. ₹" + inr(x.carryIn) + " from before" : "−₹" + inr(-x.carryIn) + " extra from before"}
+                            </small>
+                          )}
                         </td>
                         <td className="amt">
                           {a.debt > 0.5 ? (

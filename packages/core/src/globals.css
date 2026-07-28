@@ -1346,6 +1346,11 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .att-th-sub{display:block; font-weight:400; font-family:var(--mono); color:#8a7b45; font-size:9.5px; text-transform:none; letter-spacing:0}
 .att-bal{background:none; border:0; padding:0; font-family:var(--mono); font-size:12.5px; font-weight:700; cursor:pointer; white-space:nowrap}
 .att-bal:hover{text-decoration:underline}
+/* "incl. ₹X from before" — the carry-in note under the week-closing figure */
+.att-carry{display:block; font-family:var(--mono); font-size:10px; color:var(--ink-faint); margin-top:2px; white-space:nowrap}
+/* the register breathes: roomier numeric cells, no cramped wrapping */
+.att-table th.amt, .att-table td.amt{min-width:92px; padding-left:10px; padding-right:10px}
+.att-table td{padding-top:9px; padding-bottom:9px}
 .att-acct-cell{background:var(--t-cream2); border-bottom:1px solid var(--t-line); padding:10px 14px !important}
 /* account card v2: balance hero + give form + statement */
 .att-card-hero{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
