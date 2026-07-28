@@ -47,17 +47,19 @@ export default function EditorView() {
     }
   }, [tabs, ready]);
 
-  // Ctrl+Tab / Ctrl+Shift+Tab to cycle tabs
+  // Ctrl+Shift+] / Ctrl+Shift+[ to cycle tabs (avoiding browser Tab conflicts)
   useEffect(() => {
     if (!tabs.length) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === "Tab") {
+      if (!(e.ctrlKey && e.shiftKey)) return;
+      const cur = tabs.findIndex((t) => t.id === activeId);
+      if (cur < 0) return;
+      if (e.key === "]") {
         e.preventDefault();
-        const cur = tabs.findIndex((t) => t.id === activeId);
-        const nextIdx = e.shiftKey
-          ? (cur - 1 + tabs.length) % tabs.length
-          : (cur + 1) % tabs.length;
-        setActive(tabs[nextIdx].id);
+        setActive(tabs[(cur + 1) % tabs.length].id);
+      } else if (e.key === "[") {
+        e.preventDefault();
+        setActive(tabs[(cur - 1 + tabs.length) % tabs.length].id);
       }
     };
     document.addEventListener("keydown", onKey);
