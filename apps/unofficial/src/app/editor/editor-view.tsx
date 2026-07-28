@@ -66,11 +66,11 @@ export default function EditorView() {
     return () => document.removeEventListener("keydown", onKey);
   }, [tabs, activeId]);
 
-  // Ctrl+Alt+ArrowRight / ArrowLeft — alternative tab cycling
+  // Alt+ArrowRight / ArrowLeft — alternative tab cycling (cleaner, no Ctrl)
   useEffect(() => {
     if (!tabs.length) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey && e.altKey)) return;
+      if (!(e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey)) return;
       const cur = tabs.findIndex((t) => t.id === activeId);
       if (cur < 0) return;
       if (e.key === "ArrowRight") {
