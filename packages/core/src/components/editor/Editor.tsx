@@ -640,21 +640,8 @@ export default function Editor({
     toast("Payments cleared");
   }
   async function onNewQuote() {
-    // Copy current quotation's data as starting point (sections, customer, rates, etc.)
-    const cur = docRef.current;
-    const d = await createQuotation({
-      customerId: cur.customerId,
-      customerName: cur.customerName,
-      phone: cur.phone,
-      site: cur.site,
-      address: cur.address,
-      notes: cur.notes,
-      custGstin: cur.custGstin,
-      gst: cur.gst,
-      gstMode: cur.gstMode,
-      sections: clone(cur.sections),
-    });
-    toast("New " + (d.displayNumber || d.number) + " created from current");
+    const d = await createQuotation();
+    toast("New " + (d.displayNumber || d.number) + " created");
     openTab(d.id, d.number, d.displayNumber);
     router.push("/editor");
   }
