@@ -614,51 +614,64 @@ export default function ReceiptsView() {
                 </span>
               </div>
               {open &&
-                g.list.map((entry) => {
-                  const { e, quoteNo, quoteId, locked, settled, amount } = entry;
-                  const editingThis = editId === e.id || (!!editRcpt && editRcpt.id === entry.key);
+                (() => {
+                  // Build bank-format ledger rows: dues are debits, receipts are credits
+                  const lRows: { date: string; particulars: string; debit: number; credit: number; balance: number; isClose?: boolean }[] = [];
+                  let bal = 0;
+                  for (const entry of g.list) {
+                    const { e, amount } = entry;
+                    if (e.charge) {
+                      bal += amount;
+                      lRows.push({ date: e.date, particulars: (e.note || "Due added") + " · by " + userName(e.enteredBy), debit: amount, credit: 0, balance: bal });
+                    } else {
+                      bal -= amount;
+                      lRows.push({ date: e.date, particulars: (e.mode === "upi" ? "UPI" : "Cash") + " · " + (e.account || ""), debit: 0, credit: amount, balance: bal });
+                    }
+                  }
+                  const due = bal > 0.5;
                   return (
-                    <div className={"stmt" + (editingThis ? " pb-editing" : "")} key={entry.key}>
-                      <div className={"stmt-ic " + (e.charge ? "due" : e.mode === "upi" ? "upi" : "cash")}>{e.charge ? "Due" : e.mode === "upi" ? "UPI" : "₹"}</div>
-                      <div className="stmt-main">
-                        <div className="stmt-to">
-                          {e.charge
-                            ? e.note || "Due added"
-                            : locked
-                              ? "On quote #" + quoteNo + (e.mode === "upi" ? " · UPI" + (e.account ? " · " + e.account : "") : " · Cash")
-                              : e.mode === "upi"
-                                ? (e.account || "UPI") + (e.label ? " · " + e.label : "")
-                                : e.account
-                                  ? e.account + (e.label ? " · " + e.label : "")
-                                  : e.toOwner
-                                    ? "Cash → Owner" + (e.label ? " · " + e.label : "")
-                                    : e.label || "Cash · Daybook"}
-                        </div>
-                        <div className="stmt-sub">
-                          {settled ? settled + " · " : ""}
-                          {e.date} · by {userName(e.enteredBy)}
-                        </div>
+                    <div className="bank-ledger" style={{ marginTop: 0 }}>
+                      <div className="bank-hdr">
+                        <span>Date</span>
+                        <span>Particulars</span>
+                        <span className="bank-amt">Dr ₹</span>
+                        <span className="bank-amt">Cr ₹</span>
+                        <span className="bank-amt">Balance</span>
                       </div>
-                      <div className={"stmt-amt" + (e.charge ? " due" : "")}>+₹{inr(amount)}</div>
-                      <span className="pb-rowacts">
-                        {locked ? (
-                          <button className="pb-x" title="Open quotation" type="button" onClick={() => router.push("/editor/" + quoteId)}>
-                            ↗
-                          </button>
-                        ) : (
-                          <>
-                            <button className="pb-x" title="Edit" type="button" onClick={() => startEdit(entry)}>
-                              ✎
-                            </button>
-                            <button className="pb-x" title="Delete" type="button" onClick={() => remove(entry)}>
-                              ×
-                            </button>
-                          </>
-                        )}
-                      </span>
+                      {lRows.map((row, i) => {
+                        const entry = g.list[i];
+                        const { e, quoteNo, quoteId, locked, settled } = entry;
+                        const isDue = !!e.charge;
+                        return (
+                          <div key={entry.key} className="bank-row" style={{ cursor: "default" }}>
+                            <span className="bank-date">{row.date}</span>
+                            <span className="bank-parts">
+                              {isDue ? "Due " : "Receipt "}– {row.particulars}
+                              {settled && <small> · {settled}</small>}
+                              {!isDue && quoteNo && <small> · #{quoteNo}</small>}
+                              <span className="bl-acts">
+                                {locked && quoteId ? (
+                                  <button className="bl-btn" title="Open quotation" type="button" onClick={() => router.push("/editor/" + quoteId)}>↗</button>
+                                ) : (
+                                  <>
+                                    <button className="bl-btn" title="Edit" type="button" onClick={() => startEdit(entry)}>✎</button>
+                                    <button className="bl-btn danger" title="Delete" type="button" onClick={() => remove(entry)}>×</button>
+                                  </>
+                                )}
+                              </span>
+                            </span>
+                            <span className={"bank-amt" + (row.debit > 0 ? " dr" : "")}>{row.debit > 0 ? "₹" + inr(row.debit) : ""}</span>
+                            <span className={"bank-amt" + (row.credit > 0 ? " cr" : "")}>{row.credit > 0 ? "₹" + inr(row.credit) : ""}</span>
+                            <span className={"bank-amt bal" + (i === lRows.length - 1 ? (due ? " due" : " ok") : "")}>
+                              ₹{inr(Math.abs(row.balance))}
+                              <span className={"bal-tag " + (row.balance > 0.5 ? "dr" : "cr")}>{row.balance > 0.5 ? "Dr" : "Cr"}</span>
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
-                })}
+                })()}
             </div>
           );
         })

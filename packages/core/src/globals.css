@@ -2089,3 +2089,14 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .bal-tag{display:inline-block; margin-left:4px; font-size:9px; font-weight:700; letter-spacing:.04em; background:var(--panel-2); border-radius:4px; padding:1px 5px; vertical-align:middle}
 .bal-tag.dr{color:var(--danger); background:rgba(176,64,64,.1)}
 .bal-tag.cr{color:var(--green); background:rgba(86,107,59,.12)}
+
+/* editor tab bar — horizontal tabs for open quotations */
+.editor-tabs{display:flex; gap:0; overflow-x:auto; background:var(--panel-2); border-bottom:1px solid var(--line); padding:0 4px; flex-shrink:0}
+.etab{display:flex; align-items:center; gap:6px; padding:6px 10px; font-size:12px; font-family:var(--disp); font-weight:600; cursor:pointer; border-bottom:2px solid transparent; color:var(--ink-soft); white-space:nowrap; transition:color .12s,border-color .12s; user-select:none}
+.etab:hover{color:var(--ink)}
+.etab.active{border-bottom-color:var(--ink); color:var(--ink)}
+.etab.dirty::after{content:""; display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--ochre); flex-shrink:0}
+.etab-label{display:flex; align-items:center; gap:4px}
+.etab-label small{margin-left:2px; font-weight:400; color:var(--ink-faint); font-size:10px; max-width:100px; overflow:hidden; text-overflow:ellipsis}
+.etab-close{background:none; border:none; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; color:var(--ink-faint); border-radius:4px; transition:color .12s,background .12s}
+.etab-close:hover{color:var(--danger); background:rgba(176,64,64,.1)}

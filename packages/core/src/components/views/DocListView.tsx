@@ -7,6 +7,7 @@ import { createInvoice, createQuotation } from "@/lib/create";
 import { seriesOf } from "@/lib/invoice-id";
 import { trashDoc } from "@/lib/trash";
 import { quoteBill } from "@/lib/payments";
+import { openTab } from "@/lib/editor-tabs";
 import { getFeatures } from "@/lib/features";
 import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
@@ -161,6 +162,8 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       router.push("/purchases/" + encodeURIComponent(d.id) + suffix);
       return;
     }
+    const action = suffix.startsWith("?action=") ? suffix.slice(8) : undefined;
+    openTab(d.id, d.number, d.displayNumber, action);
     router.push("/editor/" + d.id + suffix);
   };
   const toggle = (id: string) =>

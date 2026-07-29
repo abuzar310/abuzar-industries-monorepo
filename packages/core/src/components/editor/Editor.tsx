@@ -195,12 +195,16 @@ export default function Editor({
     commit(next, true);
   }
 
-  // Ctrl/Cmd+S saves; navigating away (unmount) or closing the tab never loses edits.
+  // Ctrl/Cmd+S saves; Ctrl+Z undoes; navigating away (unmount) or closing the tab never loses edits.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (dirtyRef.current) saveNow().then(() => toast("Saved ✓"));
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        undo();
       }
     };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
