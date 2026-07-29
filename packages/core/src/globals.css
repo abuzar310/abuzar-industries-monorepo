@@ -2051,3 +2051,36 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .rentline .rl-amt .amt-edit{display:inline-flex; align-items:baseline; gap:3px}
 .rentline .rl-amt input{width:130px; text-align:right; color:var(--walnut)}
 .rentline .rl-amt input::-webkit-outer-spin-button,.rentline .rl-amt input::-webkit-inner-spin-button{-webkit-appearance:none; appearance:none; margin:0}
+
+/* ===== Bank-format ledger (Statements + Accounts tabs) ===== */
+.bank-ledger{border:1px solid var(--line-2); border-radius:var(--radius-md); overflow:hidden; background:var(--panel); margin-top:8px}
+.bank-ledger .bank-hdr{display:grid; grid-template-columns:48px 1fr 110px 110px 110px; gap:6px; padding:8px 12px; background:var(--panel-2); font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); border-bottom:2px solid var(--ochre)}
+.bank-row{display:grid; grid-template-columns:48px 1fr 110px 110px 110px; gap:6px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--ink)}
+.bank-row:last-child{border-bottom:none}
+.bank-row.bank-open{background:rgba(176,124,40,.06); font-weight:700}
+.bank-row.bank-close{background:rgba(86,107,59,.08); font-weight:700}
+.bank-row.bank-total{background:var(--panel-2); font-weight:700}
+.bank-date{color:var(--ink-soft); font-size:11px}
+.bank-parts{font-family:var(--disp); font-weight:600; font-size:13px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+.bank-parts small{font-family:var(--mono); font-size:10px; color:var(--ink-faint); font-weight:400; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.bank-amt{text-align:right; font-weight:700; font-variant-numeric:tabular-nums}
+.bank-amt.dr{color:var(--danger)}
+.bank-amt.cr{color:var(--green)}
+.bank-amt.bal{color:var(--ink)}
+.bank-amt.bal.due{color:var(--danger)}
+.bank-amt.bal.ok{color:var(--green)}
+@media(max-width:640px){
+  .bank-ledger .bank-hdr{grid-template-columns:1fr 90px 90px 90px}
+  .bank-row{grid-template-columns:1fr 90px 90px 90px}
+  .bank-date{display:none}
+}
+
+/* inline action buttons inside bank-ledger rows */
+.bl-acts{display:inline-flex;align-items:center;gap:1px;margin-left:6px;vertical-align:middle}
+.bl-btn{background:none;border:none;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;color:var(--ink-faint);transition:color .15s;border-radius:4px}
+.bl-btn:hover{color:var(--ink);background:var(--panel-2)}
+.bl-btn.danger:hover{color:var(--danger)}
+
+/* move a payment to another account */
+.acct-move{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px; background:var(--panel-2); border-top:1px solid var(--line)}
+.acct-move-lbl{font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft)}

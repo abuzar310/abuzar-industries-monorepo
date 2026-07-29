@@ -535,88 +535,133 @@ export default function AccountsView() {
     window.open(waLink("", text), "_blank");
   }
 
-  // ── one UPI credit / collection line ──────────────────────────────────────
-  function renderLine(l: AcctStmtLine) {
-    if (l.kind === "collect") {
-      return (
-        <div className="stmt acct-stmt-done" key={l.id}>
-          <div className="stmt-ic ok">↑</div>
-          <div className="stmt-main">
-            <div className="stmt-to">Collected / handed over{l.note ? " · " + l.note : ""}</div>
-            <div className="stmt-sub">
-              {l.date}
-              {hhmm(l.at) ? " · " + hhmm(l.at) : ""} · by {userName(l.by)}
-            </div>
-          </div>
-          <div className="stmt-amt" style={{ color: "var(--green)" }}>−₹{inr(l.amount)}</div>
-          <span className="pb-rowacts">
-            <button className="pb-x" title="Delete collection" onClick={() => delCollection(l.id)}>
-              ×
-            </button>
-          </span>
-        </div>
-      );
+  // ── build bank-format ledger rows for one account ────────────────────────
+  interface AcctLedgerRow {
+    date: string;
+    at: string;
+    particulars: string;
+    detail: string;
+    debit: number;  // collections / hand-overs
+    credit: number; // UPI payments in
+    balance: number;
+    l: AcctStmtLine;
+    kind: "in" | "collect";
+    isOpen?: boolean;
+    isClose?: boolean;
+  }
+  function buildAcctLedger(a: AcctBalance, parentOpening = 0): AcctLedgerRow[] {
+    const rows: Omit<AcctLedgerRow, "balance">[] = [];
+    let bal = parentOpening;
+    if (parentOpening > 0) {
+      bal = parentOpening;
     }
-    const moving = moveFor === l.id;
+    for (const line of a.lines) {
+      if (line.kind === "in") {
+        rows.push({
+          date: line.date,
+          at: line.at,
+          particulars: `By UPI – ${line.customer || "—"}`,
+          detail: [line.quoteNo ? `#${line.quoteNo}` : line.custId ? "receipt" : "", line.toOwner ? "to owner" : "", line.legacyCollected ? "✓" : ""].filter(Boolean).join(" · "),
+          debit: 0,
+          credit: line.amount,
+          l: line,
+          kind: "in",
+        });
+      } else {
+        rows.push({
+          date: line.date,
+          at: line.at,
+          particulars: "To Collection / handed over",
+          detail: line.note || "",
+          debit: line.amount,
+          credit: 0,
+          l: line,
+          kind: "collect",
+        });
+      }
+    }
+    // chronological sort
+    const sortKey = (d: string) => { const [dd, mm, yy] = (d || "").split("-"); return dd && mm && yy ? `20${yy}-${mm}-${dd}` : ""; };
+    rows.sort((a, b) => {
+      const da = sortKey(a.date).localeCompare(sortKey(b.date));
+      if (da !== 0) return da;
+      return (a.at || "").localeCompare(b.at || "");
+    });
+    const result: AcctLedgerRow[] = [];
+    if (parentOpening > 0) {
+      result.push({ date: "", at: "", particulars: "Opening Balance", detail: "", debit: 0, credit: 0, balance: parentOpening, l: {} as AcctStmtLine, kind: "in", isOpen: true });
+    }
+    for (const r of rows) {
+      bal += r.debit ? -r.debit : r.credit;
+      result.push({ ...r, balance: bal });
+    }
+    result.push({ date: "", at: "", particulars: "Closing Balance", detail: "", debit: 0, credit: 0, balance: bal, l: {} as AcctStmtLine, kind: "in", isClose: true });
+    return result;
+  }
+
+  // ── render an account's full bank-ledger table ──────────────────────────
+  function renderAccountLedger(a: AcctBalance, parentOpening = 0) {
+    const ledgerRows = buildAcctLedger(a, parentOpening);
+    const due = ledgerRows.length > 0 ? ledgerRows[ledgerRows.length - 1].balance > 0.5 : false;
     return (
-      <div key={l.id}>
-        <div className={"stmt" + (l.toOwner || l.legacyCollected ? " acct-stmt-done" : "")}>
-          <div className="stmt-ic upi">UPI</div>
-          <div
-            className="stmt-main"
-            style={{ cursor: l.quoteNo || l.custId ? "pointer" : "default" }}
-            title={l.quoteNo ? "Open quotation #" + l.quoteNo : l.custId ? "Open in Receipts" : undefined}
-            onClick={() => {
-              if (l.quoteNo) router.push("/editor/" + (quotes.find((d) => d.number === l.quoteNo)?.id || ""));
-              else if (l.custId) router.push("/receipts?cust=" + encodeURIComponent(l.custId));
-            }}
-          >
-            <div className="stmt-to">
-              {l.customer}
-              {l.quoteNo ? " · #" + l.quoteNo : l.custId ? " · receipt" : ""}
-              {l.toOwner && <span className="acct-overall-hint"> · to owner</span>}
-              {l.legacyCollected && <span className="acct-collected-badge sm"> ✓</span>}
-            </div>
-            <div className="stmt-sub">
-              UPI · {l.date}
-              {hhmm(l.at) ? " · " + hhmm(l.at) : ""} · by {userName(l.by)}
-            </div>
-          </div>
-          <div className="stmt-amt">+₹{inr(l.amount)}</div>
-          <span className="pb-rowacts">
-            <button className="pb-x" title="Move to another account" onClick={() => setMoveFor(moving ? null : l.id)}>
-              ⇄
-            </button>
-            <button className="pb-x" title="Delete this payment" onClick={() => delEntry(l.id, l.quoteNo)}>
-              ×
-            </button>
-          </span>
+      <div className="bank-ledger" style={{ marginTop: 0 }}>
+        <div className="bank-hdr">
+          <span>Date</span>
+          <span>Particulars</span>
+          <span className="bank-amt">Dr ₹</span>
+          <span className="bank-amt">Cr ₹</span>
+          <span className="bank-amt">Balance</span>
         </div>
-        {moving && (
-          <div className="acct-move">
-            <span className="acct-move-lbl">Move to:</span>
-            <div className="acct-pick" style={{ flex: 1 }}>
-              {allNames.map((n) => (
-                <button key={n} type="button" className="acct-chip" onClick={() => moveEntry(l.id, n)}>
-                  {n}
-                </button>
-              ))}
-              {allNames.length === 0 && <span className="stmt-sub">No other accounts yet.</span>}
+        {ledgerRows.map((row, i) => {
+          const rowCls = ["bank-row", row.isOpen ? "bank-open" : "", row.isClose ? "bank-total" : ""].filter(Boolean).join(" ");
+          const isUpi = row.kind === "in" && !row.isOpen && !row.isClose;
+          return (
+            <div
+              key={i}
+              className={rowCls}
+              style={{ cursor: row.isOpen || row.isClose ? "default" : "pointer" }}
+              onClick={() => {
+                if (row.isOpen || row.isClose) return;
+                if (row.kind === "in" && row.l.quoteNo) router.push("/editor/" + (quotes.find((d) => d.number === row.l.quoteNo)?.id || ""));
+                else if (row.kind === "in" && row.l.custId) router.push("/receipts?cust=" + encodeURIComponent(row.l.custId));
+              }}
+            >
+              <span className="bank-date">{!row.isOpen && !row.isClose ? row.date : ""}</span>
+              <span className="bank-parts">
+                {row.particulars}
+                {row.detail && <small>{row.detail}</small>}
+                {isUpi && (row.l.at ? <> · <small>{hhmm(row.l.at)}</small></> : null)}
+                {isUpi && <span className="bl-acts">
+                  <button className="bl-btn" title="Move to another account" type="button" onClick={(e) => { e.stopPropagation(); setMoveFor(moveFor === row.l.id ? null : row.l.id); }}>⇄</button>
+                  <button className="bl-btn danger" title="Delete" type="button" onClick={(e) => { e.stopPropagation(); delEntry(row.l.id, row.l.quoteNo); }}>×</button>
+                </span>}
+                {row.kind === "collect" && !row.isClose && (
+                  <span className="bl-acts">
+                    <button className="bl-btn danger" title="Delete collection" type="button" onClick={(e) => { e.stopPropagation(); delCollection(row.l.id); }}>×</button>
+                  </span>
+                )}
+              </span>
+              <span className={"bank-amt" + (row.debit > 0 ? " dr" : "")}>{row.debit > 0 ? "₹" + inr(row.debit) : ""}</span>
+              <span className={"bank-amt" + (row.credit > 0 ? " cr" : "")}>{row.credit > 0 ? "₹" + inr(row.credit) : ""}</span>
+              <span className={"bank-amt bal" + (row.isClose ? (due ? " due" : " ok") : "")}>
+                ₹{inr(Math.abs(row.balance))}
+                {!row.isOpen && <span className={"bal-tag " + (row.balance > 0.5 ? "dr" : "cr")}>{row.balance > 0.5 ? "Dr" : "Cr"}</span>}
+              </span>
             </div>
-            <button className="btn sm" type="button" onClick={() => setMoveFor(null)}>Cancel</button>
-          </div>
-        )}
+          );
+        })}
       </div>
     );
   }
 
-  // ── one sub-account (grouped: In + log only; ungrouped: full incl. collect) ─
+  // ── one sub-account (bank-format ledger + collect form + actions) ────────
   function renderAccount(a: AcctBalance, holderId?: string) {
     const isOpen = !collapsedAccts.has(a.name);
     const due = a.balance > 0.5;
     const collecting = collectFor === a.name;
     const cleared = !due && a.received > 0;
     const grouped = !!holderId;
+    const parentOpening = grouped && holders.find(h => h.id === holderId) ? (holders.find(h => h.id === holderId)!.opening || 0) : 0;
     return (
       <div className={"panel-card acct-sub" + (cleared && !grouped ? " acct-done" : "")} key={a.name}>
         <div className="pc-head acct-head">
@@ -713,7 +758,7 @@ export default function AccountsView() {
 
         {isOpen &&
           (a.lines.length ? (
-            a.lines.map(renderLine)
+            <>{renderAccountLedger(a, parentOpening)}</>
           ) : clearMarks[acctClearKey(a.name)] ? (
             <div className="stmt-sub" style={{ padding: "8px 12px", opacity: 0.7 }}>
               Log cleared on {clearedOn(acctClearKey(a.name))} — fresh start. History is kept everywhere else.
@@ -881,26 +926,39 @@ export default function AccountsView() {
 
                 {cols.length > 0 && (
                   <div className="acct-handovers">
-                    <div className="pc-sub" style={{ borderTop: 0, padding: "2px 2px 4px" }}>Hand-overs</div>
-                    {cols
-                      .slice()
-                      .sort((x, y) => (y.createdAt || "").localeCompare(x.createdAt || ""))
-                      .map((c) => (
-                        <div className="stmt acct-stmt-done" key={c.id}>
-                          <div className="stmt-ic ok">↑</div>
-                          <div className="stmt-main">
-                            <div className="stmt-to">Collected / handed over{c.note ? " · " + c.note : ""}</div>
-                            <div className="stmt-sub">
-                              {c.date}
-                              {hhmm(c.createdAt) ? " · " + hhmm(c.createdAt) : ""} · by {userName(c.by)}
+                    <div className="bank-ledger" style={{ marginTop: 8 }}>
+                      <div className="bank-hdr">
+                        <span>Date</span>
+                        <span>Particulars</span>
+                        <span className="bank-amt">Dr ₹</span>
+                        <span className="bank-amt">Cr ₹</span>
+                        <span className="bank-amt">Balance</span>
+                      </div>
+                      {cols
+                        .slice()
+                        .sort((x, y) => {
+                          const dx = (x.createdAt || "").localeCompare(y.createdAt || "");
+                          return dx;
+                        })
+                        .map((c, i) => {
+                          const bal = r2(cols.slice(0, i + 1).reduce((s, x) => s + (+x.amount || 0), 0));
+                          return (
+                            <div className="bank-row" key={c.id}>
+                              <span className="bank-date">{c.date}</span>
+                              <span className="bank-parts">
+                                Collected / handed over{c.note ? " · " + c.note : ""}
+                                <small>{hhmm(c.createdAt) ? " · " + hhmm(c.createdAt) : ""} · by {userName(c.by)}</small>
+                              </span>
+                              <span className="bank-amt dr">₹{inr(c.amount)}</span>
+                              <span className="bank-amt cr"></span>
+                              <span className="bank-amt bal">
+                                ₹{inr(Math.abs(balance - bal))}
+                                <span className={"bal-tag " + (balance - bal > 0.5 ? "dr" : "cr")}>{balance - bal > 0.5 ? "Dr" : "Cr"}</span>
+                              </span>
                             </div>
-                          </div>
-                          <div className="stmt-amt" style={{ color: "var(--green)" }}>−₹{inr(c.amount)}</div>
-                          <span className="pb-rowacts">
-                            <button className="pb-x" title="Delete collection" onClick={() => delCollection(c.id)}>×</button>
-                          </span>
-                        </div>
-                      ))}
+                          );
+                        })}
+                    </div>
                   </div>
                 )}
 
