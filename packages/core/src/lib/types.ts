@@ -39,6 +39,7 @@ export interface Doc {
   id: string;
   kind: Kind;
   number: string;
+  displayNumber?: string;
   status: string;
   customerId: string;
   customerName: string;
