@@ -631,6 +631,7 @@ export default function Editor({
     ranAction.current = true;
     if (action === "print") onPrint();
     else if (action === "wa") onWaSend();
+    else if (action === "remind-balance") onWaBalance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -2084,3 +2084,8 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 /* move a payment to another account */
 .acct-move{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px; background:var(--panel-2); border-top:1px solid var(--line)}
 .acct-move-lbl{font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft)}
+
+/* Dr/Cr tag inside bank-ledger balance cells */
+.bal-tag{display:inline-block; margin-left:4px; font-size:9px; font-weight:700; letter-spacing:.04em; background:var(--panel-2); border-radius:4px; padding:1px 5px; vertical-align:middle}
+.bal-tag.dr{color:var(--danger); background:rgba(176,64,64,.1)}
+.bal-tag.cr{color:var(--green); background:rgba(86,107,59,.12)}

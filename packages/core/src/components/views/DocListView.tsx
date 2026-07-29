@@ -305,7 +305,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                       aria-label={"Select " + d.id}
                     />
                   )}
-                  {isInv && d.tradeType === "buy" ? d.supplierBillNo || d.number || d.id : d.number || d.id}
+                  {isInv && d.tradeType === "buy" ? d.supplierBillNo || d.number || d.id : d.displayNumber || d.number || d.id}
                   {isInv && d.tradeType === "buy" ? (
                     <span className="mut" style={{ display: "block", fontSize: 11 }}>
                       Purchase{d.number ? ` · #${d.number}` : ""}
@@ -325,10 +325,42 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                 <span>
                   <div className="amt">₹ {inr(bill)}</div>
                   {hasFinal && <div className="mut" style={{ fontSize: 11 }}>final · quote ₹{inr(t.grand)}</div>}
+                  {(() => {
+                    const paid = Math.round((+(d.amountPaid || 0)) * 100) / 100;
+                    const bal = Math.round((bill - paid) * 100) / 100;
+                    const owes = bal > 2;
+                    return (
+                      <div style={{ margin: "3px 0 4px", lineHeight: 1.3 }}>
+                        {owes ? (
+                          <span style={{ color: "var(--danger)", fontSize: 13, fontWeight: 700, fontFamily: "var(--mono)" }}>
+                            Due: ₹{inr(bal)}
+                          </span>
+                        ) : (
+                          <span style={{ color: "var(--green)", fontSize: 12, fontWeight: 700, fontFamily: "var(--mono)" }}>
+                            ✓ ₹{inr(paid)} paid
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="acts">
                     <button className="btn sm" onClick={(e) => act(e, "")}>Open</button>
                     <button className="btn sm" onClick={(e) => act(e, "?action=print")}>Print</button>
                     <button className="btn wa sm" onClick={(e) => act(e, "?action=wa")}>WhatsApp</button>
+                    {(() => {
+                      const paid = Math.round((+(d.amountPaid || 0)) * 100) / 100;
+                      const bal = Math.round((bill - paid) * 100) / 100;
+                      if (bal > 2) {
+                        const hasPhone = d.phone?.trim().length > 5;
+                        return (
+                          <button className="btn sm" style={{ color: "var(--ochre-deep)", borderColor: hasPhone ? "var(--ochre)" : "var(--line-2)", opacity: hasPhone ? 1 : 0.5 }}
+                            onClick={(e) => { if (!hasPhone) return; e.stopPropagation(); act(e, "?action=remind-balance"); }}
+                            title={hasPhone ? "Send payment reminder on WhatsApp" : "Add customer phone number to send reminder"}
+                          >💰 Remind</button>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 </span>
               </div>
@@ -406,7 +438,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                     <tr key={d.id} style={isBillable(d) ? undefined : { color: "#8a7f6d" }}>
                       <td className="c-n">{i + 1}</td>
                       <td className="c-date">{d.date}</td>
-                      <td className="c-no">{d.number}</td>
+                      <td className="c-no">{d.displayNumber || d.number}</td>
                       <td className="c-cust">{d.customerName || "Walk-in"}</td>
                       <td>{isBillable(d) ? d.status : "Draft — not counted"}</td>
                       <td className="amt">{isBillable(d) ? inr(quoteBill(d)) : "(" + inr(quoteBill(d)) + ")"}</td>
