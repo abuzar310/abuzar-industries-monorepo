@@ -395,7 +395,7 @@ export default function ReceiptsView() {
   }
 
   return (
-    <div>
+    <div className="ledger-page">
       <div className="sectitle">
         Receipts <small>— record a payment or add a due</small>
       </div>

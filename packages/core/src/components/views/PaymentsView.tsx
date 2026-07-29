@@ -5,20 +5,11 @@ import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { partyLedger, type Party, type PartyStatement } from "@/lib/payments";
 import { unwindReceiptPieces } from "@/lib/receipts";
-import { USERS } from "@/lib/local-auth";
 import { useFocusFlash } from "@/lib/use-focus-flash";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { Customer, Doc, Expense } from "@/lib/types";
-
-const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
-const hhmm = (iso: string) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return isNaN(+d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-};
-const pct = (paid: number, billed: number) => (billed <= 0 ? 0 : Math.max(0, Math.min(100, (paid / billed) * 100)));
 
 // dd-mm-yy → yyyy-mm-dd for chronological sorting
 const sortDate = (d: string) => {
@@ -108,7 +99,6 @@ function buildBankLedger(p: Party, expenses: Expense[], customers: Customer[]): 
   const result: LedgerRow[] = [];
   let balance = 0;
 
-  // Opening balance row
   if (opening > 0.005) {
     balance = opening;
     result.push({
@@ -128,7 +118,6 @@ function buildBankLedger(p: Party, expenses: Expense[], customers: Customer[]): 
     result.push({ ...r, balance });
   }
 
-  // Closing balance row
   result.push({
     date: "",
     at: "",
@@ -173,36 +162,36 @@ export default function PaymentsView() {
 
   const balClass = (b: number) => (b < -0.5 ? "adv" : b <= 0.5 ? "ok" : "due");
   const balText = (b: number) => (b < -0.5 ? "₹" + inr(-b) : b <= 0.5 ? "Settled" : "₹" + inr(b));
-  const balLbl = (b: number) => (b < -0.5 ? "advance" : b <= 0.5 ? "✓ clear" : "due");
 
   return (
-    <div>
+    <div className="ledger-page">
       <div className="sectitle">
         Balances <small>— who still owes</small>
       </div>
 
-      <div className="pay-hero">
-        <div className={"ph-main" + flash("pending")}>
-          <span className="ph-k">Total Pending</span>
-          <span className="ph-v">₹ {inr(totalPending)}</span>
-          <span className="ph-sub">
-            {dueCount} {dueCount === 1 ? "party still owes" : "parties still owe"} · ₹{inr(totalPaid)} of ₹{inr(totalBilled)} collected
-          </span>
+      {/* overview stat cards */}
+      <div className="party-grid">
+        <div className={"party-card hero" + flash("pending")}>
+          <div className="party-stat-label">Total Pending</div>
+          <div className="party-stat-value due">₹ {inr(totalPending)}</div>
+          <div className="party-stat-sub">
+            {dueCount} {dueCount === 1 ? "party still owes" : "parties still owe"}
+          </div>
         </div>
-        <div className="ph-side">
-          <div className={"ph-tile rec" + flash("received")}>
-            <small>Received</small>
-            <b>₹ {inr(totalPaid)}</b>
-          </div>
-          <div className={"ph-tile" + flash("billed")}>
-            <small>Billed</small>
-            <b>₹ {inr(totalBilled)}</b>
-          </div>
+        <div className={"party-card" + flash("received")}>
+          <div className="party-stat-label">Collected</div>
+          <div className="party-stat-value rec">₹ {inr(totalPaid)}</div>
+          <div className="party-stat-sub">of ₹{inr(totalBilled)} billed</div>
+        </div>
+        <div className={"party-card" + flash("billed")}>
+          <div className="party-stat-label">Billed</div>
+          <div className="party-stat-value">₹ {inr(totalBilled)}</div>
+          <div className="party-stat-sub">{parties.length} {parties.length === 1 ? "customer" : "customers"}</div>
         </div>
       </div>
 
       {dueCount > 0 && (
-        <div className="searchbar" style={{ marginTop: 16 }}>
+        <div className="searchbar" style={{ marginTop: 20 }}>
           <span className="s-ic">⌕</span>
           <input placeholder="Search a party by name or phone…" value={q} onChange={(e) => setQ(e.target.value)} />
           {q && (
@@ -238,7 +227,6 @@ export default function PaymentsView() {
             router={router}
             balClass={balClass}
             balText={balText}
-            balLbl={balLbl}
             expenses={expenses}
             customers={customers}
             reload={load}
@@ -256,7 +244,6 @@ function PartyCard({
   router,
   balClass,
   balText,
-  balLbl,
   expenses,
   customers,
   reload,
@@ -267,7 +254,6 @@ function PartyCard({
   router: ReturnType<typeof useRouter>;
   balClass: (b: number) => string;
   balText: (b: number) => string;
-  balLbl: (b: number) => string;
   expenses: Expense[];
   customers: Customer[];
   reload: () => void;
@@ -314,42 +300,39 @@ function PartyCard({
   const closingBalanceClass = ledgerRows.length > 0 ? (ledgerRows[ledgerRows.length - 1].balance <= 0.5 ? "ok" : "due") : "";
 
   return (
-    <div>
-      <button className={"party" + (isOpen ? " on" : "")} onClick={() => setOpen(isOpen ? null : pid)}>
+    <div className="ledger-card">
+      <button className={"ledger-card-header" + (isOpen ? " on" : "")} onClick={() => setOpen(isOpen ? null : pid)}>
         <div className={"pty-av" + (settled ? " ok" : "")}>{(p.name || "?").charAt(0).toUpperCase()}</div>
-        <div className="pty-main">
-          <div className="pty-name">
+        <div className="lch-main">
+          <div className="lch-name">
             {p.name}
             {p.phone && <small>{p.phone}</small>}
           </div>
-          <div className="pty-bar">
-            <i style={{ width: pct(p.paid, p.billed) + "%" }} />
-          </div>
-          <div className="pty-meta">
+          <div className="lch-meta">
             Paid ₹{inr(p.paid)} of ₹{inr(p.billed)} · {p.quoteCount} {p.quoteCount === 1 ? "quote" : "quotes"}
           </div>
         </div>
-        <div className={"pty-bal " + bc}>
+        <div className={"lch-bal " + bc}>
           {balText(p.balance)}
-          <small>{balLbl(p.balance)}</small>
+          <small>{settled ? "✓ clear" : "due"}</small>
         </div>
       </button>
 
       {isOpen && (
-        <div className="party-body">
-          <div className="pbd-stats">
-            <div className="st">
-              <div className="k">Billed</div>
-              <div className="v">₹{inr(p.billed)}</div>
+        <div className="ledger-card-body">
+          <div className="party-stats">
+            <div className="party-stat">
+              <div className="party-stat-label">Billed</div>
+              <div className="party-stat-value">₹{inr(p.billed)}</div>
             </div>
-            <div className="st">
-              <div className="k">Paid</div>
-              <div className="v rec">₹{inr(p.paid)}</div>
-              <small>Cash ₹{inr(p.cashPaid)} · UPI ₹{inr(p.upiPaid)}</small>
+            <div className="party-stat">
+              <div className="party-stat-label">Paid</div>
+              <div className="party-stat-value rec">₹{inr(p.paid)}</div>
+              <div className="party-stat-sub">Cash ₹{inr(p.cashPaid)} · UPI ₹{inr(p.upiPaid)}</div>
             </div>
-            <div className="st">
-              <div className="k">Balance</div>
-              <div className={"v " + (settled ? "ok" : "due")}>₹{inr(p.balance)}</div>
+            <div className="party-stat">
+              <div className="party-stat-label">Balance</div>
+              <div className={"party-stat-value " + (settled ? "ok" : "due")}>₹{inr(p.balance)}</div>
             </div>
           </div>
 

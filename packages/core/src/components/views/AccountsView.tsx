@@ -778,7 +778,7 @@ export default function AccountsView() {
   const ungroupedNames = ungrouped.map((a) => a.name);
 
   return (
-    <div>
+    <div className="ledger-page">
       <div className="cd-screen">
       <div className="sectitle">
         Accounts <small>— holders, their UPI accounts &amp; hand-overs</small>

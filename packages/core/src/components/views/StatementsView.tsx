@@ -187,7 +187,7 @@ export default function StatementsView() {
   const genOn = `${p2(gToday.getDate())}-${p2(gToday.getMonth() + 1)}-${gToday.getFullYear()}`;
 
   return (
-    <div>
+    <div className="ledger-page">
       <div className="cd-screen">
       <div className="sectitle" style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <span>Statements <small>— bank-format ledger per quotation</small></span>
