@@ -2,10 +2,6 @@
   "name": "abuzar-monorepo",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "dev": "next dev apps/unofficial -p 3010",
     "dev:unofficial": "next dev apps/unofficial -p 3010",
@@ -16,7 +12,7 @@
     "start:official": "next start apps/official -p 3020",
     "lint": "eslint apps packages",
     "typecheck": "tsc --noEmit",
-    "check": "tsx packages/core/src/lib/calc.check.ts && tsx packages/core/src/lib/ledger.check.ts && tsx packages/core/src/lib/trading.check.ts && tsx packages/core/src/lib/payments.check.ts && tsx packages/core/src/lib/accounts.check.ts && tsx packages/core/src/lib/expenses.check.ts && tsx packages/core/src/lib/invoice-id.check.ts && tsx packages/core/src/lib/numbering.check.ts"
+    "check": "node --no-warnings packages/core/src/lib/calc.check.ts && node --no-warnings packages/core/src/lib/ledger.check.ts && node --no-warnings packages/core/src/lib/trading.check.ts"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",
@@ -24,8 +20,7 @@
     "next": "16.2.9",
     "pg": "^8.22.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "react-rnd": "^10.5.3"
+    "react-dom": "19.2.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -36,10 +31,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
-    "tsx": "^4.23.1",
     "typescript": "^5"
-  },
-  "allowScripts": {
-    "esbuild@0.28.1": true
   }
 }

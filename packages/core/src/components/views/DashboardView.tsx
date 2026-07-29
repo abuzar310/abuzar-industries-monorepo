@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, fetchAllTransactions, type AllTransaction } from "@/lib/data";
+import { allRec } from "@/lib/data";
 import { computeDoc, inr } from "@/lib/calc";
 import { partyLedger, quoteBill, quoteLedger } from "@/lib/payments";
 import { computeTrading, docTrade, getStockConfig, type StockConfig } from "@/lib/trading";
@@ -9,19 +9,6 @@ import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense, Stock } from "@/lib/types";
 import { StatusBadge } from "./DocList";
-
-const r2 = (n: number) => Math.round(n * 100) / 100;
-
-const thStyle: React.CSSProperties = {
-  padding: "6px 8px",
-  textAlign: "left",
-  fontFamily: "var(--disp)",
-  fontSize: 9,
-  fontWeight: 700,
-  letterSpacing: ".09em",
-  textTransform: "uppercase",
-  color: "var(--ink-faint)",
-};
 
 const MONTHS: [string, string][] = [
   ["01", "Jan"], ["02", "Feb"], ["03", "Mar"], ["04", "Apr"], ["05", "May"], ["06", "Jun"],
@@ -39,15 +26,6 @@ export default function DashboardView() {
   const [stockCfg, setStockCfg] = useState<StockConfig>({ value: 0, cft: 0, closingCft: null });
   const [month, setMonth] = useState(""); // "" = all months
   const [year, setYear] = useState(""); // "" = all years
-
-  const feat = getFeatures();
-
-  // All Transactions state
-  const [allTxns, setAllTxns] = useState<AllTransaction[]>([]);
-  const [txnsLoading, setTxnsLoading] = useState(false);
-  const [txnsPage, setTxnsPage] = useState(0);
-  const [txnsTotal, setTxnsTotal] = useState(0);
-  const TXNS_PAGE_SIZE = 100;
 
   useEffect(() => {
     let live = true;
@@ -72,22 +50,7 @@ export default function DashboardView() {
     };
   }, [dataVersion]);
 
-  // Fetch all transactions for unified view
-  useEffect(() => {
-    if (!feat.acceptPayment) return; // only for unofficial app
-    let live = true;
-    setTxnsLoading(true);
-    fetchAllTransactions(TXNS_PAGE_SIZE, txnsPage * TXNS_PAGE_SIZE).then((r) => {
-      if (!live) return;
-      setAllTxns(r.transactions);
-      setTxnsTotal(r.total);
-      setTxnsLoading(false);
-    }).catch(() => {
-      if (!live) return;
-      setTxnsLoading(false);
-    });
-    return () => { live = false; };
-  }, [feat.acceptPayment, dataVersion, txnsPage]);
+  const feat = getFeatures();
 
   // period filter over createdAt (ISO "YYYY-MM-…")
   const inPeriod = (createdAt?: string) => {
@@ -222,15 +185,16 @@ export default function DashboardView() {
     .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))
     .slice(0, 5);
 
-  type Card = { k: string; v: string; accent: "sales" | "billed" | "outstanding" | "info" | "stock" | "warning"; sub?: string; onClick?: () => void };
+  type Card = { k: string; v: string; money?: boolean; danger?: boolean; sub?: string; onClick?: () => void };
   const cards: Card[] = feat.simpleQuote
     ? [
+        // "Sales" = money actually RECEIVED in the period; what was merely quoted is "Billed"
         ...(feat.acceptPayment
           ? [
               {
                 k: "Sales (received)",
                 v: "₹ " + inr(periodReceived),
-                accent: "sales" as const,
+                money: true,
                 sub: `${periodPayCount} payment${periodPayCount === 1 ? "" : "s"} · ${periodLabel}`,
                 onClick: () => router.push("/statements?focus=received"),
               },
@@ -239,36 +203,38 @@ export default function DashboardView() {
         {
           k: "Billed (quotes)",
           v: "₹ " + inr(periodRev),
-          accent: "billed" as const,
+          money: true,
           sub: `${periodSaleCount} quote${periodSaleCount === 1 ? "" : "s"} · ${periodLabel}`,
           onClick: () => router.push("/quotations"),
         },
+        // the piece Balances adds on top of quotes — so Dashboard and Balances always agree:
+        // Total billed − Received = Outstanding, to the paisa
         ...(feat.acceptPayment && ledger && Math.abs(oldDues) > 0.5
           ? [
               {
                 k: "Old dues & charges",
                 v: "₹ " + inr(oldDues),
-                accent: "outstanding" as const,
+                money: true,
                 sub: "opening balances + added dues · overall",
                 onClick: () => router.push("/payments?focus=billed"),
               },
               {
                 k: "Total billed",
                 v: "₹ " + inr(ledger.totalBilled),
-                accent: "billed" as const,
+                money: true,
                 sub: "quotes + old dues · overall — same as Balances",
                 onClick: () => router.push("/payments?focus=billed"),
               },
             ]
           : []),
-        { k: "Quotes", v: String(periodSaleCount), accent: "info" as const, sub: periodLabel, onClick: () => router.push("/quotations") },
-        { k: "CFT Sold", v: periodCft.toFixed(2), accent: "info" as const, sub: periodLabel, onClick: () => router.push("/quotations") },
+        { k: "Quotes", v: String(periodSaleCount), sub: periodLabel, onClick: () => router.push("/quotations") },
+        { k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/quotations") },
         ...(feat.acceptPayment
           ? [
               {
                 k: "Outstanding",
                 v: "₹ " + inr(totalOutstanding),
-                accent: "outstanding" as const,
+                money: true,
                 sub: dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"} · overall` : "all clear",
                 onClick: () => router.push("/payments?focus=pending"),
               },
@@ -276,13 +242,13 @@ export default function DashboardView() {
           : []),
       ]
     : [
-        { k: "Sales", v: "₹ " + inr(periodRev), accent: "sales" as const, sub: `${periodSaleCount} invoice${periodSaleCount === 1 ? "" : "s"} · ${periodLabel}`, onClick: () => router.push("/invoices") },
-        { k: "Purchases", v: "₹ " + inr(periodPurchase), accent: "outstanding" as const, sub: `${periodBuyCount} bill${periodBuyCount === 1 ? "" : "s"} · ${periodLabel}`, onClick: () => router.push("/invoices") },
-        { k: "CFT Bought", v: periodBuyCft.toFixed(2), accent: "info" as const, sub: periodLabel, onClick: () => router.push("/stock") },
-        { k: "CFT Sold", v: periodCft.toFixed(2), accent: "info" as const, sub: periodLabel, onClick: () => router.push("/stock") },
-        { k: "Closing Stock", v: tr.closingCft.toFixed(2) + " CFT", accent: "stock" as const, sub: "₹ " + inr(tr.closingValue) + " · overall", onClick: () => router.push("/stock") },
-        { k: "Follow-ups", v: String(follow.length), accent: "outstanding" as const, sub: "to chase", onClick: () => router.push("/quotations") },
-        { k: "Low Stock", v: String(lowStock.length), accent: "warning" as const, sub: "wood type(s)", onClick: () => router.push("/stock") },
+        { k: "Sales", v: "₹ " + inr(periodRev), money: true, sub: `${periodSaleCount} invoice${periodSaleCount === 1 ? "" : "s"} · ${periodLabel}`, onClick: () => router.push("/invoices") },
+        { k: "Purchases", v: "₹ " + inr(periodPurchase), money: true, sub: `${periodBuyCount} bill${periodBuyCount === 1 ? "" : "s"} · ${periodLabel}`, onClick: () => router.push("/invoices") },
+        { k: "CFT Bought", v: periodBuyCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/stock") },
+        { k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/stock") },
+        { k: "Closing Stock", v: tr.closingCft.toFixed(2) + " CFT", sub: "₹ " + inr(tr.closingValue) + " · overall", onClick: () => router.push("/stock") },
+        { k: "Follow-ups", v: String(follow.length), sub: "to chase", onClick: () => router.push("/quotations") },
+        { k: "Low Stock", v: String(lowStock.length), danger: lowStock.length > 0, sub: "wood type(s)", onClick: () => router.push("/stock") },
       ];
   return (
     <div>
@@ -315,9 +281,9 @@ export default function DashboardView() {
 
       <div className="dash-grid">
         {cards.map((c) => (
-          <div className={"stat accent-" + c.accent} key={c.k} onClick={c.onClick} style={{ cursor: "pointer" }}>
+          <div className="stat" key={c.k} onClick={c.onClick} style={{ cursor: "pointer" }}>
             <div className="k">{c.k}</div>
-            <div className="v">
+            <div className={"v" + (c.money ? " money" : "")} style={c.danger ? { color: "var(--danger)" } : undefined}>
               {c.v}
             </div>
             {c.sub && <div className="sub">{c.sub}</div>}
@@ -334,22 +300,22 @@ export default function DashboardView() {
             </button>
           </div>
           <div className="dash-grid">
-            <div className="stat accent-stock" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
               <div className="k">Opening</div>
               <div className="v">{tr.openCft.toFixed(2)}</div>
               <div className="sub">CFT · ₹ {inr(tr.openValue)}</div>
             </div>
-            <div className="stat accent-billed" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
               <div className="k">+ Bought</div>
               <div className="v">{tr.purchaseCft.toFixed(2)}</div>
               <div className="sub">CFT · ₹ {inr(tr.purchaseTotal)}</div>
             </div>
-            <div className="stat accent-outstanding" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
               <div className="k">− Sold</div>
               <div className="v">{tr.saleCft.toFixed(2)}</div>
               <div className="sub">CFT · ₹ {inr(tr.saleTotal)}</div>
             </div>
-            <div className="stat accent-stock" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
+            <div className="stat" onClick={() => router.push("/stock")} style={{ cursor: "pointer" }}>
               <div className="k">Closing</div>
               <div className="v money">{tr.closingCft.toFixed(2)}</div>
               <div className="sub">CFT · ₹ {inr(tr.closingValue)}</div>
@@ -385,11 +351,7 @@ export default function DashboardView() {
                 </div>
               ))
             ) : (
-              <div className="empty">
-                <div className="empty-icon">💸</div>
-                <div className="empty-title">No payments yet</div>
-                <div className="empty-note">Record a receipt or daybook entry to see money movement here</div>
-              </div>
+              <div className="empty">No payments recorded yet.</div>
             )}
           </div>
         </>
@@ -412,131 +374,7 @@ export default function DashboardView() {
               </div>
             ))
           ) : (
-            <div className="empty">
-              <div className="empty-icon">✨</div>
-              <div className="empty-title">All caught up</div>
-              <div className="empty-note">No pending follow-ups — every quote is moving</div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ===== All Transactions (unified view) ===== */}
-      {feat.acceptPayment && (
-        <div className="panel-card" style={{ marginTop: 16 }}>
-          <div className="pc-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-            <span>All Transactions</span>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              <button className="dash-link" onClick={() => router.push("/transactions")}>Open full view →</button>
-              <span className="sub" style={{ fontSize: 12, color: "var(--ink-faint)" }}>
-                {txnsTotal} total · page {txnsPage + 1} of {Math.ceil(txnsTotal / TXNS_PAGE_SIZE) || 1}
-              </span>
-              {txnsPage > 0 && (
-                <button className="btn sm" onClick={() => setTxnsPage((p) => p - 1)} disabled={txnsLoading}>
-                  ‹ Prev
-                </button>
-              )}
-              <button className="btn sm" onClick={() => setTxnsPage((p) => p + 1)} disabled={txnsLoading || (txnsPage + 1) * TXNS_PAGE_SIZE >= txnsTotal}>
-                Next ›
-              </button>
-            </div>
-          </div>
-
-          {txnsLoading ? (
-            <div className="empty" style={{ textAlign: "center", padding: 24 }}>Loading transactions…</div>
-          ) : allTxns.length === 0 ? (
-            <div className="empty">
-              <div className="empty-icon">📭</div>
-              <div className="empty-title">No transactions found</div>
-              <div className="empty-note">Create a receipt, expense, or daybook entry to populate this view</div>
-            </div>
-          ) : (
-            <div className="txns-table" style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: "var(--t-cream2, #f6f0e4)", borderBottom: "1px solid var(--line)" }}>
-                    <th style={thStyle}>Date</th>
-                    <th style={thStyle}>Type</th>
-                    <th style={thStyle}>Party</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
-                    <th style={thStyle}>Mode</th>
-                    <th style={thStyle}>Note</th>
-                    <th style={thStyle}>By</th>
-                    <th style={{ ...thStyle, textAlign: "center" }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allTxns.map((txn) => (
-                    <tr key={txn.id} style={{ borderBottom: "1px solid var(--line)", background: txn.deleted ? "rgba(220,53,69,0.04)" : "transparent" }}>
-                      <td style={{ padding: "6px 8px", fontFamily: "var(--mono)", fontSize: 11, color: txn.deleted ? "var(--ink-faint)" : "inherit" }}>{txn.date}</td>
-                      <td style={{ padding: "6px 8px" }}>
-                        <span style={{
-                          display: "inline-block",
-                          padding: "1px 6px",
-                          borderRadius: "999px",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          fontFamily: "var(--disp)",
-                          letterSpacing: ".07em",
-                          textTransform: "uppercase",
-                          background:
-                            txn.type === "expense" ? "var(--t-cream2)" :
-                            txn.type === "receipt" ? "rgba(76,175,80,0.12)" :
-                            txn.type === "payment" ? "rgba(33,150,243,0.12)" :
-                            txn.type === "salary" ? "rgba(255,152,0,0.12)" :
-                            txn.type === "debt" ? "rgba(148,99,23,0.12)" :
-                            txn.type === "deduct" ? "rgba(244,67,54,0.12)" :
-                            txn.type === "repaid" ? "rgba(76,175,80,0.12)" :
-                            txn.type === "session" ? "rgba(156,39,176,0.12)" :
-                            txn.type === "session_handover" ? "rgba(156,39,176,0.12)" :
-                            txn.type === "advance" ? "rgba(255,152,0,0.12)" :
-                            txn.type === "deduction" ? "rgba(244,67,54,0.12)" :
-                            txn.type === "repayment" ? "rgba(76,175,80,0.12)" : "transparent",
-                          color:
-                            txn.type === "expense" ? "var(--ink)" :
-                            txn.type === "receipt" ? "var(--green)" :
-                            txn.type === "payment" ? "var(--blue)" :
-                            txn.type === "salary" ? "var(--ochre-deep)" :
-                            txn.type === "debt" ? "var(--ochre)" :
-                            txn.type === "deduct" ? "var(--danger)" :
-                            txn.type === "repaid" ? "var(--green)" : "var(--ink)",
-                        }}>
-                          {txn.type === "expense" ? "Expense" :
-                            txn.type === "receipt" ? "Receipt" :
-                            txn.type === "payment" ? "Payment" :
-                            txn.type === "salary" ? "Wage" :
-                            txn.type === "debt" ? "Debt" :
-                            txn.type === "deduct" ? "Cut" :
-                            txn.type === "repaid" ? "Repaid" :
-                            txn.type === "session" ? "Session" :
-                            txn.type === "session_handover" ? "Session" :
-                            txn.type === "advance" ? "Advance" :
-                            txn.type === "deduction" ? "Cut" :
-                            txn.type === "repayment" ? "Repaid" : "Charge"}
-                        </span>
-                      </td>
-                      <td style={{ padding: "6px 8px", color: txn.deleted ? "var(--ink-faint)" : "inherit" }}>
-                        <div style={{ fontWeight: 600 }}>{txn.party || "—"}</div>
-                        {txn.partyType && <div className="sub" style={{ fontSize: 10 }}>{txn.partyType}</div>}
-                      </td>
-                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--mono)", fontSize: 12, fontWeight: 700, color: txn.deleted ? "var(--ink-faint)" : (txn.type === "receipt" || txn.type === "repaid" || txn.type === "payment" || txn.type === "repayment" ? "var(--green)" : "var(--danger)") }}>
-                        {txn.amount > 0 ? (txn.type === "expense" || txn.type === "salary" || txn.type === "debt" || txn.type === "deduct" || txn.type === "advance" || txn.type === "deduction" ? "−" : "+") : ""}₹{inr(txn.amount)}
-                      </td>
-                      <td style={{ padding: "6px 8px", fontFamily: "var(--mono)", fontSize: 11, color: "var(--ink-faint)" }}>{txn.mode || (txn.type === "session" ? "—" : "cash")}</td>
-                      <td style={{ padding: "6px 8px", color: txn.deleted ? "var(--ink-faint)" : "inherit", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{txn.note || "—"}</td>
-                      <td style={{ padding: "6px 8px", fontFamily: "var(--disp)", fontSize: 10, color: "var(--ink-faint)" }}>{txn.enteredBy || "—"}</td>
-                      <td style={{ padding: "6px 8px", textAlign: "center" }}>
-                        {txn.deleted ? (
-                          <span style={{ color: "var(--danger)", fontSize: 11, fontWeight: 700 }}>DELETED</span>
-                        ) : (
-                          <span style={{ color: "var(--green)", fontSize: 11, fontWeight: 700 }}>LIVE</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <div className="empty">No pending follow-ups. 🎉</div>
           )}
         </div>
       )}

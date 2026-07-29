@@ -8,11 +8,20 @@ import type { Expense } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+export interface RateChange {
+  /** yyyy-mm-dd — this rate applies from this day (inclusive) onward */
+  from: string;
+  rate: number;
+}
+
 export interface Worker {
   id: string; // "WKR-" + uid
   name: string;
-  /** daily wage ₹ */
+  /** CURRENT daily wage ₹ (what new days earn) */
   rate: number;
+  /** rate history — a hike applies only FROM its date; past days keep the old wage.
+   *  Sorted by `from`. Days before the first entry use the first entry's rate. */
+  rateHist?: RateChange[];
   /** Debt-account opening ₹ (rarely used) — a loan the worker already owed when the register started. */
   opening?: number;
   /** false = removed from the register (history stays; can be reactivated). */
@@ -20,6 +29,22 @@ export interface Worker {
   createdAt: string;
   updatedAt: string;
 }
+
+/** The wage in force on a given day (yyyy-mm-dd). */
+export function rateOn(w: Worker, iso: string): number {
+  const hist = w.rateHist;
+  if (!hist?.length) return +w.rate || 0;
+  let r = +hist[0].rate || 0; // before the first recorded change → earliest known rate
+  for (const h of hist) {
+    if (h.from <= iso) r = +h.rate || 0;
+    else break;
+  }
+  return r;
+}
+
+/** Σ present × the rate in force that day — the ONLY correct way to total wages. */
+export const earnedFor = (w: Worker, marks: { date: string; present: number }[]) =>
+  r2(marks.reduce((s, m) => s + (+m.present || 0) * rateOn(w, m.date), 0));
 
 export interface AttendanceMark {
   /** `${workerId}|${iso}` — deterministic, so re-marking a day upserts, never duplicates. */
@@ -39,15 +64,32 @@ export const markId = (workerId: string, iso: string) => workerId + "|" + iso;
 
 export const listWorkers = () => allRec<Worker>("workers");
 
-export async function saveWorker(fields: { id?: string; name: string; rate: number; opening?: number }): Promise<Worker | null> {
+export async function saveWorker(fields: {
+  id?: string;
+  name: string;
+  rate: number;
+  opening?: number;
+  /** yyyy-mm-dd the new rate takes effect (defaults to today) — past days keep the old rate */
+  rateFrom?: string;
+}): Promise<Worker | null> {
   const name = (fields.name || "").trim();
   const rate = r2(Math.max(0, +fields.rate || 0));
   if (!name) return null;
   const now = nowIso();
   const prev = fields.id ? await getRec<Worker>("workers", fields.id) : undefined;
   const opening = fields.opening === undefined ? prev?.opening || 0 : r2(Math.max(0, +fields.opening || 0));
+  // rate change on an existing worker → RECORD it; earlier days keep earning the old wage
+  let rateHist = prev?.rateHist;
+  if (prev && r2(+prev.rate || 0) !== rate) {
+    const eff = fields.rateFrom || nowIso().slice(0, 10);
+    const hist = [...(prev.rateHist?.length ? prev.rateHist : [{ from: "1970-01-01", rate: +prev.rate || 0 }])];
+    const at = hist.findIndex((h) => h.from === eff);
+    if (at >= 0) hist[at] = { from: eff, rate };
+    else hist.push({ from: eff, rate });
+    rateHist = hist.sort((a, b) => a.from.localeCompare(b.from));
+  }
   const w: Worker = prev
-    ? { ...prev, name, rate, opening, updatedAt: now }
+    ? { ...prev, name, rate, rateHist, opening, updatedAt: now }
     : { id: "WKR-" + uid(), name, rate, opening, active: true, createdAt: now, updatedAt: now };
   await put("workers", w);
   return w;
@@ -226,7 +268,7 @@ export function workerPayments(expenses: Expense[], workerId: string): WorkerEnt
 // ---- all-time account (pure) ----
 
 export interface WorkerAccount {
-  /** attendance days × the worker's CURRENT rate (historic rate changes aren't replayed) */
+  /** Σ per-day: attendance × the rate IN FORCE that day (hikes never rewrite the past) */
   earnedAll: number;
   /** cash handed over as wages */
   wagePaidAll: number;
@@ -248,9 +290,7 @@ export interface WorkerAccount {
 }
 
 export function workerAccount(worker: Worker, marks: AttendanceMark[], expenses: Expense[]): WorkerAccount {
-  let days = 0;
-  for (const m of marks) if (m.workerId === worker.id) days += +m.present || 0;
-  const earnedAll = r2(days * (+worker.rate || 0));
+  const earnedAll = earnedFor(worker, marks.filter((m) => m.workerId === worker.id));
   const sums: Record<WorkerEntryKind, number> = { wage: 0, debt: 0, deduct: 0, repaid: 0 };
   for (const { e, kind } of workerPayments(expenses, worker.id)) sums[kind] += +e.amount || 0;
   const wagePaidAll = r2(sums.wage);
@@ -294,6 +334,13 @@ export interface WeekRow {
   paid: number;
   /** earned − paid: >0 still owed to the worker · <0 paid over this week's wages */
   balance: number;
+  /** balance brought FORWARD into this week: everything earned before the week − everything
+   *  settled before it. Each week is a closed statement — pay on payout day, and whatever
+   *  is left rolls into the next week as ITS carry-in. */
+  carryIn: number;
+  /** the week's CLOSING: carryIn + earned − paid. This is what the next week starts from.
+   *  Frozen for old weeks — later payments belong to later weeks, they never rewrite history. */
+  closing: number;
   /** this week's wage-settling entries (wage + deduct), oldest first */
   payments: WorkerEntry[];
   /** iso → CASH handed to the worker that day (wages + advance loans) — the Excel's
@@ -312,16 +359,29 @@ export function weekRollup(
   return workers.map((worker) => {
     const wm: Record<string, number> = {};
     let presentDays = 0;
+    const weekMarks: AttendanceMark[] = []; // this week's marks — priced at each day's rate
+    const beforeMarks: AttendanceMark[] = []; // attendance before this week — feeds the carry-in
     for (const m of marks) {
-      if (m.workerId !== worker.id || !inWeek(m.date)) continue;
-      wm[m.date] = m.present;
-      presentDays += +m.present || 0;
+      if (m.workerId !== worker.id) continue;
+      if (inWeek(m.date)) {
+        wm[m.date] = m.present;
+        presentDays += +m.present || 0;
+        weekMarks.push(m);
+      } else if (m.date && m.date < from) {
+        beforeMarks.push(m);
+      }
     }
     const all = workerPayments(expenses, worker.id);
     const dayIso = (x: WorkerEntry) => dateSortKey(x.e.date) || (x.e.createdAt || "").slice(0, 10);
     const payments = all
       .filter((x) => (x.kind === "wage" || x.kind === "deduct") && inWeek(dayIso(x)))
       .sort((a, b) => (a.e.createdAt || "").localeCompare(b.e.createdAt || ""));
+    // everything settled BEFORE this week (wage cash + deductions)
+    const paidBefore = r2(
+      all
+        .filter((x) => (x.kind === "wage" || x.kind === "deduct") && dayIso(x) < from)
+        .reduce((s, x) => s + (+x.e.amount || 0), 0),
+    );
     const takenByDay: Record<string, number> = {};
     for (const x of all) {
       if (x.kind !== "wage" && x.kind !== "debt") continue; // real cash only
@@ -329,8 +389,21 @@ export function weekRollup(
       if (!inWeek(iso)) continue;
       takenByDay[iso] = r2((takenByDay[iso] || 0) + (+x.e.amount || 0));
     }
-    const earned = r2(presentDays * (+worker.rate || 0));
+    // each day earns at the rate in force THAT day — a hike never re-prices old weeks
+    const earned = earnedFor(worker, weekMarks);
     const paid = r2(payments.reduce((s, x) => s + (+x.e.amount || 0), 0));
-    return { worker, marks: wm, presentDays: r2(presentDays), earned, paid, balance: r2(earned - paid), payments, takenByDay };
+    const carryIn = r2(earnedFor(worker, beforeMarks) - paidBefore);
+    return {
+      worker,
+      marks: wm,
+      presentDays: r2(presentDays),
+      earned,
+      paid,
+      balance: r2(earned - paid),
+      carryIn,
+      closing: r2(carryIn + earned - paid),
+      payments,
+      takenByDay,
+    };
   });
 }

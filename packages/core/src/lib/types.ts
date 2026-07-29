@@ -33,21 +33,12 @@ export interface Section {
   calcMode?: "cft" | "direct" | "rft" | "pcs" | "cbm";
   /** free-arrange: where/how big this box sits on the A4 page (unset = auto-placed). */
   box?: BoxRect;
-  /** Sub-quotation group heading. Sections with the same subGroup render
-   *  together under that name (e.g. "Kitchen", "Bedroom"). All share the
-   *  same quotation number — no separate file. */
-  subGroup?: string;
 }
 
 export interface Doc {
   id: string;
   kind: Kind;
   number: string;
-  /** Recycled display number — when a quotation is created, the backend assigns
-   *  the next sequential number (e.g. 117), but the frontend shows a recycled
-   *  number from a deleted quotation (e.g. 116) for gap-free sequential display.
-   *  Use displayNumber || number everywhere the user sees a quotation number. */
-  displayNumber?: string;
   status: string;
   customerId: string;
   customerName: string;
@@ -125,6 +116,8 @@ export interface AppFeatures {
   soloLogin?: boolean;
   /** Tally-style double-entry ledger section (official). */
   ledger?: boolean;
+  /** simple business vouchers: receipt/payment books + invoice payment acceptance (official). */
+  vouchers?: boolean;
 }
 
 export interface Customer {
@@ -175,8 +168,6 @@ export type StoreName =
 export interface Tab {
   label: string;
   href: string;
-  /** Icon key — maps to the SVG icon set in Icons.tsx */
-  icon?: string;
   badge?: boolean;
   owner?: boolean;
 }
@@ -204,6 +195,8 @@ export interface Expense {
   note?: string;
   /** UPI recipient / account this money went to (only for mode "upi"); "" for cash. */
   account?: string;
+  /** counter-account for transfers: journal voucher's TO-bank (account = FROM-bank). */
+  account2?: string;
   /** cash that went straight to the owner (owner recorded it, or "Cash → Owner"): kept OUT of the
    *  manager's cash daybook, but still a recorded payment. */
   toOwner?: boolean;

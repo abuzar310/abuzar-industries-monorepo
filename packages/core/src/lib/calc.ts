@@ -8,9 +8,11 @@ export const inr = (n: number) =>
     maximumFractionDigits: 2,
   });
 
-/** Cubic feet for one line: (L ft × W in × T in × Pcs) ÷ 144. */
+/** Cubic feet for one line: (L ft × W in × T in × Pcs) ÷ 144 — ROUNDED to 2 decimals.
+ *  Round-first billing: the CFT figure printed on the line is exactly what's billed,
+ *  so displayed CFT × rate = total with no hidden fractions (e.g. 36.65 × 1500 = 54,975). */
 export const cftOf = (r: Row) =>
-  ((+r.l || 0) * (+r.w || 0) * (+r.t || 0) * (+r.pcs || 0)) / 144;
+  Math.round((((+r.l || 0) * (+r.w || 0) * (+r.t || 0) * (+r.pcs || 0)) / 144) * 100) / 100;
 
 export const esc = (s: unknown) =>
   String(s == null ? "" : s)
@@ -81,8 +83,8 @@ export interface DocTotals {
   secCft: number[];
 }
 
-/** Running feet for one line: L (ft) × Pcs. */
-export const rftOf = (r: Row) => (+r.l || 0) * (+r.pcs || 0);
+/** Running feet for one line: L (ft) × Pcs — rounded to 2 decimals (round-first, same as CFT). */
+export const rftOf = (r: Row) => Math.round((+r.l || 0) * (+r.pcs || 0) * 100) / 100;
 /** Directly-entered CFT (or CBM) for one line — both use the single `cft` input field. */
 export const directOf = (r: Row) => +(r.cft ?? 0) || 0;
 /** Per-piece pricing: just the piece count (amount = Pcs × rate). */

@@ -2,11 +2,6 @@ packages:
   - apps/*
   - packages/*
 
-# @abuzar/core is depended on as "^0.1.0", not "workspace:*", so npm on Vercel can
-# parse it (npm dies with EUNSUPPORTEDPROTOCOL on the workspace: protocol). This makes
-# pnpm link the local packages/core for that range instead of hitting the registry.
-linkWorkspacePackages: true
-
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver

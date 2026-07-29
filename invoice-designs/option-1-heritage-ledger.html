@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Option 1 · Heritage Ledger — Abuzar Industries</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ================= HERITAGE LEDGER =================
+     A timber-merchant's ledger page: warm paper, walnut ink,
+     letterpress double-rules, one continuous ruled account table.
+     Palette kept from the existing Abuzar brand (cream + walnut). */
+  :root{
+    --paper:#FBF7EF;
+    --paper-deep:#F3ECDD;
+    --ink:#2B2118;
+    --ink-soft:#6B5B4A;
+    --ink-faint:#9C8B77;
+    --walnut:#4A3423;
+    --rule:#D8CBB4;
+    --rule-dark:#4A3423;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#8a8478;font-family:"EB Garamond",serif;color:var(--ink);
+       display:flex;justify-content:center;padding:32px 12px}
+  .num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+
+  .sheet{width:210mm;min-height:297mm;background:var(--paper);padding:11mm 12mm 9mm;
+         box-shadow:0 24px 60px rgba(30,22,12,.45);position:relative;display:flex;flex-direction:column}
+
+  /* ---- masthead ---- */
+  .mast{display:flex;justify-content:space-between;align-items:flex-end;gap:24px}
+  .brand h1{font-size:39px;font-weight:700;letter-spacing:.045em;line-height:1;color:var(--walnut)}
+  .brand .sub{font-size:13.5px;color:var(--ink-soft);margin-top:6px;letter-spacing:.02em}
+  .brand .gst{display:inline-block;margin-top:7px;border:1.4px solid var(--walnut);padding:2px 10px;
+              font-size:11px;letter-spacing:.14em;color:var(--walnut);font-family:"IBM Plex Mono",monospace}
+  .docmeta{text-align:right;flex:0 0 auto}
+  .docmeta .kind{font-size:12px;letter-spacing:.34em;color:var(--ink-soft);text-transform:uppercase}
+  .docmeta .no{font-size:32px;font-weight:600;color:var(--walnut);line-height:1.15}
+  .docmeta .date{font-size:14px;color:var(--ink-soft);margin-top:2px}
+  .dblrule{border-top:2.4px solid var(--rule-dark);border-bottom:1px solid var(--rule-dark);height:5px;margin:12px 0 0}
+
+  /* ---- parties strip ---- */
+  .parties{display:grid;grid-template-columns:1.35fr 1fr .8fr;gap:0;border-bottom:1px solid var(--rule)}
+  .party{padding:12px 14px 12px 0}
+  .party + .party{border-left:1px solid var(--rule);padding-left:16px}
+  .plabel{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:5px}
+  .pname{font-size:18.5px;font-weight:700;letter-spacing:.01em}
+  .pline{font-size:13px;color:var(--ink-soft);margin-top:2px;line-height:1.45}
+  .kv{display:flex;justify-content:space-between;font-size:12.5px;padding:2.5px 0}
+  .kv b{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:600}
+  .kv span{color:var(--ink-faint)}
+
+  /* ---- account table ---- */
+  table{width:100%;border-collapse:collapse;margin-top:14px}
+  thead th{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);
+           border-top:1.6px solid var(--rule-dark);border-bottom:1.6px solid var(--rule-dark);
+           padding:7px 8px;text-align:left;font-weight:600}
+  th.r,td.r{text-align:right}
+  th.c,td.c{text-align:center}
+  tbody td{padding:6px 8px;font-size:14px;border-bottom:1px solid var(--rule)}
+  tr.wood td{background:var(--paper-deep);font-weight:700;font-size:14.5px;letter-spacing:.09em;
+             text-transform:uppercase;color:var(--walnut);border-bottom:1px solid var(--rule-dark);padding:7px 8px}
+  tr.wood td small{font-weight:500;letter-spacing:.03em;text-transform:none;color:var(--ink-soft);font-size:12.5px}
+  tr.sub td{border-bottom:1.6px solid var(--rule-dark);font-weight:600;padding:7px 8px}
+  td.dim{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink)}
+  .amt{font-family:"IBM Plex Mono",monospace;font-size:13.5px;font-weight:600}
+
+  /* ---- totals ---- */
+  .settle{display:flex;gap:26px;margin-top:16px;align-items:flex-start}
+  .words{flex:1;font-size:13.5px;font-style:italic;color:var(--ink-soft);line-height:1.55;padding-top:8px}
+  .words b{color:var(--ink);font-style:normal}
+  .totals{flex:0 0 78mm}
+  .trow{display:flex;justify-content:space-between;padding:6px 12px;font-size:14px;border-bottom:1px solid var(--rule)}
+  .trow .v{font-family:"IBM Plex Mono",monospace;font-weight:600}
+  .grand{background:var(--walnut);color:var(--paper);display:flex;justify-content:space-between;
+         align-items:center;padding:11px 14px;margin-top:8px}
+  .grand .l{font-size:11.5px;letter-spacing:.24em;text-transform:uppercase}
+  .grand .v{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:700}
+
+  /* ---- footer ---- */
+  .foot{margin-top:auto;padding-top:18px}
+  .fcols{display:grid;grid-template-columns:1fr 1.3fr;gap:26px;border-top:1.6px solid var(--rule-dark);padding-top:12px}
+  .fh{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px}
+  .bank div{font-size:13px;line-height:1.6}
+  .bank b{font-family:"IBM Plex Mono",monospace;font-size:12.5px;font-weight:600}
+  .terms ol{padding-left:16px}
+  .terms li{font-size:12.5px;color:var(--ink-soft);line-height:1.6}
+  .signs{display:flex;justify-content:space-between;align-items:flex-end;margin-top:34px}
+  .sig{width:60mm;text-align:center}
+  .sig .line{border-top:1px solid var(--ink-soft);padding-top:5px;font-size:10.5px;
+             letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint)}
+  .sig .for{font-size:14px;font-weight:700;color:var(--walnut);margin-bottom:26px}
+
+  @media print{
+    body{background:none;padding:0}
+    .sheet{box-shadow:none;width:auto;min-height:auto}
+    @page{size:A4 portrait;margin:0}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="mast">
+    <div class="brand">
+      <h1>ABUZAR INDUSTRIES</h1>
+      <div class="sub">KSSIDC Industrial Area, DVG Road, Chitradurga, Karnataka - 577501 · Ph 98453 78626</div>
+      <span class="gst">GSTIN 29AROPA1101B1ZK</span>
+    </div>
+    <div class="docmeta">
+      <div class="kind">Tax Invoice</div>
+      <div class="no num">No. 2717</div>
+      <div class="date">Dated 27-07-2026</div>
+    </div>
+  </div>
+  <div class="dblrule"></div>
+
+  <div class="parties">
+    <div class="party">
+      <div class="plabel">Billed To</div>
+      <div class="pname">GOVARDHANA CONSTRUCTIONS</div>
+      <div class="pline">Ganappana Hatti, Challakere, Chitradurga, Karnataka, 577522</div>
+      <div class="pline num">Ph 9448261223 · GSTIN 29AATFG3180G1Z0</div>
+    </div>
+    <div class="party">
+      <div class="plabel">Ship To</div>
+      <div class="pname" style="font-size:16px">Challakere</div>
+      <div class="pline">Delivery by road</div>
+    </div>
+    <div class="party">
+      <div class="plabel">Particulars</div>
+      <div class="kv"><span>HSN</span><b>4407</b></div>
+      <div class="kv"><span>Vehicle</span><b>KA 16 AA 0647</b></div>
+      <div class="kv"><span>Payment</span><b>Credit</b></div>
+    </div>
+  </div>
+
+  <table>
+    <colgroup>
+      <col style="width:5%"><col style="width:33%"><col style="width:9%">
+      <col style="width:13%"><col style="width:9%"><col style="width:13%"><col style="width:18%">
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="c">#</th><th>Description</th><th class="c">Pcs</th>
+        <th class="c">Size L×W×T</th><th class="r">CFT</th><th class="r">Rate ₹/CFT</th><th class="r">Amount ₹</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="wood"><td colspan="7">Teak &nbsp;<small>sawn sizes</small></td></tr>
+      <tr><td class="c num">1</td><td>Teak sawn</td><td class="c num">3</td><td class="c dim">8 × 8 × 4</td><td class="r num">5.33</td><td class="r num"></td><td class="r"></td></tr>
+      <tr><td class="c num">2</td><td>Teak sawn</td><td class="c num">2</td><td class="c dim">6 × 8 × 4</td><td class="r num">2.67</td><td class="r num"></td><td class="r"></td></tr>
+      <tr><td class="c num">3</td><td>Teak sawn</td><td class="c num">1</td><td class="c dim">7 × 8 × 4</td><td class="r num">1.56</td><td class="r num"></td><td class="r"></td></tr>
+      <tr><td class="c num">4</td><td>Teak sawn</td><td class="c num">2</td><td class="c dim">7 × 6 × 2</td><td class="r num">1.17</td><td class="r num"></td><td class="r"></td></tr>
+      <tr><td class="c num">5</td><td>Teak sawn</td><td class="c num">1</td><td class="c dim">7 × 8 × 2</td><td class="r num">0.78</td><td class="r num"></td><td class="r"></td></tr>
+      <tr><td class="c num">6</td><td>Teak sawn</td><td class="c num">1</td><td class="c dim">6 × 30 × 1.5</td><td class="r num">1.88</td><td class="r num"></td><td class="r"></td></tr>
+      <tr class="sub"><td></td><td>Teak total</td><td class="c num">10</td><td></td><td class="r num">13.39</td><td class="r num">3,600</td><td class="r amt">48,204.00</td></tr>
+
+      <tr class="wood"><td colspan="7">Imported &nbsp;<small>saw wood</small></td></tr>
+      <tr><td class="c num">1</td><td>Imported saw wood</td><td class="c num">54</td><td class="c dim">measured</td><td class="r num">448.50</td><td class="r num"></td><td class="r"></td></tr>
+      <tr class="sub"><td></td><td>Imported total</td><td class="c num">54</td><td></td><td class="r num">448.50</td><td class="r num">1,400</td><td class="r amt">6,27,900.00</td></tr>
+    </tbody>
+  </table>
+
+  <div class="settle">
+    <div class="words">
+      Amount in words:<br>
+      <b>Rupees Seven Lakh Ninety Seven Thousand Eight Hundred Two and Seventy Two Paise only</b>
+    </div>
+    <div class="totals">
+      <div class="trow"><span>Total CFT</span><span class="v">461.89</span></div>
+      <div class="trow"><span>Taxable Amount</span><span class="v">6,76,104.00</span></div>
+      <div class="trow"><span>SGST 9%</span><span class="v">60,849.36</span></div>
+      <div class="trow"><span>CGST 9%</span><span class="v">60,849.36</span></div>
+      <div class="grand"><span class="l">Grand Total</span><span class="v">₹ 7,97,802.72</span></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="fcols">
+      <div class="bank">
+        <div class="fh">Bank Details</div>
+        <div>HDFC Bank, Chitradurga</div>
+        <div>A/c Name: ABUZAR INDUSTRIES</div>
+        <div>A/c No: <b>50200006429458</b> · IFSC: <b>HDFC0002566</b></div>
+      </div>
+      <div class="terms">
+        <div class="fh">Terms &amp; Conditions</div>
+        <ol>
+          <li>Goods once sold will not be taken back.</li>
+          <li>Any type of cracks and damages - shop not responsible.</li>
+          <li>Payment due on delivery unless agreed otherwise.</li>
+          <li>All disputes subject to Chitradurga jurisdiction.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="signs">
+      <div class="sig"><div class="for">&nbsp;</div><div class="line">Customer Signature</div></div>
+      <div class="sig"><div class="for">For Abuzar Industries</div><div class="line">Proprietor · Authorised Signature</div></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

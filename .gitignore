@@ -52,6 +52,3 @@ scripts/backups/
 
 # nested workspace node_modules
 **/node_modules/
-
-.vercel
-.env*

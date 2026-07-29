@@ -19,7 +19,6 @@
 // No Supabase client keys, no anon access, no client-side SQL: the only secret
 // is DATABASE_URL and it never leaves the server.
 import type { NextRequest } from "next/server";
-import { rateLimitByIp, rateLimitByUser, rateLimitResponse } from "./rate-limit";
 import {
   changedRows,
   getRow,
@@ -43,7 +42,6 @@ import {
   clearSessionCookie,
   makeSessionToken,
   readSessionToken,
-  requireRole as authRequireRole,
   sessionCookie,
   SESSION_COOKIE,
   type AppUser,
@@ -67,9 +65,7 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 
 const err = (status: number, message: string) => json({ error: message }, status);
 
-/** JSONB data — user-entered, coerced at the UI layer. `any` is intentional
- *  (the fields are validated at write time, not re-validated on read). */
-type AnyRec = Record<string, any>;
+type AnyRec = Record<string, unknown>;
 
 /** Split raw document rows into the two client-facing stores. */
 function splitDocs(rows: Row[]): { quotations: AnyRec[]; invoices: AnyRec[] } {
@@ -84,83 +80,6 @@ function splitDocs(rows: Row[]): { quotations: AnyRec[]; invoices: AnyRec[] } {
 
 function userFrom(req: NextRequest): AppUser | null {
   return readSessionToken(req.cookies.get(SESSION_COOKIE)?.value);
-}
-
-/** Role-check that returns a 403 Response on failure (safe — never throws on
- *  insufficient privilege). Returns null when caller should short-circuit. */
-function checkRole(user: AppUser | null, minRole: "owner" | "manager"): Response | null {
-  try {
-    authRequireRole(user, minRole);
-    return null;
-  } catch {
-    return err(403, "Forbidden — " + (minRole === "owner" ? "owner" : "manager") + " role required");
-  }
-}
-
-// ---- quotation number recycling ----
-// Deleted quotation numbers are kept in a pool so new quotations can reuse them
-// for display (gap-free sequential numbering). The backend ID always increments
-// to avoid collision; the displayNumber field shows the recycled number.
-
-/** Extract the numeric serial from a quotation number like "2026-27-116" → 116. */
-function serialFromQuotationNumber(num: string): number {
-  const m = String(num || "").match(/-(\d+)$/);
-  return m ? parseInt(m[1], 10) : 0;
-}
-
-/** Read recycled pool using a locked client (inside advisory lock). */
-async function getRecycledSerialsWithClient(
-  client: import("pg").PoolClient,
-  schema: AppSchema,
-): Promise<number[]> {
-  const r = await client.query(
-    `select v from ${tableRef(schema, "meta")} where k = 'quotation_recycled'`,
-  );
-  const arr = (r.rows[0]?.v as number[]) || [];
-  return arr.sort((a, b) => a - b);
-}
-
-/** Write recycled pool using a locked client (inside advisory lock). */
-async function setRecycledSerialsWithClient(
-  client: import("pg").PoolClient,
-  schema: AppSchema,
-  serials: number[],
-): Promise<void> {
-  await client.query(
-    `insert into ${tableRef(schema, "meta")} (k, v) values ('quotation_recycled', $1::jsonb)
-     on conflict (k) do update set v = excluded.v, updated_at = now()`,
-    [JSON.stringify(serials)],
-  );
-}
-
-/** Read the recycled serials pool (sorted ascending). Uses the default pool. */
-async function getRecycledSerials(schema: AppSchema): Promise<number[]> {
-  const rows = await sql<{ v: unknown }>(
-    `select v from ${tableRef(schema, "meta")} where k = 'quotation_recycled'`,
-  );
-  const arr = (rows[0]?.v as number[]) || [];
-  return arr.sort((a, b) => a - b);
-}
-
-/** Add a serial to the recycled pool (if not already there). Uses default pool. */
-async function addToRecycled(schema: AppSchema, serial: number): Promise<void> {
-  if (serial <= 0) return;
-  const pool = await getRecycledSerials(schema);
-  if (!pool.includes(serial)) {
-    pool.push(serial);
-    await metaSet(schema, "quotation_recycled", pool.sort((a, b) => a - b));
-  }
-}
-
-/** Remove a serial from the recycled pool. Uses default pool. */
-async function removeFromRecycled(schema: AppSchema, serial: number): Promise<void> {
-  if (serial <= 0) return;
-  const pool = await getRecycledSerials(schema);
-  const idx = pool.indexOf(serial);
-  if (idx >= 0) {
-    pool.splice(idx, 1);
-    await metaSet(schema, "quotation_recycled", pool);
-  }
 }
 
 // ---- atomic document creation (collision-proof numbering) ----
@@ -204,26 +123,12 @@ async function createDocAtomic(schema: AppSchema, data: AnyRec): Promise<AnyRec>
         `select coalesce(max((substring(id from '^${fy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d+)$'))::int), 0) as mx
            from ${t} where data->>'kind' = 'quotation'`,
       );
-      const realN = (parseInt(r.rows[0]?.mx, 10) || 0) + 1;
-      const realId = fy + "-" + pad(realN, 3);
-      // Check recycled pool for a display number (soft-deleted quotation's serial)
-      const recycled = await getRecycledSerialsWithClient(client, schema);
-      let displayId = realId;
-      if (recycled.length > 0) {
-        const serial = recycled[0]; // lowest recycled serial
-        displayId = fy + "-" + pad(serial, 3);
-        await setRecycledSerialsWithClient(client, schema, recycled.slice(1));
-      }
-      const doc = {
-        ...data,
-        id: realId,
-        number: realId,
-        ...(displayId !== realId ? { displayNumber: displayId } : {}),
-        kind,
-      };
+      const n = (parseInt(r.rows[0]?.mx, 10) || 0) + 1;
+      const id = fy + "-" + pad(n, 3);
+      const doc = { ...data, id, number: id, kind };
       const ins = await client.query(
         `insert into ${t} (id, data) values ($1, $2::jsonb) returning data`,
-        [realId, JSON.stringify(doc)],
+        [id, JSON.stringify(doc)],
       );
       return ins.rows[0].data as AnyRec;
     }
@@ -260,22 +165,6 @@ async function nextNumberAtomic(
   });
 }
 
-// ---- All Transactions (unified dashboard view) ----
-
-async function allTransactions(schema: AppSchema): Promise<AnyRec[]> {
-  // All expenses including soft-deleted — the full financial history
-  const rows = await sql<Row>(
-    `select * from ${tableRef(schema, "expenses")} order by created_at desc limit 2000`,
-  );
-  return rows.map((r) => ({
-    _table: "expenses",
-    _deleted: !!r.deleted_at,
-    _createdAt: r.created_at,
-    _updatedAt: r.updated_at,
-    ...(r.data as AnyRec),
-  }));
-}
-
 // ---- the handler factory ----
 
 export function createDataApi(schema: AppSchema) {
@@ -286,9 +175,6 @@ export function createDataApi(schema: AppSchema) {
     // ---------- auth (no session required) ----------
     if (a === "auth") {
       if (b === "login" && method === "POST") {
-        // Rate limit: 5 login attempts per IP per minute
-        const rl = rateLimitByIp(req, 5);
-        if (!rl.ok) return rateLimitResponse(rl.resetIn);
         const body = (await req.json().catch(() => ({}))) as AnyRec;
         const user = await checkLogin(schema, String(body.userId || ""), String(body.password || ""));
         if (!user) return err(401, "Wrong password");
@@ -300,8 +186,6 @@ export function createDataApi(schema: AppSchema) {
       if (b === "password" && method === "POST") {
         const user = userFrom(req);
         if (!user) return err(401, "Not signed in");
-        const rl = rateLimitByUser(user.id, 3);
-        if (!rl.ok) return rateLimitResponse(rl.resetIn);
         const body = (await req.json().catch(() => ({}))) as AnyRec;
         const pw = String(body.password || "").trim();
         if (pw.length < 4) return err(400, "Password too short");
@@ -316,8 +200,6 @@ export function createDataApi(schema: AppSchema) {
     if (!user) return err(401, "Not signed in");
 
     if (a === "bootstrap" && method === "GET") {
-      const rl = rateLimitByUser(user.id, 5);
-      if (!rl.ok) return rateLimitResponse(rl.resetIn);
       const out: AnyRec = {};
       for (const table of SYNC_TABLES) {
         const rows = await listRows(schema, table);
@@ -362,30 +244,9 @@ export function createDataApi(schema: AppSchema) {
       if (!table) return err(404, "Unknown store: " + b);
       const id = decodeURIComponent(c || "");
       if (!id) return err(400, "Missing id");
-      if (method === "PUT" || method === "DELETE") {
-        const rl = rateLimitByUser(user.id, 60);
-        if (!rl.ok) return rateLimitResponse(rl.resetIn);
-        // Sensitive stores (financial/operational core): owner-only writes
-        const ownerStores = ["sessions", "ledgers", "vouchers", "collections", "payHolders", "workers", "attendance"];
-        if (ownerStores.includes(b)) authRequireRole(user, "owner");
-      }
       if (method === "PUT") {
         const data = (await req.json().catch(() => null)) as AnyRec | null;
         if (!data || typeof data !== "object") return err(400, "Bad record");
-
-        // Quotation recycle: detect trash/restore transitions
-        if (data.kind === "quotation" && data.number) {
-          const serial = serialFromQuotationNumber(String(data.number));
-          if (serial > 0) {
-            // Check current DB state to detect transition
-            const currentRow = await getRow(schema, table, id).catch(() => null);
-            const wasDeleted = currentRow?.data?.deletedAt ? true : false;
-            const nowDeleted = data.deletedAt ? true : false;
-            if (!wasDeleted && nowDeleted)   await addToRecycled(schema, serial);  // → trashed
-            else if (wasDeleted && !nowDeleted) await removeFromRecycled(schema, serial); // → restored
-          }
-        }
-
         const row = await (await import("./db")).upsertRow(schema, table, id, data);
         return json({ data: row.data, updatedAt: row.updated_at });
       }
@@ -402,7 +263,6 @@ export function createDataApi(schema: AppSchema) {
     }
 
     if (a === "meta" && b && method === "PUT") {
-      authRequireRole(user, "owner");
       const body = (await req.json().catch(() => ({}))) as AnyRec;
       await metaSet(schema, decodeURIComponent(b), body.v);
       return json({ ok: true });
@@ -428,206 +288,6 @@ export function createDataApi(schema: AppSchema) {
         return json({ number: await nextNumberAtomic(schema, series, exceptId) });
       }
       return err(404, "Unknown rpc");
-    }
-
-    // ---------- unified all-transactions (owner-only, includes deleted) ----------
-    if (a === "all-transactions" && method === "GET") {
-      authRequireRole(user, "owner");
-      const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "500", 10), 2000);
-      const offset = parseInt(req.nextUrl.searchParams.get("offset") || "0", 10);
-      const typeFilter = req.nextUrl.searchParams.get("type") || ""; // empty = all
-      const dateFrom = req.nextUrl.searchParams.get("from") || ""; // dd-mm-yy
-      const dateTo = req.nextUrl.searchParams.get("to") || "";
-
-      // Helper to parse dd-mm-yy → ISO prefix for ordering
-      const dmyToIso = (dmy: string): string => {
-        const [dd = "", mm = "", yy = ""] = dmy.split("-");
-        return dd && mm && yy ? `20${yy}-${mm}-${dd}` : "";
-      };
-      const fromIso = dateFrom ? dmyToIso(dateFrom) : "";
-      const toIso = dateTo ? dmyToIso(dateTo) + " 23:59:59" : "";
-
-      type UnifiedTx = {
-        id: string;
-        type: "expense" | "receipt" | "salary" | "session" | "session_handover" | "payment" | "advance" | "deduction" | "repayment";
-        date: string; // dd-mm-yy
-        amount: number;
-        party: string; // customer / supplier / worker / account
-        partyType: "customer" | "supplier" | "worker" | "account" | "";
-        mode: string; // cash, upi, ""
-        note: string;
-        enteredBy: string;
-        deleted: boolean;
-        createdAt: string;
-        sourceId?: string;
-        sourceType?: string;
-      };
-
-      // 1. expenses (daybook) - all types including deleted
-      const expRows = await sql<Row>(
-        `select * from ${tableRef(schema, "expenses")} order by created_at desc limit $1 offset $2`,
-        [limit * 3, offset], // fetch more to filter later
-      );
-
-      // 2. sessions (daybook handovers) - include pending/confirmed
-      const sessRows = await sql<Row>(
-        `select * from ${tableRef(schema, "sessions")} order by created_at desc limit $1 offset $2`,
-        [100, 0],
-      );
-
-      // 3. attendance payments (wage, advance, deduction, repayment)
-      const attRows = await sql<Row>(
-        `select * from ${tableRef(schema, "attendance")} order by created_at desc limit $1 offset $2`,
-        [200, 0],
-      );
-
-      // Load lookups (names are in JSONB data column)
-      const [customers, suppliers, workers, payHolders] = await Promise.all([
-        sql<Row>(`select * from ${tableRef(schema, "customers")}`),
-        sql<Row>(`select * from ${tableRef(schema, "suppliers")}`),
-        sql<Row>(`select * from ${tableRef(schema, "workers")}`),
-        sql<Row>(`select * from ${tableRef(schema, "pay_holders")}`),
-      ]);
-      const custMap = new Map(customers.map((r) => [r.id, r.data.name as string]));
-      const suppMap = new Map(suppliers.map((r) => [r.id, r.data.name as string]));
-      const workMap = new Map(workers.map((r) => [r.id, r.data.name as string]));
-      const phMap = new Map(payHolders.map((r) => [r.id, r.data.name as string]));
-
-      const all: UnifiedTx[] = [];
-
-      // Expenses / Daybook entries
-      for (const r of expRows) {
-        const e = r.data as AnyRec;
-        const dmy = String(e.date || "");
-        const iso = dmyToIso(dmy);
-        if (fromIso && iso < fromIso) continue;
-        if (toIso && iso > toIso.replace(" 23:59:59", "")) continue;
-        if (typeFilter && e.type !== typeFilter) continue;
-
-        let party = "";
-        let partyType: UnifiedTx["partyType"] = "";
-        if (e.custId) { party = custMap.get(e.custId) || e.custId; partyType = "customer"; }
-        else if ((e.data as AnyRec)?.supplierId) { party = suppMap.get(e.supplierId) || e.supplierId; partyType = "supplier"; }
-        else if (e.account) { party = e.account; partyType = "account"; }
-
-        all.push({
-          id: r.id,
-          type: e.type === "sale" && e.custId ? "receipt" : e.type === "salary" ? "salary" : (e.type === "food" || e.type === "additional" || e.type === "custom") ? "expense" : (e.type || "expense") as UnifiedTx["type"],
-          date: dmy,
-          amount: +e.amount || 0,
-          party,
-          partyType,
-          mode: e.mode || "",
-          note: e.note || e.label || "",
-          enteredBy: e.enteredBy || "",
-          deleted: !!r.deleted_at,
-          createdAt: String(r.created_at || ""),
-          sourceId: e.sourceId,
-          sourceType: e.charge ? "due" : "payment",
-        });
-      }
-
-      // Session handovers
-      for (const r of sessRows) {
-        const s = r.data as AnyRec;
-        const dmy = s.date || "";
-        const iso = dmyToIso(dmy);
-        if (fromIso && iso < fromIso) continue;
-        if (toIso && iso > toIso.replace(" 23:59:59", "")) continue;
-        if (typeFilter && typeFilter !== "session") continue;
-
-        all.push({
-          id: r.id,
-          type: "session_handover",
-          date: dmy,
-          amount: +s.given || 0,
-          party: `Session → ${phMap.get(s.by) || s.by}`,
-          partyType: "account",
-          mode: "cash",
-          note: s.pending ? "Pending owner confirmation" : "Confirmed",
-          enteredBy: s.by || "",
-          deleted: !!r.deleted_at,
-          createdAt: String(r.created_at || ""),
-        });
-      }
-
-      // Attendance money (wage payments, advances, deductions, repayments)
-      const expenseRows = await sql<Row>(
-        `select * from ${tableRef(schema, "expenses")} where data->>'sourceId' like 'wkr:%' or data->>'sourceId' like 'wkradv:%' or data->>'sourceId' like 'wkrded:%' order by created_at desc limit 300`,
-      );
-      const workerExpenses = expenseRows.map((r) => r.data as AnyRec);
-
-      for (const e of workerExpenses) {
-        const dmy = String(e.date || "");
-        const iso = dmyToIso(dmy);
-        if (fromIso && iso < fromIso) continue;
-        if (toIso && iso > toIso.replace(" 23:59:59", "")) continue;
-        if (typeFilter) {
-          const src = e.sourceId || "";
-          const map: Record<string, string> = { "wkr:": "payment", "wkradv:": "advance", "wkrded:": "deduction" };
-          const matched = Object.entries(map).find(([k]) => src.startsWith(k));
-          if (matched && matched[1] !== typeFilter) continue;
-        }
-
-        const workerId = e.sourceId?.split(":")[1] || "";
-        const party = workMap.get(workerId) || workerId;
-
-        all.push({
-          id: e.id,
-          type: e.sourceId?.startsWith("wkr:") ? "payment" : e.sourceId?.startsWith("wkradv:") ? "advance" : "deduction",
-          date: dmy,
-          amount: +e.amount || 0,
-          party,
-          partyType: "worker",
-          mode: e.mode || "cash",
-          note: e.note || e.label || "",
-          enteredBy: e.enteredBy || "",
-          deleted: e.charge || false, // charge = deduction (no cash), show as deleted-like
-          createdAt: e.createdAt || e.updatedAt || "",
-          sourceId: e.sourceId,
-        });
-      }
-
-      // Repayments (sale type with wkr: sourceId)
-      for (const e of workerExpenses) {
-        if (e.type !== "sale" || !e.sourceId?.startsWith("wkr:")) continue;
-        const dmy = String(e.date || "");
-        const iso = dmyToIso(dmy);
-        if (fromIso && iso < fromIso) continue;
-        if (toIso && iso > toIso.replace(" 23:59:59", "")) continue;
-        if (typeFilter && typeFilter !== "repayment") continue;
-
-        const workerId = e.sourceId.split(":")[1] || "";
-        const party = workMap.get(workerId) || workerId;
-
-        all.push({
-          id: e.id,
-          type: "repayment",
-          date: dmy,
-          amount: +e.amount || 0,
-          party,
-          partyType: "worker",
-          mode: e.mode || "cash",
-          note: e.note || e.label || "",
-          enteredBy: e.enteredBy || "",
-          deleted: false,
-          createdAt: e.createdAt || e.updatedAt || "",
-          sourceId: e.sourceId,
-        });
-      }
-
-      // Sort by date desc, then createdAt desc
-      all.sort((a, b) => {
-        const da = dmyToIso(a.date);
-        const db = dmyToIso(b.date);
-        if (da !== db) return (db || "").localeCompare(da || "");
-        return (b.createdAt || "").localeCompare(a.createdAt || "");
-      });
-
-      const total = all.length;
-      const page = all.slice(0, limit);
-
-      return json({ transactions: page, total, limit, offset });
     }
 
     return err(404, "Unknown route");

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, clone, prefSet, put, rpcNextInvoiceNumber } from "@/lib/data";
 import { seriesOf } from "@/lib/invoice-id";
-import { amountOf, cftOf, computeDoc, directOf, inr, nowIso, pcsOf, rftOf } from "@/lib/calc";
+import { cftOf, computeDoc, inr, nowIso } from "@/lib/calc";
 import { getLineClip, setLineClip } from "@/lib/lineClipboard";
 import { STATUSES } from "@/lib/constants";
 import { brandFor } from "@/lib/brand";
@@ -15,10 +15,9 @@ import { findLiveByNumber } from "@/lib/durability";
 import { trashDoc } from "@/lib/trash";
 import { getFeatures } from "@/lib/features";
 import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
-import { openTab } from "@/lib/editor-tabs";
 import { statementsForQuote } from "@/lib/payments";
 import { postInvoice } from "@/lib/ledger-autopost";
-import { paymentReminderMessage, reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
+import { balanceReminderMessage, reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
 import { generatePdf, printOrSavePdf } from "@/lib/pdf";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -28,6 +27,9 @@ import Totals from "./Totals";
 import QuoteCanvas from "./QuoteCanvas";
 import MoreMenu from "./MoreMenu";
 import PaymentBlock from "./PaymentBlock";
+import InvoicePayBlock from "./InvoicePayBlock";
+import { applyAdvancesToInvoice } from "@/lib/vouchers";
+import InvoicePrintA from "./InvoicePrintA";
 import CustomerPicker from "./CustomerPicker";
 import GstinField from "./GstinField";
 import DateField from "./DateField";
@@ -53,17 +55,11 @@ export default function Editor({
   initialDoc,
   action,
   payFocus,
-  active = true,
-  onDirtyChange,
 }: {
   initialDoc: Doc;
   action?: string;
   /** a payment line (expense id) to scroll to + flash — set when arriving from Statements */
   payFocus?: string;
-  /** false when this editor sits in a background tab: its document-level shortcuts stay silent */
-  active?: boolean;
-  /** reports the unsaved-changes state so the tab bar can show a dirty dot */
-  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const router = useRouter();
   const [doc, setDoc] = useState<Doc>(initialDoc);
@@ -72,10 +68,8 @@ export default function Editor({
   // the Save button (or Ctrl/Cmd+S, or any action that uses the doc) persists.
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
-  // Undo history stack (Ctrl+Z). Each edit pushes current state before the change.
-  const historyRef = useRef<Doc[]>([]);
-  const UNDO_MAX = 50;
   const sheetRef = useRef<HTMLDivElement>(null);
+  const inv3aRef = useRef<HTMLDivElement>(null); // the print-only 3A invoice (sell invoices)
   const secRef = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<{ si: number; ri: number; k: string } | null>(null);
   const [editingNo, setEditingNo] = useState(false);
@@ -113,7 +107,6 @@ export default function Editor({
   const totalPcs = isRent
     ? 0
     : doc.sections.reduce((s, sec) => s + sec.rows.reduce((p, r) => p + (Math.round(+r.pcs) || 0), 0), 0);
-  const hasSubGroups = doc.sections.some((s) => s.subGroup);
   const { brandMode, user } = useApp();
   const brand = brandFor(brandMode);
   const invBank = brand.banks?.[doc.bankIdx ?? 0] || brand.bank; // chosen bank for this invoice
@@ -123,10 +116,10 @@ export default function Editor({
     if (feat.acceptPayment) upiAccounts().then(setUpiAccts);
   }, [feat.acceptPayment]);
 
-  // accept-payment: load this quote's recorded payments for the mini statements
+  // accept-payment / invoice vouchers: load recorded payments for the mini statements
   const loadExpenses = useCallback(() => {
-    if (feat.acceptPayment) allExpenses().then(setExpenses);
-  }, [feat.acceptPayment]);
+    if (feat.acceptPayment || feat.vouchers) allExpenses().then(setExpenses);
+  }, [feat.acceptPayment, feat.vouchers]);
   useEffect(() => {
     loadExpenses();
   }, [loadExpenses, doc.id]);
@@ -146,15 +139,9 @@ export default function Editor({
   });
 
   // ---- persistence ----
-  // Several editors stay mounted at once (background tabs are hidden, not
-  // unmounted), so every document-level shortcut below must ignore the
-  // inactive ones — otherwise one Ctrl+Z undoes an edit in a tab you can't see.
-  const activeRef = useRef(active);
-  activeRef.current = active;
   const markDirty = (v: boolean) => {
     dirtyRef.current = v;
     setDirty(v);
-    onDirtyChange?.(v);
   };
   function persist(d: Doc) {
     d.updatedAt = nowIso();
@@ -170,26 +157,9 @@ export default function Editor({
     else markDirty(true);
   }
   function update(producer: (d: Doc) => void) {
-    // Push current state onto undo stack before mutating
-    const stack = historyRef.current;
-    stack.push(clone(docRef.current));
-    if (stack.length > UNDO_MAX) stack.shift();
     const next = clone(docRef.current);
     producer(next);
     commit(next);
-  }
-  /** Undo the last edit — Ctrl+Z restores the previous doc state. */
-  function undo() {
-    const stack = historyRef.current;
-    if (!stack.length) {
-      toast("Nothing to undo");
-      return;
-    }
-    const prev = stack.pop()!;
-    docRef.current = prev;
-    setDoc(prev);
-    markDirty(true);
-    toast("Undone ↶");
   }
   /** The Save button / Ctrl+S: link the customer record, then persist. */
   async function saveNow() {
@@ -201,16 +171,9 @@ export default function Editor({
   // Ctrl/Cmd+S saves; navigating away (unmount) or closing the tab never loses edits.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!activeRef.current) return; // background tab — the visible editor owns the shortcut
-      const ctrl = e.ctrlKey || e.metaKey;
-      const key = e.key.toLowerCase();
-      if (ctrl && key === "s") {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (dirtyRef.current) saveNow().then(() => toast("Saved ✓"));
-      }
-      if (ctrl && key === "z") {
-        e.preventDefault();
-        undo();
       }
     };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -317,7 +280,6 @@ export default function Editor({
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!activeRef.current) return; // background tab — don't paste into an invisible box
       if (!(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
       if (k !== "c" && k !== "v") return;
@@ -493,7 +455,7 @@ export default function Editor({
     toast(msg);
   }
   const onSaveDraft = () => setStatusAndSave("Draft", "Saved as draft");
-  const onCreate = () => setStatusAndSave("Created", "Quotation " + (docRef.current.displayNumber || docRef.current.number) + " saved ✓");
+  const onCreate = () => setStatusAndSave("Created", "Quotation " + docRef.current.number + " saved ✓");
 
   // final accepted price override (round figure); autosaved, doesn't change the itemised total
   const onFinalPrice = (v: string) =>
@@ -520,13 +482,16 @@ export default function Editor({
     await saveNow();
     const next = docRef.current;
     toast(
-      "Saved ✓  " + (next.displayNumber || next.number) + " — reopen from " + (next.kind === "invoice" ? "Invoices" : "Quotations") + " to edit",
+      "Saved ✓  " + next.number + " — reopen from " + (next.kind === "invoice" ? "Invoices" : "Quotations") + " to edit",
     );
   }
+  /** What Print / PDF / WhatsApp render: sell invoices use the printed 3A Woodmark
+   *  sheet; everything else keeps rendering the on-screen sheet. */
+  const printNode = () => (inv3aRef.current ? inv3aRef.current : sheetRef.current);
   async function onPrint() {
     await saveNow(); // never print an unsaved doc
     // Android / installed app: no print dialog — the sheet downloads as a PDF instead
-    if ((await printOrSavePdf(sheetRef.current, docRef.current.displayNumber || docRef.current.number || docRef.current.id)) === "pdf")
+    if ((await printOrSavePdf(printNode(), docRef.current.number || docRef.current.id)) === "pdf")
       toast("PDF downloaded \u2713");
   }
   async function onPdf() {
@@ -534,7 +499,7 @@ export default function Editor({
       await saveNow();
     } catch {}
     try {
-      if (sheetRef.current) await generatePdf(sheetRef.current, docRef.current.displayNumber || docRef.current.number);
+      if (printNode()) await generatePdf(printNode()!, docRef.current.number);
       toast("PDF downloaded ✓");
     } catch (e) {
       toast("PDF error: " + ((e as Error)?.message || e));
@@ -542,10 +507,10 @@ export default function Editor({
   }
   async function onWaSend() {
     await saveNow();
-    if (!sheetRef.current) return;
+    if (!printNode()) return;
     try {
       toast("Preparing PDF…");
-      const how = await sendDocOnWhatsApp(sheetRef.current, docRef.current);
+      const how = await sendDocOnWhatsApp(printNode()!, docRef.current);
       if (how === "shared") toast("PDF + message attached — pick the customer in WhatsApp");
       else if (how === "direct") toast("PDF downloaded · WhatsApp opened with the message ✓");
       else if (how === "fallback") toast("PDF downloaded — attach it in the WhatsApp chat that opened");
@@ -556,23 +521,20 @@ export default function Editor({
   function onWaRemind() {
     window.open(waLink(doc.phone, reminderMessage(doc)), "_blank");
   }
-  async function onWaRemindPdf() {
-    await saveNow();
-    if (!sheetRef.current) return;
-    try {
-      toast("Preparing PDF with payment reminder…");
-      const how = await sendDocOnWhatsApp(sheetRef.current, docRef.current, (d) => {
-        const bill = d.kind === "invoice" ? computeDoc(d).grand : (d.finalPrice && d.finalPrice > 0 ? d.finalPrice : computeDoc(d).grand);
-        const paid = Math.round((+(d.amountPaid || 0)) * 100) / 100;
-        const bal = Math.round((bill - paid) * 100) / 100;
-        return paymentReminderMessage(d, Math.max(0, bal));
-      });
-      if (how === "shared") toast("PDF + payment reminder attached — pick the customer in WhatsApp");
-      else if (how === "direct") toast("PDF downloaded · WhatsApp opened with payment reminder ✓");
-      else if (how === "fallback") toast("PDF downloaded — attach it in the WhatsApp chat with reminder message");
-    } catch (e) {
-      toast("WhatsApp error: " + ((e as Error)?.message || e));
-    }
+  /** Standard automated reminder: the balance pending from the total — nothing else. */
+  function onWaBalance() {
+    const d = docRef.current;
+    const total = d.finalPrice && d.finalPrice > 0 ? d.finalPrice : totals.grand;
+    const received = (payLines || []).reduce((s, l) => s + l.amount, 0);
+    const balance = Math.max(0, Math.round((total - received) * 100) / 100);
+    const msg = balanceReminderMessage({
+      name: d.customerName,
+      ref: (d.kind === "invoice" ? "Invoice " : "Quotation ") + d.number,
+      total,
+      received,
+      balance,
+    });
+    window.open(waLink(d.phone, msg), "_blank");
   }
   async function onConvert() {
     if (docRef.current.kind === "invoice") return;
@@ -601,12 +563,17 @@ export default function Editor({
     });
     cur.status = "Converted to Invoice";
     commit(cur, true); // saves the source quote before navigating away
-    toast("Invoice " + inv.number + " created · prices locked");
+    // any advance sitting on the customer's account clears onto the new invoice automatically
+    const adv = feat.vouchers ? await applyAdvancesToInvoice(inv, { persist: true }) : { applied: 0 };
+    toast(
+      "Invoice " + inv.number + " created · prices locked" +
+        (adv.applied > 0 ? " · ₹" + inr(adv.applied) + " advance applied" : ""),
+    );
     router.push("/editor/" + inv.id);
   }
   async function onDelete() {
     const ok = await confirmDialog({
-      title: "Move " + (doc.displayNumber || doc.number) + " to Recycle bin?",
+      title: "Move " + doc.number + " to Recycle bin?",
       message: "It leaves your lists but isn't lost — restore it anytime from Settings → Recycle bin.",
       confirmLabel: "Move to bin",
     });
@@ -616,7 +583,7 @@ export default function Editor({
     await trashDoc(st, docRef.current.id); // soft-delete: kept in the cloud, always recoverable
     prefSet("lastOpen", null);
     bumpData();
-    toast((doc.displayNumber || doc.number) + " moved to Recycle bin");
+    toast(doc.number + " moved to Recycle bin");
     router.push(st === "invoices" ? "/invoices" : "/quotations");
   }
   async function onClearPayments() {
@@ -641,60 +608,22 @@ export default function Editor({
   }
   async function onNewQuote() {
     const d = await createQuotation();
-    toast("New " + (d.displayNumber || d.number) + " created");
-    openTab(d.id, d.number, d.displayNumber);
-    router.push("/editor");
-  }
-  async function onSubQuote() {
-    // Add a new section as part of a named sub-group (Kitchen, Bedroom, etc.).
-    // Each sub-group renders on its own printed page under the same quotation number.
-    const existing = doc.sections.filter((s) => s.subGroup);
-    const groups = Array.from(new Set(existing.map((s) => s.subGroup!)));
-    let groupName: string;
-    if (groups.length === 0) {
-      groupName = prompt("Sub-quotation name (e.g. Kitchen, Bedroom):") || "";
-      if (!groupName) return;
-    } else {
-      // Offer existing groups, or let them type a new one
-      const groupList = groups.map((g, i) => `${i + 1}. ${g}`).join("\n");
-      const input = prompt(
-        `Existing sub-groups:\n${groupList}\n\nType a number to add to one, or type a new name:`,
-      );
-      if (!input) return;
-      const num = parseInt(input, 10);
-      if (num > 0 && num <= groups.length) {
-        groupName = groups[num - 1];
-      } else {
-        groupName = input.trim();
-        if (!groupName) return;
-      }
-    }
-    update((d) => {
-      d.sections.push({
-        name: "Teak",
-        rate: 4000,
-        rows: [{ l: "", w: "", t: "", pcs: "" }],
-        subGroup: groupName,
-      });
-    });
-    toast(`Added section to "${groupName}"`);
+    toast("New " + d.id + " created");
+    router.push("/editor/" + d.id);
   }
   async function onNewInvoice() {
     const d = await createInvoice();
     toast("New invoice " + d.id + " created");
-    openTab(d.id, d.number, d.displayNumber);
-    router.push("/editor");
+    router.push("/editor/" + d.id);
   }
 
-  // ---- one-shot action requested from a list row (?action=print|wa|remind|remind-pdf) ----
+  // ---- one-shot action requested from a list row (?action=print|wa) ----
   const ranAction = useRef(false);
   useEffect(() => {
     if (ranAction.current || !action) return;
     ranAction.current = true;
     if (action === "print") onPrint();
     else if (action === "wa") onWaSend();
-    else if (action === "remind") onWaRemind();
-    else if (action === "remind-pdf") onWaRemindPdf();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -805,6 +734,16 @@ export default function Editor({
   };
   // this quote's recorded payments — printed as the settlement block when the toggle is on
   const payLines = !isInv ? statementsForQuote(doc, expenses) : undefined;
+  // what's still pending on this quote (final price if agreed, else the computed total)
+  const remBalance = !isInv
+    ? Math.max(
+        0,
+        Math.round(
+          ((doc.finalPrice && doc.finalPrice > 0 ? doc.finalPrice : totals.grand) -
+            (payLines || []).reduce((s, l) => s + l.amount, 0)) * 100,
+        ) / 100,
+      )
+    : 0;
   const billNode = (
     <Totals
       doc={doc}
@@ -825,7 +764,7 @@ export default function Editor({
       <div className="mast-top sq-head">
         <div className="mh-side mh-no">
           <label>Quotation No.</label>
-          <input key="numro" className="ro" value={doc.displayNumber || doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
+          <input key="numro" className="ro" value={doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
         </div>
         <div className="co-name">Wood Quotation</div>
         <div className="mh-side mh-date">
@@ -858,11 +797,6 @@ export default function Editor({
         <button className="btn sm" onClick={onNewQuote}>
           + Quotation
         </button>
-        {!isInv && (
-          <button className="btn sm" onClick={onSubQuote} title="Add a new sub-page (Kitchen, Bedroom, etc.) under the same quotation number">
-            + Sub page
-          </button>
-        )}
         {feat.invoices && (
           <button className="btn sm" onClick={onNewInvoice}>
             + Invoice
@@ -937,8 +871,11 @@ export default function Editor({
       </div>
 
       {/* printable sheet */}
-      <div id="sheet" className={(isInv ? "inv" : feat.simpleQuote ? "sq" : "") + (freeMode ? " free" : "")} ref={sheetRef}>
-        <div className="print-watermark" aria-hidden="true"><span>CUT SIZE</span></div>
+      <div
+        id="sheet"
+        className={(isInv ? "inv" : feat.simpleQuote ? "sq" : "") + (freeMode ? " free" : "") + (isInv && !isBuy && !isRent ? " p3a" : "")}
+        ref={sheetRef}
+      >
         {isInv && !isBuy && (
           <div className="wmark" aria-hidden="true">
             <span>{brand.name}</span>
@@ -978,7 +915,7 @@ export default function Editor({
                     }}
                   />
                 ) : (
-                  <input key="numro" className="ro" value={doc.displayNumber || doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
+                  <input key="numro" className="ro" value={doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
                 )}
               </div>
               <div className="co-name">Wood Quotation</div>
@@ -1029,7 +966,7 @@ export default function Editor({
             </div>
           )}
           {!feat.simpleQuote && (
-          <div className={"meta" + (showLink ? "" : " two")}>
+          <div className={"meta" + (isInv ? " invrow" : showLink ? "" : " two")}>
             <div className="f">
               <label>{isInv ? "Invoice No." : "Quotation No."}</label>
               {editingNo ? (
@@ -1044,13 +981,37 @@ export default function Editor({
                   }}
                 />
               ) : (
-                <input key="numro" className="ro" value={doc.displayNumber || doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
+                <input key="numro" className="ro" value={doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
               )}
             </div>
+            {isInv && (
+              <>
+                <div className="f">
+                  <label>Payment</label>
+                  <select value={doc.payType || ""} onChange={(e) => setField("payType", e.target.value)}>
+                    <option value="">—</option>
+                    <option>Cash</option>
+                    <option>UPI</option>
+                    <option>Bank Transfer</option>
+                    <option>Credit</option>
+                  </select>
+                </div>
+                <div className="f">
+                  <label>HSN Code</label>
+                  <input placeholder="—" value={doc.hsn || ""} onChange={(e) => setField("hsn", e.target.value)} />
+                </div>
+              </>
+            )}
             <div className="f">
               <label>{isBuy ? "Purchase Date" : "Date"}</label>
               <DateField value={doc.date} onChange={(v) => setField("date", v)} />
             </div>
+            {isInv && !isBuy && !isRent && (
+              <div className="f">
+                <label>Vehicle No.</label>
+                <input placeholder="—" value={doc.vehicleNo || ""} onChange={(e) => setField("vehicleNo", e.target.value)} />
+              </div>
+            )}
             {showLink && (
               <div className="f">
                 <label>Linked</label>
@@ -1059,7 +1020,7 @@ export default function Editor({
             )}
           </div>
           )}
-          <div className="cust-block">
+          <div className={"cust-block" + (isInv && !isBuy && !isRent ? " c4" : "")}>
             <div className="f">
               <label>{isBuy ? "Supplier Name" : "Customer Name"}</label>
               <CustomerPicker value={doc.customerName} customers={customers} onType={onCustomerType} onPick={pickCustomer} />
@@ -1083,42 +1044,22 @@ export default function Editor({
                   onUseName={(name) => update((d) => (d.customerName = name))}
                   onUseAddress={(addr) => update((d) => (d.address = addr))}
                 />
+                {!isBuy && !isRent && (
+                  <div className="f">
+                    <label>Ship To (address)</label>
+                    <input placeholder="—" value={doc.shipTo || ""} onChange={(e) => setField("shipTo", e.target.value)} />
+                  </div>
+                )}
                 <div className="f" style={{ gridColumn: "1 / -1" }}>
                   <label>{isBuy ? "Supplier Address" : "Address"}</label>
                   <input placeholder="—" value={doc.address} onChange={(e) => setField("address", e.target.value)} />
                 </div>
-                <div className="f">
-                  <label>HSN Code</label>
-                  <input placeholder="—" value={doc.hsn || ""} onChange={(e) => setField("hsn", e.target.value)} />
-                </div>
-                <div className="f">
-                  <label>Payment</label>
-                  <select value={doc.payType || ""} onChange={(e) => setField("payType", e.target.value)}>
-                    <option value="">—</option>
-                    <option>Cash</option>
-                    <option>UPI</option>
-                    <option>Bank Transfer</option>
-                    <option>Credit</option>
-                  </select>
-                </div>
-                {!isBuy && !isRent && (
-                  <>
-                    <div className="f">
-                      <label>Vehicle No.</label>
-                      <input placeholder="—" value={doc.vehicleNo || ""} onChange={(e) => setField("vehicleNo", e.target.value)} />
-                    </div>
-                    <div className="f" style={{ gridColumn: "1 / -1" }}>
-                      <label>Ship To (address)</label>
-                      <input placeholder="—" value={doc.shipTo || ""} onChange={(e) => setField("shipTo", e.target.value)} />
-                    </div>
-                  </>
-                )}
               </>
             )}
           </div>
         </div>
 
-        <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} onFocus={onSecFocusIn} className={feat.simpleQuote ? (hasSubGroups ? "" : "twocol") : ""}>
+        <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} onFocus={onSecFocusIn} className={feat.simpleQuote ? "twocol" : ""}>
           {(() => {
             // rented invoice: a single custom "Rent" line instead of wood boxes.
             if (isRent)
@@ -1155,95 +1096,37 @@ export default function Editor({
                   </div>
                 </div>
               );
-            // Official app: no sub-pages, just list sections (one-column layout)
+            // Cut Size quote: split the wood boxes into EXACTLY two columns — FILL THE LEFT COLUMN
+            // first (each box stacks directly below the previous one), and only start the right column
+            // once the left is full (~one page of compact 0.72cm rows ≈ 30 lines). Never three columns.
             if (!feat.simpleQuote) return doc.sections.map((_, si) => renderCard(si));
-            // Sub-page grouping: sections without subGroup go to "Main" page,
-            // sections with subGroup get their own page per unique subGroup name.
-            // Each page gets its own two-column layout + sub-total; a grand-total
-            // appears only on the last page.
-            const subGroups: Map<string, number[]> = new Map(); // subGroup -> section indices
+            // box height ≈ header/footer chrome + rows×0.72cm; a printable column is ~25cm tall.
+            const COL_CM = 25;
+            const boxCm = (sec: (typeof doc.sections)[number]) => 3 + (sec.rows.length || 1) * 0.72;
+            const c1: number[] = [];
+            const c2: number[] = [];
+            let h1 = 0;
+            let filled = false; // once the left column is full, everything else goes to the right
             doc.sections.forEach((sec, i) => {
-              const g = sec.subGroup?.trim() || "Main";
-              const arr = subGroups.get(g) || [];
-              arr.push(i);
-              subGroups.set(g, arr);
+              const bc = boxCm(sec);
+              if (!filled && (c1.length === 0 || h1 + bc <= COL_CM)) {
+                c1.push(i);
+                h1 += bc;
+              } else {
+                filled = true;
+                c2.push(i);
+              }
             });
-            // "Main" first, then other groups in order of first appearance
-            const groupNames = ["Main", ...Array.from(subGroups.keys()).filter((k) => k !== "Main")];
-
-            // Per-group two-column layout + sub-total computation
-            const groupNodes = groupNames.map((gName, gi) => {
-              const indices = subGroups.get(gName) || [];
-              const isLastGroup = gi === groupNames.length - 1;
-              // Two-column fill for this group
-              const COL_CM = 25;
-              const boxCm = (si: number) => 3 + (doc.sections[si].rows.length || 1) * 0.72;
-              const c1: number[] = [];
-              const c2: number[] = [];
-              let h1 = 0;
-              let filled = false;
-              indices.forEach((si) => {
-                const bc = boxCm(si);
-                if (!filled && (c1.length === 0 || h1 + bc <= COL_CM)) {
-                  c1.push(si);
-                  h1 += bc;
-                } else {
-                  filled = true;
-                  c2.push(si);
-                }
-              });
-              // Sub-total for this group (use same GST logic as main total)
-              const groupCft = indices.reduce((s, si) => s + (totals.secCft[si] || 0), 0);
-              const groupSub = indices.reduce((s, si) => {
-                const sec = doc.sections[si];
-                const measureOf =
-                  sec.calcMode === "rft"
-                    ? (r: Row) => rftOf(r)
-                    : sec.calcMode === "direct" || sec.calcMode === "cbm"
-                      ? (r: Row) => directOf(r)
-                      : sec.calcMode === "pcs"
-                        ? (r: Row) => pcsOf(r)
-                        : (r: Row) => cftOf(r);
-                let m = 0;
-                (sec.rows || []).forEach((r) => (m += measureOf(r)));
-                return s + amountOf(sec, m);
-              }, 0);
-              const groupGst = doc.gstMode === "flat"
-                ? Math.round((+doc.gst || 0) * 100) / 100
-                : Math.round(groupSub * (+doc.gst || 0)) / 100;
-              const groupGrand = Math.round((groupSub + groupGst) * 100) / 100;
-
-              return (
-                <div key={gName} className="sub-page" data-subgroup={gName}>
-                  {gName !== "Main" && (
-                    <div className="sub-page-head">
-                      <span className="sub-page-title">{gName}</span>
-                    </div>
-                  )}
-                  <div className="sub-page-sections">
-                    <div className="scol">{c1.map(renderCard)}</div>
-                    <div className="scol">
-                      {c2.map(renderCard)}
-                      {/* Sub-total bill for this group — only the full GST/grand on the last page */}
-                      <Totals
-                        doc={doc}
-                        sub={groupSub}
-                        gstAmt={isLastGroup ? totals.gstAmt : 0}
-                        grand={isLastGroup ? totals.grand : groupSub}
-                        totalCft={isLastGroup ? totalCft : groupCft}
-                        totalCbm={totalCbm}
-                        totalPcs={totalPcs}
-                        payLines={isLastGroup ? payLines : undefined}
-                        onGst={(v) => setField("gst", v)}
-                        onGstMode={(m) => setField("gstMode", m)}
-                      />
-                    </div>
-                  </div>
+            // the bill sits at the BOTTOM of the right column (aligned with the taller column's bottom)
+            return (
+              <>
+                <div className="scol">{c1.map(renderCard)}</div>
+                <div className="scol">
+                  {c2.map(renderCard)}
+                  {billNode}
                 </div>
-              );
-            });
-
-            return <>{groupNodes}</>;
+              </>
+            );
           })()}
         </div>
           </>
@@ -1332,6 +1215,11 @@ export default function Editor({
         <button className="btn wa" onClick={onWaSend}>
           WhatsApp
         </button>
+        {feat.acceptPayment && !isInv && remBalance > 0.5 && (
+          <button className="btn wa" onClick={onWaBalance} title="WhatsApp just the balance figures — total, received, pending">
+            Remind
+          </button>
+        )}
         <button className="btn go" onClick={onPrint}>
           Print
         </button>
@@ -1361,6 +1249,11 @@ export default function Editor({
         </div>
       </div>
 
+      {/* the PRINTED tax invoice (3A Woodmark) — print & Save-PDF only, never on screen */}
+      {isInv && !isBuy && !isRent && (
+        <InvoicePrintA ref={inv3aRef} doc={doc} totals={totals} brand={brand} bank={invBank} totalCft={totalCft || 0} />
+      )}
+
       {/* App A: accept payment on a created quotation → final price + cash/UPI → Daybook */}
       {feat.acceptPayment && !isInv && (
         <PaymentBlock
@@ -1376,6 +1269,18 @@ export default function Editor({
           onClearAll={onClearPayments}
           reload={loadExpenses}
           highlightId={payFocus}
+        />
+      )}
+
+      {/* official: record money received against this invoice (cash capped ₹10k/day) — internal, never printed */}
+      {feat.vouchers && isInv && !isBuy && !isRent && (
+        <InvoicePayBlock
+          doc={doc}
+          grand={totals.grand}
+          expenses={expenses}
+          by={user?.id || "unknown"}
+          setAggregates={setPayAggregates}
+          reload={loadExpenses}
         />
       )}
 

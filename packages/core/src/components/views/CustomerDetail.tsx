@@ -10,8 +10,7 @@ import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
 import { mergeReceiptPieces, quoteBill, type PartyStatement } from "@/lib/payments";
-import { USERS } from "@/lib/local-auth";
-import { customerFollowupMessage, waLink } from "@/lib/whatsapp";
+import { balanceReminderMessage, customerFollowupMessage, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -75,7 +74,7 @@ export default function CustomerDetail({ id }: { id: string }) {
     const t = computeDoc(d);
     return {
       i: i + 1,
-      no: d.displayNumber || d.number || d.id,
+      no: d.number || d.id,
       date: d.date,
       carpenter: d.site || "",
       cft: t.secCft.reduce((s, c) => s + c, 0),
@@ -110,7 +109,48 @@ export default function CustomerDetail({ id }: { id: string }) {
   ).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
   const paidTotal = Math.round(payLines.reduce((s, l) => s + l.amount, 0) * 100) / 100;
   const balanceDue = Math.round((grandTotal - paidTotal) * 100) / 100;
-  const payerName = (uid: string) => USERS.find((u) => u.id === uid)?.name || uid || "—";
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  // Daybook-style account statement: opening → every bill & payment chronologically,
+  // with a running balance after each line (ends exactly at the Outstanding figure)
+  interface StmtEv {
+    key: string; // sortable timestamp
+    kind: "quote" | "pay";
+    /** payment mode — picks the icon (UPI / ₹ cash) */
+    pay?: "upi" | "cash";
+    date: string;
+    label: string;
+    sub: string;
+    amount: number;
+    id: string;
+  }
+  const stmtEvents: StmtEv[] = [
+    ...quotes.map((d): StmtEv => ({
+      key: d.createdAt || "",
+      kind: "quote",
+      date: d.date,
+      label: "Quotation #" + (d.number || d.id),
+      sub: d.site ? "Carpenter: " + d.site : "",
+      amount: quoteBill(d),
+      id: d.id,
+    })),
+    ...payLines.map((l): StmtEv => ({
+      key: l.at || "",
+      kind: "pay",
+      pay: l.mode === "upi" ? "upi" : "cash",
+      date: l.date,
+      label: l.mode === "upi" ? l.account || "UPI account" : l.toOwner ? "Cash → Owner" : "Cash",
+      sub: (l.note || "").split(" · ").filter((s) => !s.startsWith("settled") && !s.startsWith("on account")).join(" · "),
+      amount: l.amount,
+      id: l.id,
+    })),
+  ].sort((a, b) => a.key.localeCompare(b.key));
+  const stmtRows = stmtEvents.reduce<{ rows: (StmtEv & { bal: number })[]; bal: number }>(
+    (acc, ev) => {
+      const bal = r2(acc.bal + (ev.kind === "quote" ? ev.amount : -ev.amount));
+      return { rows: [...acc.rows, { ...ev, bal }], bal };
+    },
+    { rows: [], bal: opening },
+  ).rows;
   const canPrint = quotes.length > 0 || opening > 0;
   const today = new Date();
   const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -129,6 +169,16 @@ export default function CustomerDetail({ id }: { id: string }) {
   }
   function whatsapp() {
     window.open(waLink(cust!.phone, customerFollowupMessage(cust!.name)), "_blank");
+  }
+  /** Standard automated reminder: the account's balance pending from the total — nothing else. */
+  function remind() {
+    const msg = balanceReminderMessage({
+      name: cust!.name,
+      total: grandTotal,
+      received: paidTotal,
+      balance: balanceDue,
+    });
+    window.open(waLink(cust!.phone, msg), "_blank");
   }
   async function remove() {
     const ok = await confirmDialog({
@@ -164,6 +214,11 @@ export default function CustomerDetail({ id }: { id: string }) {
           <div className="links" style={{ marginTop: 0 }}>
             <button className="btn primary sm" onClick={newDoc}>{invoiceMode ? "New invoice" : "New quote"}</button>
             <button className="btn wa sm" onClick={whatsapp}>WhatsApp</button>
+            {f.outstanding > 0.5 && (
+              <button className="btn wa sm" onClick={remind} title="WhatsApp just the balance figures — total, payments, pending">
+                Remind
+              </button>
+            )}
             <button className="btn sm" onClick={edit}>Edit</button>
             <button className="btn warn sm" onClick={remove}>Delete</button>
           </div>
@@ -181,19 +236,72 @@ export default function CustomerDetail({ id }: { id: string }) {
         ))}
       </div>
 
-      <div className="sectitle" style={{ marginTop: 24, fontSize: 22, display: "flex", alignItems: "center", gap: 12 }}>
+      {(stmtRows.length > 0 || opening > 0) && (
+        <>
+          <div className="sectitle" style={{ marginTop: 24, fontSize: 22, display: "flex", alignItems: "center", gap: 12 }}>
+            <span>Account statement <small>— every bill &amp; payment, running balance</small></span>
+            {canPrint && (
+              <button
+                className="btn sm"
+                style={{ marginLeft: "auto" }}
+                onClick={async () => {
+                  if ((await printOrSavePdf(printRef.current, (cust!.name || "customer") + "-statement")) === "pdf") toast("Statement PDF downloaded \u2713");
+                }}
+              >
+                Print / Save PDF
+              </button>
+            )}
+          </div>
+          <div className="panel-card cs-card">
+            {opening > 0 && (
+              <div className="stmt">
+                <div className="stmt-ic due">₹</div>
+                <div className="stmt-main">
+                  <div className="stmt-to">Opening balance</div>
+                  <div className="stmt-sub">old dues from before the app</div>
+                </div>
+                <div className="cs-amt">
+                  <div className="stmt-amt due">+₹{inr(opening)}</div>
+                  <small className="cs-runbal">bal ₹{inr(opening)}</small>
+                </div>
+              </div>
+            )}
+            {stmtRows.map((ev) => (
+              <div
+                className="stmt"
+                key={ev.kind + ev.id}
+                style={ev.kind === "quote" ? { cursor: "pointer" } : undefined}
+                onClick={ev.kind === "quote" ? () => router.push("/editor/" + ev.id) : undefined}
+                title={ev.kind === "quote" ? "Open this quotation" : undefined}
+              >
+                <div className={"stmt-ic " + (ev.kind === "quote" ? "due" : ev.pay === "upi" ? "upi" : "cash")}>
+                  {ev.kind === "quote" ? "Bill" : ev.pay === "upi" ? "UPI" : "₹"}
+                </div>
+                <div className="stmt-main">
+                  <div className="stmt-to">{ev.label}{ev.sub ? <span className="acct-overall-hint"> · {ev.sub}</span> : null}</div>
+                  <div className="stmt-sub">{ev.date}</div>
+                </div>
+                <div className="cs-amt">
+                  <div className={"stmt-amt" + (ev.kind === "quote" ? " due" : "")}>
+                    {ev.kind === "quote" ? "+" : "−"}₹{inr(ev.amount)}
+                  </div>
+                  <small className="cs-runbal">bal ₹{inr(ev.bal)}</small>
+                </div>
+              </div>
+            ))}
+            <div className="cs-sum">
+              <span>Billed <b>₹{inr(grandTotal)}</b></span>
+              <span>Received <b className="in">₹{inr(paidTotal)}</b></span>
+              <span className="cs-due">
+                {balanceDue > 0.5 ? "Balance due ₹" + inr(balanceDue) : balanceDue < -0.5 ? "Advance ₹" + inr(-balanceDue) : "Settled ✓"}
+              </span>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
         <span>Quotations <small>— {quotes.length}</small></span>
-        {canPrint && (
-          <button
-            className="btn sm"
-            style={{ marginLeft: "auto" }}
-            onClick={async () => {
-              if ((await printOrSavePdf(printRef.current, (cust!.name || "customer") + "-statement")) === "pdf") toast("Statement PDF downloaded \u2713");
-            }}
-          >
-            Print / Save PDF
-          </button>
-        )}
       </div>
       <div className="listwrap">
         <DocList docs={quotes} empty="No quotations for this customer yet." />
@@ -220,7 +328,7 @@ export default function CustomerDetail({ id }: { id: string }) {
               {brand.gstin && <div>GSTIN: {brand.gstin}</div>}
             </div>
             <div className="rep-meta">
-              <div className="rep-title">Quotations</div>
+              <div className="rep-title">Account Statement</div>
               <div className="rep-period">{cust.name}{cust.phone ? " · " + cust.phone : ""}</div>
             </div>
           </div>
@@ -228,27 +336,28 @@ export default function CustomerDetail({ id }: { id: string }) {
           <div className="rep-summary cols4">
             <div><b>{qreport.length}</b><span>Quotations</span></div>
             <div><b>₹{inr(grandTotal)}</b><span>Billed{opening > 0 ? " (incl. opening)" : ""}</span></div>
-            <div><b>₹{inr(paidTotal)}</b><span>Paid</span></div>
+            <div><b>₹{inr(paidTotal)}</b><span>Received</span></div>
             <div><b>₹{inr(balanceDue)}</b><span>Balance due</span></div>
           </div>
 
+          {/* the SAME statement as on screen: opening → every bill & payment, running balance */}
           <table className="rep-table">
             <colgroup>
               <col style={{ width: "5%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "22%" }} />
-              <col style={{ width: "31%" }} />
-              <col style={{ width: "12%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "34%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "16%" }} />
               <col style={{ width: "16%" }} />
             </colgroup>
             <thead>
               <tr>
                 <th className="c-n">#</th>
                 <th>Date</th>
-                <th>Quote No</th>
-                <th>Carpenter</th>
-                <th className="amt">CFT</th>
-                <th className="amt">Total ₹</th>
+                <th>Entry</th>
+                <th className="amt">Billed ₹</th>
+                <th className="amt">Received ₹</th>
+                <th className="amt">Balance ₹</th>
               </tr>
             </thead>
             <tbody>
@@ -257,81 +366,35 @@ export default function CustomerDetail({ id }: { id: string }) {
                   <td className="c-n">—</td>
                   <td className="c-date">—</td>
                   <td className="c-no">Opening Balance</td>
-                  <td className="c-cust">—</td>
+                  <td className="amt">{inr(opening)}</td>
                   <td className="amt">—</td>
                   <td className="amt">{inr(opening)}</td>
                 </tr>
               )}
-              {qreport.map((r) => (
-                <tr key={r.no + "-" + r.i}>
-                  <td className="c-n">{r.i}</td>
-                  <td className="c-date">{r.date}</td>
-                  <td className="c-no">{r.no}</td>
-                  <td className="c-cust">{r.carpenter || "—"}</td>
-                  <td className="amt">{inr(r.cft)}</td>
-                  <td className="amt">{inr(r.total)}</td>
+              {stmtRows.map((ev, i) => (
+                <tr key={ev.kind + ev.id}>
+                  <td className="c-n">{i + 1}</td>
+                  <td className="c-date">{ev.date}</td>
+                  <td className="c-cust">
+                    {ev.kind === "quote" ? ev.label + (ev.sub ? " · " + ev.sub : "") : "Received · " + [ev.label, ev.sub].filter(Boolean).join(" · ")}
+                  </td>
+                  <td className="amt">{ev.kind === "quote" ? inr(ev.amount) : ""}</td>
+                  <td className="amt">{ev.kind === "pay" ? inr(ev.amount) : ""}</td>
+                  <td className="amt">{inr(ev.bal)}</td>
                 </tr>
               ))}
               <tr className="rep-tot">
-                <td colSpan={4}>
-                  Total
-                  {opening > 0 ? ` — opening + ${qreport.length} quotation${qreport.length === 1 ? "" : "s"}` : ` — ${qreport.length} quotation${qreport.length === 1 ? "" : "s"}`}
-                </td>
-                <td className="amt">{inr(qtot.cft)}</td>
+                <td colSpan={3}>Total</td>
                 <td className="amt">{inr(grandTotal)}</td>
+                <td className="amt">{inr(paidTotal)}</td>
+                <td className="amt">{inr(balanceDue)}</td>
+              </tr>
+              <tr className="rep-tot">
+                <td colSpan={5}>{balanceDue > 0.5 ? "Balance due" : balanceDue < -0.5 ? "Advance held" : "Settled"}</td>
+                <td className="amt">{inr(Math.abs(balanceDue))}</td>
               </tr>
             </tbody>
           </table>
-
-          {payLines.length > 0 && (
-            <>
-              <div className="rep-title" style={{ marginTop: 18, marginBottom: 8 }}>
-                Payments received — {payLines.length}
-              </div>
-              <table className="rep-table">
-                <colgroup>
-                  <col style={{ width: "5%" }} />
-                  <col style={{ width: "13%" }} />
-                  <col style={{ width: "10%" }} />
-                  <col style={{ width: "42%" }} />
-                  <col style={{ width: "13%" }} />
-                  <col style={{ width: "17%" }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className="c-n">#</th>
-                    <th>Date</th>
-                    <th>Via</th>
-                    <th>Detail</th>
-                    <th>By</th>
-                    <th className="amt">Amount ₹</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...payLines].reverse().map((l, i) => (
-                    <tr key={l.id}>
-                      <td className="c-n">{i + 1}</td>
-                      <td className="c-date">{l.date}</td>
-                      <td>{l.mode === "upi" ? "UPI" : "Cash"}</td>
-                      <td className="c-cust">
-                        {[l.account, l.quoteNo ? "#" + l.quoteNo : "", l.note].filter(Boolean).join(" · ") || "—"}
-                      </td>
-                      <td>{payerName(l.by)}</td>
-                      <td className="amt">{inr(l.amount)}</td>
-                    </tr>
-                  ))}
-                  <tr className="rep-tot">
-                    <td colSpan={5}>Total paid</td>
-                    <td className="amt">{inr(paidTotal)}</td>
-                  </tr>
-                  <tr className="rep-tot">
-                    <td colSpan={5}>Balance due — billed ₹{inr(grandTotal)} − paid ₹{inr(paidTotal)}</td>
-                    <td className="amt">{inr(balanceDue)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </>
-          )}
 
           <div className="rep-foot">Generated {genOn} · {brand.name}</div>
         </div>

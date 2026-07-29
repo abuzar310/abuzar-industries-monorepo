@@ -55,19 +55,23 @@ This is ${b.name}.
 Regarding your timber enquiry and quotation ${doc.number}, we wanted to follow up. Please let us know if you would like to proceed. Thank you.`;
 }
 
-/** Payment reminder for quotations with outstanding balance */
-export function paymentReminderMessage(doc: Doc, balance: number): string {
-  const b = activeBrand();
-  const sign = [b.name, [b.phone, b.web].filter(Boolean).join(" · ")].filter(Boolean).join("\n");
-  return `${greet(doc.customerName)}
-This is a friendly reminder from ${b.name} regarding quotation #${doc.number}.
-
-Outstanding balance: ₹ ${inr(balance)}
-
-Please clear the due amount at your earliest convenience. You can pay via Cash or UPI.
-
-Thank you for your business.
-${sign}${reviewFooter()}`;
+/** Standard automated company reminder — just the balance from the total. No dates, no notes. */
+export function balanceReminderMessage(opts: {
+  name?: string;
+  /** e.g. "Quotation 2026-27-097"; omit for a whole-account reminder */
+  ref?: string;
+  total: number;
+  received: number;
+  balance: number;
+}): string {
+  const { name, ref, total, balance } = opts;
+  const who = (name || "").trim() || "Customer";
+  // reminders go out under the real business name — never the "Cut Size" app title
+  const from = activeBrand().name.toLowerCase().includes("abuzar") ? activeBrand().name : "ABUZAR TIMBERS, CHITRADURGA";
+  return `Hello ${who},
+This is an automated payment reminder from ${from}.
+Your balance pending${ref ? " for " + ref : ""} is ₹${inr(balance)} (from a total of ₹${inr(total)}).
+Thank you.`;
 }
 
 export function customerFollowupMessage(name: string): string {
@@ -77,15 +81,20 @@ export function customerFollowupMessage(name: string): string {
 /**
  * Send the document on WhatsApp — the PDF must actually go with the message.
  * WhatsApp links (wa.me) are a platform dead end here: they can ONLY carry text,
- * never a file. So on phones the real path is the system share sheet.
- * Accepts an optional messageFn to customise the text (default: quoteMessage).
+ * never a file. So on phones the real path is the system share sheet:
+ *  - PHONE → build the PDF, share it (message attached as the caption/text) via
+ *    navigator.share; the user taps WhatsApp and picks the customer's chat.
+ *    File + text go together.
+ *  - PHONE where sharing is unavailable/blocked → download the PDF AND open the
+ *    customer's chat with the message, so the file is one attach away ("fallback").
+ *  - DESKTOP → save the PDF (a real download) and open the chat with the message,
+ *    so the file is ready to drop in ("direct").
  */
 export async function sendDocOnWhatsApp(
   sheet: HTMLElement,
   doc: Doc,
-  messageFn?: (d: Doc) => string,
 ): Promise<"direct" | "shared" | "cancelled" | "fallback"> {
-  const text = messageFn ? messageFn(doc) : quoteMessage(doc);
+  const text = quoteMessage(doc);
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
   const mobile = !!nav && /Android|iPhone|iPad|iPod/i.test(nav.userAgent);
 

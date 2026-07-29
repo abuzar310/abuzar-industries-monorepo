@@ -1,8 +1,11 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { openTab } from "@/lib/editor-tabs";
+import { loadDoc } from "@/lib/doc";
 import { useApp } from "@/store/useApp";
+import { toast } from "@/store/app-store";
+import Editor from "@/components/editor/Editor";
+import type { Doc } from "@/lib/types";
 
 export default function Page() {
   const { ready } = useApp();
@@ -10,18 +13,30 @@ export default function Page() {
   const sp = useSearchParams();
   const router = useRouter();
   const id = decodeURIComponent(params.id);
-  const done = useRef(false);
+  const [doc, setDoc] = useState<Doc | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!ready || done.current) return;
-    done.current = true;
-    openTab(id, "", sp.get("action") || undefined, sp.get("pay") || undefined);
-    router.replace("/editor");
-  }, [ready, id, router, sp]);
+    if (!ready) return;
+    let live = true;
+    loadDoc(id).then((d) => {
+      if (!live) return;
+      if (!d) {
+        toast("Not found");
+        router.replace("/quotations");
+        setDoc(null);
+      } else setDoc(d);
+    });
+    return () => {
+      live = false;
+    };
+  }, [ready, id, router]);
 
-  return (
-    <div className="sectitle">
-      {id} <small>— opening…</small>
-    </div>
-  );
+  if (!doc) {
+    return (
+      <div className="sectitle">
+        {id} <small>— loading…</small>
+      </div>
+    );
+  }
+  return <Editor key={doc.id} initialDoc={doc} action={sp.get("action") || undefined} payFocus={sp.get("pay") || undefined} />;
 }

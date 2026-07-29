@@ -7,7 +7,6 @@ import { createInvoice, createQuotation } from "@/lib/create";
 import { seriesOf } from "@/lib/invoice-id";
 import { trashDoc } from "@/lib/trash";
 import { quoteBill } from "@/lib/payments";
-import { openTab } from "@/lib/editor-tabs";
 import { getFeatures } from "@/lib/features";
 import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
@@ -104,7 +103,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       if (store === "invoices") {
         // invoices: newest number on top (falls back to createdAt when numbers tie / are non-numeric)
         const num = (d: Doc) => {
-          const m = String(d.displayNumber || d.number || d.id || "").match(/(\d+)\D*$/);
+          const m = String(d.number || d.id || "").match(/(\d+)\D*$/);
           return m ? parseInt(m[1], 10) : 0;
         };
         active.sort((a, b) => num(b) - num(a) || (b.createdAt || "").localeCompare(a.createdAt || ""));
@@ -162,8 +161,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       router.push("/purchases/" + encodeURIComponent(d.id) + suffix);
       return;
     }
-    openTab(d.id, d.number, suffix.startsWith("?action=") ? suffix.slice(8) : undefined);
-    router.push("/editor");
+    router.push("/editor/" + d.id + suffix);
   };
   const toggle = (id: string) =>
     setSel((s) => {
@@ -183,8 +181,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     // numbering is allocated atomically by the server — no pre-pull needed
     const d = isInv ? await createInvoice() : await createQuotation();
     toast("New " + d.number + " created");
-    openTab(d.id, d.number);
-    router.push("/editor");
+    router.push("/editor/" + d.id);
   }
   function onNewPurchase() {
     router.push("/purchases");
@@ -308,7 +305,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                       aria-label={"Select " + d.id}
                     />
                   )}
-                  {isInv && d.tradeType === "buy" ? d.supplierBillNo || (d.displayNumber || d.number) || d.id : (d.displayNumber || d.number) || d.id}
+                  {isInv && d.tradeType === "buy" ? d.supplierBillNo || d.number || d.id : d.number || d.id}
                   {isInv && d.tradeType === "buy" ? (
                     <span className="mut" style={{ display: "block", fontSize: 11 }}>
                       Purchase{d.number ? ` · #${d.number}` : ""}
@@ -328,42 +325,10 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                 <span>
                   <div className="amt">₹ {inr(bill)}</div>
                   {hasFinal && <div className="mut" style={{ fontSize: 11 }}>final · quote ₹{inr(t.grand)}</div>}
-                  {(() => {
-                    const paid = Math.round((+(d.amountPaid || 0)) * 100) / 100;
-                    const bal = Math.round((bill - paid) * 100) / 100;
-                    const owes = bal > 2;
-                    return (
-                      <div style={{ margin: "3px 0 4px", lineHeight: 1.3 }}>
-                        {owes ? (
-                          <span style={{ color: "var(--danger)", fontSize: 13, fontWeight: 700, fontFamily: "var(--mono)" }}>
-                            Due: ₹{inr(bal)}
-                          </span>
-                        ) : (
-                          <span style={{ color: "var(--green)", fontSize: 12, fontWeight: 700, fontFamily: "var(--mono)" }}>
-                            ✓ ₹{inr(paid)} paid
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })()}
                   <div className="acts">
                     <button className="btn sm" onClick={(e) => act(e, "")}>Open</button>
                     <button className="btn sm" onClick={(e) => act(e, "?action=print")}>Print</button>
                     <button className="btn wa sm" onClick={(e) => act(e, "?action=wa")}>WhatsApp</button>
-                    {(() => {
-                      const paid = Math.round((+(d.amountPaid || 0)) * 100) / 100;
-                      const bal = Math.round((bill - paid) * 100) / 100;
-                      if (bal > 2) {
-                        const hasPhone = d.phone?.trim().length > 5;
-                        return (
-                          <button className="btn sm" style={{ color: "var(--ochre-deep)", borderColor: hasPhone ? "var(--ochre)" : "var(--line-2)", opacity: hasPhone ? 1 : 0.5 }}
-                            onClick={(e) => { if (!hasPhone) return; e.stopPropagation(); act(e, "?action=remind-pdf"); }}
-                            title={hasPhone ? "Send PDF + payment reminder on WhatsApp" : "Add customer phone number to send reminder"}
-                          >💰 Remind</button>
-                        );
-                      }
-                      return null;
-                    })()}
                   </div>
                 </span>
               </div>
@@ -441,7 +406,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                     <tr key={d.id} style={isBillable(d) ? undefined : { color: "#8a7f6d" }}>
                       <td className="c-n">{i + 1}</td>
                       <td className="c-date">{d.date}</td>
-                      <td className="c-no">{d.displayNumber || d.number}</td>
+                      <td className="c-no">{d.number}</td>
                       <td className="c-cust">{d.customerName || "Walk-in"}</td>
                       <td>{isBillable(d) ? d.status : "Draft — not counted"}</td>
                       <td className="amt">{isBillable(d) ? inr(quoteBill(d)) : "(" + inr(quoteBill(d)) + ")"}</td>

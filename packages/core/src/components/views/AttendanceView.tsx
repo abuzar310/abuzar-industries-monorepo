@@ -1,7 +1,7 @@
 "use client";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { delRec } from "@/lib/data";
-import { inr, todayStr } from "@/lib/calc";
+import { dateSortKey, inr, todayStr } from "@/lib/calc";
 import { allExpenses } from "@/lib/expenses";
 import {
   deductAdvance,
@@ -104,6 +104,8 @@ export default function AttendanceView() {
   // account card (one worker at a time) + its received-back inline form
   const [openAcct, setOpenAcct] = useState<string | null>(null);
   const [repayOpen, setRepayOpen] = useState(false);
+  /** past-weeks history inside the account card — folded to one carry line by default */
+  const [histOpen, setHistOpen] = useState(false);
   const [fAmt, setFAmt] = useState("");
   const [fDate, setFDate] = useState("");
   const [fNote, setFNote] = useState("");
@@ -148,6 +150,7 @@ export default function AttendanceView() {
   const totDays = r2(rows.reduce((s, x) => s + x.presentDays, 0));
   const totEarned = r2(rows.reduce((s, x) => s + x.earned, 0));
   const totPaid = r2(rows.reduce((s, x) => s + x.paid, 0));
+  const totClosing = r2(rows.reduce((s, x) => s + x.closing, 0)); // what this week carries forward
   const totNet = r2(rows.reduce((s, x) => s + acctOf(x.worker.id).wageBalance, 0));
   // "due" = unpaid wages (the wage pot is positive)
   const due = rows.filter((x) => acctOf(x.worker.id).wageBalance > 0.5);
@@ -297,6 +300,7 @@ export default function AttendanceView() {
   function toggleAcct(id: string) {
     setOpenAcct((cur) => (cur === id ? null : id));
     setRepayOpen(false);
+    setHistOpen(false); // past weeks start folded — one carry line
   }
   function startRepay() {
     setRepayOpen(true);
@@ -553,6 +557,68 @@ export default function AttendanceView() {
     const stmt = workerPayments(expenses, w.id).sort(
       (p, q) => (q.e.createdAt || "").localeCompare(p.e.createdAt || ""),
     );
+    // split by the VIEWED week: its own entries in full, everything older folded
+    // into one carry line (tap to expand), later entries likewise when browsing history
+    const isoOfEntry = (x2: WorkerEntry) => dateSortKey(x2.e.date) || (x2.e.createdAt || "").slice(0, 10);
+    const curStmt = stmt.filter((s) => { const i = isoOfEntry(s); return i >= days[0] && i <= days[6]; });
+    const pastStmt = stmt.filter((s) => isoOfEntry(s) < days[0]);
+    const laterStmt = stmt.filter((s) => isoOfEntry(s) > days[6]);
+    // expanded history reads week by week — each old week its own mini statement
+    const groupByWeek = (list: WorkerEntry[]) => {
+      const m = new Map<string, { days: string[]; entries: WorkerEntry[] }>();
+      for (const s of list) {
+        const [y, mo, d] = isoOfEntry(s).split("-").map(Number);
+        const wdays = weekDays(weekStart(new Date(y, (mo || 1) - 1, d || 1)));
+        const g = m.get(wdays[0]) || { days: wdays, entries: [] };
+        g.entries.push(s);
+        m.set(wdays[0], g);
+      }
+      return [...m.values()]
+        .sort((a, b) => b.days[0].localeCompare(a.days[0])) // newest week first
+        .map((g) => ({
+          key: g.days[0],
+          label: fmtWeekLabel(g.days),
+          paid: r2(
+            g.entries
+              .filter((s) => s.kind === "wage" || s.kind === "deduct")
+              .reduce((t, s) => t + (+s.e.amount || 0), 0),
+          ),
+          entries: g.entries,
+        }));
+    };
+    const pastGroups = groupByWeek(pastStmt);
+    const laterGroups = groupByWeek(laterStmt);
+    const stmtRow = (x2: WorkerEntry) => {
+      const ui = KIND_UI[x2.kind];
+      return (
+        <div className="stmt" key={x2.e.id}>
+          <div className={"stmt-ic " + ui.icCls}>{ui.ic}</div>
+          <div className="stmt-main">
+            <div className="stmt-to">
+              <span style={{ color: ui.color }}>{ui.label}</span>
+              {extraNote(x2) ? " · " + extraNote(x2) : ""}
+              {x2.kind === "deduct" ? (
+                <span className="acct-overall-hint"> · no cash</span>
+              ) : (
+                <span className="acct-overall-hint">
+                  {" "}· {x2.kind === "repaid" ? "received by" : "paid by"} {x2.e.toOwner ? "Owner" : "Manager (Daybook)"}
+                </span>
+              )}
+            </div>
+            <div className="stmt-sub">
+              {x2.e.date}
+              {hhmm(x2.e.createdAt) ? " · " + hhmm(x2.e.createdAt) : ""} · by {userName(x2.e.enteredBy)}
+            </div>
+          </div>
+          <div className="stmt-amt" style={{ color: ui.color }}>
+            {ui.sign}₹{inr(x2.e.amount)}
+          </div>
+          <span className="pb-rowacts">
+            <button className="pb-x" title="Delete" onClick={() => delPayment(x2)}>×</button>
+          </span>
+        </div>
+      );
+    };
     // notes carry the worker's name ("Zameer · note") — show only the note part here
     const extraNote = (x2: WorkerEntry) => {
       const n = x2.e.note || "";
@@ -676,43 +742,58 @@ export default function AttendanceView() {
             )}
 
             <div className="att-card-stmt">
-              <div className="pbd-lbl">Money on this account · {stmt.length}</div>
-              {stmt.length ? (
-                stmt.map((x2) => {
-                  const ui = KIND_UI[x2.kind];
-                  return (
-                    <div className="stmt" key={x2.e.id}>
-                      <div className={"stmt-ic " + ui.icCls}>{ui.ic}</div>
-                      <div className="stmt-main">
-                        <div className="stmt-to">
-                          <span style={{ color: ui.color }}>{ui.label}</span>
-                          {extraNote(x2) ? " · " + extraNote(x2) : ""}
-                          {x2.kind === "deduct" ? (
-                            <span className="acct-overall-hint"> · no cash</span>
-                          ) : (
-                            <span className="acct-overall-hint">
-                              {" "}· {x2.kind === "repaid" ? "received by" : "paid by"} {x2.e.toOwner ? "Owner" : "Manager (Daybook)"}
-                            </span>
-                          )}
-                        </div>
-                        <div className="stmt-sub">
-                          {x2.e.date}
-                          {hhmm(x2.e.createdAt) ? " · " + hhmm(x2.e.createdAt) : ""} · by {userName(x2.e.enteredBy)}
-                        </div>
-                      </div>
-                      <div className="stmt-amt" style={{ color: ui.color }}>
-                        {ui.sign}₹{inr(x2.e.amount)}
-                      </div>
-                      <span className="pb-rowacts">
-                        <button className="pb-x" title="Delete" onClick={() => delPayment(x2)}>×</button>
-                      </span>
-                    </div>
-                  );
-                })
+              <div className="pbd-lbl">This week · {curStmt.length}</div>
+              {curStmt.length ? (
+                curStmt.map(stmtRow)
               ) : (
                 <div className="stmt-sub" style={{ padding: "6px 2px", opacity: 0.7 }}>
-                  No money given or received yet.
+                  Nothing given or received this week yet.
                 </div>
+              )}
+
+              {/* past weeks fold into ONE carry line — tap to see every old entry */}
+              {pastStmt.length > 0 && (
+                <>
+                  <button className="att-hist-toggle" type="button" onClick={() => setHistOpen((v) => !v)}>
+                    <span className="um-caret">{histOpen ? "▾" : "▸"}</span>
+                    Past weeks · {pastStmt.length} {pastStmt.length === 1 ? "entry" : "entries"}
+                    <b style={{ marginLeft: "auto", color: balWords(x.carryIn).color }}>
+                      {x.carryIn > 0.5
+                        ? "carried in: to pay ₹" + inr(x.carryIn)
+                        : x.carryIn < -0.5
+                          ? "carried in: −₹" + inr(-x.carryIn) + " extra taken"
+                          : "settled ✓"}
+                    </b>
+                  </button>
+                  {histOpen &&
+                    pastGroups.map((g) => (
+                      <div key={g.key}>
+                        <div className="att-hist-week">
+                          <span>Week {g.label}</span>
+                          {g.paid > 0.5 && <b>paid ₹{inr(g.paid)}</b>}
+                        </div>
+                        {g.entries.map(stmtRow)}
+                      </div>
+                    ))}
+                </>
+              )}
+              {laterStmt.length > 0 && (
+                <>
+                  <button className="att-hist-toggle" type="button" onClick={() => setHistOpen((v) => !v)}>
+                    <span className="um-caret">{histOpen ? "▾" : "▸"}</span>
+                    After this week · {laterStmt.length} {laterStmt.length === 1 ? "entry" : "entries"}
+                  </button>
+                  {histOpen &&
+                    laterGroups.map((g) => (
+                      <div key={g.key}>
+                        <div className="att-hist-week">
+                          <span>Week {g.label}</span>
+                          {g.paid > 0.5 && <b>paid ₹{inr(g.paid)}</b>}
+                        </div>
+                        {g.entries.map(stmtRow)}
+                      </div>
+                    ))}
+                </>
               )}
             </div>
           </div>
@@ -811,6 +892,11 @@ export default function AttendanceView() {
           <div className="sub">this week</div>
         </div>
         <div className="stat">
+          <div className="k">Week closing</div>
+          <div className="v" style={{ color: balWords(totClosing).color }}>₹ {inr(Math.abs(totClosing))}</div>
+          <div className="sub">{totClosing > 0.5 ? "carries to next week" : totClosing < -0.5 ? "taken extra — carries" : "week settled ✓"}</div>
+        </div>
+        <div className="stat">
           <div className="k">Wages net</div>
           <div className="v" style={{ color: balWords(totNet).color }}>₹ {inr(Math.abs(totNet))}</div>
           <div className="sub">{totNet > 0.5 ? "to pay overall" : totNet < -0.5 ? "taken extra overall" : "all square"}</div>
@@ -820,7 +906,7 @@ export default function AttendanceView() {
       <div className="tsheet">
         <div className="tsheet-head">
           <span>Wage register</span>
-          <small>tap a day: 1 → ½ → 0 → blank · tap a name or balance for the account · payout {PAYDAY_NAMES[cfg.payday]}</small>
+          <small>tap a day: 1 → ½ → 0 → blank · each week closes on {PAYDAY_NAMES[cfg.payday]} — the closing carries into next week</small>
         </div>
         <div className="tsheet-body" style={{ overflowX: "auto" }}>
           {rows.length ? (
@@ -836,7 +922,8 @@ export default function AttendanceView() {
                   ))}
                   <th className="amt">Days</th>
                   <th className="amt">Earned ₹<small className="att-th-sub">this week</small></th>
-                  <th className="amt">Wage balance<small className="att-th-sub">all-time</small></th>
+                  <th className="amt">Paid ₹<small className="att-th-sub">this week</small></th>
+                  <th className="amt">Week closing<small className="att-th-sub">carries forward</small></th>
                   <th className="amt">Advance<small className="att-th-sub">owes us</small></th>
                   <th />
                 </tr>
@@ -844,7 +931,7 @@ export default function AttendanceView() {
               <tbody>
                 {rows.map((x) => {
                   const a = acctOf(x.worker.id);
-                  const bw = balWords(a.wageBalance);
+                  const bw = balWords(x.closing); // the WEEK'S closing — frozen for old weeks
                   const open = openAcct === x.worker.id;
                   return (
                     <Fragment key={x.worker.id}>
@@ -894,16 +981,22 @@ export default function AttendanceView() {
                         ))}
                         <td className="amt" style={{ fontWeight: 700 }}>{x.presentDays || ""}</td>
                         <td className="amt">{x.earned ? inr(x.earned) : ""}</td>
+                        <td className="amt">{x.paid ? inr(x.paid) : ""}</td>
                         <td className="amt">
                           <button
                             className="att-bal"
                             type="button"
                             style={{ color: bw.color }}
-                            title="Open this worker's account"
+                            title="This week's closing (carry-in + earned − paid) — carries into next week. Tap for the account."
                             onClick={() => toggleAcct(x.worker.id)}
                           >
                             {bw.text}
                           </button>
+                          {Math.abs(x.carryIn) > 0.5 && (
+                            <small className="att-carry">
+                              {x.carryIn > 0 ? "incl. ₹" + inr(x.carryIn) + " from before" : "−₹" + inr(-x.carryIn) + " extra from before"}
+                            </small>
+                          )}
                         </td>
                         <td className="amt">
                           {a.debt > 0.5 ? (

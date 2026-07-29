@@ -8,7 +8,6 @@ import { brandFor } from "@/lib/brand";
 import { isInvoiceId } from "@/lib/doc";
 import { changePassword, lockApp } from "@/lib/local-auth";
 import { formDialog } from "@/store/dialog-store";
-import { TabIcon } from "@/components/Icons";
 import type { Tab } from "@/lib/types";
 
 function isActive(href: string, path: string) {
@@ -67,14 +66,12 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
                     }
                   }}
                 >
-                  <TabIcon icon={t.icon} size={16} />
                   {t.label}
                 </Link>
               );
             }
             return (
               <Link key={t.href} href={t.href} className={cls}>
-                <TabIcon icon={t.icon} size={16} />
                 {t.label}
                 {t.badge && unseen > 0 && <span className="tab-badge">{unseen}</span>}
               </Link>
