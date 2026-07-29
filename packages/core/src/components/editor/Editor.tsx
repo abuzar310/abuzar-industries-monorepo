@@ -145,6 +145,9 @@ export default function Editor({
   });
 
   // ---- persistence ----
+  // Undo history stack (Ctrl+Z). Each edit pushes current state before the change.
+  const historyRef = useRef<Doc[]>([]);
+  const UNDO_MAX = 50;
   const markDirty = (v: boolean) => {
     dirtyRef.current = v;
     setDirty(v);
@@ -164,9 +167,26 @@ export default function Editor({
     else markDirty(true);
   }
   function update(producer: (d: Doc) => void) {
+    // Push current state onto undo stack before mutating
+    const stack = historyRef.current;
+    stack.push(clone(docRef.current));
+    if (stack.length > UNDO_MAX) stack.shift();
     const next = clone(docRef.current);
     producer(next);
     commit(next);
+  }
+  /** Undo the last edit — Ctrl+Z restores the previous doc state. */
+  function undo() {
+    const stack = historyRef.current;
+    if (!stack.length) {
+      toast("Nothing to undo");
+      return;
+    }
+    const prev = stack.pop()!;
+    docRef.current = prev;
+    setDoc(prev);
+    markDirty(true);
+    toast("Undone ↶");
   }
   /** The Save button / Ctrl+S: link the customer record, then persist. */
   async function saveNow() {
