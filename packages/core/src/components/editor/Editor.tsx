@@ -55,11 +55,17 @@ export default function Editor({
   initialDoc,
   action,
   payFocus,
+  onDirtyChange,
+  active: _active,
 }: {
   initialDoc: Doc;
   action?: string;
   /** a payment line (expense id) to scroll to + flash — set when arriving from Statements */
   payFocus?: string;
+  /** called when the dirty state changes */
+  onDirtyChange?: (dirty: boolean) => void;
+  /** whether this tab is currently visible (tab-panel active) — passed from tab container */
+  active?: boolean;
 }) {
   const router = useRouter();
   const [doc, setDoc] = useState<Doc>(initialDoc);
@@ -142,6 +148,7 @@ export default function Editor({
   const markDirty = (v: boolean) => {
     dirtyRef.current = v;
     setDirty(v);
+    onDirtyChange?.(v);
   };
   function persist(d: Doc) {
     d.updatedAt = nowIso();
