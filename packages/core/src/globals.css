@@ -2248,12 +2248,37 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .ledger-page .pay-hero{border-radius:16px; border:1px solid var(--line-2);
   box-shadow:0 1px 2px rgba(51,36,26,.04), 0 6px 20px rgba(51,36,26,.05); margin-top:18px}
 
-/* mobile: scoped rules outrank the base 640px rules, so restate them here */
+/* mobile: scoped rules outrank the base 640px rules, so restate them here.
+   Ledgers nest deep on Accounts (holder → sub-account → ledger), so every level
+   sheds horizontal padding and the grid columns tighten to fit a 375px phone. */
 @media(max-width:640px){
   .party-grid{grid-template-columns:1fr; gap:10px}
   .party-stats{grid-template-columns:1fr 1fr}
+  /* reclaim width: .wrap already pads the page — the ledger container goes flush */
+  .ledger-page{padding:8px 0 24px}
+  /* the header's Date cell has no class — hide it to match the 4-col mobile grid */
+  .ledger-page .bank-hdr span:first-child{display:none}
   .ledger-page .bank-hdr,
-  .ledger-page .bank-row{grid-template-columns:minmax(0,1fr) 76px 76px 100px}
+  .ledger-page .bank-row{grid-template-columns:minmax(0,1fr) 64px 64px 88px; gap:4px; padding:5px 8px}
   .ledger-page .bank-date{display:none}
-  .ledger-page .bank-row.bank-total{padding:7px 12px}
+  .ledger-page .bank-parts{font-size:11.5px}
+  .ledger-page .bank-amt{font-size:11px; white-space:nowrap}
+  .ledger-page .bank-row.bank-total{padding:7px 8px}
+  /* Accounts: shed nesting padding so the ledger keeps its width */
+  .ledger-page .acct-holder{padding:10px 8px}
+  .ledger-page .acct-holder-body{padding-left:5px}
+  .ledger-page .acct-sub{padding:8px 6px}
+  .ledger-page .panel-card{border-radius:12px}
+  .ledger-page .ledger-card-body{padding:12px 10px 14px}
+  .ledger-page .ledger-card-header{padding:12px 12px}
+}
+/* very small phones: shrink amounts further, drop the Dr/Cr pill */
+@media(max-width:420px){
+  .ledger-page .bank-hdr,
+  .ledger-page .bank-row{grid-template-columns:minmax(0,1fr) 56px 56px 80px; gap:3px; padding:5px 6px}
+  .ledger-page .bank-amt{font-size:10.5px}
+  .ledger-page .bank-parts{font-size:11px}
+  .ledger-page .bal-tag{display:none}
+  .ledger-page .sq-bal{font-size:11px; padding:4px 9px}
+  .ledger-page .lch-bal{font-size:15px}
 }
