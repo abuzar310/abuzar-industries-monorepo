@@ -374,6 +374,41 @@ export async function pullChanges(): Promise<boolean> {
   }
 }
 
+// ---- all-transactions (unified money movement feed, client-side) ----
+
+export interface AllTransaction {
+  id: string;
+  date: string;
+  type: string;
+  amount: number;
+  party: string;
+  partyType: string;
+  mode: string;
+  note: string;
+  enteredBy: string;
+  deleted: boolean;
+  createdAt: string;
+  sourceId?: string;
+}
+
+export interface AllTransactionsResponse {
+  transactions: AllTransaction[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** Fetch a page of unified transactions from the server. */
+export async function fetchAllTransactions(
+  limit = 100,
+  offset = 0,
+  typeFilter = "",
+): Promise<AllTransactionsResponse> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (typeFilter) params.set("type", typeFilter);
+  return call<AllTransactionsResponse>(`/all-transactions?${params.toString()}`);
+}
+
 // ---- atomic document creation (numbering allocated inside the database) ----
 
 export async function rpcCreateDoc<T extends object>(data: T): Promise<T> {
