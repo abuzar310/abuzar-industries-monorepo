@@ -26,7 +26,7 @@ const fromDmy = (v: string) => {
 };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-type Kind = "received" | "due";
+type Kind = "received" | "due" | "paid";
 
 export default function ReceiptsView() {
   const { ready, dataVersion, user } = useApp();
@@ -45,6 +45,8 @@ export default function ReceiptsView() {
   const [note, setNote] = useState("");
   const [date, setDate] = useState("");
   const [openCust, setOpenCust] = useState<string | null>(null);
+  /** whose cash the "Paid out" money left (null = default to the logged-in role) */
+  const [paidBy, setPaidBy] = useState<"owner" | "manager" | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   /** editing a whole receipt (possibly split across quotes): its pieces get unwound + re-applied on save */
   const [editRcpt, setEditRcpt] = useState<{ id: string; pieces: Expense[] } | null>(null);
@@ -131,6 +133,7 @@ export default function ReceiptsView() {
     setNote("");
     setDate("");
     setMode("cash");
+    setPaidBy(null);
     setEditId(null);
     setEditRcpt(null);
     setApplyTo("quotes");
@@ -169,7 +172,15 @@ export default function ReceiptsView() {
     if (editId) {
       const e = await getRec<Expense>("expenses", editId);
       if (!e || e.custId !== picked.id) return resetForm();
-      if (e.charge) {
+      if (e.type === "custom") {
+        // a "Paid out" entry — money we handed to this customer
+        const by = paidBy ?? (e.toOwner ? "owner" : "manager");
+        e.amount = a;
+        e.label = "Paid to " + picked.name;
+        e.note = note.trim();
+        e.toOwner = by === "owner";
+        e.date = date ? toDmy(date) : e.date;
+      } else if (e.charge) {
         e.amount = a;
         e.label = note.trim() || picked.name;
         e.date = date ? toDmy(date) : e.date;
@@ -209,6 +220,27 @@ export default function ReceiptsView() {
       return toast("₹" + inr(a) + " due added for " + picked.name);
     }
 
+    if (kind === "paid") {
+      // money paid OUT to this person — lands in the Daybook as a spend (custom entry),
+      // tagged with the customer so it lists under them here
+      const by = paidBy ?? (isOwner ? "owner" : "manager");
+      await addExpense({
+        type: "custom",
+        amount: a,
+        mode: "cash",
+        label: "Paid to " + picked.name,
+        custId: picked.id,
+        note: note.trim(),
+        date: date ? toDmy(date) : undefined,
+        toOwner: by === "owner",
+        enteredBy: user?.id || "unknown",
+      });
+      resetForm();
+      load();
+      bumpData();
+      return toast("₹" + inr(a) + " paid to " + picked.name + (by === "owner" ? " — Owner's cash (not in Daybook)" : " — cut from the Daybook cash"));
+    }
+
     const isUpiMode = mode === "upi" || mode === "uowner";
     if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
     const isCash = !isUpiMode;
@@ -246,7 +278,7 @@ export default function ReceiptsView() {
 
   async function remove(entry: Entry) {
     const { e, pieces, settled } = entry;
-    const label = e.charge ? "due" : "receipt";
+    const label = entry.paid ? "payment" : e.charge ? "due" : "receipt";
     const total = pieces ? r2(pieces.reduce((s, x) => s + (+x.amount || 0), 0)) : +e.amount || 0;
     const ok = await confirmDialog({
       title: "Delete " + label + "?",
@@ -278,12 +310,13 @@ export default function ReceiptsView() {
     } else {
       setEditId(e.id);
       setEditRcpt(null);
-      setKind(e.charge ? "due" : "received");
+      setKind(entry.paid ? "paid" : e.charge ? "due" : "received");
       setAmt(String(e.amount));
     }
     setMode(e.charge ? "cash" : e.mode === "upi" ? (e.toOwner ? "uowner" : "upi") : e.toOwner ? "owner" : "cash");
+    setPaidBy(entry.paid ? (e.toOwner ? "owner" : "manager") : null);
     setAcct(e.account || "");
-    setNote(e.charge ? e.note || "" : e.label || "");
+    setNote(entry.paid ? e.note || "" : e.charge ? e.note || "" : e.label || "");
     setDate(e.date ? fromDmy(e.date) : "");
     const c = customers.find((x) => x.id === entry.cid);
     if (c) {
@@ -308,6 +341,8 @@ export default function ReceiptsView() {
     quoteNo?: string;
     quoteId?: string;
     locked: boolean;
+    /** true = a "Paid out" entry (money we handed to the customer) */
+    paid?: boolean;
   }
   const byCust = new Map<string, Entry[]>();
   const rcptGroups = new Map<string, { cid: string; pieces: Expense[] }>();
@@ -329,6 +364,15 @@ export default function ReceiptsView() {
         : { key: e.id, cid, e, amount: +e.amount || 0, quoteNo: q!.number, quoteId: q!.id, locked: true };
       const arr = byCust.get(cid) || [];
       arr.push(entry);
+      byCust.set(cid, arr);
+    });
+  // "Paid out" entries — money we handed to the customer (Daybook custom spends tagged with custId)
+  expenses
+    .filter((e) => e.type === "custom" && !!e.custId)
+    .forEach((e) => {
+      const cid = e.custId!;
+      const arr = byCust.get(cid) || [];
+      arr.push({ key: e.id, cid, e, amount: +e.amount || 0, locked: false, paid: true });
       byCust.set(cid, arr);
     });
   for (const [rid, g] of rcptGroups) {
@@ -353,17 +397,19 @@ export default function ReceiptsView() {
   const groups = [...byCust.entries()]
     .map(([cid, list]) => {
       const sorted = list.sort((a, b) => (b.e.createdAt || "").localeCompare(a.e.createdAt || ""));
-      const received = sorted.filter((x) => !x.e.charge);
+      const received = sorted.filter((x) => !x.e.charge && !x.paid);
       const dues = sorted.filter((x) => x.e.charge);
+      const paidOut = sorted.filter((x) => x.paid);
       return {
         cid,
         name: custName(cid),
         received: r2(received.reduce((s, x) => s + x.amount, 0)),
         dueAdded: r2(dues.reduce((s, x) => s + x.amount, 0)),
+        paidOut: r2(paidOut.reduce((s, x) => s + x.amount, 0)),
         list: sorted,
       };
     })
-    .sort((a, b) => b.received + b.dueAdded - (a.received + a.dueAdded));
+    .sort((a, b) => b.received + b.dueAdded + b.paidOut - (a.received + a.dueAdded + a.paidOut));
 
   const editing = !!editId || !!editRcpt;
   const showReceivedFields = kind === "received";
@@ -422,6 +468,9 @@ export default function ReceiptsView() {
         <div className="db-seg sm" style={{ margin: "12px 0 14px" }}>
           <button className={"seg-btn" + (kind === "received" ? " on" : "")} type="button" onClick={() => setKind("received")} disabled={editing}>
             Received
+          </button>
+          <button className={"seg-btn" + (kind === "paid" ? " on" : "")} type="button" onClick={() => setKind("paid")} disabled={editing}>
+            Paid out
           </button>
           <button className={"seg-btn" + (kind === "due" ? " on" : "")} type="button" onClick={() => setKind("due")} disabled={editing}>
             Add due
@@ -498,10 +547,34 @@ export default function ReceiptsView() {
           </div>
         )}
 
+        {kind === "paid" && (
+          <div className="att-paidby" style={{ marginTop: 12 }}>
+            <span className="att-paidby-lbl">Paid by</span>
+            <div className="db-seg sm">
+              <button
+                className={"seg-btn" + ((paidBy ?? (isOwner ? "owner" : "manager")) === "owner" ? " on" : "")}
+                type="button"
+                title="The Owner's own cash — the Daybook is untouched"
+                onClick={() => setPaidBy("owner")}
+              >
+                Owner
+              </button>
+              <button
+                className={"seg-btn" + ((paidBy ?? (isOwner ? "owner" : "manager")) === "manager" ? " on" : "")}
+                type="button"
+                title="The Manager's cash — cut from the Daybook"
+                onClick={() => setPaidBy("manager")}
+              >
+                Manager
+              </button>
+            </div>
+          </div>
+        )}
+
         {editing && (
           <div className="pb-editbar no-print" style={{ marginTop: 12 }}>
             <span>
-              Editing this {kind === "due" ? "due" : "receipt"}
+              Editing this {kind === "due" ? "due" : kind === "paid" ? "payment" : "receipt"}
               {editRcpt && editRcpt.pieces.some((x) => !!x.sourceId) ? " — saving re-applies it fresh (linked quotations adjust)" : ""}
             </span>
             <button type="button" onClick={resetForm}>
@@ -511,7 +584,7 @@ export default function ReceiptsView() {
         )}
 
         <button className="btn primary" type="button" onClick={record} style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: 12 }}>
-          {editing ? "Save changes" : kind === "due" ? "Add due" : "Record receipt"}
+          {editing ? "Save changes" : kind === "due" ? "Add due" : kind === "paid" ? "Record payment" : "Record receipt"}
         </button>
       </div>
 
@@ -609,6 +682,7 @@ export default function ReceiptsView() {
                   {g.received > 0 && <>₹{inr(g.received)} received</>}
                   {g.received > 0 && g.dueAdded > 0 && " · "}
                   {g.dueAdded > 0 && <span style={{ color: "var(--danger)" }}>₹{inr(g.dueAdded)} due</span>}
+                  {g.paidOut > 0 && <span style={{ color: "var(--ochre-deep)" }}>{g.received > 0 || g.dueAdded > 0 ? " · " : ""}₹{inr(g.paidOut)} paid out</span>}
                   {" · "}
                   {g.list.length} {g.list.length === 1 ? "entry" : "entries"}
                 </span>
@@ -620,7 +694,10 @@ export default function ReceiptsView() {
                   let bal = 0;
                   for (const entry of g.list) {
                     const { e, amount } = entry;
-                    if (e.charge) {
+                    if (entry.paid) {
+                      bal += amount;
+                      lRows.push({ date: e.date, particulars: "Paid out" + (e.note ? " · " + e.note : "") + " · " + (e.toOwner ? "Owner's cash" : "Daybook cash") + " · by " + userName(e.enteredBy), debit: amount, credit: 0, balance: bal });
+                    } else if (e.charge) {
                       bal += amount;
                       lRows.push({ date: e.date, particulars: (e.note || "Due added") + " · by " + userName(e.enteredBy), debit: amount, credit: 0, balance: bal });
                     } else {
@@ -646,7 +723,7 @@ export default function ReceiptsView() {
                           <div key={entry.key} className="bank-row" style={{ cursor: "default" }}>
                             <span className="bank-date">{row.date}</span>
                             <span className="bank-parts">
-                              {isDue ? "Due " : "Receipt "}– {row.particulars}
+                              {entry.paid ? "" : isDue ? "Due – " : "Receipt – "}{row.particulars}
                               {settled && <small> · {settled}</small>}
                               {!isDue && quoteNo && <small> · #{quoteNo}</small>}
                               <span className="bl-acts">
