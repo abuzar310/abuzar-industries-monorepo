@@ -203,23 +203,6 @@ export default function ReceiptsView() {
       return toast("Updated ✓");
     }
 
-    if (kind === "due") {
-      await addExpense({
-        type: "sale",
-        amount: a,
-        mode: "cash",
-        charge: true,
-        custId: picked.id,
-        note: note.trim() || picked.name,
-        date: date ? toDmy(date) : undefined,
-        enteredBy: user?.id || "unknown",
-      });
-      resetForm();
-      load();
-      bumpData();
-      return toast("₹" + inr(a) + " due added for " + picked.name);
-    }
-
     if (kind === "paid") {
       // money paid OUT to this person — lands in the Daybook as a spend (custom entry),
       // tagged with the customer so it lists under them here
@@ -443,7 +426,7 @@ export default function ReceiptsView() {
   return (
     <div className="ledger-page">
       <div className="sectitle">
-        Receipts <small>— record a payment or add a due</small>
+        Receipts <small>— record a payment received or paid out</small>
       </div>
 
       <div className="panel-card" style={{ padding: 16 }}>
@@ -471,9 +454,6 @@ export default function ReceiptsView() {
           </button>
           <button className={"seg-btn" + (kind === "paid" ? " on" : "")} type="button" onClick={() => setKind("paid")} disabled={editing}>
             Paid out
-          </button>
-          <button className={"seg-btn" + (kind === "due" ? " on" : "")} type="button" onClick={() => setKind("due")} disabled={editing}>
-            Add due
           </button>
         </div>
 
@@ -584,7 +564,7 @@ export default function ReceiptsView() {
         )}
 
         <button className="btn primary" type="button" onClick={record} style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: 12 }}>
-          {editing ? "Save changes" : kind === "due" ? "Add due" : kind === "paid" ? "Record payment" : "Record receipt"}
+          {editing ? "Save changes" : kind === "paid" ? "Record payment" : "Record receipt"}
         </button>
       </div>
 
