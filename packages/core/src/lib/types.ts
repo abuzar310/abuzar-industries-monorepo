@@ -39,6 +39,7 @@ export interface Doc {
   id: string;
   kind: Kind;
   number: string;
+  displayNumber?: string;
   status: string;
   customerId: string;
   customerName: string;
@@ -168,6 +169,7 @@ export type StoreName =
 export interface Tab {
   label: string;
   href: string;
+  icon?: string;
   badge?: boolean;
   owner?: boolean;
 }

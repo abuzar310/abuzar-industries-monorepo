@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec } from "@/lib/data";
+import { allRec, fetchAllTransactions, type AllTransaction } from "@/lib/data";
 import { computeDoc, inr } from "@/lib/calc";
 import { partyLedger, quoteBill, quoteLedger } from "@/lib/payments";
 import { computeTrading, docTrade, getStockConfig, type StockConfig } from "@/lib/trading";
@@ -9,6 +9,19 @@ import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense, Stock } from "@/lib/types";
 import { StatusBadge } from "./DocList";
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+const thStyle: React.CSSProperties = {
+  padding: "6px 8px",
+  textAlign: "left",
+  fontFamily: "var(--disp)",
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: ".09em",
+  textTransform: "uppercase",
+  color: "var(--ink-faint)",
+};
 
 const MONTHS: [string, string][] = [
   ["01", "Jan"], ["02", "Feb"], ["03", "Mar"], ["04", "Apr"], ["05", "May"], ["06", "Jun"],
@@ -26,6 +39,13 @@ export default function DashboardView() {
   const [stockCfg, setStockCfg] = useState<StockConfig>({ value: 0, cft: 0, closingCft: null });
   const [month, setMonth] = useState(""); // "" = all months
   const [year, setYear] = useState(""); // "" = all years
+
+  // All Transactions state
+  const [allTxns, setAllTxns] = useState<AllTransaction[]>([]);
+  const [txnsLoading, setTxnsLoading] = useState(false);
+  const [txnsPage, setTxnsPage] = useState(0);
+  const [txnsTotal, setTxnsTotal] = useState(0);
+  const TXNS_PAGE_SIZE = 100;
 
   useEffect(() => {
     let live = true;
@@ -51,6 +71,23 @@ export default function DashboardView() {
   }, [dataVersion]);
 
   const feat = getFeatures();
+
+  // Fetch all transactions for unified view
+  useEffect(() => {
+    if (!feat.acceptPayment) return; // only for unofficial app
+    let live = true;
+    setTxnsLoading(true);
+    fetchAllTransactions(TXNS_PAGE_SIZE, txnsPage * TXNS_PAGE_SIZE).then((r) => {
+      if (!live) return;
+      setAllTxns(r.transactions);
+      setTxnsTotal(r.total);
+      setTxnsLoading(false);
+    }).catch(() => {
+      if (!live) return;
+      setTxnsLoading(false);
+    });
+    return () => { live = false; };
+  }, [feat.acceptPayment, dataVersion, txnsPage]);
 
   // period filter over createdAt (ISO "YYYY-MM-…")
   const inPeriod = (createdAt?: string) => {
@@ -375,6 +412,102 @@ export default function DashboardView() {
             ))
           ) : (
             <div className="empty">No pending follow-ups. 🎉</div>
+          )}
+        </div>
+      )}
+
+      {/* ===== All Transactions (unified view) ===== */}
+      {feat.acceptPayment && (
+        <div className="panel-card" style={{ marginTop: 16 }}>
+          <div className="pc-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <span>All Transactions</span>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <button className="dash-link" onClick={() => router.push("/transactions")}>Open full view →</button>
+              <span className="sub" style={{ fontSize: 12, color: "var(--ink-faint)" }}>
+                {txnsTotal} total · page {txnsPage + 1} of {Math.ceil(txnsTotal / TXNS_PAGE_SIZE) || 1}
+              </span>
+              {txnsPage > 0 && (
+                <button className="btn sm" onClick={() => setTxnsPage((p) => p - 1)} disabled={txnsLoading}>
+                  ‹ Prev
+                </button>
+              )}
+              <button className="btn sm" onClick={() => setTxnsPage((p) => p + 1)} disabled={txnsLoading || (txnsPage + 1) * TXNS_PAGE_SIZE >= txnsTotal}>
+                Next ›
+              </button>
+            </div>
+          </div>
+
+          {txnsLoading ? (
+            <div className="empty" style={{ textAlign: "center", padding: 24 }}>Loading transactions…</div>
+          ) : allTxns.length === 0 ? (
+            <div className="empty" style={{ padding: 24, textAlign: "center" }}>No transactions found. Create a receipt, expense, or daybook entry.</div>
+          ) : (
+            <div className="txns-table" style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "var(--t-cream2, #f6f0e4)", borderBottom: "1px solid var(--line)" }}>
+                    <th style={thStyle}>Date</th>
+                    <th style={thStyle}>Type</th>
+                    <th style={thStyle}>Party</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
+                    <th style={thStyle}>Mode</th>
+                    <th style={thStyle}>Note</th>
+                    <th style={thStyle}>By</th>
+                    <th style={{ ...thStyle, textAlign: "center" }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allTxns.map((txn) => (
+                    <tr key={txn.id} style={{ borderBottom: "1px solid var(--line)", background: txn.deleted ? "rgba(220,53,69,0.04)" : "transparent" }}>
+                      <td style={{ padding: "6px 8px", fontFamily: "var(--mono)", fontSize: 11 }}>{txn.date}</td>
+                      <td style={{ padding: "6px 8px" }}>
+                        <span style={{
+                          display: "inline-block", padding: "1px 6px", borderRadius: "999px",
+                          fontSize: 10, fontWeight: 700, fontFamily: "var(--disp)",
+                          letterSpacing: ".07em", textTransform: "uppercase",
+                          background:
+                            txn.type === "expense" ? "var(--t-cream2)" :
+                            txn.type === "receipt" ? "rgba(76,175,80,0.12)" :
+                            txn.type === "payment" ? "rgba(33,150,243,0.12)" :
+                            txn.type === "salary" ? "rgba(255,152,0,0.12)" :
+                            txn.type === "session" ? "rgba(156,39,176,0.12)" :
+                            txn.type === "session_handover" ? "rgba(156,39,176,0.12)" : "transparent",
+                          color:
+                            txn.type === "expense" ? "var(--ink)" :
+                            txn.type === "receipt" ? "var(--green)" :
+                            txn.type === "payment" ? "var(--blue)" :
+                            txn.type === "salary" ? "var(--ochre-deep)" : "var(--ink)",
+                        }}>
+                          {txn.type === "expense" ? "Expense" :
+                            txn.type === "receipt" ? "Receipt" :
+                            txn.type === "payment" ? "Payment" :
+                            txn.type === "salary" ? "Wage" :
+                            txn.type === "session" ? "Session" :
+                            txn.type === "session_handover" ? "Session" : "Charge"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "6px 8px" }}>
+                        <div style={{ fontWeight: 600 }}>{txn.party || "—"}</div>
+                        {txn.partyType && <div className="sub" style={{ fontSize: 10 }}>{txn.partyType}</div>}
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--mono)", fontSize: 12, fontWeight: 700, color: txn.deleted ? "var(--ink-faint)" : (txn.type === "receipt" || txn.type === "payment" || txn.type === "repayment" ? "var(--green)" : "var(--danger)") }}>
+                        {txn.amount > 0 ? (txn.type === "expense" || txn.type === "salary" || txn.type === "deduct" || txn.type === "deduction" ? "−" : "+") : ""}₹{inr(txn.amount)}
+                      </td>
+                      <td style={{ padding: "6px 8px", fontFamily: "var(--mono)", fontSize: 11, color: "var(--ink-faint)" }}>{txn.mode || (txn.type === "session" ? "—" : "cash")}</td>
+                      <td style={{ padding: "6px 8px" }}>{txn.note || "—"}</td>
+                      <td style={{ padding: "6px 8px", fontFamily: "var(--disp)", fontSize: 10, color: "var(--ink-faint)" }}>{txn.enteredBy || "—"}</td>
+                      <td style={{ padding: "6px 8px", textAlign: "center" }}>
+                        {txn.deleted ? (
+                          <span style={{ color: "var(--danger)", fontSize: 11, fontWeight: 700 }}>DELETED</span>
+                        ) : (
+                          <span style={{ color: "var(--green)", fontSize: 11, fontWeight: 700 }}>LIVE</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

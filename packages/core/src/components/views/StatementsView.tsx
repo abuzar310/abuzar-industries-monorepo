@@ -1,9 +1,9 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
-import { quoteLedger } from "@/lib/payments";
+import { quoteLedger, type QuoteStatements } from "@/lib/payments";
 import { brandFor } from "@/lib/brand";
 import { printOrSavePdf } from "@/lib/pdf";
 import { toast } from "@/store/app-store";
@@ -27,6 +27,84 @@ const MONTHS: [string, string][] = [
   ["01", "Jan"], ["02", "Feb"], ["03", "Mar"], ["04", "Apr"], ["05", "May"], ["06", "Jun"],
   ["07", "Jul"], ["08", "Aug"], ["09", "Sep"], ["10", "Oct"], ["11", "Nov"], ["12", "Dec"],
 ];
+
+/** One row in a per-quotation bank-format statement. */
+interface StmtLedgerRow {
+  date: string;
+  at: string;
+  particulars: string;
+  detail: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  isBill?: boolean;
+  isClose?: boolean;
+  payId?: string;
+}
+
+function buildQuoteLedger(r: QuoteStatements): StmtLedgerRow[] {
+  const rows: StmtLedgerRow[] = [];
+
+  // Bill row — the initial debit
+  rows.push({
+    date: r.date,
+    at: "",
+    particulars: `To Quotation #${r.displayNumber || r.number}`,
+    detail: "Billed amount",
+    debit: r.bill,
+    credit: 0,
+    balance: 0,
+    isBill: true,
+  });
+
+  // Payment rows — each is a credit reducing the balance
+  for (const s of r.statements) {
+    const mode = s.mode === "upi" ? "UPI" : "Cash";
+    const acct = s.account ? ` (${s.account})` : "";
+    rows.push({
+      date: s.date,
+      at: s.at,
+      particulars: `By ${mode}${acct}`,
+      detail: [s.note, s.pieces ? `${s.pieces} receipts` : ""].filter(Boolean).join(" · "),
+      debit: 0,
+      credit: s.amount,
+      balance: 0,
+      payId: s.id,
+    });
+  }
+
+  // Sort chronologically
+  const sortKey = (d: string) => {
+    const [dd, mm, yy] = (d || "").split("-");
+    return dd && mm && yy ? `20${yy}-${mm}-${dd}` : "";
+  };
+  rows.sort((a, b) => {
+    const da = sortKey(a.date).localeCompare(sortKey(b.date));
+    if (da !== 0) return da;
+    return (a.at || "").localeCompare(b.at || "");
+  });
+
+  // Compute running balance
+  let bal = 0;
+  for (const row of rows) {
+    bal += row.debit - row.credit;
+    row.balance = bal;
+  }
+
+  // Closing balance row
+  rows.push({
+    date: "",
+    at: "",
+    particulars: "Closing Balance",
+    detail: "",
+    debit: 0,
+    credit: 0,
+    balance: bal,
+    isClose: true,
+  });
+
+  return rows;
+}
 
 export default function StatementsView() {
   const { ready, dataVersion, brandMode } = useApp();
@@ -109,10 +187,10 @@ export default function StatementsView() {
   const genOn = `${p2(gToday.getDate())}-${p2(gToday.getMonth() + 1)}-${gToday.getFullYear()}`;
 
   return (
-    <div>
+    <div className="ledger-page">
       <div className="cd-screen">
       <div className="sectitle" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span>Statements <small>— every payment, per quotation</small></span>
+        <span>Statements <small>— bank-format ledger per quotation</small></span>
         <button
           className="btn sm"
           style={{ marginLeft: "auto" }}
@@ -205,66 +283,7 @@ export default function StatementsView() {
           </div>
         </div>
       ) : (
-        shown.map((r) => (
-          <div className="panel-card" key={r.id} style={{ marginTop: 12 }}>
-            <div className="stmt-qhead" onClick={() => router.push("/editor/" + r.id)} title="Open quotation">
-              <span className="sq-no">#{r.number}</span>
-              <span className="sq-name">{r.name}</span>
-              <small className="sq-date">
-                {r.date}
-                {r.phone ? " · " + r.phone : ""}
-              </small>
-              <span className={"sq-bal " + (r.balance <= 0.5 ? "ok" : "due")}>
-                {r.balance <= 0.5 ? "✓ clear" : "Due ₹" + inr(r.balance)}
-              </span>
-            </div>
-
-            <div className="pbd-stats">
-              <div className="st">
-                <div className="k">Billed</div>
-                <div className="v">₹{inr(r.bill)}</div>
-              </div>
-              <div className="st">
-                <div className="k">Paid</div>
-                <div className="v rec">₹{inr(r.paid)}</div>
-              </div>
-              <div className="st">
-                <div className="k">Balance</div>
-                <div className={"v " + (r.balance <= 0.5 ? "ok" : "due")}>₹{inr(r.balance)}</div>
-              </div>
-            </div>
-
-            {r.statements.length > 0 ? (
-              <>
-                <div className="pbd-lbl">Payments received · {r.statements.length}</div>
-                {r.statements.map((s) => (
-                  <div
-                    className="stmt"
-                    key={s.id}
-                    style={{ cursor: "pointer" }}
-                    title={"Open #" + r.number + " at this payment"}
-                    onClick={() => router.push("/editor/" + r.id + "?pay=" + encodeURIComponent(s.id))}
-                  >
-                    <div className={"stmt-ic " + (s.mode === "upi" ? "upi" : "cash")}>{s.mode === "upi" ? "UPI" : "₹"}</div>
-                    <div className="stmt-main">
-                      <div className="stmt-to">{s.mode === "upi" ? (s.account || "UPI account") + (s.note ? " · " + s.note : "") : s.note || "Cash in hand"}</div>
-                      <div className="stmt-sub">
-                        {s.mode === "upi" ? "UPI" : "Cash"} · {s.date}
-                        {hhmm(s.at) ? " · " + hhmm(s.at) : ""}
-                        {s.synthetic ? " · from quote record" : " · by " + userName(s.by)}
-                      </div>
-                    </div>
-                    <div className="stmt-amt">+₹{inr(s.amount)}</div>
-                  </div>
-                ))}
-              </>
-            ) : (
-              <div className="pbd-lbl" style={{ opacity: 0.7 }}>
-                No payment recorded yet
-              </div>
-            )}
-          </div>
-        ))
+        shown.map((r) => <QuoteStatementCard key={r.id} r={r} router={router} />)
       )}
 
       {receipts.length > 0 && (
@@ -468,6 +487,100 @@ export default function StatementsView() {
 
         <div className="rep-foot">Generated {genOn} · {brand.name}</div>
       </div>
+    </div>
+  );
+}
+
+/** One quotation rendered as a bank-format ledger card. */
+function QuoteStatementCard({
+  r,
+  router,
+}: {
+  r: QuoteStatements;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const ledgerRows = useMemo(() => buildQuoteLedger(r), [r]);
+  const balCls = r.balance <= 0.5 ? "ok" : "due";
+
+  return (
+    <div className="panel-card" style={{ marginTop: 12 }}>
+      {/* Quote header — click to open */}
+      <div className="stmt-qhead" onClick={() => router.push("/editor/" + r.id)} title="Open quotation">
+        <span className="sq-no">#{r.displayNumber || r.number}</span>
+        <span className="sq-name">{r.name}</span>
+        <small className="sq-date">
+          {r.date}
+          {r.phone ? " · " + r.phone : ""}
+        </small>
+        <span className={"sq-bal " + balCls}>
+          {r.balance <= 0.5 ? "✓ clear" : "Due ₹" + inr(r.balance)}
+        </span>
+      </div>
+
+      {/* Bank-format ledger */}
+      <div className="bank-ledger">
+        <div className="bank-hdr">
+          <span>Date</span>
+          <span>Particulars</span>
+          <span className="bank-amt">Dr ₹</span>
+          <span className="bank-amt">Cr ₹</span>
+          <span className="bank-amt">Balance</span>
+        </div>
+
+        {ledgerRows.map((row, i) => {
+          const rowCls = ["bank-row", row.isBill ? "bank-open" : "", row.isClose ? "bank-total" : ""]
+            .filter(Boolean)
+            .join(" ");
+
+          const canClick = !row.isClose && !row.isBill;
+
+          return (
+            <div
+              key={i}
+              className={rowCls}
+              onClick={() => {
+                if (!canClick) return;
+                router.push("/editor/" + r.id + "?pay=" + encodeURIComponent(row.payId || ""));
+              }}
+              style={{ cursor: canClick ? "pointer" : "default" }}
+            >
+              <span className="bank-date">{row.date}</span>
+              <span className="bank-parts">
+                {row.particulars}
+                {row.detail && <small>{row.detail}</small>}
+              </span>
+              <span className={"bank-amt" + (row.debit > 0 ? " dr" : "")}>
+                {row.debit > 0 ? "₹" + inr(row.debit) : ""}
+              </span>
+              <span className={"bank-amt" + (row.credit > 0 ? " cr" : "")}>
+                {row.credit > 0 ? "₹" + inr(row.credit) : ""}
+              </span>
+              <span className={"bank-amt bal" + (row.isClose ? (balCls === "due" ? " due" : " ok") : "")}>
+                ₹{inr(Math.abs(row.balance))}
+                {!row.isBill && (
+                  <span className={"bal-tag " + (row.balance > 0.5 ? "dr" : "cr")}>
+                    {row.balance > 0.5 ? "Dr" : "Cr"}
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {r.statements.length === 0 && (
+        <div
+          style={{
+            padding: "8px 12px",
+            fontFamily: "var(--disp)",
+            fontSize: 11,
+            color: "var(--ink-faint)",
+            textAlign: "center",
+          }}
+        >
+          No payment recorded yet
+        </div>
+      )}
     </div>
   );
 }

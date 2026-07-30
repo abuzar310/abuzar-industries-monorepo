@@ -1600,11 +1600,11 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .ph-tile b{font-size:21px; font-family:var(--mono); color:var(--ink); margin-top:2px}
 .ph-tile.rec b{color:var(--ochre-deep)}
 
-.party{display:flex; align-items:center; gap:13px; background:var(--panel-2); border:1px solid var(--line);
-  border-radius:var(--radius-md); padding:12px 15px; margin-top:10px; cursor:pointer; width:100%; text-align:left;
-  transition:border-color var(--t-fast),box-shadow var(--t-fast)}
-.party:hover{border-color:var(--ochre); box-shadow:0 3px 14px rgba(51,36,26,.07)}
-.party.on{border-color:var(--ochre); border-bottom-left-radius:0; border-bottom-right-radius:0}
+.party{display:flex; align-items:center; gap:16px; background:var(--paper-2); border:1px solid var(--line-2);
+  border-radius:16px; padding:16px 20px; margin-top:14px; cursor:pointer; width:100%; text-align:left;
+  box-shadow:0 1px 3px rgba(0,0,0,.04); transition:border-color var(--t-fast),box-shadow var(--t-fast),transform var(--t-fast)}
+.party:hover{border-color:var(--ochre); box-shadow:0 4px 16px rgba(51,36,26,.08); transform:translateY(-1px)}
+.party.on{border-color:var(--ochre); border-bottom-left-radius:0; border-bottom-right-radius:0; box-shadow:0 2px 8px rgba(176,124,40,.08)}
 .pty-av{flex:0 0 auto; width:42px; height:42px; border-radius:50%; display:grid; place-items:center;
   font-family:var(--serif); font-size:19px; font-weight:600; color:#fff; background:linear-gradient(135deg,var(--brass),var(--ochre-deep))}
 .pty-av.ok{background:linear-gradient(135deg,#6f8a4c,var(--green))}
@@ -1619,23 +1619,23 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .pty-bal.due{color:var(--danger)} .pty-bal.ok{color:var(--green)} .pty-bal.adv{color:var(--blue)}
 
 .party-body{background:var(--paper-2); border:1px solid var(--ochre); border-top:none;
-  border-radius:0 0 var(--radius-md) var(--radius-md); margin-bottom:10px; overflow:hidden}
+  border-radius:0 0 16px 16px; margin-bottom:10px; overflow:hidden}
 .pbd-stats{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border-bottom:1px solid var(--line)}
-.pbd-stats .st{background:var(--paper-2); padding:11px 14px}
+.pbd-stats .st{background:var(--paper-2); padding:14px 16px}
 .pbd-stats .st .k{font-family:var(--disp); letter-spacing:.08em; text-transform:uppercase; font-size:9.5px; font-weight:700; color:var(--ink-faint)}
 .pbd-stats .st .v{font-family:var(--mono); font-size:17px; font-weight:700; color:var(--ink); margin-top:2px}
 .pbd-stats .st .v.due{color:var(--danger)} .pbd-stats .st .v.ok{color:var(--green)} .pbd-stats .st .v.rec{color:var(--ochre-deep)}
 .pbd-stats .st small{display:block; font-family:var(--mono); font-size:10px; color:var(--ink-faint); margin-top:1px}
-.stmt{display:flex; align-items:center; gap:11px; padding:10px 14px; border-bottom:1px solid var(--line)}
+.stmt{display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--line-2); transition:background var(--t-fast)}
 .stmt:last-child{border-bottom:none}
 .stmt-ic{flex:0 0 auto; width:36px; height:36px; border-radius:10px; display:grid; place-items:center; font-family:var(--mono); font-weight:700; font-size:13px}
 .stmt-ic.upi{background:rgba(54,90,107,.13); color:var(--blue)}
 .stmt-ic.cash{background:rgba(86,107,59,.15); color:var(--green)}
 .stmt-ic.due{background:rgba(176,64,64,.12); color:var(--danger); font-size:11px}
 .stmt-main{flex:1 1 auto; min-width:0}
-.stmt-to{font-family:var(--disp); font-weight:700; font-size:14px; color:var(--ink)}
+.stmt-to{font-family:var(--disp); font-weight:600; font-size:14px; color:var(--ink)}
 .stmt-sub{font-family:var(--mono); font-size:11px; color:var(--ink-faint); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.stmt-amt{flex:0 0 auto; font-family:var(--mono); font-weight:700; font-size:15px; color:var(--green)}
+.stmt-amt{flex:0 0 auto; font-family:var(--mono); font-weight:700; font-size:15px; color:var(--green); text-align:right}
 .stmt-amt.due{color:var(--danger)}
 .stmt .pb-rowacts{flex:0 0 auto; margin-left:4px}
 .pbd-q{display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--line); cursor:pointer; transition:background var(--t-fast)}
@@ -2051,3 +2051,246 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .rentline .rl-amt .amt-edit{display:inline-flex; align-items:baseline; gap:3px}
 .rentline .rl-amt input{width:130px; text-align:right; color:var(--walnut)}
 .rentline .rl-amt input::-webkit-outer-spin-button,.rentline .rl-amt input::-webkit-inner-spin-button{-webkit-appearance:none; appearance:none; margin:0}
+
+/* ===== Bank-format ledger (Statements + Accounts tabs) ===== */
+.bank-ledger{border:1px solid var(--line-2); border-radius:var(--radius-md); overflow:hidden; background:var(--panel); margin-top:8px}
+.bank-ledger .bank-hdr{display:grid; grid-template-columns:48px 1fr 110px 110px 110px; gap:6px; padding:8px 12px; background:var(--panel-2); font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); border-bottom:2px solid var(--ochre)}
+.bank-row{display:grid; grid-template-columns:48px 1fr 110px 110px 110px; gap:6px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--ink)}
+.bank-row:last-child{border-bottom:none}
+.bank-row.bank-open{background:rgba(176,124,40,.06); font-weight:700}
+.bank-row.bank-close{background:rgba(86,107,59,.08); font-weight:700}
+.bank-row.bank-total{background:var(--panel-2); font-weight:700}
+.bank-date{color:var(--ink-soft); font-size:11px}
+.bank-parts{font-family:var(--disp); font-weight:600; font-size:13px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+.bank-parts small{font-family:var(--mono); font-size:10px; color:var(--ink-faint); font-weight:400; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.bank-amt{text-align:right; font-weight:700; font-variant-numeric:tabular-nums}
+.bank-amt.dr{color:var(--danger)}
+.bank-amt.cr{color:var(--green)}
+.bank-amt.bal{color:var(--ink)}
+.bank-amt.bal.due{color:var(--danger)}
+.bank-amt.bal.ok{color:var(--green)}
+@media(max-width:640px){
+  .bank-ledger .bank-hdr{grid-template-columns:1fr 90px 90px 90px}
+  .bank-row{grid-template-columns:1fr 90px 90px 90px}
+  .bank-date{display:none}
+}
+
+/* ========== PREMIUM LEDGER / BALANCE CARDS ========== */
+.ledger-page{max-width:1180px; margin:0 auto; padding:24px 16px 32px}
+.ledger-section{margin-bottom:32px}
+.ledger-title{font-family:var(--serif); font-size:24px; font-weight:700; color:var(--ink); margin:0 0 20px; letter-spacing:-0.01em}
+.ledger-title small{font-family:var(--disp); font-size:13px; font-weight:500; color:var(--ink-faint); margin-left:12px; letter-spacing:.08em; text-transform:uppercase}
+
+/* Party summary cards - 3 column grid */
+.party-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px}
+@media(max-width:1000px){.party-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.party-grid{grid-template-columns:1fr}}
+.party-card{background:var(--paper); border:1px solid var(--line-2); border-radius:16px; padding:20px; transition:box-shadow .2s, border-color .2s, transform .15s}
+.party-card:hover{box-shadow:0 8px 30px rgba(51,36,26,.08); border-color:var(--ochre); transform:translateY(-1px)}
+.party-header{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:16px}
+.party-avatar{flex:0 0 auto; width:44px; height:44px; border-radius:12px; display:grid; place-items:center; font-family:var(--disp); font-weight:700; font-size:16px; color:#fff; background:linear-gradient(135deg,var(--ochre),var(--ochre-deep))}
+.party-card.settled .party-avatar{background:linear-gradient(135deg,var(--green),#5a8f3d)}
+.party-info{flex:1 1 auto; min-width:0}
+.party-name{font-family:var(--disp); font-weight:700; font-size:15px; color:var(--ink); margin-bottom:2px}
+.party-phone{font-family:var(--mono); font-size:12px; color:var(--ink-faint)}
+.party-badge{flex:0 0 auto; font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:4px 10px; border-radius:999px; white-space:nowrap}
+.party-badge.due{background:rgba(176,64,64,.1); color:var(--danger)}
+.party-badge.ok{background:rgba(86,107,59,.12); color:var(--green)}
+.party-badge.adv{background:rgba(54,90,107,.12); color:var(--blue)}
+
+.party-stats{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px; padding:14px; background:var(--panel-2); border-radius:12px}
+.party-stat{text-align:center}
+.party-stat-label{font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:4px}
+.party-stat-value{font-family:var(--mono); font-weight:700; font-size:16px; color:var(--ink)}
+.party-stat-value.due{color:var(--danger)}
+.party-stat-value.ok{color:var(--green)}
+.party-stat-value.rec{color:var(--ochre-deep)}
+.party-stat-sub{font-family:var(--mono); font-size:10px; color:var(--ink-faint); margin-top:2px}
+
+/* Expandable ledger card */
+.ledger-card{background:var(--paper); border:1px solid var(--line-2); border-radius:16px; overflow:hidden; margin-top:12px}
+.ledger-card-header{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; background:var(--panel-2); border-bottom:1px solid var(--line-2); cursor:pointer; transition:background .15s}
+.ledger-card-header:hover{background:rgba(176,124,40,.04)}
+.ledger-card-title{display:flex; align-items:center; gap:10px; font-family:var(--disp); font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink)}
+.ledger-card-title .caret{flex:0 0 auto; width:18px; height:18px; display:grid; place-items:center; transition:transform .2s}
+.ledger-card.open .ledger-card-title .caret{transform:rotate(180deg)}
+.ledger-summary{display:flex; align-items:center; gap:16px; font-family:var(--mono); font-size:12px; color:var(--ink-faint)}
+.ledger-summary .amt{font-weight:700; color:var(--ink)}
+.ledger-summary .amt.due{color:var(--danger)}
+.ledger-summary .amt.ok{color:var(--green)}
+
+/* Bank-format ledger table inside card */
+.bank-ledger{padding:8px 4px}
+.bank-row{display:grid; grid-template-columns:80px 1fr 100px 100px 110px; gap:8px; align-items:center; padding:6px 12px; border-bottom:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--ink); transition:background .12s}
+.bank-row:last-child{border-bottom:none}
+.bank-row:hover:not(.bank-hdr){background:var(--panel-2)}
+.bank-hdr{background:var(--panel-2); font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); padding:10px 12px; border-radius:8px 8px 0 0; margin:4px 0 2px}
+.bank-open{background:rgba(176,124,40,.06); font-weight:700}
+.bank-total{background:var(--panel-2); font-weight:700; border-radius:0 0 8px 8px}
+.bank-date{color:var(--ink-soft); font-variant-numeric:tabular-nums}
+.bank-parts{font-family:var(--disp); font-size:13px; color:var(--ink); display:flex; flex-direction:column; gap:2px}
+.bank-parts small{font-family:var(--mono); font-size:10px; color:var(--ink-faint); font-weight:400}
+.bank-amt{text-align:right; font-weight:700; font-variant-numeric:tabular-nums}
+.bank-amt.dr{color:var(--danger)}
+.bank-amt.cr{color:var(--green)}
+.bank-amt.bal{color:var(--ink); font-family:var(--mono); font-size:13px}
+.bank-amt.bal.due{color:var(--danger)}
+.bank-amt.bal.ok{color:var(--green)}
+.bal-tag{display:inline-block; margin-left:6px; font-family:var(--disp); font-size:8.5px; font-weight:700; letter-spacing:.04em; background:var(--panel-2); border-radius:4px; padding:1px 6px; vertical-align:middle}
+.bal-tag.dr{color:var(--danger); background:rgba(176,64,64,.1)}
+.bal-tag.cr{color:var(--green); background:rgba(86,107,59,.12)}
+
+/* Receipts/Accounts customer cards */
+.cust-card{background:var(--paper); border:1px solid var(--line-2); border-radius:16px; overflow:hidden; margin-bottom:16px}
+.cust-card-header{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 20px; background:var(--panel-2); border-bottom:1px solid var(--line-2); cursor:pointer; transition:background .15s}
+.cust-card-header:hover{background:rgba(176,124,40,.04)}
+.cust-info{display:flex; align-items:center; gap:14px; flex:1 1 auto; min-width:0}
+.cust-avatar{flex:0 0 auto; width:48px; height:48px; border-radius:12px; display:grid; place-items:center; font-family:var(--disp); font-weight:700; font-size:18px; color:#fff; background:linear-gradient(135deg,var(--ochre),var(--ochre-deep))}
+.cust-name{font-family:var(--disp); font-weight:700; font-size:16px; color:var(--ink); margin-bottom:2px}
+.cust-meta{font-family:var(--mono); font-size:12px; color:var(--ink-faint); display:flex; gap:12px; align-items:center}
+.cust-meta .outstanding{font-weight:700; color:var(--danger)}
+.cust-meta .outstanding.ok{color:var(--green)}
+.cust-actions{flex:0 0 auto; display:flex; gap:8px}
+.cust-toggle{flex:0 0 auto; width:20px; height:20px; display:grid; place-items:center; color:var(--ink-soft); transition:transform .2s}
+.cust-card.open .cust-toggle{transform:rotate(180deg)}
+
+/* editor tab bar — horizontal tabs for open quotations */
+.editor-tabs{display:flex; gap:0; overflow-x:auto; background:var(--panel-2); border-bottom:1px solid var(--line); padding:0 4px; flex-shrink:0}
+.etab{display:flex; align-items:center; gap:6px; padding:6px 10px; font-size:12px; font-family:var(--disp); font-weight:600; cursor:pointer; border-bottom:2px solid transparent; color:var(--ink-soft); white-space:nowrap; transition:color .12s,border-color .12s; user-select:none}
+.etab:hover{color:var(--ink)}
+.etab.active{border-bottom-color:var(--ink); color:var(--ink)}
+.etab.dirty::after{content:""; display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--ochre); flex-shrink:0}
+.etab-label{display:flex; align-items:center; gap:4px}
+.etab-label small{margin-left:2px; font-weight:400; color:var(--ink-faint); font-size:10px; max-width:100px; overflow:hidden; text-overflow:ellipsis}
+.etab-close{background:none; border:none; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; color:var(--ink-faint); border-radius:4px; transition:color .12s,background .12s}
+.etab-close:hover{color:var(--danger); background:rgba(176,64,64,.1)}
+
+/* ═══════════════ Premium ledger redesign — scoped to .ledger-page ═══════════════
+   Constrained, centered, card-based accounting UI (Stripe/Linear feel) for the
+   Balances / Statements / Accounts / Receipts pages. Scoped so the editor and
+   other full-width pages are untouched. */
+.ledger-page{max-width:1140px; margin:0 auto}
+
+/* typography hierarchy: bigger titles, quieter metadata */
+.ledger-page .sectitle{font-size:27px; letter-spacing:-.02em; margin-bottom:4px}
+.ledger-page .sectitle small{font-size:13px; color:var(--ink-faint); font-weight:400}
+
+/* every card: rounded 16px, hairline border, soft shadow, air between records */
+.ledger-page .panel-card,
+.ledger-page .listwrap{border-radius:16px; border:1px solid var(--line-2);
+  box-shadow:0 1px 2px rgba(51,36,26,.04), 0 6px 20px rgba(51,36,26,.05); overflow:hidden}
+.ledger-page .panel-card{margin-top:18px}
+
+/* overview stat cards (Balances top row) */
+.party-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:18px}
+.party-card{background:var(--panel); border:1px solid var(--line-2); border-radius:16px;
+  padding:18px 20px; box-shadow:0 1px 2px rgba(51,36,26,.04), 0 6px 20px rgba(51,36,26,.05)}
+.party-card.hero{background:linear-gradient(135deg,var(--panel) 0%,var(--panel-2) 100%)}
+.party-stat-label{font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--ink-faint)}
+.party-stat-value{font-family:var(--mono); font-size:22px; font-weight:800; color:var(--ink);
+  margin-top:5px; font-variant-numeric:tabular-nums; letter-spacing:-.01em}
+.party-stat-value.due{color:var(--danger)}
+.party-stat-value.rec{color:var(--ochre-deep)}
+.party-stat-value.ok{color:var(--green)}
+.party-stat-sub{font-family:var(--mono); font-size:11px; color:var(--ink-faint); margin-top:4px}
+
+/* one customer record = one card, comfortable gap between records */
+.ledger-card{background:var(--panel); border:1px solid var(--line-2); border-radius:16px;
+  box-shadow:0 1px 2px rgba(51,36,26,.04), 0 6px 20px rgba(51,36,26,.05);
+  margin-top:16px; overflow:hidden; transition:box-shadow var(--t-fast), border-color var(--t-fast)}
+.ledger-card:hover{border-color:var(--line); box-shadow:0 2px 4px rgba(51,36,26,.05), 0 10px 28px rgba(51,36,26,.07)}
+.ledger-card-header{display:flex; align-items:center; gap:14px; width:100%; text-align:left;
+  padding:14px 18px; background:none; border:none; cursor:pointer; font-family:var(--disp)}
+.ledger-card-header.on{border-bottom:1px solid var(--line)}
+.lch-main{flex:1 1 auto; min-width:0}
+.lch-name{font-family:var(--disp); font-weight:700; font-size:15.5px; color:var(--ink);
+  display:flex; align-items:baseline; gap:8px}
+.lch-name small{font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); font-weight:400}
+.lch-meta{font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); margin-top:3px}
+.lch-bal{flex:0 0 auto; text-align:right; font-family:var(--mono); font-weight:800; font-size:17px;
+  line-height:1.15; white-space:nowrap; font-variant-numeric:tabular-nums}
+.lch-bal small{display:block; font-family:var(--disp); font-size:9px; letter-spacing:.1em;
+  text-transform:uppercase; font-weight:700; opacity:.65; margin-top:2px}
+.lch-bal.due{color:var(--danger)} .lch-bal.ok{color:var(--green)} .lch-bal.adv{color:var(--blue)}
+.ledger-card-body{padding:14px 18px 16px}
+
+/* stats strip inside an open record */
+.party-stats{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px}
+.party-stat{background:var(--panel-2); border-radius:12px; padding:10px 14px}
+.party-stat .party-stat-value{font-size:16px; margin-top:3px}
+
+/* ── the ledger table: compact rows, Particulars dominant ── */
+.ledger-page .bank-ledger{border:1px solid var(--line-2); border-radius:12px; margin-top:0; overflow:hidden}
+.ledger-page .bank-hdr{grid-template-columns:70px minmax(0,1fr) 86px 86px 122px;
+  padding:6px 14px; letter-spacing:.08em; border-bottom:1px solid var(--line); background:var(--panel-2)}
+.ledger-page .bank-row{grid-template-columns:70px minmax(0,1fr) 86px 86px 122px;
+  padding:5px 14px; font-size:11.5px; line-height:1.35}
+.ledger-page .bank-row:hover{background:var(--panel-2)}
+.ledger-page .bank-parts{font-family:var(--disp); font-weight:600; font-size:12px}
+.ledger-page .bank-parts small{display:block; font-family:var(--mono); font-weight:400;
+  font-size:10.5px; color:var(--ink-faint); margin-top:1px}
+.ledger-page .bank-date{color:var(--ink-faint); font-size:10.5px}
+.ledger-page .bank-amt{font-weight:700}
+.ledger-page .bank-row.bank-total{background:var(--panel-2); font-size:12.5px; padding:8px 14px}
+.ledger-page .bank-row.bank-total .bank-amt.bal{font-size:13.5px; font-weight:800}
+
+/* statement quote-header: bolder identity, pill balance */
+.ledger-page .stmt-qhead{padding:14px 18px}
+.ledger-page .sq-name{font-size:15px; font-weight:700}
+.ledger-page .sq-date{color:var(--ink-faint)}
+.ledger-page .sq-bal{font-family:var(--mono); font-weight:700; font-size:12.5px;
+  padding:5px 12px; border-radius:999px}
+.ledger-page .sq-bal.due{color:var(--danger); background:rgba(176,64,64,.1)}
+.ledger-page .sq-bal.ok{color:var(--green); background:rgba(86,107,59,.12)}
+
+/* summary hero on Statements keeps card language */
+.ledger-page .pay-hero{border-radius:16px; border:1px solid var(--line-2);
+  box-shadow:0 1px 2px rgba(51,36,26,.04), 0 6px 20px rgba(51,36,26,.05); margin-top:18px}
+
+/* mobile: scoped rules outrank the base 640px rules, so restate them here.
+   Ledgers nest deep on Accounts (holder → sub-account → ledger), so every level
+   sheds horizontal padding and the grid columns tighten to fit a 375px phone. */
+@media(max-width:640px){
+  .party-grid{grid-template-columns:1fr; gap:10px}
+  .party-stats{grid-template-columns:1fr 1fr}
+  /* reclaim width: .wrap already pads the page — the ledger container goes flush */
+  .ledger-page{padding:8px 0 24px}
+  /* the header's Date cell has no class — hide it to match the 4-col mobile grid */
+  .ledger-page .bank-hdr span:first-child{display:none}
+  .ledger-page .bank-hdr,
+  .ledger-page .bank-row{grid-template-columns:minmax(0,1fr) 64px 64px 88px; gap:4px; padding:5px 8px}
+  .ledger-page .bank-date{display:none}
+  .ledger-page .bank-parts{font-size:11.5px}
+  .ledger-page .bank-amt{font-size:11px; white-space:nowrap}
+  .ledger-page .bank-row.bank-total{padding:7px 8px}
+  /* Accounts: shed nesting padding so the ledger keeps its width */
+  .ledger-page .acct-holder{padding:10px 8px}
+  .ledger-page .acct-holder-body{padding-left:5px}
+  .ledger-page .acct-sub{padding:8px 6px}
+  .ledger-page .panel-card{border-radius:12px}
+  .ledger-page .ledger-card-body{padding:12px 10px 14px}
+  .ledger-page .ledger-card-header{padding:12px 12px}
+}
+/* ── Books page — income/expense + assets/liabilities cards ── */
+.books-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px}
+.books-row{display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+  padding:7px 2px; border-bottom:1px solid var(--line); font-family:var(--mono); font-size:12.5px; color:var(--ink)}
+.books-row:last-child{border-bottom:none}
+.books-row small{color:var(--ink-faint); font-size:10.5px}
+.books-row b{font-variant-numeric:tabular-nums; font-weight:700; white-space:nowrap}
+.books-row b.ok{color:var(--green)} .books-row b.due{color:var(--danger)}
+.books-row.books-total{border-top:2px solid var(--line-2); border-bottom:none; margin-top:4px; padding-top:9px; font-weight:700}
+.books-row.books-total b{font-size:14.5px}
+@media(max-width:640px){ .books-grid{grid-template-columns:1fr; gap:12px} }
+
+/* very small phones: shrink amounts further, drop the Dr/Cr pill */
+@media(max-width:420px){
+  .ledger-page .bank-hdr,
+  .ledger-page .bank-row{grid-template-columns:minmax(0,1fr) 56px 56px 80px; gap:3px; padding:5px 6px}
+  .ledger-page .bank-amt{font-size:10.5px}
+  .ledger-page .bank-parts{font-size:11px}
+  .ledger-page .bal-tag{display:none}
+  .ledger-page .sq-bal{font-size:11px; padding:4px 9px}
+  .ledger-page .lch-bal{font-size:15px}
+}

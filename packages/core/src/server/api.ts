@@ -268,6 +268,127 @@ export function createDataApi(schema: AppSchema) {
       return json({ ok: true });
     }
 
+    // ---------- unified all-transactions (all money entries) ----------
+    if (a === "all-transactions" && method === "GET") {
+      const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "500", 10), 2000);
+      const offset = parseInt(req.nextUrl.searchParams.get("offset") || "0", 10);
+      const typeFilter = req.nextUrl.searchParams.get("type") || "";
+
+      // Helper: parse "dd-mm-yy" → ISO string
+      const dmyToIso = (s: string) => {
+        if (!s) return "";
+        const [d, m, y] = s.split("-");
+        if (!d || !m) return "";
+        const yy = y ? (y.length === 2 ? "20" + y : y) : "2026";
+        return `${yy}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+      };
+
+      // Expenses (receipts and costs)
+      const expenseRows = await sql<Row>(
+        `select * from ${tableRef(schema, "expenses")} where data->>'sourceId' is null or data->>'sourceId' = '' or data->>'sourceId' not like 'wkr:%' order by created_at desc limit ${Math.min(limit + 200, 3000)}`,
+      );
+      const expenses = expenseRows.map((r) => ({ r, e: r.data as AnyRec }));
+
+      // Session handovers
+      const sessionRows = await sql<Row>(
+        `select * from ${tableRef(schema, "sessions")} where data->>'handover' = 'true' order by created_at desc limit ${Math.min(limit + 100, 2000)}`,
+      );
+
+      // Load lookups
+      const [customers, suppliers, workers, payHolders] = await Promise.all([
+        sql<Row>(`select * from ${tableRef(schema, "customers")}`),
+        sql<Row>(`select * from ${tableRef(schema, "suppliers")}`),
+        sql<Row>(`select * from ${tableRef(schema, "workers")}`),
+        sql<Row>(`select * from ${tableRef(schema, "pay_holders")}`),
+      ]);
+      const custMap = new Map(customers.map((r) => [r.id, (r.data as AnyRec).name as string]));
+      const suppMap = new Map(suppliers.map((r) => [r.id, (r.data as AnyRec).name as string]));
+      const wrkMap = new Map(workers.map((r) => [r.id, (r.data as AnyRec).name as string]));
+      const phMap = new Map(payHolders.map((r) => [r.id, (r.data as AnyRec).name as string]));
+
+      interface UnifiedTx {
+        id: string; date: string; type: string; amount: number;
+        party: string; partyType: string; mode: string; note: string;
+        enteredBy: string; deleted: boolean; createdAt: string;
+        sourceId?: string;
+      }
+
+      const all: UnifiedTx[] = [];
+
+      for (const { r, e } of expenses) {
+        const amount = Math.round(+(e.amount || 0) * 100) / 100;
+        if (!amount) continue;
+        const charge = e.charge as string;
+        const mode = String(e.mode || e.label || "");
+        const isCharge = !!charge;
+        let type = "expense";
+        let party = "";
+        let partyType = "";
+        if (isCharge) {
+          type = "receipt_charge";
+          party = custMap.get(String(e.customerId || "")) || "";
+          partyType = "Customer";
+          if (!party) party = String(e.account || "");
+        } else if (mode === "salary") {
+          type = "salary";
+          party = wrkMap.get(String(e.workerId || e.accountId || "")) || String(e.account || "");
+          partyType = "Worker";
+        } else if (e.accountId) {
+          const ph = phMap.get(String(e.accountId));
+          if (ph) { party = ph; partyType = "Holder"; }
+        }
+        // Determine inflow/outflow
+        if (!isCharge && (mode === "cash" || mode === "upi" || mode === "cheque")) type = "receipt";
+
+        all.push({
+          id: r.id, date: String(e.date || ""), type, amount: Math.abs(amount),
+          party: party || String(e.label || e.note || ""),
+          partyType, mode, note: String(e.note || ""),
+          enteredBy: String(e.enteredBy || ""),
+          deleted: !!r.deleted_at,
+          createdAt: String(r.created_at || ""),
+          sourceId: (e.sourceId as string) || undefined,
+        });
+      }
+
+      // Session handovers
+      for (const r of sessionRows) {
+        const s = r.data as AnyRec;
+        const cash = Math.round(+(s.cashTotal || 0) * 100) / 100;
+        const upi = Math.round(+(s.upiTotal || 0) * 100) / 100;
+        const total = cash + upi;
+        if (!total) continue;
+        all.push({
+          id: r.id, date: String(s.date || ""), type: "session_handover",
+          amount: total, party: String(s.by || ""), partyType: "Session",
+          mode: cash && upi ? "Cash+UPI" : cash ? "Cash" : "UPI",
+          note: s.pending ? "Pending owner confirmation" : "Confirmed",
+          enteredBy: String(s.by || ""), deleted: !!r.deleted_at,
+          createdAt: String(r.created_at || ""),
+        });
+      }
+
+      const typeLabels: Record<string, string> = {
+        expense: "expense", receipt: "receipt", salary: "salary",
+        session_handover: "session_handover", receipt_charge: "receipt_charge",
+      };
+
+      let filtered = all;
+      if (typeFilter && typeLabels[typeFilter]) {
+        filtered = all.filter((t) => t.type === typeFilter);
+      }
+      filtered.sort((a, b) => {
+        const da = dmyToIso(a.date);
+        const db = dmyToIso(b.date);
+        if (da !== db) return (db || "").localeCompare(da || "");
+        return (b.createdAt || "").localeCompare(a.createdAt || "");
+      });
+
+      const total = filtered.length;
+      const page = filtered.slice(offset, offset + limit);
+      return json({ transactions: page, total, limit, offset });
+    }
+
     if (a === "rpc" && method === "POST") {
       const body = (await req.json().catch(() => ({}))) as AnyRec;
       if (b === "create-doc") {

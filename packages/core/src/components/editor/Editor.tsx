@@ -55,11 +55,17 @@ export default function Editor({
   initialDoc,
   action,
   payFocus,
+  onDirtyChange,
+  active: _active,
 }: {
   initialDoc: Doc;
   action?: string;
   /** a payment line (expense id) to scroll to + flash — set when arriving from Statements */
   payFocus?: string;
+  /** called when the dirty state changes */
+  onDirtyChange?: (dirty: boolean) => void;
+  /** whether this tab is currently visible (tab-panel active) — passed from tab container */
+  active?: boolean;
 }) {
   const router = useRouter();
   const [doc, setDoc] = useState<Doc>(initialDoc);
@@ -139,9 +145,13 @@ export default function Editor({
   });
 
   // ---- persistence ----
+  // Undo history stack (Ctrl+Z). Each edit pushes current state before the change.
+  const historyRef = useRef<Doc[]>([]);
+  const UNDO_MAX = 50;
   const markDirty = (v: boolean) => {
     dirtyRef.current = v;
     setDirty(v);
+    onDirtyChange?.(v);
   };
   function persist(d: Doc) {
     d.updatedAt = nowIso();
@@ -157,9 +167,26 @@ export default function Editor({
     else markDirty(true);
   }
   function update(producer: (d: Doc) => void) {
+    // Push current state onto undo stack before mutating
+    const stack = historyRef.current;
+    stack.push(clone(docRef.current));
+    if (stack.length > UNDO_MAX) stack.shift();
     const next = clone(docRef.current);
     producer(next);
     commit(next);
+  }
+  /** Undo the last edit — Ctrl+Z restores the previous doc state. */
+  function undo() {
+    const stack = historyRef.current;
+    if (!stack.length) {
+      toast("Nothing to undo");
+      return;
+    }
+    const prev = stack.pop()!;
+    docRef.current = prev;
+    setDoc(prev);
+    markDirty(true);
+    toast("Undone ↶");
   }
   /** The Save button / Ctrl+S: link the customer record, then persist. */
   async function saveNow() {
@@ -168,12 +195,16 @@ export default function Editor({
     commit(next, true);
   }
 
-  // Ctrl/Cmd+S saves; navigating away (unmount) or closing the tab never loses edits.
+  // Ctrl/Cmd+S saves; Ctrl+Z undoes; navigating away (unmount) or closing the tab never loses edits.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (dirtyRef.current) saveNow().then(() => toast("Saved ✓"));
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        undo();
       }
     };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -624,6 +655,7 @@ export default function Editor({
     ranAction.current = true;
     if (action === "print") onPrint();
     else if (action === "wa") onWaSend();
+    else if (action === "remind-balance") onWaBalance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
