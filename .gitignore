@@ -29,7 +29,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-pnpm-lock.yaml
+
+# npm lockfile — this monorepo uses pnpm (workspace:*). Keep only pnpm-lock.yaml
+# so Vercel does not switch to npm and fail on workspace: protocol.
+package-lock.json
 
 # env files (can opt-in for committing if needed)
 .env*
