@@ -44,6 +44,10 @@ export default function BooksView() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [marks, setMarks] = useState<AttendanceMark[]>([]);
   const [carry, setCarry] = useState(0);
+  /** Month ledger filters */
+  const [ledCat, setLedCat] = useState("all");
+  const [ledFrom, setLedFrom] = useState("");
+  const [ledTo, setLedTo] = useState("");
 
   const load = useCallback(() => {
     Promise.all([
@@ -127,25 +131,38 @@ export default function BooksView() {
 
   // ── month ledger: every money event chronologically with a running net ────
   const monthRows = useMemo(() => {
+    const fromKey = ledFrom || "";
+    const toKey = ledTo || "";
     const rows = monthExp
       .filter((e) => !e.charge) // charges move no cash
+      .filter((e) => {
+        if (ledCat === "all") return true;
+        if (ledCat === "in") return isInflow(e.type);
+        if (ledCat === "out") return !isInflow(e.type);
+        return spendCatKey(e) === ledCat;
+      })
+      .filter((e) => {
+        const k = sortKey(e.date);
+        if (fromKey && k && k < fromKey) return false;
+        if (toKey && k && k > toKey) return false;
+        return true;
+      })
       .map((e) => {
         const inflow = isInflow(e.type);
-        const what = inflow
-          ? (e.custId ? "Received" : "Sale") + (e.mode === "upi" ? " · UPI" + (e.account ? " · " + e.account : "") : " · Cash") + (e.toOwner ? " → Owner" : "")
-          : (() => {
-              const cat = spendCategoryOf(e);
-              const detail = spendDetailOf(e);
-              return detail && detail !== cat ? cat + " · " + detail : cat;
-            })();
+        const cat = inflow
+          ? (e.custId ? "Received" : "Sale") + (e.mode === "upi" ? " · UPI" : " · Cash") + (e.toOwner ? " → Owner" : "")
+          : spendCategoryOf(e);
+        const detailBits = inflow
+          ? [e.account ? "acct " + e.account : "", e.note, "by " + userName(e.enteredBy)].filter(Boolean)
+          : [spendDetailOf(e), "by " + userName(e.enteredBy)].filter(Boolean);
         return {
           id: e.id,
           date: e.date,
           at: e.createdAt || "",
-          particulars: what,
-          detail: [e.note, "by " + userName(e.enteredBy)].filter(Boolean).join(" · "),
-          debit: inflow ? 0 : +e.amount || 0, // money out
-          credit: inflow ? +e.amount || 0 : 0, // money in
+          particulars: cat,
+          detail: detailBits.join(" · "),
+          debit: inflow ? 0 : +e.amount || 0,
+          credit: inflow ? +e.amount || 0 : 0,
           balance: 0,
         };
       })
@@ -160,7 +177,12 @@ export default function BooksView() {
       row.balance = bal;
     }
     return rows;
-  }, [monthExp]);
+  }, [monthExp, ledCat, ledFrom, ledTo]);
+
+  const ledOut = r2(monthRows.reduce((s, r) => s + r.debit, 0));
+  const ledIn = r2(monthRows.reduce((s, r) => s + r.credit, 0));
+  const ledNet = r2(ledIn - ledOut);
+  const ledFiltered = ledCat !== "all" || !!ledFrom || !!ledTo;
 
   // ── assets & liabilities snapshot (as of today) ────────────────────────────
   const snapshot = useMemo(() => {
@@ -213,6 +235,9 @@ export default function BooksView() {
     if (m > 12) { m = 1; y++; }
     setMonth(String(m).padStart(2, "0"));
     setYear(String(y).padStart(2, "0"));
+    setLedCat("all");
+    setLedFrom("");
+    setLedTo("");
   };
 
   return (
@@ -286,14 +311,53 @@ export default function BooksView() {
 
       {/* every money event of the month — bank-format with running net */}
       <div className="panel-card" style={{ marginTop: 18 }}>
-        <div className="pc-head" style={{ justifyContent: "space-between" }}>
+        <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <span>Month ledger · {monthRows.length} {monthRows.length === 1 ? "entry" : "entries"}</span>
           <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
-            in ₹{inr(income.total)} · out ₹{inr(spends.total)}
+            in ₹{inr(ledIn)} · out ₹{inr(ledOut)}
           </span>
         </div>
+        <div
+          className="books-led-filters"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
+            alignItems: "flex-end",
+            padding: "4px 12px 10px",
+          }}
+        >
+          <label className="modal-field" style={{ flex: "1 1 160px", minWidth: 140, margin: 0 }}>
+            <span>Category</span>
+            <select value={ledCat} onChange={(e) => setLedCat(e.target.value)}>
+              <option value="all">All</option>
+              <option value="in">Money in</option>
+              <option value="out">All expenses</option>
+              {SPEND_CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="modal-field" style={{ flex: "0 1 140px", minWidth: 120, margin: 0 }}>
+            <span>From</span>
+            <input type="date" value={ledFrom} onChange={(e) => setLedFrom(e.target.value)} />
+          </label>
+          <label className="modal-field" style={{ flex: "0 1 140px", minWidth: 120, margin: 0 }}>
+            <span>To</span>
+            <input type="date" value={ledTo} onChange={(e) => setLedTo(e.target.value)} />
+          </label>
+          {ledFiltered && (
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => { setLedCat("all"); setLedFrom(""); setLedTo(""); }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
         {monthRows.length ? (
-          <div className="bank-ledger" style={{ margin: "10px 12px 12px" }}>
+          <div className="bank-ledger" style={{ margin: "0 12px 12px" }}>
             <div className="bank-hdr">
               <span>Date</span>
               <span>Particulars</span>
@@ -318,14 +382,16 @@ export default function BooksView() {
             ))}
             <div className="bank-row bank-total">
               <span className="bank-date"></span>
-              <span className="bank-parts">Net for {monthLabel}</span>
-              <span className="bank-amt dr">₹{inr(spends.total)}</span>
-              <span className="bank-amt cr">₹{inr(income.total)}</span>
-              <span className={"bank-amt bal " + (net >= 0 ? "ok" : "due")}>₹{inr(Math.abs(net))}</span>
+              <span className="bank-parts">{ledFiltered ? "Filtered net" : "Net for " + monthLabel}</span>
+              <span className="bank-amt dr">₹{inr(ledOut)}</span>
+              <span className="bank-amt cr">₹{inr(ledIn)}</span>
+              <span className={"bank-amt bal " + (ledNet >= 0 ? "ok" : "due")}>₹{inr(Math.abs(ledNet))}</span>
             </div>
           </div>
         ) : (
-          <div className="stmt-sub" style={{ padding: "10px 16px", opacity: 0.7 }}>No money moved in {monthLabel}.</div>
+          <div className="stmt-sub" style={{ padding: "10px 16px", opacity: 0.7 }}>
+            {ledFiltered ? "No entries match these filters." : "No money moved in " + monthLabel + "."}
+          </div>
         )}
       </div>
 

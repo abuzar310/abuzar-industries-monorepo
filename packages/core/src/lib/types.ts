@@ -221,6 +221,10 @@ export interface Expense {
   mode: PayMode;
   amount: number;
   note?: string;
+  /** Person / party name on a category spend (carpenter, truck, etc.) — display only, not a ledger link. */
+  party?: string;
+  /** Trip/round count (e.g. Mini truck). */
+  rounds?: number;
   /** UPI recipient / account this money went to (only for mode "upi"); "" for cash. */
   account?: string;
   /** counter-account for transfers: journal voucher's TO-bank (account = FROM-bank). */

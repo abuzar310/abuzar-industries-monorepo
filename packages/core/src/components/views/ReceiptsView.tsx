@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, getRec, put } from "@/lib/data";
 import { inr, nowIso } from "@/lib/calc";
-import { addExpense, spendCategoryOf, SPEND_CATEGORIES, upiAccounts } from "@/lib/expenses";
+import { addExpense, spendCategoryOf, spendDetailOf, SPEND_CATEGORIES, upiAccounts } from "@/lib/expenses";
 import { listWorkers, payWorker, repayWorker, type Worker } from "@/lib/attendance";
 import { partyLedger, quoteBill } from "@/lib/payments";
 import { applyCustomerReceipt, unwindReceiptPieces } from "@/lib/receipts";
@@ -58,6 +58,10 @@ export default function ReceiptsView() {
   const [paidBy, setPaidBy] = useState<"owner" | "manager" | null>(null);
   /** Paid out category — Food / Salary / Truck rent / … */
   const [paidCat, setPaidCat] = useState(SPEND_CATEGORIES[0].id);
+  /** Paid out: party (carpenter = customer pick/type) or free name for other cats */
+  const [paidParty, setPaidParty] = useState("");
+  /** Mini truck rounds */
+  const [paidRounds, setPaidRounds] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   /** editing a whole receipt (possibly split across quotes): its pieces get unwound + re-applied on save */
   const [editRcpt, setEditRcpt] = useState<{ id: string; pieces: Expense[] } | null>(null);
@@ -150,6 +154,8 @@ export default function ReceiptsView() {
     setMode("cash");
     setPaidBy(null);
     setPaidCat(SPEND_CATEGORIES[0].id);
+    setPaidParty("");
+    setPaidRounds("");
     setEditId(null);
     setEditRcpt(null);
     setApplyTo("quotes");
@@ -183,10 +189,12 @@ export default function ReceiptsView() {
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return toast("Enter an amount");
 
-    // ---- Paid out: category spend (no customer) ----
+    // ---- Paid out: category spend (party/name logged; not a customer ledger link) ----
     if (kind === "paid" && !editRcpt) {
       const cat = SPEND_CATEGORIES.find((c) => c.id === paidCat) || SPEND_CATEGORIES[SPEND_CATEGORIES.length - 1];
       const by = paidBy ?? (isOwner ? "owner" : "manager");
+      const party = paidParty.trim();
+      const rounds = cat.id === "minitruck" ? Math.max(0, Math.floor(+paidRounds || 0)) : 0;
       if (editId) {
         const e = await getRec<Expense>("expenses", editId);
         if (!e || e.type === "sale") return resetForm();
@@ -194,6 +202,8 @@ export default function ReceiptsView() {
         e.type = cat.type;
         e.label = cat.label;
         e.note = note.trim();
+        e.party = party || undefined;
+        e.rounds = rounds > 0 ? rounds : undefined;
         e.toOwner = by === "owner";
         e.date = date ? toDmy(date) : e.date;
         e.custId = undefined;
@@ -210,6 +220,8 @@ export default function ReceiptsView() {
         mode: "cash",
         label: cat.label,
         note: note.trim(),
+        party,
+        rounds: rounds > 0 ? rounds : undefined,
         date: date ? toDmy(date) : undefined,
         toOwner: by === "owner",
         enteredBy: user?.id || "unknown",
@@ -367,6 +379,8 @@ export default function ReceiptsView() {
       setPaidCat(match?.id || "other");
       setPaidBy(e.toOwner ? "owner" : "manager");
       setNote(e.note || "");
+      setPaidParty(e.party || "");
+      setPaidRounds(e.rounds ? String(e.rounds) : "");
       setDate(e.date ? fromDmy(e.date) : "");
       setPicked(null);
       setName("");
@@ -536,7 +550,13 @@ export default function ReceiptsView() {
         {kind === "paid" && (
           <label className="modal-field" style={{ width: "100%", marginBottom: 4 }}>
             <span>Category</span>
-            <select value={paidCat} onChange={(e) => setPaidCat(e.target.value)}>
+            <select
+              value={paidCat}
+              onChange={(e) => {
+                setPaidCat(e.target.value);
+                if (e.target.value !== "minitruck") setPaidRounds("");
+              }}
+            >
               {SPEND_CATEGORIES.map((c) => (
                 <option key={c.id} value={c.id}>{c.label}</option>
               ))}
@@ -606,6 +626,48 @@ export default function ReceiptsView() {
               onChange={(e) => setNote(e.target.value)}
             />
           </label>
+        )}
+
+        {kind === "paid" && (
+          <div style={{ marginTop: 12, width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
+            {paidCat === "carpenter" ? (
+              <label className="modal-field" style={{ width: "100%" }}>
+                <span>Party / customer</span>
+                <CustomerPicker
+                  value={paidParty}
+                  customers={customers}
+                  onType={setPaidParty}
+                  onPick={(c) => setPaidParty(c.name)}
+                  placeholder="Search customer or type a name…"
+                  maxResults={12}
+                />
+              </label>
+            ) : (
+              <label className="modal-field" style={{ width: "100%" }}>
+                <span>Name (optional)</span>
+                <input
+                  type="text"
+                  placeholder={paidCat === "minitruck" ? "e.g. driver / vehicle" : "e.g. who / where"}
+                  value={paidParty}
+                  onChange={(e) => setPaidParty(e.target.value)}
+                />
+              </label>
+            )}
+            {paidCat === "minitruck" && (
+              <label className="modal-field" style={{ width: "100%", maxWidth: 200 }}>
+                <span>Rounds</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
+                  placeholder="0"
+                  value={paidRounds}
+                  onChange={(e) => setPaidRounds(e.target.value)}
+                />
+              </label>
+            )}
+          </div>
         )}
 
         {showReceivedFields && (
@@ -804,7 +866,10 @@ export default function ReceiptsView() {
                   </span>
                 </div>
                 <div className="stmt-sub">
-                  {entry.e.note ? entry.e.note + " · " : ""}by {userName(entry.e.enteredBy)}
+                  {(() => {
+                    const d = spendDetailOf(entry.e);
+                    return (d ? d + " · " : "") + "by " + userName(entry.e.enteredBy);
+                  })()}
                 </div>
               </div>
               <div className="stmt-amt due">−₹{inr(entry.amount)}</div>

@@ -457,7 +457,7 @@ export default function ExpensesView() {
                 <div className="db-srow" key={e.id}>
                   <span className={"exptag " + (cin > 0 ? "in" : "out")}>{spendCategoryOf(e).split(" ")[0]}</span>
                   <span className="expnote">
-                    {spendDetailOf(e)}
+                    {spendDetailOf(e) || spendCategoryOf(e)}
                     <small>
                       {userName(e.enteredBy)}
                       {cin > 0 && e.mode ? " · " + e.mode.toUpperCase() : ""}
@@ -608,7 +608,7 @@ export default function ExpensesView() {
                       <div className="exprow" key={e.id}>
                         <span className={"exptag " + (isInflow(e.type) ? "in" : "out")}>{spendCategoryOf(e).split(" ")[0]}</span>
                         <span className="expnote">
-                          {spendDetailOf(e)}
+                          {spendDetailOf(e) || spendCategoryOf(e)}
                           <small>
                             {e.date} · {userName(e.enteredBy)}
                             {isInflow(e.type) && e.mode ? " · " + e.mode.toUpperCase() : ""}

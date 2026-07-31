@@ -9,6 +9,7 @@ export const SPEND_CATEGORIES: { id: string; label: string; type: EntryType }[] 
   { id: "salary", label: "Salary", type: "salary" },
   { id: "carpenter", label: "Carpenter commission", type: "custom" },
   { id: "truck", label: "Truck rent", type: "custom" },
+  { id: "minitruck", label: "Mini truck", type: "custom" },
   { id: "bills", label: "Bills", type: "custom" },
   { id: "tea", label: "Tea bill", type: "custom" },
   { id: "pigmy", label: "Pigmy", type: "custom" },
@@ -43,13 +44,19 @@ export function spendCatKey(e: Expense): string {
   return SPEND_CATEGORIES.find((c) => c.label === label)?.id || "other";
 }
 
-/** Detail line for lists: note, else legacy freeform label, else category name. */
+/** Detail line for lists: party · rounds · note (legacy freeform label as fallback). */
 export function spendDetailOf(e: Expense): string {
+  const bits: string[] = [];
+  const party = (e.party || "").trim();
+  if (party) bits.push(party);
+  const rounds = +(e.rounds || 0);
+  if (rounds > 0) bits.push(rounds === 1 ? "1 round" : rounds + " rounds");
   const note = (e.note || "").trim();
-  if (note) return note;
+  if (note) bits.push(note);
+  if (bits.length) return bits.join(" · ");
   const lab = (e.label || "").trim();
   if (lab && !SPEND_LABELS.has(lab)) return lab;
-  return spendCategoryOf(e);
+  return "";
 }
 
 export const ENTRY_TYPES: { value: EntryType; label: string; flow: "in" | "out" }[] = [
@@ -106,6 +113,8 @@ export async function addExpense(fields: {
   mode: PayMode;
   note?: string;
   label?: string;
+  party?: string;
+  rounds?: number;
   account?: string;
   /** transfer counter-account (journal voucher's TO-bank) */
   account2?: string;
@@ -119,6 +128,7 @@ export async function addExpense(fields: {
   rcptId?: string;
 }): Promise<Expense> {
   const mode = fields.charge ? "" : isInflow(fields.type) ? fields.mode || "cash" : "";
+  const rounds = Math.max(0, Math.floor(+(fields.rounds || 0) || 0));
   const e: Expense = {
     id: "EXP-" + uid(),
     date: fields.date || todayStr(),
@@ -127,6 +137,8 @@ export async function addExpense(fields: {
     mode,
     amount: r2(fields.amount),
     note: fields.note || "",
+    party: (fields.party || "").trim() || undefined,
+    rounds: rounds > 0 ? rounds : undefined,
     account: (fields.account || "").trim(),
     account2: (fields.account2 || "").trim() || undefined,
     // outflows (mode "") can also be owner-paid — e.g. the owner hands a worker money
