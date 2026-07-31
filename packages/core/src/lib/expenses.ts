@@ -11,6 +11,7 @@ export const SPEND_CATEGORIES: { id: string; label: string; type: EntryType }[] 
   { id: "truck", label: "Truck rent", type: "custom" },
   { id: "bills", label: "Bills", type: "custom" },
   { id: "tea", label: "Tea bill", type: "custom" },
+  { id: "pigmy", label: "Pigmy", type: "custom" },
   { id: "other", label: "Other", type: "custom" },
 ];
 
