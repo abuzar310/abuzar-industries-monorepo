@@ -1,5 +1,6 @@
 import { nowIso, todayStr } from "./calc";
 import { clone, getCached } from "./data";
+import { defaultWoodSection } from "./woods";
 import type { Doc, DocStore } from "./types";
 
 export const docStore = (d: Doc): DocStore =>
@@ -35,7 +36,7 @@ export function blankDoc(id: string): Doc {
     address: "",
     notes: "",
     date: todayStr(),
-    sections: [{ name: "Teak", rate: 4000, rows: [{ l: "", w: "", t: "", pcs: "" }] }],
+    sections: [defaultWoodSection()],
     gst: 18,
     quotationId: "",
     paymentStatus: "Pending",

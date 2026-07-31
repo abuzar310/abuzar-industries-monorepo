@@ -19,12 +19,18 @@ interface Props {
 
 export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, payLines, onGst, onGstMode }: Props) {
   const isInv = doc.kind === "invoice";
-  const showFinal = !isInv && !!doc.showFinalOnPrint && (doc.finalPrice || 0) > 0;
-  // the settlement block: every payment + received + balance/settled — printed with the final price
   const r2 = (n: number) => Math.round(n * 100) / 100;
-  const pays = showFinal && payLines ? [...payLines].reverse() : []; // oldest first on paper
+  const finalPrice = !isInv && (doc.finalPrice || 0) > 0 ? r2(doc.finalPrice!) : 0;
+  const hasFinal = finalPrice > 0;
+  /** print toggle — when off, discount/final still show on screen but stay off the paper */
+  const printFinal = hasFinal && !!doc.showFinalOnPrint;
+  const discAmt = hasFinal ? r2(grand - finalPrice) : 0;
+  const hasDiscount = hasFinal && Math.abs(discAmt) > 0.5;
+  const screenOnly = hasFinal && !printFinal ? " no-print" : "";
+  // the settlement block: every payment + received + balance/settled — printed with the final price
+  const pays = printFinal && payLines ? [...payLines].reverse() : []; // oldest first on paper
   const received = r2(pays.reduce((s, l) => s + l.amount, 0));
-  const balance = r2((doc.finalPrice || 0) - received);
+  const balance = r2(finalPrice - received);
   const settled = balance <= 0.5;
   const flat = doc.gstMode === "flat";
   const half = Math.round((+doc.gst || 0) * 50) / 100; // e.g. 18 -> 9
@@ -85,21 +91,31 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
           <span className="val">{inr(gstAmt)}</span>
         </div>
       )}
-      <div className="t-row grand">
+      {/* dark bar stays on Grand total unless Final is also going on the printed sheet */}
+      <div className={"t-row" + (printFinal ? "" : " grand")}>
         <span className="lab">Grand total</span>
-        <span className="val">₹ {inr(grand)}</span>
+        <span className="val">{printFinal ? inr(grand) : <>₹ {inr(grand)}</>}</span>
       </div>
-      {/* the agreed round figure — printed only when the toggle next to Final price is on */}
-      {showFinal && (
-        <div className="t-row grand final-print">
-          <span className="lab">Final price (agreed)</span>
-          <span className="val">₹ {inr(doc.finalPrice!)}</span>
+      {/* final ≠ computed → Discount (or Round off if higher) */}
+      {hasDiscount && (
+        <div className={"t-row discount" + screenOnly}>
+          <span className="lab">{discAmt > 0 ? "Discount" : "Round off"}</span>
+          <span className="val">
+            {discAmt > 0 ? "− " + inr(discAmt) : "+ " + inr(-discAmt)}
+          </span>
+        </div>
+      )}
+      {/* agreed figure — on screen whenever set; on paper only with the print toggle */}
+      {hasFinal && (
+        <div className={"t-row" + (printFinal ? " grand final-print" : " final-screen") + screenOnly}>
+          <span className="lab">Final price</span>
+          <span className="val">₹ {inr(finalPrice)}</span>
         </div>
       )}
       </div>
       {/* the COMPLETE settlement box — its own box below the totals, mirroring the
           on-screen payment card: every payment, total received, balance / Settled ✓ */}
-      {showFinal && pays.length > 0 && (
+      {printFinal && pays.length > 0 && (
         <table className="pay-sheet">
           <colgroup>
             <col style={{ width: "26%" }} />
@@ -125,7 +141,7 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
               </tr>
             ))}
             <tr className="ps-tot">
-              <td colSpan={3}>Total received — of final price ₹{inr(doc.finalPrice!)}</td>
+              <td colSpan={3}>Total received — of final price ₹{inr(finalPrice)}</td>
               <td className="amt">{inr(received)}</td>
             </tr>
             <tr className={"ps-bal" + (settled ? " ok" : "")}>
@@ -136,9 +152,14 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
         </table>
       )}
       {/* amount-in-words lives OUTSIDE the totals box (which clips overflow) so it can never be cut off */}
-      <div className="words">
-        Amount in words: <b>{rupeesInWords(showFinal ? doc.finalPrice! : grand)}</b>
+      <div className={"words" + (hasFinal && !printFinal ? " no-print" : "")}>
+        Amount in words: <b>{rupeesInWords(hasFinal ? finalPrice : grand)}</b>
       </div>
+      {hasFinal && !printFinal && (
+        <div className="words print-only">
+          Amount in words: <b>{rupeesInWords(grand)}</b>
+        </div>
+      )}
     </>
   );
 }

@@ -19,6 +19,7 @@ import { statementsForQuote } from "@/lib/payments";
 import { postInvoice } from "@/lib/ledger-autopost";
 import { balanceReminderMessage, reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
 import { generatePdf, printOrSavePdf } from "@/lib/pdf";
+import { promoteTempTab, setTempDoc } from "@/lib/editor-tabs";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { BoxRect, Customer, Doc, Expense, Row } from "@/lib/types";
@@ -48,7 +49,11 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 // Default per-CFT rates for common woods (auto-filled when a wood is chosen and the rate is still a default).
-const WOOD_PRICES: Record<string, number> = { teak: 4000, "white teak": 2600 };
+const WOOD_PRICES: Record<string, number> = {
+  teak: 4000,
+  "imported teak wood": 4000,
+  "white teak": 2600,
+};
 const DEFAULT_RATES = new Set(Object.values(WOOD_PRICES));
 
 export default function Editor({
@@ -57,6 +62,7 @@ export default function Editor({
   payFocus,
   onDirtyChange,
   active: _active,
+  temporary = false,
 }: {
   initialDoc: Doc;
   action?: string;
@@ -66,6 +72,8 @@ export default function Editor({
   onDirtyChange?: (dirty: boolean) => void;
   /** whether this tab is currently visible (tab-panel active) — passed from tab container */
   active?: boolean;
+  /** in-memory comparison tab — never cloud-saved until "Save as new quotation" */
+  temporary?: boolean;
 }) {
   const router = useRouter();
   const [doc, setDoc] = useState<Doc>(initialDoc);
@@ -155,6 +163,12 @@ export default function Editor({
   };
   function persist(d: Doc) {
     d.updatedAt = nowIso();
+    if (temporary) {
+      // comparison tab — keep only in memory until explicitly saved as a new quotation
+      setTempDoc(d.id, d);
+      markDirty(true);
+      return;
+    }
     put(docStore(d), clone(d)); // optimistic cache + retrying outbox → the database
     // optional: mirror this invoice into the Tally ledger (no-op unless the toggle is on)
     if (d.kind === "invoice") postInvoice(d).catch(() => {});
@@ -163,6 +177,11 @@ export default function Editor({
   function commit(next: Doc, immediate = false) {
     docRef.current = next;
     setDoc(next);
+    if (temporary) {
+      setTempDoc(next.id, next);
+      markDirty(true);
+      return;
+    }
     if (immediate) persist(next);
     else markDirty(true);
   }
@@ -190,9 +209,47 @@ export default function Editor({
   }
   /** The Save button / Ctrl+S: link the customer record, then persist. */
   async function saveNow() {
+    if (temporary) {
+      toast("This is a comparison tab — use Save as new quotation");
+      return;
+    }
     const next = clone(docRef.current);
     await upsertCustomerFromDoc(next);
     commit(next, true);
+  }
+
+  /** Persist a temporary comparison as a real quotation (allocates a new number). */
+  async function saveTempAsNew(status: "Draft" | "Created") {
+    if (!temporary) return;
+    const cur = clone(docRef.current);
+    const tempId = cur.id;
+    const saved = await createQuotation({
+      customerId: cur.customerId,
+      customerName: cur.customerName,
+      phone: cur.phone,
+      site: cur.site,
+      sitePhone: cur.sitePhone,
+      address: cur.address,
+      notes: cur.notes,
+      date: cur.date,
+      sections: clone(cur.sections),
+      gst: cur.gst,
+      gstMode: cur.gstMode,
+      finalPrice: cur.finalPrice,
+      showFinalOnPrint: cur.showFinalOnPrint,
+      freeLayout: cur.freeLayout,
+      billBox: cur.billBox,
+      status,
+    });
+    await upsertCustomerFromDoc(saved);
+    promoteTempTab(tempId, saved);
+    bumpData();
+    toast(
+      status === "Draft"
+        ? "Saved as draft " + (saved.displayNumber || saved.number)
+        : "Quotation " + (saved.displayNumber || saved.number) + " saved ✓",
+    );
+    router.replace("/editor/" + saved.id);
   }
 
   // Ctrl/Cmd+S saves; Ctrl+Z undoes; navigating away (unmount) or closing the tab never loses edits.
@@ -200,6 +257,10 @@ export default function Editor({
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
+        if (temporary) {
+          toast("Comparison tab — use Save as new quotation");
+          return;
+        }
         if (dirtyRef.current) saveNow().then(() => toast("Saved ✓"));
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
@@ -208,7 +269,7 @@ export default function Editor({
       }
     };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (dirtyRef.current) {
+      if (dirtyRef.current && !temporary) {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -220,11 +281,12 @@ export default function Editor({
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [temporary]);
   useEffect(
     () => () => {
-      // in-app navigation away from a dirty doc — save it rather than lose the edits
-      if (dirtyRef.current) persist(docRef.current);
+      // in-app navigation away from a dirty persisted doc — save it rather than lose the edits
+      // temporary comparison tabs are NEVER auto-saved to the cloud
+      if (!temporary && dirtyRef.current) persist(docRef.current);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -355,9 +417,14 @@ export default function Editor({
     });
   };
   const onAddSec = () =>
-    update((d) =>
-      d.sections.push({ name: "White Teak", rate: WOOD_PRICES["white teak"], rows: [{ l: "", w: "", t: "", pcs: "" }] }),
-    );
+    update((d) => {
+      // official default wood; cut-size keeps the White Teak add-another habit
+      if (feat.simpleQuote) {
+        d.sections.push({ name: "White Teak", rate: WOOD_PRICES["white teak"], rows: [{ l: "", w: "", t: "", pcs: "" }] });
+      } else {
+        d.sections.push({ name: "Imported Teak Wood", rate: 4000, rows: [{ l: "", w: "", t: "", pcs: "" }] });
+      }
+    });
 
   // ---- free-arrange (A4 canvas): drag/resize boxes + the grand total, persisted per-box ----
   const onBox = (si: number, r: BoxRect) => update((d) => (d.sections[si].box = r));
@@ -640,8 +707,9 @@ export default function Editor({
     toast("Payments cleared");
   }
   async function onNewQuote() {
+    // allocate a real quotation (+ on the tab bar opens a temporary compare tab)
     const d = await createQuotation();
-    toast("New " + d.id + " created");
+    toast("New quotation " + (d.displayNumber || d.number) + " created");
     router.push("/editor/" + d.id);
   }
   async function onNewInvoice() {
@@ -798,7 +866,13 @@ export default function Editor({
       <div className="mast-top sq-head">
         <div className="mh-side mh-no">
           <label>Quotation No.</label>
-          <input key="numro" className="ro" value={doc.number || ""} readOnly onClick={() => setEditingNo(true)} />
+          <input
+            key="numro"
+            className="ro"
+            value={temporary ? "Compare · unsaved" : doc.number || ""}
+            readOnly
+            onClick={() => !temporary && setEditingNo(true)}
+          />
         </div>
         <div className="co-name">Wood Quotation</div>
         <div className="mh-side mh-date">
@@ -894,17 +968,28 @@ export default function Editor({
             </select>
           </>
         )}
-        <button
-          className={"btn primary sm save-btn" + (dirty ? " save-needed" : " save-clean")}
-          style={{ marginLeft: "auto" }}
-          disabled={!dirty}
-          title={dirty ? "Save changes (Ctrl+S)" : "All changes saved"}
-          onClick={() => saveNow().then(() => toast("Saved ✓"))}
-        >
-          {dirty ? "Save" : "Saved ✓"}
-        </button>
-        <span className={"badge " + badgeCls}>
-          {badgeText}
+        {temporary ? (
+          <button
+            className="btn primary sm save-btn save-needed temp-save"
+            style={{ marginLeft: "auto" }}
+            title="Allocate a new quotation number and keep this comparison"
+            onClick={() => saveTempAsNew("Created")}
+          >
+            Save as new quotation
+          </button>
+        ) : (
+          <button
+            className={"btn primary sm save-btn" + (dirty ? " save-needed" : " save-clean")}
+            style={{ marginLeft: "auto" }}
+            disabled={!dirty}
+            title={dirty ? "Save changes (Ctrl+S)" : "All changes saved"}
+            onClick={() => saveNow().then(() => toast("Saved ✓"))}
+          >
+            {dirty ? "Save" : "Saved ✓"}
+          </button>
+        )}
+        <span className={"badge " + (temporary ? "b-follow" : badgeCls)}>
+          {temporary ? "COMPARE · UNSAVED" : badgeText}
         </span>
       </div>
 
@@ -941,7 +1026,9 @@ export default function Editor({
             <div className="mast-top sq-head">
               <div className="mh-side mh-no">
                 <label>Quotation No.</label>
-                {editingNo ? (
+                {temporary ? (
+                  <input key="numro" className="ro" value="Compare · unsaved" readOnly />
+                ) : editingNo ? (
                   <input
                     className="ro"
                     autoFocus
@@ -1007,7 +1094,9 @@ export default function Editor({
           <div className={"meta" + (isInv ? " invrow" : showLink ? "" : " two")}>
             <div className="f">
               <label>{isInv ? "Invoice No." : "Quotation No."}</label>
-              {editingNo ? (
+              {temporary ? (
+                <input key="numro" className="ro" value="Compare · unsaved" readOnly />
+              ) : editingNo ? (
                 <input
                   className="ro"
                   autoFocus
@@ -1180,12 +1269,6 @@ export default function Editor({
             + Add wood type
           </button>
         )}
-        <datalist id="woodtypes">
-          {["Teak", "White Teak", "Nagpur Teak", "CP Teak", "Ghana Teak", "Honne", "Neem", "Sagwan", "Rosewood"].map((w) => (
-            <option key={w} value={w} />
-          ))}
-        </datalist>
-
         {!feat.simpleQuote && (
           <Totals
             doc={doc}
@@ -1242,7 +1325,16 @@ export default function Editor({
 
       {/* bottom actions — tight primary row + overflow */}
       <div className="doctool">
-        {feat.simpleQuote ? (
+        {temporary ? (
+          <>
+            <button className="btn temp-save" onClick={() => saveTempAsNew("Draft")}>
+              Save as draft
+            </button>
+            <button className="btn primary temp-save" onClick={() => saveTempAsNew("Created")}>
+              Save as new quotation
+            </button>
+          </>
+        ) : feat.simpleQuote ? (
           <>
             <button className="btn" onClick={onSaveDraft}>
               Save draft
@@ -1256,7 +1348,7 @@ export default function Editor({
             Save
           </button>
         )}
-        <button className="btn wa" onClick={onWaSend}>
+        <button className="btn wa" onClick={onWaSend} disabled={temporary} title={temporary ? "Save as new quotation first" : undefined}>
           WhatsApp
         </button>
         {feat.acceptPayment && !isInv && remBalance > 0.5 && (
@@ -1264,7 +1356,7 @@ export default function Editor({
             Remind
           </button>
         )}
-        <button className="btn go" onClick={onPrint}>
+        <button className="btn go" onClick={onPrint} disabled={temporary} title={temporary ? "Save as new quotation first" : undefined}>
           Print
         </button>
         {feat.simpleQuote && (
@@ -1299,7 +1391,25 @@ export default function Editor({
       )}
 
       {/* App A: accept payment on a created quotation → final price + cash/UPI → Daybook */}
-      {feat.acceptPayment && !isInv && (
+      {feat.acceptPayment && !isInv && temporary && (
+        <div className="panel-card no-print" style={{ marginTop: 12, borderColor: "var(--ochre)" }}>
+          <p style={{ margin: 0, fontFamily: "var(--disp)", fontWeight: 600, color: "var(--ochre-deep)" }}>
+            Comparison tab — nothing is saved yet.
+          </p>
+          <p style={{ margin: "6px 0 10px", color: "var(--ink-soft)", fontSize: 13 }}>
+            Enter rates and sizes freely. When you want to keep it, save as a draft or new quotation (allocates a number).
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="btn temp-save" onClick={() => saveTempAsNew("Draft")}>
+              Save as draft
+            </button>
+            <button type="button" className="btn primary temp-save" onClick={() => saveTempAsNew("Created")}>
+              Save as new quotation
+            </button>
+          </div>
+        </div>
+      )}
+      {feat.acceptPayment && !isInv && !temporary && (
         <PaymentBlock
           doc={doc}
           quoteGrand={totals.grand}

@@ -213,13 +213,40 @@ body{
 .grain{display:flex; flex-direction:column; gap:2.5px; flex:0 0 auto}
 .grain i{display:block; width:15px; height:1.5px; background:var(--brass); border-radius:2px; opacity:.7}
 .grain i:nth-child(2){width:9px} .grain i:nth-child(3){width:13px}
+.sec-name-wrap{position:relative; display:inline-flex; align-items:center; gap:2px; min-width:80px; max-width:min(280px, 100%); z-index:3}
+.sec-name-wrap.open{z-index:20}
 .sec-name{
   font-family:var(--disp); font-weight:700; text-transform:none;
   letter-spacing:.01em; font-size:16px; line-height:1; color:#F6ECDD;
   background:transparent; border:none; padding:2px; min-width:80px; max-width:100%;
   width:auto; field-sizing:content; /* grow the box to whatever the user types */
+  flex:1 1 auto;
 }
 .sec-name:focus{outline:1.5px dashed var(--brass); outline-offset:3px; border-radius:3px}
+.sec-name-caret{
+  flex:0 0 auto; width:22px; height:22px; border:none; border-radius:6px; cursor:pointer;
+  background:transparent; position:relative; padding:0;
+}
+.sec-name-caret::after{
+  content:""; position:absolute; left:50%; top:46%; width:0; height:0;
+  border-left:5px solid transparent; border-right:5px solid transparent;
+  border-top:6px solid #E9C9A6; transform:translate(-50%,-20%);
+}
+.sec-name-caret:hover{background:rgba(255,255,255,.1)}
+.sec-name-menu{
+  position:absolute; left:0; top:calc(100% + 6px); min-width:max(100%, 200px); max-height:240px; overflow:auto;
+  margin:0; padding:4px; list-style:none; z-index:30;
+  background:var(--panel, #fff); border:1px solid var(--line-2); border-radius:10px;
+  box-shadow:var(--shadow-card, 0 8px 24px rgba(0,0,0,.18));
+}
+.sec-name-menu button{
+  display:block; width:100%; text-align:left; border:none; background:transparent; cursor:pointer;
+  padding:8px 10px; border-radius:7px; font-family:var(--disp); font-size:13px; font-weight:600; color:var(--ink);
+}
+.sec-name-menu button:hover, .sec-name-menu button.on{background:rgba(176,124,40,.12); color:var(--ochre-deep)}
+@media print{
+  .sec-name-caret, .sec-name-menu{display:none !important}
+}
 .rate-box{margin-left:auto; display:flex; align-items:center; gap:5px;
   font-family:var(--disp); letter-spacing:.04em; font-size:10.5px; text-transform:uppercase; color:#D8C2A4}
 .rate-box input{
@@ -369,6 +396,8 @@ body{
 #sheet.sq .sec-head{background:var(--panel); color:var(--ink-soft); border-bottom:1px solid var(--line-2)}
 #sheet.sq .sec-name{color:var(--walnut)}
 #sheet.sq .sec-name:focus{outline-color:var(--ochre)}
+#sheet.sq .sec-name-caret::after{border-top-color:var(--walnut)}
+#sheet.sq .sec-name-caret:hover{background:rgba(61,42,24,.08)}
 #sheet.sq .grain i{background:var(--line-2); opacity:1}
 #sheet.sq .sec-pcs{color:var(--ink-faint)}
 #sheet.sq .sec-pcs b{color:var(--ink)}
@@ -1908,7 +1937,15 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .fp-print-opt input{accent-color:var(--ochre-deep)}
 .fp-print-opt small{color:var(--ink-faint)}
 .fp-print-opt:has(input:disabled){opacity:.6; cursor:default}
-/* the printed "Final price (agreed)" row — slightly separated from the computed grand */
+/* discount between computed grand and agreed final — quiet minus line */
+.t-row.discount{background:rgba(176,124,40,.06); border-bottom:1px solid var(--line)}
+.t-row.discount .lab{color:var(--ochre-deep)}
+.t-row.discount .val{color:var(--ochre-deep); font-weight:600}
+/* on-screen final when not printing it — compact, under discount */
+.t-row.final-screen{background:rgba(61,42,24,.06); border-bottom:none}
+.t-row.final-screen .lab{color:var(--walnut)}
+.t-row.final-screen .val{font-family:var(--serif); font-weight:600; font-size:20px; color:var(--walnut)}
+/* printed Final price row — dark bar, separated from computed grand */
 .t-row.final-print{border-top:2px solid rgba(255,255,255,.35)}
 /* the settlement box printed below the totals when "Show final price & payments" is on:
    every payment + total received + balance / Settled — the on-screen card, on paper */
@@ -2155,15 +2192,22 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .cust-card.open .cust-toggle{transform:rotate(180deg)}
 
 /* editor tab bar — horizontal tabs for open quotations */
-.editor-tabs{display:flex; gap:0; overflow-x:auto; background:var(--panel-2); border-bottom:1px solid var(--line); padding:0 4px; flex-shrink:0}
+.editor-tabs{display:flex; gap:0; overflow-x:auto; background:var(--panel-2); border-bottom:1px solid var(--line); padding:0 4px; flex-shrink:0; align-items:stretch}
 .etab{display:flex; align-items:center; gap:6px; padding:6px 10px; font-size:12px; font-family:var(--disp); font-weight:600; cursor:pointer; border-bottom:2px solid transparent; color:var(--ink-soft); white-space:nowrap; transition:color .12s,border-color .12s; user-select:none}
 .etab:hover{color:var(--ink)}
 .etab.active{border-bottom-color:var(--ink); color:var(--ink)}
+.etab.temp{color:var(--ochre-deep); font-style:italic}
+.etab.temp.active{border-bottom-color:var(--ochre); color:var(--ochre-deep)}
 .etab.dirty::after{content:""; display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--ochre); flex-shrink:0}
 .etab-label{display:flex; align-items:center; gap:4px}
 .etab-label small{margin-left:2px; font-weight:400; color:var(--ink-faint); font-size:10px; max-width:100px; overflow:hidden; text-overflow:ellipsis}
 .etab-close{background:none; border:none; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; color:var(--ink-faint); border-radius:4px; transition:color .12s,background .12s}
 .etab-close:hover{color:var(--danger); background:rgba(176,64,64,.1)}
+.etab-new{flex:0 0 auto; align-self:center; margin:4px 6px; width:28px; height:28px; border-radius:8px; border:1px dashed var(--line-2); background:transparent; color:var(--ink-soft); font-size:18px; line-height:1; cursor:pointer; font-family:var(--disp); font-weight:700}
+.etab-new:hover{border-color:var(--ochre); color:var(--ochre-deep); background:rgba(176,124,40,.08)}
+.btn.temp-save{box-shadow:0 0 0 2px rgba(176,124,40,.35); font-weight:700}
+.btn.primary.temp-save{animation:temp-pulse 1.8s ease-in-out infinite}
+@keyframes temp-pulse{0%,100%{box-shadow:0 0 0 2px rgba(176,124,40,.35)}50%{box-shadow:0 0 0 4px rgba(176,124,40,.55)}}
 
 /* ═══════════════ Premium ledger redesign — scoped to .ledger-page ═══════════════
    Constrained, centered, card-based accounting UI (Stripe/Linear feel) for the

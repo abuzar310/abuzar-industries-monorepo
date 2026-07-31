@@ -1,5 +1,7 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
 import { cftOf, directOf, inr, pcsOf, rftOf } from "@/lib/calc";
+import { WOOD_TYPES } from "@/lib/woods";
 import type { Section } from "@/lib/types";
 
 type CellKey = "l" | "w" | "t" | "pcs" | "cft";
@@ -104,7 +106,7 @@ export default function SectionCard({ sec, si, cft, modes, selRows, reorderable,
           <i />
           <i />
         </span>
-        <input className="sec-name" list="woodtypes" value={sec.name} aria-label="Wood type name" onChange={(e) => onName(si, e.target.value)} />
+        <WoodNameInput value={sec.name} onChange={(v) => onName(si, v)} />
         {!single && (
           <span className="sec-pcs">
             Total Pcs <b>{totalPcs}</b>
@@ -238,6 +240,75 @@ export default function SectionCard({ sec, si, cft, modes, selRows, reorderable,
           </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Editable wood name + caret that always opens the full list (datalist hides options once text is set). */
+function WoodNameInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  return (
+    <div className={"sec-name-wrap" + (open ? " open" : "")} ref={wrapRef}>
+      <input
+        className="sec-name"
+        value={value}
+        aria-label="Wood type name"
+        aria-expanded={open}
+        aria-autocomplete="list"
+        autoComplete="off"
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setOpen(false);
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+      />
+      <button
+        type="button"
+        className="sec-name-caret"
+        tabIndex={-1}
+        title="Choose wood type"
+        aria-label="Choose wood type"
+        onMouseDown={(e) => {
+          e.preventDefault(); // keep focus on the input
+          setOpen((o) => !o);
+        }}
+      />
+      {open && (
+        <ul className="sec-name-menu" role="listbox">
+          {WOOD_TYPES.map((w) => (
+            <li key={w}>
+              <button
+                type="button"
+                role="option"
+                className={w === value ? "on" : ""}
+                aria-selected={w === value}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(w);
+                  setOpen(false);
+                }}
+              >
+                {w}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

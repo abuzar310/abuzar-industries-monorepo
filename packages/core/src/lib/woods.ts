@@ -1,0 +1,26 @@
+import { getFeatures } from "./features";
+import type { Section } from "./types";
+
+/** Suggestions for the wood-type picker (official + cut-size). */
+export const WOOD_TYPES = [
+  "Imported Teak Wood",
+  "Teak",
+  "White Teak",
+  "Nagpur Teak",
+  "CP Teak",
+  "Ghana Teak",
+  "Honne",
+  "Neem",
+  "Sagwan",
+  "Rosewood",
+] as const;
+
+/** First wood box on a brand-new quotation / invoice. */
+export function defaultWoodSection(): Section {
+  const official = !getFeatures().simpleQuote;
+  return {
+    name: official ? "Imported Teak Wood" : "Teak",
+    rate: 4000,
+    rows: [{ l: "", w: "", t: "", pcs: "" }],
+  };
+}
