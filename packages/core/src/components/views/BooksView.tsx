@@ -156,10 +156,18 @@ export default function BooksView() {
       .map((e) => {
         const inflow = isInflow(e.type);
         const cat = inflow
-          ? (e.custId ? "Received" : "Sale") + (e.mode === "upi" ? " · UPI" : " · Cash") + (e.toOwner ? " → Owner" : "")
+          ? (e.custId ? "Received" : e.party ? "Received from name" : "Sale") +
+            (e.mode === "upi" ? " · UPI" : " · Cash") +
+            (e.toOwner ? " → Owner" : "")
           : spendCategoryOf(e);
         const detailBits = inflow
-          ? [e.account ? "acct " + e.account : "", e.note, "by " + userName(e.enteredBy)].filter(Boolean)
+          ? [
+              e.party && !e.custId ? e.party : "",
+              e.label && !e.custId ? e.label : "",
+              e.account ? "acct " + e.account : "",
+              e.note,
+              "by " + userName(e.enteredBy),
+            ].filter(Boolean)
           : [spendDetailOf(e), "by " + userName(e.enteredBy)].filter(Boolean);
         return {
           id: e.id,

@@ -35,7 +35,17 @@ const isCategoryPayout = (e: Expense) =>
     e.type === "salary" ||
     (e.type === "custom" && SPEND_LABELS.has(e.label || "")));
 
+/** Money received back from a person/name (not a customer ledger receipt). */
+const isNameReceipt = (e: Expense) =>
+  e.type === "sale" &&
+  !e.charge &&
+  !e.custId &&
+  !e.sourceId &&
+  !e.rcptId &&
+  !!(e.party || "").trim();
+
 type Kind = "received" | "due" | "paid";
+type RecvVia = "customer" | "name";
 
 export default function ReceiptsView() {
   const { ready, dataVersion, user } = useApp();
@@ -48,6 +58,11 @@ export default function ReceiptsView() {
   const [picked, setPicked] = useState<Customer | null>(null);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<Kind>("received");
+  /** Received: settle a customer, or take money back from a free name (refund of paid-out). */
+  const [recvVia, setRecvVia] = useState<RecvVia>("customer");
+  const [recvName, setRecvName] = useState("");
+  /** Optional category this name-receipt is against (refund of Food / Truck / …) */
+  const [recvCat, setRecvCat] = useState("");
   const [amt, setAmt] = useState("");
   const [mode, setMode] = useState<"cash" | "owner" | "upi" | "uowner">("cash");
   const [acct, setAcct] = useState("");
@@ -163,6 +178,9 @@ export default function ReceiptsView() {
     setPaidQuoteId("");
     setPaidCarpenter("");
     setPaidRounds("");
+    setRecvVia("customer");
+    setRecvName("");
+    setRecvCat("");
     setEditId(null);
     setEditRcpt(null);
     setApplyTo("quotes");
@@ -209,6 +227,57 @@ export default function ReceiptsView() {
   async function record() {
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return toast("Enter an amount");
+
+    // ---- Received from name (money back — not on a customer account) ----
+    if (kind === "received" && recvVia === "name" && !editRcpt) {
+      const who = recvName.trim();
+      if (!who) return toast("Enter who paid / gave money back");
+      const isUpiMode = mode === "upi" || mode === "uowner";
+      if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
+      const isCash = !isUpiMode;
+      const toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
+      const catLab = recvCat ? SPEND_CATEGORIES.find((c) => c.id === recvCat)?.label || "" : "";
+      if (editId) {
+        const e = await getRec<Expense>("expenses", editId);
+        if (!e || !isNameReceipt(e)) return resetForm();
+        e.amount = a;
+        e.mode = isUpiMode ? "upi" : "cash";
+        e.account = mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "";
+        e.toOwner = toOwner;
+        e.party = who;
+        e.label = catLab || undefined;
+        e.note = note.trim();
+        e.date = date ? toDmy(date) : e.date;
+        e.custId = undefined;
+        e.sourceId = undefined;
+        e.updatedAt = nowIso();
+        await put("expenses", e);
+        resetForm();
+        load();
+        bumpData();
+        return toast("Updated ✓");
+      }
+      await addExpense({
+        type: "sale",
+        amount: a,
+        mode: isUpiMode ? "upi" : "cash",
+        account: mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "",
+        toOwner,
+        party: who,
+        label: catLab || undefined,
+        note: note.trim(),
+        date: date ? toDmy(date) : undefined,
+        enteredBy: user?.id || "unknown",
+      });
+      resetForm();
+      load();
+      bumpData();
+      return toast(
+        "₹" + inr(a) + " received from " + who +
+          (catLab ? " · " + catLab : "") +
+          (toOwner ? " — Owner" : " — Daybook"),
+      );
+    }
 
     // ---- Paid out: category spend (party/name logged; not a customer ledger link) ----
     if (kind === "paid" && !editRcpt) {
@@ -364,7 +433,12 @@ export default function ReceiptsView() {
     const { e, pieces, settled } = entry;
     const label = entry.paid ? "paid out" : e.charge ? "due" : "receipt";
     const total = pieces ? r2(pieces.reduce((s, x) => s + (+x.amount || 0), 0)) : +e.amount || 0;
-    const who = entry.paid && !entry.cid ? spendCategoryOf(e) : custName(entry.cid);
+    const who =
+      entry.paid && !entry.cid
+        ? spendCategoryOf(e)
+        : !entry.cid && e.party
+          ? e.party
+          : custName(entry.cid);
     const ok = await confirmDialog({
       title: "Delete " + label + "?",
       message:
@@ -424,6 +498,22 @@ export default function ReceiptsView() {
         ? customers.find((c) => c.name.trim().toLowerCase() === (e.party || "").trim().toLowerCase())
         : null;
       setPaidCustId(fromQuote?.customerId || byName?.id || "");
+      return;
+    } else if (!entry.paid && isNameReceipt(e)) {
+      setEditId(e.id);
+      setEditRcpt(null);
+      setKind("received");
+      setRecvVia("name");
+      setRecvName(e.party || "");
+      const catMatch = SPEND_CATEGORIES.find((c) => c.label === (e.label || "").trim());
+      setRecvCat(catMatch?.id || "");
+      setAmt(String(e.amount));
+      setNote(e.note || "");
+      setDate(e.date ? fromDmy(e.date) : "");
+      setMode(e.mode === "upi" ? (e.toOwner ? "uowner" : "upi") : e.toOwner ? "owner" : "cash");
+      setAcct(e.account || "");
+      setPicked(null);
+      setName("");
       return;
     } else {
       setEditId(e.id);
@@ -499,6 +589,11 @@ export default function ReceiptsView() {
     .map((e) => ({ key: e.id, cid: "", e, amount: +e.amount || 0, locked: false, paid: true as const }))
     .sort((a, b) => (b.e.createdAt || "").localeCompare(a.e.createdAt || ""));
   const paidOutTotal = r2(paidOutList.reduce((s, x) => s + x.amount, 0));
+  const nameRecvList = expenses
+    .filter(isNameReceipt)
+    .map((e) => ({ key: e.id, cid: "", e, amount: +e.amount || 0, locked: false, paid: false as const }))
+    .sort((a, b) => (b.e.createdAt || "").localeCompare(a.e.createdAt || ""));
+  const nameRecvTotal = r2(nameRecvList.reduce((s, x) => s + x.amount, 0));
   for (const [rid, g] of rcptGroups) {
     const pieces = g.pieces.sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
     const quoteNos = pieces.map((x) => (x.sourceId ? quoteById.get(x.sourceId)?.number || "" : "")).filter(Boolean);
@@ -537,6 +632,7 @@ export default function ReceiptsView() {
 
   const editing = !!editId || !!editRcpt;
   const showReceivedFields = kind === "received";
+  const recvFromCustomer = kind === "received" && recvVia === "customer";
   const activeWorkers = workers.filter((w) => w.active).sort((a, b) => a.name.localeCompare(b.name));
 
   async function recordWorker() {
@@ -581,10 +677,56 @@ export default function ReceiptsView() {
         </div>
 
         {kind === "received" && (
-          <label className="modal-field" style={{ width: "100%" }}>
-            <span>Customer</span>
-            <CustomerPicker value={name} customers={customers} onType={onType} onPick={pickCustomer} placeholder="Search an existing customer…" />
-          </label>
+          <>
+            <div className="db-seg sm" style={{ margin: "0 0 12px" }}>
+              <button
+                className={"seg-btn" + (recvVia === "customer" ? " on" : "")}
+                type="button"
+                disabled={editing && recvVia !== "customer"}
+                onClick={() => { setRecvVia("customer"); setRecvName(""); setRecvCat(""); }}
+              >
+                Customer
+              </button>
+              <button
+                className={"seg-btn" + (recvVia === "name" ? " on" : "")}
+                type="button"
+                disabled={editing && recvVia !== "name"}
+                onClick={() => { setRecvVia("name"); setPicked(null); setName(""); setQuoteId(""); }}
+              >
+                From name
+              </button>
+            </div>
+            {recvVia === "customer" ? (
+              <label className="modal-field" style={{ width: "100%" }}>
+                <span>Customer</span>
+                <CustomerPicker value={name} customers={customers} onType={onType} onPick={pickCustomer} placeholder="Search an existing customer…" />
+              </label>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%" }}>
+                <label className="modal-field" style={{ width: "100%" }}>
+                  <span>Received from (name)</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. driver · carpenter · who gave money back"
+                    value={recvName}
+                    onChange={(e) => setRecvName(e.target.value)}
+                  />
+                </label>
+                <label className="modal-field" style={{ width: "100%" }}>
+                  <span>Against category (optional)</span>
+                  <select value={recvCat} onChange={(e) => setRecvCat(e.target.value)}>
+                    <option value="">— none —</option>
+                    {SPEND_CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                  <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
+                    If they returned money from a paid-out (Food, Truck rent, etc.), pick that category.
+                  </small>
+                </label>
+              </div>
+            )}
+          </>
         )}
 
         {kind === "paid" && (
@@ -604,7 +746,7 @@ export default function ReceiptsView() {
           </label>
         )}
 
-        {kind === "received" && picked && (
+        {recvFromCustomer && picked && (
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "10px 0 4px" }}>
             <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>
               Outstanding: <b style={{ color: outstanding > 0.5 ? "var(--danger)" : "var(--green)" }}>₹ {inr(outstanding)}</b>
@@ -761,7 +903,7 @@ export default function ReceiptsView() {
           </div>
         )}
 
-        {showReceivedFields && (
+        {recvFromCustomer && (
           <div className="modal-field" style={{ marginTop: 12, width: "100%" }}>
             <span>Use this money for</span>
             <div className="db-seg sm" style={{ marginTop: 4, flexWrap: "wrap" }}>
@@ -865,7 +1007,9 @@ export default function ReceiptsView() {
             ? "Save changes"
             : kind === "paid"
               ? "Record paid out — " + (SPEND_CATEGORIES.find((c) => c.id === paidCat)?.label || "Other")
-              : "Record receipt"}
+              : recvVia === "name"
+                ? "Record received from " + (recvName.trim() || "name")
+                : "Record receipt"}
         </button>
       </div>
 
@@ -937,6 +1081,44 @@ export default function ReceiptsView() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+        Received from name <small>— ₹{inr(nameRecvTotal)} · {nameRecvList.length}</small>
+      </div>
+      {nameRecvList.length ? (
+        <div className="panel-card" style={{ padding: "0 0 4px" }}>
+          {nameRecvList.map((entry) => (
+            <div className="stmt" key={entry.key}>
+              <div className={"stmt-ic " + (entry.e.mode === "upi" ? "upi" : "cash")}>
+                {(entry.e.party || "?").slice(0, 3)}
+              </div>
+              <div className="stmt-main">
+                <div className="stmt-to">
+                  {entry.e.party || "—"}
+                  <span className="acct-overall-hint">
+                    {entry.e.label ? " · " + entry.e.label : ""}
+                    {" · "}{entry.e.mode === "upi" ? "UPI" : "Cash"}
+                    {entry.e.toOwner ? " → Owner" : " · Daybook"}
+                    {" · "}{entry.e.date}
+                  </span>
+                </div>
+                <div className="stmt-sub">
+                  {(entry.e.note ? entry.e.note + " · " : "") + "by " + userName(entry.e.enteredBy)}
+                </div>
+              </div>
+              <div className="stmt-amt" style={{ color: "var(--green)" }}>+₹{inr(entry.amount)}</div>
+              <span className="pb-rowacts">
+                <button className="pb-x" title="Edit" type="button" onClick={() => startEdit(entry)} style={{ marginRight: 4 }}>✎</button>
+                <button className="pb-x" title="Delete" type="button" onClick={() => remove(entry)}>×</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="panel-card">
+          <div className="empty">No name receipts yet — use Received → From name when someone returns money.</div>
         </div>
       )}
 
