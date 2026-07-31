@@ -12,7 +12,7 @@ export const SPEND_CATEGORIES: { id: string; label: string; type: EntryType }[] 
   { id: "minitruck", label: "Mini truck", type: "custom" },
   { id: "bills", label: "Bills", type: "custom" },
   { id: "tea", label: "Tea bill", type: "custom" },
-  { id: "pigmy", label: "Pigmy", type: "custom" },
+  { id: "pigmy", label: "Pignee", type: "custom" },
   { id: "shop", label: "Shop expenses", type: "custom" },
   { id: "unload", label: "Unloading charges", type: "custom" },
   { id: "other", label: "Other", type: "custom" },
@@ -30,6 +30,7 @@ export function spendCategoryOf(e: Expense): string {
   if (e.type === "salary") return "Salary";
   if (e.type === "custom") {
     const lab = (e.label || "").trim();
+    if (lab === "Pigmy") return "Pignee"; // renamed
     if (SPEND_LABELS.has(lab)) return lab;
   }
   // additional, old custom notes ("Afsar bhaiya", "Carp com…"), etc.
