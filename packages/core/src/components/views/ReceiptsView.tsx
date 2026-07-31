@@ -5,7 +5,7 @@ import { allRec, getRec, put } from "@/lib/data";
 import { inr, nowIso } from "@/lib/calc";
 import { addExpense, upiAccounts } from "@/lib/expenses";
 import { listWorkers, payWorker, repayWorker, type Worker } from "@/lib/attendance";
-import { partyLedger } from "@/lib/payments";
+import { partyLedger, quoteBill } from "@/lib/payments";
 import { applyCustomerReceipt, unwindReceiptPieces } from "@/lib/receipts";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
@@ -50,8 +50,9 @@ export default function ReceiptsView() {
   const [editId, setEditId] = useState<string | null>(null);
   /** editing a whole receipt (possibly split across quotes): its pieces get unwound + re-applied on save */
   const [editRcpt, setEditRcpt] = useState<{ id: string; pieces: Expense[] } | null>(null);
-  /** where a received amount goes: waterfall over open quotations, or straight onto the account (old dues) */
-  const [applyTo, setApplyTo] = useState<"quotes" | "account">("quotes");
+  /** where a received amount goes: oldest-first · one specific quote · account only */
+  const [applyTo, setApplyTo] = useState<"quotes" | "quote" | "account">("quotes");
+  const [quoteId, setQuoteId] = useState("");
   // worker salary-account quick panel
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [showWkr, setShowWkr] = useState(false);
@@ -122,10 +123,13 @@ export default function ReceiptsView() {
   function pickCustomer(c: Customer) {
     setPicked(c);
     setName(c.name);
+    setQuoteId("");
+    if (applyTo === "quote") setApplyTo("quotes");
   }
   function onType(v: string) {
     setName(v);
     setPicked(null);
+    setQuoteId("");
   }
   function resetForm() {
     setAmt("");
@@ -137,7 +141,31 @@ export default function ReceiptsView() {
     setEditId(null);
     setEditRcpt(null);
     setApplyTo("quotes");
+    setQuoteId("");
   }
+
+  /** open quotations for the picked customer — total + due for the pick list */
+  const openQuotes = picked
+    ? quotes
+        .filter((d) => {
+          if (d.deletedAt || d.purgedAt || d.customerId !== picked.id) return false;
+          const billable =
+            d.status === "Created" ||
+            (+(d.payCash || 0)) > 0 ||
+            (+(d.payUpi || 0)) > 0 ||
+            (+(d.amountPaid || 0)) > 0;
+          if (!billable) return false;
+          return r2(quoteBill(d) - (+d.amountPaid || 0)) > 0.5;
+        })
+        .map((d) => {
+          const total = quoteBill(d);
+          const due = r2(total - (+d.amountPaid || 0));
+          const no = d.displayNumber || d.number || d.id;
+          return { d, total, due, no };
+        })
+        .sort((a, b) => (a.d.createdAt || "").localeCompare(b.d.createdAt || ""))
+    : [];
+  const pickedQuote = openQuotes.find((x) => x.d.id === quoteId) || null;
 
   async function record() {
     if (!picked) return toast("Pick an existing customer");
@@ -149,6 +177,7 @@ export default function ReceiptsView() {
       // then re-apply the corrected amount fresh — money can never be double-counted
       const isUpiMode = mode === "upi" || mode === "uowner";
       if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
+      if (applyTo === "quote" && !quoteId) return toast("Pick which quotation to settle");
       const isCash = !isUpiMode;
       await unwindReceiptPieces(editRcpt.pieces);
       await applyCustomerReceipt({
@@ -161,6 +190,7 @@ export default function ReceiptsView() {
         note: note.trim(),
         date: date ? toDmy(date) : editRcpt.pieces[0]?.date,
         toAccount: applyTo === "account",
+        quoteId: applyTo === "quote" ? quoteId : undefined,
         enteredBy: user?.id || "unknown",
       });
       resetForm();
@@ -226,9 +256,10 @@ export default function ReceiptsView() {
 
     const isUpiMode = mode === "upi" || mode === "uowner";
     if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
+    if (applyTo === "quote" && !quoteId) return toast("Pick which quotation to settle");
     const isCash = !isUpiMode;
     const toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
-    // apply the receipt across the customer's open quotations (oldest first); leftover → account credit
+    // apply the receipt across open quotations (oldest-first, or one picked quote); leftover → account
     const { applied, leftover } = await applyCustomerReceipt({
       custId: picked.id,
       custName: picked.name,
@@ -240,6 +271,7 @@ export default function ReceiptsView() {
       note: note.trim(),
       date: date ? toDmy(date) : undefined,
       toAccount: applyTo === "account",
+      quoteId: applyTo === "quote" ? quoteId : undefined,
       enteredBy: user?.id || "unknown",
     });
     resetForm();
@@ -248,7 +280,8 @@ export default function ReceiptsView() {
     const nq = applied.length;
     const msg =
       nq > 0
-        ? "₹" + inr(a) + " received from " + picked.name + " · applied to " + nq + " quote" + (nq === 1 ? "" : "s") +
+        ? "₹" + inr(a) + " received from " + picked.name + " · applied to " +
+          (nq === 1 ? "#" + (applied[0]?.number || "quote") : nq + " quotes") +
           (leftover > 0.5 ? " · ₹" + inr(leftover) + " to account" : "")
         : "₹" + inr(a) + " received from " + picked.name +
           (isUpiMode
@@ -289,7 +322,17 @@ export default function ReceiptsView() {
       setEditId(null);
       setKind("received");
       setAmt(String(r2(pieces.reduce((s, x) => s + (+x.amount || 0), 0))));
-      setApplyTo(pieces.some((x) => !!x.sourceId) ? "quotes" : "account");
+      const linked = pieces.filter((x) => !!x.sourceId);
+      if (linked.length === 1) {
+        setApplyTo("quote");
+        setQuoteId(linked[0].sourceId || "");
+      } else if (linked.length > 1) {
+        setApplyTo("quotes");
+        setQuoteId("");
+      } else {
+        setApplyTo("account");
+        setQuoteId("");
+      }
     } else {
       setEditId(e.id);
       setEditRcpt(null);
@@ -511,18 +554,62 @@ export default function ReceiptsView() {
         {showReceivedFields && (
           <div className="modal-field" style={{ marginTop: 12, width: "100%" }}>
             <span>Use this money for</span>
-            <div className="db-seg sm" style={{ marginTop: 4 }}>
-              <button className={"seg-btn" + (applyTo === "quotes" ? " on" : "")} type="button" onClick={() => setApplyTo("quotes")}>
-                Settle quotations (oldest first)
+            <div className="db-seg sm" style={{ marginTop: 4, flexWrap: "wrap" }}>
+              <button
+                className={"seg-btn" + (applyTo === "quotes" ? " on" : "")}
+                type="button"
+                onClick={() => { setApplyTo("quotes"); setQuoteId(""); }}
+              >
+                Oldest first
               </button>
-              <button className={"seg-btn" + (applyTo === "account" ? " on" : "")} type="button" onClick={() => setApplyTo("account")}>
-                Account only (old dues)
+              <button
+                className={"seg-btn" + (applyTo === "quote" ? " on" : "")}
+                type="button"
+                onClick={() => setApplyTo("quote")}
+                disabled={!picked || openQuotes.length === 0}
+                title={!picked ? "Pick a customer first" : openQuotes.length ? "Settle one quotation" : "No open quotations for this customer"}
+              >
+                This quotation
+              </button>
+              <button
+                className={"seg-btn" + (applyTo === "account" ? " on" : "")}
+                type="button"
+                onClick={() => { setApplyTo("account"); setQuoteId(""); }}
+              >
+                Account only
               </button>
             </div>
+            {applyTo === "quote" && (
+              <div style={{ marginTop: 10 }}>
+                <label className="modal-field" style={{ width: "100%" }}>
+                  <span>Which quotation</span>
+                  <select value={quoteId} onChange={(e) => setQuoteId(e.target.value)}>
+                    <option value="">— pick quotation —</option>
+                    {openQuotes.map((q) => (
+                      <option key={q.d.id} value={q.d.id}>
+                        #{q.no} · Total ₹{inr(q.total)} · Due ₹{inr(q.due)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {pickedQuote && (
+                  <div style={{ marginTop: 8, fontFamily: "var(--mono)", fontSize: 13, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    <span>Total <b>₹{inr(pickedQuote.total)}</b></span>
+                    <span>Paid <b>₹{inr(r2(pickedQuote.total - pickedQuote.due))}</b></span>
+                    <span style={{ color: "var(--danger)" }}>Due <b>₹{inr(pickedQuote.due)}</b></span>
+                    <button className="btn sm" type="button" onClick={() => setAmt(String(pickedQuote.due))}>
+                      Fill due
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
               {applyTo === "quotes"
-                ? "The amount clears their open quotations oldest-first; anything beyond stays on the account."
-                : "Nothing is linked to any quotation — the whole amount pays down their account balance (e.g. an opening balance from before the app)."}
+                ? "Clears open quotations oldest-first; anything beyond stays on the account."
+                : applyTo === "quote"
+                  ? "Applies only to the quotation you pick — enter the amount manually (or Fill due)."
+                  : "Whole amount pays the account balance only — not linked to any quotation."}
             </small>
           </div>
         )}

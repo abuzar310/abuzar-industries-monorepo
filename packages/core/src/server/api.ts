@@ -27,6 +27,7 @@ import {
   metaSet,
   nextCounter,
   softDeleteRow,
+  upsertRow,
   q as sql,
   tableRef,
   withAdvisoryLock,
@@ -80,6 +81,74 @@ function splitDocs(rows: Row[]): { quotations: AnyRec[]; invoices: AnyRec[] } {
 
 function userFrom(req: NextRequest): AppUser | null {
   return readSessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+}
+
+/** Append one owner-visible audit row (login / logout / create / delete). Never throws. */
+async function writeActivity(
+  schema: AppSchema,
+  opts: {
+    by: string;
+    byName: string;
+    action: "login" | "logout" | "create" | "delete";
+    store?: string;
+    targetId?: string;
+    summary: string;
+  },
+): Promise<void> {
+  try {
+    const id = "act_" + crypto.randomUUID().replace(/-/g, "");
+    const at = new Date().toISOString();
+    await upsertRow(schema, "activity", id, {
+      id,
+      at,
+      by: opts.by,
+      byName: opts.byName,
+      action: opts.action,
+      store: opts.store || "",
+      targetId: opts.targetId || "",
+      summary: opts.summary,
+      createdAt: at,
+      updatedAt: at,
+    });
+  } catch {
+    /* audit must never break the real request */
+  }
+}
+
+function storeLabel(store: string): string {
+  const m: Record<string, string> = {
+    quotations: "quotation",
+    invoices: "invoice",
+    documents: "document",
+    customers: "customer",
+    suppliers: "supplier",
+    expenses: "expense",
+    sessions: "daybook session",
+    stock: "stock",
+    workers: "worker",
+    attendance: "attendance",
+    ledgers: "ledger",
+    vouchers: "voucher",
+    collections: "collection",
+    payHolders: "pay holder",
+    pay_holders: "pay holder",
+  };
+  return m[store] || store;
+}
+
+function recordSummary(store: string, data: AnyRec | null | undefined, id: string): string {
+  if (!data) return storeLabel(store) + " " + id;
+  const kind = storeLabel(store);
+  const name =
+    (data.customerName as string) ||
+    (data.name as string) ||
+    (data.label as string) ||
+    (data.note as string) ||
+    (data.number as string) ||
+    "";
+  const num = (data.displayNumber as string) || (data.number as string) || "";
+  const amt = data.amount != null ? " ₹" + Number(data.amount) : "";
+  return [kind, num && ("#" + num), name, amt].filter(Boolean).join(" · ") || kind + " " + id;
 }
 
 // ---- atomic document creation (collision-proof numbering) ----
@@ -178,10 +247,26 @@ export function createDataApi(schema: AppSchema) {
         const body = (await req.json().catch(() => ({}))) as AnyRec;
         const user = await checkLogin(schema, String(body.userId || ""), String(body.password || ""));
         if (!user) return err(401, "Wrong password");
+        await writeActivity(schema, {
+          by: user.id,
+          byName: user.name,
+          action: "login",
+          summary: user.name + " signed in",
+        });
         return json({ user }, 200, { "Set-Cookie": sessionCookie(makeSessionToken(user)) });
       }
-      if (b === "logout" && method === "POST")
+      if (b === "logout" && method === "POST") {
+        const u = userFrom(req);
+        if (u) {
+          await writeActivity(schema, {
+            by: u.id,
+            byName: u.name,
+            action: "logout",
+            summary: u.name + " signed out",
+          });
+        }
         return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie() });
+      }
       if (b === "me" && method === "GET") return json({ user: userFrom(req) });
       if (b === "password" && method === "POST") {
         const user = userFrom(req);
@@ -244,14 +329,38 @@ export function createDataApi(schema: AppSchema) {
       if (!table) return err(404, "Unknown store: " + b);
       const id = decodeURIComponent(c || "");
       if (!id) return err(400, "Missing id");
+      // never audit the audit trail itself
+      const auditStore = b !== "activity" && table !== "activity";
       if (method === "PUT") {
         const data = (await req.json().catch(() => null)) as AnyRec | null;
         if (!data || typeof data !== "object") return err(400, "Bad record");
-        const row = await (await import("./db")).upsertRow(schema, table, id, data);
+        const prev = await getRow(schema, table, id);
+        const row = await upsertRow(schema, table, id, data);
+        if (auditStore && (!prev || prev.deleted_at)) {
+          await writeActivity(schema, {
+            by: user.id,
+            byName: user.name,
+            action: "create",
+            store: b,
+            targetId: id,
+            summary: "Created " + recordSummary(b, data, id),
+          });
+        }
         return json({ data: row.data, updatedAt: row.updated_at });
       }
       if (method === "DELETE") {
+        const prev = auditStore ? await getRow(schema, table, id) : undefined;
         await softDeleteRow(schema, table, id);
+        if (auditStore && prev && !prev.deleted_at) {
+          await writeActivity(schema, {
+            by: user.id,
+            byName: user.name,
+            action: "delete",
+            store: b,
+            targetId: id,
+            summary: "Deleted " + recordSummary(b, prev.data as AnyRec, id),
+          });
+        }
         return json({ ok: true });
       }
       if (method === "GET") {
@@ -395,6 +504,15 @@ export function createDataApi(schema: AppSchema) {
         const data = body.data as AnyRec;
         if (!data || typeof data !== "object") return err(400, "Bad document");
         const doc = await createDocAtomic(schema, data);
+        const store = doc.kind === "invoice" ? "invoices" : "quotations";
+        await writeActivity(schema, {
+          by: user.id,
+          byName: user.name,
+          action: "create",
+          store,
+          targetId: String(doc.id || ""),
+          summary: "Created " + recordSummary(store, doc, String(doc.id || "")),
+        });
         return json({ data: doc });
       }
       if (b === "next-voucher-no") {

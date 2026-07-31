@@ -163,7 +163,24 @@ export type StoreName =
   | "collections"
   | "payHolders"
   | "workers"
-  | "attendance";
+  | "attendance"
+  | "activity";
+
+/** Owner audit trail — login/logout/create/delete (unofficial Logs tab). */
+export interface Activity {
+  id: string;
+  /** ISO timestamp */
+  at: string;
+  by: string;
+  byName: string;
+  action: "login" | "logout" | "create" | "delete";
+  /** store name when the action is about a record */
+  store?: string;
+  targetId?: string;
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 // ---- app navigation (each app supplies its own tab set) ----
 export interface Tab {

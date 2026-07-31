@@ -38,7 +38,9 @@ declare
     'documents', 'customers', 'suppliers', 'stock', 'expenses', 'sessions',
     'ledgers', 'vouchers', 'collections', 'pay_holders',
     -- attendance: workers (name + daily rate) and one row per worker per day
-    'workers', 'attendance'
+    'workers', 'attendance',
+    -- owner audit trail (login / logout / create / delete)
+    'activity'
   ];
 begin
   foreach sch in array array['official', 'unofficial'] loop

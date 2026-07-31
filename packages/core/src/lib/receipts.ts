@@ -35,6 +35,8 @@ export interface ReceiptInput {
   /** true = keep the whole amount on the customer's account (old/opening dues) —
    *  never allocate it onto open quotations. */
   toAccount?: boolean;
+  /** settle this one quotation only (still leftover → account if overpay). */
+  quoteId?: string;
   enteredBy: string;
 }
 
@@ -60,11 +62,13 @@ export async function applyCustomerReceipt(inp: ReceiptInput): Promise<ReceiptRe
   const rcptId = "RCP-" + uid();
 
   // "account only" (e.g. paying down an opening balance whose bills predate the app):
-  // skip the quote waterfall entirely — the whole amount stays an account receipt
+  // skip the quote waterfall entirely — the whole amount stays an account receipt.
+  // Optional quoteId → only that quotation (manual pick on the Receipts tab).
+  const want = (inp.quoteId || "").trim();
   const open = inp.toAccount
     ? []
     : (await allRec<Doc>("quotations"))
-        .filter((d) => d.customerId === inp.custId && isBillable(d))
+        .filter((d) => d.customerId === inp.custId && isBillable(d) && (!want || d.id === want))
         .map((d) => ({ d, bal: r2(quoteBill(d) - (+d.amountPaid || 0)) }))
         .filter((x) => x.bal > 0.5)
         .sort((a, b) => (a.d.createdAt || "").localeCompare(b.d.createdAt || "")); // oldest first
