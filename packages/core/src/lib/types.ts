@@ -225,6 +225,12 @@ export interface Expense {
   party?: string;
   /** Trip/round count (e.g. Mini truck). */
   rounds?: number;
+  /** Carpenter name on a commission payout (from customer/quote). */
+  carpenter?: string;
+  /** Quotation linked for logging only (not cascade-deleted with the quote — unlike sourceId). */
+  refQuoteId?: string;
+  /** Snapshot of quotation number at save time (survives quote delete). */
+  quoteNo?: string;
   /** UPI recipient / account this money went to (only for mode "upi"); "" for cash. */
   account?: string;
   /** counter-account for transfers: journal voucher's TO-bank (account = FROM-bank). */

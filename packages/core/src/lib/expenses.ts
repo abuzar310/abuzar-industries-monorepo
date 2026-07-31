@@ -44,11 +44,15 @@ export function spendCatKey(e: Expense): string {
   return SPEND_CATEGORIES.find((c) => c.label === label)?.id || "other";
 }
 
-/** Detail line for lists: party · rounds · note (legacy freeform label as fallback). */
+/** Detail line for lists: party · carpenter · quote · rounds · note. */
 export function spendDetailOf(e: Expense): string {
   const bits: string[] = [];
   const party = (e.party || "").trim();
   if (party) bits.push(party);
+  const carpenter = (e.carpenter || "").trim();
+  if (carpenter) bits.push("Carpenter " + carpenter);
+  const qNo = (e.quoteNo || "").trim();
+  if (qNo) bits.push("Q#" + qNo);
   const rounds = +(e.rounds || 0);
   if (rounds > 0) bits.push(rounds === 1 ? "1 round" : rounds + " rounds");
   const note = (e.note || "").trim();
@@ -115,6 +119,9 @@ export async function addExpense(fields: {
   label?: string;
   party?: string;
   rounds?: number;
+  carpenter?: string;
+  refQuoteId?: string;
+  quoteNo?: string;
   account?: string;
   /** transfer counter-account (journal voucher's TO-bank) */
   account2?: string;
@@ -139,6 +146,9 @@ export async function addExpense(fields: {
     note: fields.note || "",
     party: (fields.party || "").trim() || undefined,
     rounds: rounds > 0 ? rounds : undefined,
+    carpenter: (fields.carpenter || "").trim() || undefined,
+    refQuoteId: (fields.refQuoteId || "").trim() || undefined,
+    quoteNo: (fields.quoteNo || "").trim() || undefined,
     account: (fields.account || "").trim(),
     account2: (fields.account2 || "").trim() || undefined,
     // outflows (mode "") can also be owner-paid — e.g. the owner hands a worker money

@@ -60,6 +60,10 @@ export default function ReceiptsView() {
   const [paidCat, setPaidCat] = useState(SPEND_CATEGORIES[0].id);
   /** Paid out: party (carpenter = customer pick/type) or free name for other cats */
   const [paidParty, setPaidParty] = useState("");
+  /** Carpenter commission: linked customer (for quote list) — not written to expense.custId */
+  const [paidCustId, setPaidCustId] = useState("");
+  const [paidQuoteId, setPaidQuoteId] = useState("");
+  const [paidCarpenter, setPaidCarpenter] = useState("");
   /** Mini truck rounds */
   const [paidRounds, setPaidRounds] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
@@ -155,6 +159,9 @@ export default function ReceiptsView() {
     setPaidBy(null);
     setPaidCat(SPEND_CATEGORIES[0].id);
     setPaidParty("");
+    setPaidCustId("");
+    setPaidQuoteId("");
+    setPaidCarpenter("");
     setPaidRounds("");
     setEditId(null);
     setEditRcpt(null);
@@ -185,6 +192,20 @@ export default function ReceiptsView() {
     : [];
   const pickedQuote = openQuotes.find((x) => x.d.id === quoteId) || null;
 
+  /** All quotations for the carpenter-commission party (not only open/due). */
+  const paidCustQuotes = paidCustId
+    ? quotes
+        .filter((d) => !d.deletedAt && !d.purgedAt && d.customerId === paidCustId)
+        .map((d) => ({
+          d,
+          no: d.displayNumber || d.number || d.id,
+          carpenter: (d.site || "").trim(),
+          total: quoteBill(d),
+        }))
+        .sort((a, b) => (b.d.createdAt || "").localeCompare(a.d.createdAt || ""))
+    : [];
+  const paidCust = paidCustId ? customers.find((c) => c.id === paidCustId) || null : null;
+
   async function record() {
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return toast("Enter an amount");
@@ -195,6 +216,11 @@ export default function ReceiptsView() {
       const by = paidBy ?? (isOwner ? "owner" : "manager");
       const party = paidParty.trim();
       const rounds = cat.id === "minitruck" ? Math.max(0, Math.floor(+paidRounds || 0)) : 0;
+      const isCarp = cat.id === "carpenter";
+      const carpenter = isCarp ? paidCarpenter.trim() : "";
+      const q = isCarp && paidQuoteId ? paidCustQuotes.find((x) => x.d.id === paidQuoteId) : null;
+      const refQuoteId = q?.d.id || "";
+      const quoteNo = q ? q.no : "";
       if (editId) {
         const e = await getRec<Expense>("expenses", editId);
         if (!e || e.type === "sale") return resetForm();
@@ -204,6 +230,9 @@ export default function ReceiptsView() {
         e.note = note.trim();
         e.party = party || undefined;
         e.rounds = rounds > 0 ? rounds : undefined;
+        e.carpenter = carpenter || undefined;
+        e.refQuoteId = refQuoteId || undefined;
+        e.quoteNo = quoteNo || undefined;
         e.toOwner = by === "owner";
         e.date = date ? toDmy(date) : e.date;
         e.custId = undefined;
@@ -222,6 +251,9 @@ export default function ReceiptsView() {
         note: note.trim(),
         party,
         rounds: rounds > 0 ? rounds : undefined,
+        carpenter: carpenter || undefined,
+        refQuoteId: refQuoteId || undefined,
+        quoteNo: quoteNo || undefined,
         date: date ? toDmy(date) : undefined,
         toOwner: by === "owner",
         enteredBy: user?.id || "unknown",
@@ -380,10 +412,18 @@ export default function ReceiptsView() {
       setPaidBy(e.toOwner ? "owner" : "manager");
       setNote(e.note || "");
       setPaidParty(e.party || "");
+      setPaidCarpenter(e.carpenter || "");
+      setPaidQuoteId(e.refQuoteId || "");
       setPaidRounds(e.rounds ? String(e.rounds) : "");
       setDate(e.date ? fromDmy(e.date) : "");
       setPicked(null);
       setName("");
+      // resolve customer id from party name or linked quote
+      const fromQuote = e.refQuoteId ? quotes.find((q) => q.id === e.refQuoteId) : null;
+      const byName = (e.party || "").trim()
+        ? customers.find((c) => c.name.trim().toLowerCase() === (e.party || "").trim().toLowerCase())
+        : null;
+      setPaidCustId(fromQuote?.customerId || byName?.id || "");
       return;
     } else {
       setEditId(e.id);
@@ -631,17 +671,68 @@ export default function ReceiptsView() {
         {kind === "paid" && (
           <div style={{ marginTop: 12, width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
             {paidCat === "carpenter" ? (
-              <label className="modal-field" style={{ width: "100%" }}>
-                <span>Party / customer</span>
-                <CustomerPicker
-                  value={paidParty}
-                  customers={customers}
-                  onType={setPaidParty}
-                  onPick={(c) => setPaidParty(c.name)}
-                  placeholder="Search customer or type a name…"
-                  maxResults={12}
-                />
-              </label>
+              <>
+                <label className="modal-field" style={{ width: "100%" }}>
+                  <span>Party / customer</span>
+                  <CustomerPicker
+                    value={paidParty}
+                    customers={customers}
+                    onType={(v) => {
+                      setPaidParty(v);
+                      setPaidCustId("");
+                      setPaidQuoteId("");
+                      setPaidCarpenter("");
+                    }}
+                    onPick={(c) => {
+                      setPaidParty(c.name);
+                      setPaidCustId(c.id);
+                      setPaidQuoteId("");
+                      setPaidCarpenter((c.site || "").trim());
+                    }}
+                    placeholder="Search customer or type a name…"
+                    maxResults={12}
+                  />
+                </label>
+                {paidCustId && (
+                  <label className="modal-field" style={{ width: "100%" }}>
+                    <span>Quotation (optional)</span>
+                    <select
+                      value={paidQuoteId}
+                      onChange={(ev) => {
+                        const id = ev.target.value;
+                        setPaidQuoteId(id);
+                        const q = paidCustQuotes.find((x) => x.d.id === id);
+                        if (q?.carpenter) setPaidCarpenter(q.carpenter);
+                        else if (paidCust?.site) setPaidCarpenter(paidCust.site.trim());
+                      }}
+                    >
+                      <option value="">— none / all for this party —</option>
+                      {paidCustQuotes.map((q) => (
+                        <option key={q.d.id} value={q.d.id}>
+                          #{q.no}
+                          {q.d.date ? " · " + q.d.date : ""}
+                          {q.carpenter ? " · " + q.carpenter : ""}
+                          {" · ₹" + inr(q.total)}
+                        </option>
+                      ))}
+                    </select>
+                    {paidCustQuotes.length === 0 && (
+                      <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
+                        No quotations for this customer yet.
+                      </small>
+                    )}
+                  </label>
+                )}
+                <label className="modal-field" style={{ width: "100%" }}>
+                  <span>Carpenter</span>
+                  <input
+                    type="text"
+                    placeholder={paidCust?.site ? "From customer: " + paidCust.site : "Carpenter name (optional)"}
+                    value={paidCarpenter}
+                    onChange={(ev) => setPaidCarpenter(ev.target.value)}
+                  />
+                </label>
+              </>
             ) : (
               <label className="modal-field" style={{ width: "100%" }}>
                 <span>Name (optional)</span>
