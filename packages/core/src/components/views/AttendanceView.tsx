@@ -14,6 +14,7 @@ import {
   payWorker,
   prevWeek,
   repayWorker,
+  rateOn,
   saveWorker,
   setAttendanceCfg,
   setWorkerActive,
@@ -960,7 +961,7 @@ export default function AttendanceView() {
                             <span className="um-caret" style={{ marginRight: 4 }}>{open ? "▾" : "▸"}</span>
                             {x.worker.name}
                           </button>
-                          <small className="att-rate">₹{inr(x.worker.rate)}/day</small>
+                          <small className="att-rate">₹{inr(rateOn(x.worker, days[0]))}/day</small>
                         </td>
                         {days.map((iso, i) => (
                           <td key={iso} className={"att-day" + (i === paydayCol ? " att-payday" : "")}>
