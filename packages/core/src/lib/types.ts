@@ -166,18 +166,27 @@ export type StoreName =
   | "attendance"
   | "activity";
 
-/** Owner audit trail — login/logout/create/delete (unofficial Logs tab). */
+/** Owner audit trail — login/logout/create/update/delete (unofficial Logs tab). */
 export interface Activity {
   id: string;
   /** ISO timestamp */
   at: string;
   by: string;
   byName: string;
-  action: "login" | "logout" | "create" | "delete";
+  /** owner | manager */
+  role?: string;
+  action: "login" | "logout" | "create" | "update" | "delete";
   /** store name when the action is about a record */
   store?: string;
   targetId?: string;
+  /** short one-line headline */
   summary: string;
+  /** longer detail lines (amount, mode, party, note, field diffs…) */
+  detail?: string;
+  amount?: number;
+  mode?: string;
+  date?: string;
+  party?: string;
   createdAt: string;
   updatedAt: string;
 }

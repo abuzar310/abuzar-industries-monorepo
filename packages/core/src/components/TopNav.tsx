@@ -104,28 +104,30 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
                 <div className="um-head">
                   {user.name} · {user.role === "owner" ? "Owner" : "Manager"}
                 </div>
-                <button
-                  className="um-item"
-                  onClick={async () => {
-                    setUserMenu(false);
-                    const r = await formDialog({
-                      title: "Change my password",
-                      message: "New password for " + user.name,
-                      fields: [
-                        { name: "pw", label: "New password", type: "password", required: true },
-                        { name: "pw2", label: "Confirm password", type: "password", required: true },
-                      ],
-                      submitLabel: "Update",
-                    });
-                    if (!r) return;
-                    if ((r.pw || "").trim().length < 4) return toast("Use at least 4 characters");
-                    if (r.pw !== r.pw2) return toast("Passwords don't match");
-                    const ok = await changePassword(user.id, r.pw);
-                    toast(ok ? "Password updated" : "Could not update — try again");
-                  }}
-                >
-                  Change password
-                </button>
+                {user.role === "owner" && (
+                  <button
+                    className="um-item"
+                    onClick={async () => {
+                      setUserMenu(false);
+                      const r = await formDialog({
+                        title: "Change my password",
+                        message: "New password for " + user.name,
+                        fields: [
+                          { name: "pw", label: "New password", type: "password", required: true },
+                          { name: "pw2", label: "Confirm password", type: "password", required: true },
+                        ],
+                        submitLabel: "Update",
+                      });
+                      if (!r) return;
+                      if ((r.pw || "").trim().length < 4) return toast("Use at least 4 characters");
+                      if (r.pw !== r.pw2) return toast("Passwords don't match");
+                      const ok = await changePassword(user.id, r.pw);
+                      toast(ok ? "Password updated" : "Could not update — try again");
+                    }}
+                  >
+                    Change password
+                  </button>
+                )}
                 <button
                   className="um-logout"
                   onClick={() => {

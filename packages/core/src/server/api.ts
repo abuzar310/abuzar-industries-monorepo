@@ -83,16 +83,24 @@ function userFrom(req: NextRequest): AppUser | null {
   return readSessionToken(req.cookies.get(SESSION_COOKIE)?.value);
 }
 
-/** Append one owner-visible audit row (login / logout / create / delete). Never throws. */
+type ActAction = "login" | "logout" | "create" | "update" | "delete";
+
+/** Append one owner-visible audit row. Never throws. */
 async function writeActivity(
   schema: AppSchema,
   opts: {
     by: string;
     byName: string;
-    action: "login" | "logout" | "create" | "delete";
+    role?: string;
+    action: ActAction;
     store?: string;
     targetId?: string;
     summary: string;
+    detail?: string;
+    amount?: number;
+    mode?: string;
+    date?: string;
+    party?: string;
   },
 ): Promise<void> {
   try {
@@ -103,10 +111,16 @@ async function writeActivity(
       at,
       by: opts.by,
       byName: opts.byName,
+      role: opts.role || "",
       action: opts.action,
       store: opts.store || "",
       targetId: opts.targetId || "",
       summary: opts.summary,
+      detail: opts.detail || "",
+      amount: opts.amount ?? null,
+      mode: opts.mode || "",
+      date: opts.date || "",
+      party: opts.party || "",
       createdAt: at,
       updatedAt: at,
     });
@@ -122,11 +136,11 @@ function storeLabel(store: string): string {
     documents: "document",
     customers: "customer",
     suppliers: "supplier",
-    expenses: "expense",
+    expenses: "expense / receipt",
     sessions: "daybook session",
     stock: "stock",
     workers: "worker",
-    attendance: "attendance",
+    attendance: "attendance day",
     ledgers: "ledger",
     vouchers: "voucher",
     collections: "collection",
@@ -136,19 +150,79 @@ function storeLabel(store: string): string {
   return m[store] || store;
 }
 
-function recordSummary(store: string, data: AnyRec | null | undefined, id: string): string {
-  if (!data) return storeLabel(store) + " " + id;
+function money(n: unknown): string {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "";
+  return "₹" + (Math.round(v * 100) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Rich snapshot lines for the Logs detail panel. */
+function recordDetail(store: string, data: AnyRec | null | undefined, id: string): {
+  summary: string;
+  detail: string;
+  amount?: number;
+  mode?: string;
+  date?: string;
+  party?: string;
+} {
+  if (!data) {
+    return { summary: storeLabel(store) + " " + id, detail: "id " + id };
+  }
   const kind = storeLabel(store);
-  const name =
-    (data.customerName as string) ||
-    (data.name as string) ||
-    (data.label as string) ||
-    (data.note as string) ||
-    (data.number as string) ||
-    "";
-  const num = (data.displayNumber as string) || (data.number as string) || "";
-  const amt = data.amount != null ? " ₹" + Number(data.amount) : "";
-  return [kind, num && ("#" + num), name, amt].filter(Boolean).join(" · ") || kind + " " + id;
+  const num = String(data.displayNumber || data.number || "");
+  const party = String(data.customerName || data.name || data.label || "").trim();
+  const note = String(data.note || "").trim();
+  const date = String(data.date || "").trim();
+  const mode = data.mode ? String(data.mode) : data.toOwner ? "owner-cash" : "";
+  const type = data.type ? String(data.type) : data.kind ? String(data.kind) : "";
+  const status = data.status ? String(data.status) : data.paymentStatus ? String(data.paymentStatus) : "";
+  const amount = data.amount != null ? Number(data.amount) : data.amountPaid != null ? Number(data.amountPaid) : undefined;
+  const phone = data.phone ? String(data.phone) : "";
+  const account = data.account ? String(data.account) : "";
+  const lines: string[] = [];
+  lines.push("Record: " + kind + (num ? " #" + num : "") + " · id " + id);
+  if (party) lines.push("Party / name: " + party);
+  if (phone) lines.push("Phone: " + phone);
+  if (type) lines.push("Type: " + type);
+  if (status) lines.push("Status: " + status);
+  if (amount != null && Number.isFinite(amount)) lines.push("Amount: " + money(amount));
+  if (data.payCash != null || data.payUpi != null) {
+    lines.push(
+      "Paid: cash " + money(data.payCash || 0) + " · bank/UPI " + money(data.payUpi || 0) +
+        (data.amountPaid != null ? " · total " + money(data.amountPaid) : ""),
+    );
+  }
+  if (mode) lines.push("Mode: " + mode + (data.toOwner ? " (to owner)" : ""));
+  if (account) lines.push("Account: " + account);
+  if (date) lines.push("Business date: " + date);
+  if (note) lines.push("Note: " + note);
+  if (data.charge) lines.push("Flag: due/charge (increases balance)");
+  if (data.custId) lines.push("Customer id: " + String(data.custId));
+  if (data.sourceId) lines.push("Linked to: " + String(data.sourceId));
+  if (data.rcptId) lines.push("Receipt group: " + String(data.rcptId));
+  if (data.enteredBy) lines.push("Entered by (field): " + String(data.enteredBy));
+  const summary = [kind, num && ("#" + num), party, amount != null ? money(amount) : ""].filter(Boolean).join(" · ") || kind + " " + id;
+  return { summary, detail: lines.join("\n"), amount, mode, date, party };
+}
+
+function fieldDiffs(prev: AnyRec, next: AnyRec): string {
+  const keys = [
+    "customerName", "name", "label", "note", "amount", "mode", "account", "date", "status",
+    "paymentStatus", "payCash", "payUpi", "amountPaid", "phone", "type", "toOwner", "charge",
+    "number", "displayNumber", "finalPrice",
+  ];
+  const out: string[] = [];
+  for (const k of keys) {
+    const a = prev[k];
+    const b = next[k];
+    if (a === b) continue;
+    if (a == null && (b === "" || b === 0 || b === false)) continue;
+    if (b == null && (a === "" || a === 0 || a === false)) continue;
+    const fmt = (v: unknown) =>
+      typeof v === "number" ? money(v) : v === true ? "yes" : v === false ? "no" : v == null ? "—" : String(v);
+    out.push(k + ": " + fmt(a) + " → " + fmt(b));
+  }
+  return out.join("\n");
 }
 
 // ---- atomic document creation (collision-proof numbering) ----
@@ -250,8 +324,11 @@ export function createDataApi(schema: AppSchema) {
         await writeActivity(schema, {
           by: user.id,
           byName: user.name,
+          role: user.role,
           action: "login",
-          summary: user.name + " signed in",
+          summary: user.name + " (" + user.role + ") signed in",
+          detail:
+            "User: " + user.name + "\nRole: " + user.role + "\nUser id: " + user.id + "\nAction: login (session cookie set)",
         });
         return json({ user }, 200, { "Set-Cookie": sessionCookie(makeSessionToken(user)) });
       }
@@ -261,8 +338,11 @@ export function createDataApi(schema: AppSchema) {
           await writeActivity(schema, {
             by: u.id,
             byName: u.name,
+            role: u.role,
             action: "logout",
-            summary: u.name + " signed out",
+            summary: u.name + " (" + u.role + ") signed out",
+            detail:
+              "User: " + u.name + "\nRole: " + u.role + "\nUser id: " + u.id + "\nAction: logout (session cleared)",
           });
         }
         return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie() });
@@ -271,10 +351,22 @@ export function createDataApi(schema: AppSchema) {
       if (b === "password" && method === "POST") {
         const user = userFrom(req);
         if (!user) return err(401, "Not signed in");
+        // managers cannot change passwords — owner only
+        if (user.role !== "owner") return err(403, "Only the owner can change passwords");
         const body = (await req.json().catch(() => ({}))) as AnyRec;
         const pw = String(body.password || "").trim();
         if (pw.length < 4) return err(400, "Password too short");
         await changeUserPassword(schema, user.id, pw);
+        await writeActivity(schema, {
+          by: user.id,
+          byName: user.name,
+          role: user.role,
+          action: "update",
+          store: "users",
+          targetId: user.id,
+          summary: user.name + " changed their password",
+          detail: "Password updated for " + user.name + " (" + user.id + ")",
+        });
         return json({ ok: true });
       }
       return err(404, "Unknown auth route");
@@ -336,15 +428,50 @@ export function createDataApi(schema: AppSchema) {
         if (!data || typeof data !== "object") return err(400, "Bad record");
         const prev = await getRow(schema, table, id);
         const row = await upsertRow(schema, table, id, data);
-        if (auditStore && (!prev || prev.deleted_at)) {
-          await writeActivity(schema, {
-            by: user.id,
-            byName: user.name,
-            action: "create",
-            store: b,
-            targetId: id,
-            summary: "Created " + recordSummary(b, data, id),
-          });
+        if (auditStore) {
+          const snap = recordDetail(b, data, id);
+          if (!prev || prev.deleted_at) {
+            await writeActivity(schema, {
+              by: user.id,
+              byName: user.name,
+              role: user.role,
+              action: "create",
+              store: b,
+              targetId: id,
+              summary: "Created · " + snap.summary,
+              detail: snap.detail + "\nBy: " + user.name + " (" + user.role + ")",
+              amount: snap.amount,
+              mode: snap.mode,
+              date: snap.date,
+              party: snap.party,
+            });
+          } else {
+            const diffs = fieldDiffs(prev.data as AnyRec, data);
+            if (diffs) {
+              await writeActivity(schema, {
+                by: user.id,
+                byName: user.name,
+                role: user.role,
+                action: "update",
+                store: b,
+                targetId: id,
+                summary: "Updated · " + snap.summary,
+                detail:
+                  snap.detail +
+                  "\n\nChanges:\n" +
+                  diffs +
+                  "\n\nBy: " +
+                  user.name +
+                  " (" +
+                  user.role +
+                  ")",
+                amount: snap.amount,
+                mode: snap.mode,
+                date: snap.date,
+                party: snap.party,
+              });
+            }
+          }
         }
         return json({ data: row.data, updatedAt: row.updated_at });
       }
@@ -352,13 +479,20 @@ export function createDataApi(schema: AppSchema) {
         const prev = auditStore ? await getRow(schema, table, id) : undefined;
         await softDeleteRow(schema, table, id);
         if (auditStore && prev && !prev.deleted_at) {
+          const snap = recordDetail(b, prev.data as AnyRec, id);
           await writeActivity(schema, {
             by: user.id,
             byName: user.name,
+            role: user.role,
             action: "delete",
             store: b,
             targetId: id,
-            summary: "Deleted " + recordSummary(b, prev.data as AnyRec, id),
+            summary: "Deleted · " + snap.summary,
+            detail: snap.detail + "\nBy: " + user.name + " (" + user.role + ")\nSoft-deleted (recoverable in DB)",
+            amount: snap.amount,
+            mode: snap.mode,
+            date: snap.date,
+            party: snap.party,
           });
         }
         return json({ ok: true });
@@ -505,13 +639,20 @@ export function createDataApi(schema: AppSchema) {
         if (!data || typeof data !== "object") return err(400, "Bad document");
         const doc = await createDocAtomic(schema, data);
         const store = doc.kind === "invoice" ? "invoices" : "quotations";
+        const snap = recordDetail(store, doc, String(doc.id || ""));
         await writeActivity(schema, {
           by: user.id,
           byName: user.name,
+          role: user.role,
           action: "create",
           store,
           targetId: String(doc.id || ""),
-          summary: "Created " + recordSummary(store, doc, String(doc.id || "")),
+          summary: "Created · " + snap.summary,
+          detail: snap.detail + "\nBy: " + user.name + " (" + user.role + ")",
+          amount: snap.amount,
+          mode: snap.mode,
+          date: snap.date,
+          party: snap.party,
         });
         return json({ data: doc });
       }
