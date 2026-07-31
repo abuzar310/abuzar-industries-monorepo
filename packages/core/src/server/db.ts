@@ -95,6 +95,12 @@ export async function ensureTable(schema: AppSchema, table: string): Promise<voi
   const key = schema + "." + table;
   if (ensuredTables[key]) return;
   const ref = tableRef(schema, table);
+  // Cheap existence check first — for already-provisioned tables this is a single
+  // catalog lookup and we skip all DDL. Running DROP/CREATE TRIGGER on hot tables
+  // every cold request races under concurrency and floods the connection pool.
+  const found = await q<{ t: string | null }>(`select to_regclass($1)::text as t`, [`${schema}.${table}`]);
+  if (found[0]?.t) { ensuredTables[key] = true; return; }
+  // Table genuinely missing — provision it (mirrors db/cloud-schema.sql).
   await q(`create or replace function public.touch_updated_at() returns trigger
     language plpgsql as $$ begin new.updated_at := now(); return new; end $$`);
   await q(`create table if not exists ${ref} (
@@ -105,8 +111,8 @@ export async function ensureTable(schema: AppSchema, table: string): Promise<voi
     deleted_at timestamptz
   )`);
   await q(`create index if not exists ${ident(table + "_updated_at_idx")} on ${ref} (updated_at)`);
-  await q(`drop trigger if exists touch_updated_at on ${ref}`);
-  await q(`create trigger touch_updated_at before update on ${ref}
+  // create-or-replace is atomic (PG14+) — no drop+create race.
+  await q(`create or replace trigger touch_updated_at before update on ${ref}
     for each row execute function public.touch_updated_at()`);
   ensuredTables[key] = true;
 }
