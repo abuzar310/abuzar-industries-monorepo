@@ -2,16 +2,54 @@ import { allRec, delRec, put } from "./data";
 import { nowIso, splitHandover, todayStr, uid } from "./calc";
 import type { DaybookSession, EntryType, Expense, PayMode } from "./types";
 
+/** Prebuilt money-out categories — Daybook, Receipts Paid out, and Books all share these.
+ *  Food/Salary use native types; the rest store as `custom` with `label` = category name. */
+export const SPEND_CATEGORIES: { id: string; label: string; type: EntryType }[] = [
+  { id: "food", label: "Food", type: "food" },
+  { id: "salary", label: "Salary", type: "salary" },
+  { id: "carpenter", label: "Carpenter commission", type: "custom" },
+  { id: "truck", label: "Truck rent", type: "custom" },
+  { id: "bills", label: "Bills", type: "custom" },
+  { id: "tea", label: "Tea bill", type: "custom" },
+  { id: "other", label: "Other", type: "custom" },
+];
+
+const SPEND_LABELS = new Set(SPEND_CATEGORIES.map((c) => c.label));
+
+/** Human label for an expense (category-aware). Legacy additional/custom keep their label. */
+export function spendCategoryOf(e: Expense): string {
+  if (e.type === "sale") return e.charge ? "Due" : "Sale";
+  if (e.type === "food") return "Food";
+  if (e.type === "salary") return "Salary";
+  if (e.type === "additional") return (e.label || "").trim() || "Additional";
+  if (e.type === "custom") {
+    const lab = (e.label || "").trim();
+    if (SPEND_LABELS.has(lab)) return lab;
+    if (lab.startsWith("Paid to ")) return lab; // legacy customer paid-out
+    return lab || "Other";
+  }
+  return e.type;
+}
+
+/** Stable group key for Books category breakdown. */
+export function spendCatKey(e: Expense): string {
+  const label = spendCategoryOf(e);
+  const known = SPEND_CATEGORIES.find((c) => c.label === label);
+  return known ? known.id : "x:" + label.toLowerCase();
+}
+
 export const ENTRY_TYPES: { value: EntryType; label: string; flow: "in" | "out" }[] = [
   { value: "sale", label: "Sale (money in)", flow: "in" },
-  { value: "salary", label: "Salary given", flow: "out" },
+  { value: "salary", label: "Salary", flow: "out" },
   { value: "food", label: "Food", flow: "out" },
-  { value: "additional", label: "Additional cost", flow: "out" },
-  { value: "custom", label: "Custom", flow: "out" },
+  // additional / custom kept for old rows — new UI uses SPEND_CATEGORIES instead
+  { value: "additional", label: "Additional", flow: "out" },
+  { value: "custom", label: "Other", flow: "out" },
 ];
 
 export const typeLabel = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t)?.label ?? t;
-export const isInflow = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t)?.flow === "in";
+/** Money-in is only `sale`. Everything else (food, salary, custom…) is money-out. */
+export const isInflow = (t: EntryType) => t === "sale";
 /** UPI money-in: kept OUT of the cash daybook (Manager only owes cash) and shown in its own section. */
 export const isUpi = (e: Expense) => isInflow(e.type) && e.mode === "upi";
 /** Does this entry belong in the manager's cash daybook? Excludes UPI, cash sent straight to owner,

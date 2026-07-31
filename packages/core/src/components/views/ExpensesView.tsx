@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { allRec, delRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
-import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, ENTRY_TYPES, inDaybook, isInflow, isUpi, requestHandover, typeLabel, upiAccounts } from "@/lib/expenses";
+import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, inDaybook, isInflow, isUpi, requestHandover, spendCategoryOf, SPEND_CATEGORIES, upiAccounts } from "@/lib/expenses";
 import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
 import { isIOS, isStandalone } from "@/lib/pwa";
 import { USERS } from "@/lib/local-auth";
@@ -10,7 +10,7 @@ import AccountPicker from "@/components/AccountPicker";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
-import type { DaybookSession, Doc, EntryType, Expense, PayMode } from "@/lib/types";
+import type { DaybookSession, Doc, Expense, PayMode } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id;
 
@@ -24,7 +24,8 @@ export default function ExpensesView() {
   const [notif, setNotif] = useState(""); // "" until client checks; then default/granted/denied
 
   // inline quick-entry form state
-  const [type, setType] = useState<EntryType>("sale");
+  const [flow, setFlow] = useState<"in" | "out">("in");
+  const [spendCat, setSpendCat] = useState(SPEND_CATEGORIES[0].id);
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<PayMode>("cash");
   const [note, setNote] = useState("");
@@ -101,22 +102,45 @@ export default function ExpensesView() {
       amountRef.current?.focus();
       return toast("Enter an amount");
     }
-    const upiEntry = isInflow(type) && mode === "upi";
-    if (upiEntry && !acct.trim()) return toast("Enter the UPI account (to whom)");
-    await addExpense({ type, amount: amt, mode, note, account: acct, label: type === "custom" ? note : "", enteredBy: user?.id || "unknown" });
+    if (flow === "in") {
+      const upiEntry = mode === "upi";
+      if (upiEntry && !acct.trim()) return toast("Enter the UPI account (to whom)");
+      await addExpense({
+        type: "sale",
+        amount: amt,
+        mode,
+        note,
+        account: acct,
+        enteredBy: user?.id || "unknown",
+      });
+      setAmount("");
+      setNote("");
+      setAcct("");
+      if (upiEntry && !upiAccts.includes(acct.trim())) setUpiAccts((a) => [...a, acct.trim()].sort());
+      amountRef.current?.focus();
+      bumpData();
+      return toast(upiEntry ? "UPI entry added" : "Entry added");
+    }
+    const cat = SPEND_CATEGORIES.find((c) => c.id === spendCat) || SPEND_CATEGORIES[SPEND_CATEGORIES.length - 1];
+    await addExpense({
+      type: cat.type,
+      amount: amt,
+      mode: "cash",
+      note,
+      label: cat.label,
+      enteredBy: user?.id || "unknown",
+    });
     setAmount("");
     setNote("");
-    setAcct("");
-    if (upiEntry && !upiAccts.includes(acct.trim())) setUpiAccts((a) => [...a, acct.trim()].sort());
     amountRef.current?.focus();
     bumpData();
-    toast(upiEntry ? "UPI entry added" : "Entry added");
+    toast(cat.label + " · ₹" + inr(amt) + " added");
   }
 
   async function remove(e: Expense) {
     const ok = await confirmDialog({
       title: "Delete entry?",
-      message: `${typeLabel(e.type)} — ₹${inr(e.amount)}`,
+      message: `${spendCategoryOf(e)} — ₹${inr(e.amount)}`,
       confirmLabel: "Delete",
       danger: true,
     });
@@ -243,8 +267,6 @@ export default function ExpensesView() {
     );
     return rows.reverse(); // newest day first on screen
   })();
-  const flow = isInflow(type) ? "in" : "out";
-  const setFlow = (f: "in" | "out") => setType(f === "in" ? "sale" : isInflow(type) ? "additional" : type);
 
   return (
     <div>
@@ -352,16 +374,20 @@ export default function ExpensesView() {
           ) : (
             <label className="db-cat">
               <span>Category</span>
-              <select value={type} onChange={(ev) => setType(ev.target.value as EntryType)}>
-                {ENTRY_TYPES.filter((e) => e.flow === "out").map((et) => (
-                  <option key={et.value} value={et.value}>{et.label}</option>
+              <select value={spendCat} onChange={(ev) => setSpendCat(ev.target.value)}>
+                {SPEND_CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
                 ))}
               </select>
             </label>
           )}
           <label className="db-note">
             <span>Note</span>
-            <input placeholder="e.g. teak planks, helper salary…" value={note} onChange={(ev) => setNote(ev.target.value)} />
+            <input
+              placeholder={flow === "out" ? "e.g. lunch for yard · truck #KA…" : "e.g. teak planks…"}
+              value={note}
+              onChange={(ev) => setNote(ev.target.value)}
+            />
           </label>
           <button className="btn primary db-add" type="submit">Add entry</button>
         </form>
@@ -429,9 +455,9 @@ export default function ExpensesView() {
               </div>
               {g.lines.map(({ e, cin, cout, bal }) => (
                 <div className="db-srow" key={e.id}>
-                  <span className={"exptag " + (cin > 0 ? "in" : "out")}>{typeLabel(e.type).split(" ")[0]}</span>
+                  <span className={"exptag " + (cin > 0 ? "in" : "out")}>{spendCategoryOf(e).split(" ")[0]}</span>
                   <span className="expnote">
-                    {e.note || typeLabel(e.type)}
+                    {e.note || spendCategoryOf(e)}
                     <small>
                       {userName(e.enteredBy)}
                       {cin > 0 && e.mode ? " · " + e.mode.toUpperCase() : ""}
@@ -580,9 +606,9 @@ export default function ExpensesView() {
                     {entries.length > 0 && <div className="pbd-lbl">Every transaction · {entries.length}</div>}
                     {entries.map((e) => (
                       <div className="exprow" key={e.id}>
-                        <span className={"exptag " + (isInflow(e.type) ? "in" : "out")}>{typeLabel(e.type).split(" ")[0]}</span>
+                        <span className={"exptag " + (isInflow(e.type) ? "in" : "out")}>{spendCategoryOf(e).split(" ")[0]}</span>
                         <span className="expnote">
-                          {e.note || typeLabel(e.type)}
+                          {e.note || spendCategoryOf(e)}
                           <small>
                             {e.date} · {userName(e.enteredBy)}
                             {isInflow(e.type) && e.mode ? " · " + e.mode.toUpperCase() : ""}

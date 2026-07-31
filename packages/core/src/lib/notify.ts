@@ -8,7 +8,7 @@
 // only while the app is in the foreground. True background delivery needs Web Push.
 import { allRec, prefGet, prefSet } from "./data";
 import { computeDoc, inr, nowIso } from "./calc";
-import { allExpenses, allSessions, typeLabel } from "./expenses";
+import { allExpenses, allSessions, spendCategoryOf } from "./expenses";
 import { getFeatures } from "./features";
 import { USERS } from "./local-auth";
 import { getState, setUnseen } from "@/store/app-store";
@@ -79,7 +79,7 @@ export async function checkOwnerNotifications() {
   const events: Ev[] = [];
   for (const e of list) {
     if (e.enteredBy !== me.id && (e.createdAt || "") > lastNotifiedAt) {
-      events.push({ at: e.createdAt || "", title: "New daybook entry", body: `${whoName(e.enteredBy)}: ${typeLabel(e.type)} — ₹${inr(e.amount)}`, tag: e.id });
+      events.push({ at: e.createdAt || "", title: "New daybook entry", body: `${whoName(e.enteredBy)}: ${spendCategoryOf(e)} — ₹${inr(e.amount)}`, tag: e.id });
     }
   }
   for (const s of sessions) {

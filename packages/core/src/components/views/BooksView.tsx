@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
-import { inDaybook, isInflow, openingCarry, typeLabel } from "@/lib/expenses";
+import { inDaybook, isInflow, openingCarry, spendCategoryOf, spendCatKey } from "@/lib/expenses";
 import { partyLedger, quoteBill } from "@/lib/payments";
 import { acctLedger, listCollections, listHolders, type AccountCollection, type PayHolder } from "@/lib/accounts";
 import { listAttendance, listWorkers, workerAccount, type AttendanceMark, type Worker } from "@/lib/attendance";
@@ -97,15 +97,16 @@ export default function BooksView() {
 
   const spends = useMemo(() => {
     const outs = monthExp.filter((e) => !isInflow(e.type) && !e.charge);
-    const byType = new Map<string, { amount: number; count: number }>();
+    const byCat = new Map<string, { label: string; amount: number; count: number }>();
     for (const e of outs) {
-      const g = byType.get(e.type) || { amount: 0, count: 0 };
+      const key = spendCatKey(e);
+      const g = byCat.get(key) || { label: spendCategoryOf(e), amount: 0, count: 0 };
       g.amount = r2(g.amount + (+e.amount || 0));
       g.count++;
-      byType.set(e.type, g);
+      byCat.set(key, g);
     }
     const total = r2(outs.reduce((s, e) => s + (+e.amount || 0), 0));
-    return { byType, total, count: outs.length };
+    return { byCat, total, count: outs.length };
   }, [monthExp]);
 
   const duesAdded = useMemo(
@@ -132,7 +133,7 @@ export default function BooksView() {
         const inflow = isInflow(e.type);
         const what = inflow
           ? (e.custId ? "Received" : "Sale") + (e.mode === "upi" ? " · UPI" + (e.account ? " · " + e.account : "") : " · Cash") + (e.toOwner ? " → Owner" : "")
-          : typeLabel(e.type) + (e.label ? " · " + e.label : "");
+          : spendCategoryOf(e);
         return {
           id: e.id,
           date: e.date,
@@ -242,7 +243,7 @@ export default function BooksView() {
         <div className="party-card">
           <div className="party-stat-label">Expenses · {monthLabel}</div>
           <div className="party-stat-value due">₹ {inr(spends.total)}</div>
-          <div className="party-stat-sub">{spends.count} entries across {spends.byType.size} categories</div>
+          <div className="party-stat-sub">{spends.count} entries across {spends.byCat.size} categories</div>
         </div>
         <div className="party-card hero">
           <div className="party-stat-label">Net · {monthLabel}</div>
@@ -263,10 +264,10 @@ export default function BooksView() {
         </div>
         <div className="party-card">
           <div className="party-stat-label" style={{ marginBottom: 10 }}>Expense breakdown</div>
-          {spends.byType.size === 0 && <div className="books-row"><span>No expenses this month</span><b>—</b></div>}
-          {[...spends.byType.entries()].sort((a, b) => b[1].amount - a[1].amount).map(([t, g]) => (
-            <div className="books-row" key={t}>
-              <span>{typeLabel(t as Expense["type"])} <small>· {g.count}</small></span>
+          {spends.byCat.size === 0 && <div className="books-row"><span>No expenses this month</span><b>—</b></div>}
+          {[...spends.byCat.entries()].sort((a, b) => b[1].amount - a[1].amount).map(([key, g]) => (
+            <div className="books-row" key={key}>
+              <span>{g.label} <small>· {g.count}</small></span>
               <b className="due">₹{inr(g.amount)}</b>
             </div>
           ))}

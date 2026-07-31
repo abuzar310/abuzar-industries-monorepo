@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, getRec, put } from "@/lib/data";
 import { inr, nowIso } from "@/lib/calc";
-import { addExpense, upiAccounts } from "@/lib/expenses";
+import { addExpense, spendCategoryOf, SPEND_CATEGORIES, upiAccounts } from "@/lib/expenses";
 import { listWorkers, payWorker, repayWorker, type Worker } from "@/lib/attendance";
 import { partyLedger, quoteBill } from "@/lib/payments";
 import { applyCustomerReceipt, unwindReceiptPieces } from "@/lib/receipts";
@@ -13,7 +13,7 @@ import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import AccountPicker from "@/components/AccountPicker";
 import CustomerPicker from "@/components/editor/CustomerPicker";
-import type { Customer, Doc, EntryType, Expense } from "@/lib/types";
+import type { Customer, Doc, Expense } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
 const toDmy = (v: string) => {
@@ -26,24 +26,14 @@ const fromDmy = (v: string) => {
 };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Paid-out spend categories (daybook-style) — not tied to a customer. */
-const PAID_OUT_CATS: { id: string; label: string; type: EntryType }[] = [
-  { id: "food", label: "Food", type: "food" },
-  { id: "salary", label: "Salary", type: "salary" },
-  { id: "carpenter", label: "Carpenter commission", type: "custom" },
-  { id: "truck", label: "Truck rent", type: "custom" },
-  { id: "bills", label: "Bills", type: "custom" },
-  { id: "tea", label: "Tea bill", type: "custom" },
-  { id: "other", label: "Other", type: "custom" },
-];
-const PAID_OUT_LABELS = new Set(PAID_OUT_CATS.map((c) => c.label));
-const catOf = (e: Expense) =>
-  e.type === "food" ? "Food" : e.type === "salary" ? "Salary" : e.label || "Other";
+const SPEND_LABELS = new Set(SPEND_CATEGORIES.map((c) => c.label));
 /** Category spends recorded as Paid out (and daybook food/salary/custom with our labels). */
 const isCategoryPayout = (e: Expense) =>
   !e.custId &&
   !e.charge &&
-  (e.type === "food" || e.type === "salary" || (e.type === "custom" && PAID_OUT_LABELS.has(e.label || "")));
+  (e.type === "food" ||
+    e.type === "salary" ||
+    (e.type === "custom" && SPEND_LABELS.has(e.label || "")));
 
 type Kind = "received" | "due" | "paid";
 
@@ -67,7 +57,7 @@ export default function ReceiptsView() {
   /** whose cash the "Paid out" money left (null = default to the logged-in role) */
   const [paidBy, setPaidBy] = useState<"owner" | "manager" | null>(null);
   /** Paid out category — Food / Salary / Truck rent / … */
-  const [paidCat, setPaidCat] = useState(PAID_OUT_CATS[0].id);
+  const [paidCat, setPaidCat] = useState(SPEND_CATEGORIES[0].id);
   const [editId, setEditId] = useState<string | null>(null);
   /** editing a whole receipt (possibly split across quotes): its pieces get unwound + re-applied on save */
   const [editRcpt, setEditRcpt] = useState<{ id: string; pieces: Expense[] } | null>(null);
@@ -159,7 +149,7 @@ export default function ReceiptsView() {
     setDate("");
     setMode("cash");
     setPaidBy(null);
-    setPaidCat(PAID_OUT_CATS[0].id);
+    setPaidCat(SPEND_CATEGORIES[0].id);
     setEditId(null);
     setEditRcpt(null);
     setApplyTo("quotes");
@@ -195,7 +185,7 @@ export default function ReceiptsView() {
 
     // ---- Paid out: category spend (no customer) ----
     if (kind === "paid" && !editRcpt) {
-      const cat = PAID_OUT_CATS.find((c) => c.id === paidCat) || PAID_OUT_CATS[PAID_OUT_CATS.length - 1];
+      const cat = SPEND_CATEGORIES.find((c) => c.id === paidCat) || SPEND_CATEGORIES[SPEND_CATEGORIES.length - 1];
       const by = paidBy ?? (isOwner ? "owner" : "manager");
       if (editId) {
         const e = await getRec<Expense>("expenses", editId);
@@ -330,7 +320,7 @@ export default function ReceiptsView() {
     const { e, pieces, settled } = entry;
     const label = entry.paid ? "paid out" : e.charge ? "due" : "receipt";
     const total = pieces ? r2(pieces.reduce((s, x) => s + (+x.amount || 0), 0)) : +e.amount || 0;
-    const who = entry.paid && !entry.cid ? catOf(e) : custName(entry.cid);
+    const who = entry.paid && !entry.cid ? spendCategoryOf(e) : custName(entry.cid);
     const ok = await confirmDialog({
       title: "Delete " + label + "?",
       message:
@@ -373,7 +363,7 @@ export default function ReceiptsView() {
       setEditRcpt(null);
       setKind("paid");
       setAmt(String(e.amount));
-      const match = PAID_OUT_CATS.find((c) => c.label === catOf(e));
+      const match = SPEND_CATEGORIES.find((c) => c.label === spendCategoryOf(e));
       setPaidCat(match?.id || "other");
       setPaidBy(e.toOwner ? "owner" : "manager");
       setNote(e.note || "");
@@ -547,7 +537,7 @@ export default function ReceiptsView() {
           <label className="modal-field" style={{ width: "100%", marginBottom: 4 }}>
             <span>Category</span>
             <select value={paidCat} onChange={(e) => setPaidCat(e.target.value)}>
-              {PAID_OUT_CATS.map((c) => (
+              {SPEND_CATEGORIES.map((c) => (
                 <option key={c.id} value={c.id}>{c.label}</option>
               ))}
             </select>
@@ -721,7 +711,7 @@ export default function ReceiptsView() {
           {editing
             ? "Save changes"
             : kind === "paid"
-              ? "Record paid out — " + (PAID_OUT_CATS.find((c) => c.id === paidCat)?.label || "Other")
+              ? "Record paid out — " + (SPEND_CATEGORIES.find((c) => c.id === paidCat)?.label || "Other")
               : "Record receipt"}
         </button>
       </div>
@@ -804,10 +794,10 @@ export default function ReceiptsView() {
         <div className="panel-card" style={{ padding: "0 0 4px" }}>
           {paidOutList.map((entry) => (
             <div className="stmt" key={entry.key}>
-              <div className="stmt-ic due">{catOf(entry.e).slice(0, 3)}</div>
+              <div className="stmt-ic due">{spendCategoryOf(entry.e).slice(0, 3)}</div>
               <div className="stmt-main">
                 <div className="stmt-to">
-                  {catOf(entry.e)}
+                  {spendCategoryOf(entry.e)}
                   <span className="acct-overall-hint">
                     {" · "}{entry.e.toOwner ? "Owner's cash" : "Daybook"}
                     {" · "}{entry.e.date}
