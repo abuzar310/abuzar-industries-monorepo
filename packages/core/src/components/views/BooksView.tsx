@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { allRec } from "@/lib/data";
 import { dateSortKey, inr } from "@/lib/calc";
 import { inDaybook, isInflow, openingCarry, typeLabel } from "@/lib/expenses";
@@ -7,7 +7,10 @@ import { partyLedger, quoteBill } from "@/lib/payments";
 import { acctLedger, listCollections, listHolders, type AccountCollection, type PayHolder } from "@/lib/accounts";
 import { listAttendance, listWorkers, workerAccount, type AttendanceMark, type Worker } from "@/lib/attendance";
 import { USERS } from "@/lib/local-auth";
+import { brandFor } from "@/lib/brand";
+import { generatePdf, printOrSavePdf } from "@/lib/pdf";
 import { useApp } from "@/store/useApp";
+import { toast } from "@/store/app-store";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -28,10 +31,9 @@ const MONTHS: [string, string][] = [
 const isBillable = (d: Doc) =>
   d.status === "Created" || (+(d.payCash || 0)) > 0 || (+(d.payUpi || 0)) > 0 || (+(d.amountPaid || 0)) > 0;
 
-type BookTab = "sales" | "cash" | "expenses" | "trading" | "pl" | "bs";
+type BookTab = "sales" | "cash" | "expenses" | "pl" | "bs";
 
 const TABS: { key: BookTab; label: string; desc: string }[] = [
-  { key: "trading", label: "Trading A/C", desc: "Sales − Direct costs = Gross profit" },
   { key: "pl", label: "P&L", desc: "Gross profit − Expenses = Net profit" },
   { key: "bs", label: "Balance Sheet", desc: "Assets − Liabilities = Capital" },
   { key: "sales", label: "Sales Book", desc: "All money in, chronological" },
@@ -40,11 +42,13 @@ const TABS: { key: BookTab; label: string; desc: string }[] = [
 ];
 
 export default function BooksView() {
-  const { ready, dataVersion } = useApp();
+  const { ready, dataVersion, brandMode } = useApp();
   const now = new Date();
   const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, "0"));
   const [year, setYear] = useState(String(now.getFullYear()).slice(2));
-  const [tab, setTab] = useState<BookTab>("trading");
+  const [tab, setTab] = useState<BookTab>("pl");
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [quotes, setQuotes] = useState<Doc[]>([]);
@@ -290,65 +294,26 @@ export default function BooksView() {
     setMonth(String(m).padStart(2, "0"));
     setYear(String(y).padStart(2, "0"));
   };
+  const bookName = TABS.find((t) => t.key === tab)?.label || "Books";
+  const brand = brandFor(brandMode);
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const today = new Date();
+  const genOn = `${pad2(today.getDate())}-${pad2(today.getMonth() + 1)}-${today.getFullYear()}`;
+  async function downloadPdf() {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      if ((await printOrSavePdf(printRef.current, bookName.replace(/[\s/]+/g, "-").toLowerCase() + "-" + monthLabel.replace(/\s+/g, "-") + "-" + genOn)) === "pdf") toast("PDF downloaded ✓");
+    } catch (e) {
+      toast("PDF error: " + ((e as Error)?.message || e));
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   // ── tab renderers ─────────────────────────────────────────────────────────
 
-  /** 1. Trading Account — Sales − Direct costs = Gross Profit */
-  const renderTrading = () => (
-    <div>
-      {/* summary card */}
-      <div className="party-grid" style={{ marginTop: 6 }}>
-        <div className="party-card">
-          <div className="party-stat-label">Sales · {monthLabel}</div>
-          <div className="party-stat-value ok">₹ {inr(income.total + billedMonth)}</div>
-          <div className="party-stat-sub">{income.count + salesBookRows.length - income.count} cash/UPI receipts + {billedMonth > 0 ? "₹" + inr(billedMonth) + " billed" : "0 billed"}</div>
-        </div>
-        <div className="party-card">
-          <div className="party-stat-label">Direct costs · {monthLabel}</div>
-          <div className="party-stat-value due">₹ {inr(directCosts.total)}</div>
-          <div className="party-stat-sub">{directCosts.count} entries (freight, material, custom)</div>
-        </div>
-        <div className="party-card hero">
-          <div className="party-stat-label">Gross Profit</div>
-          <div className={"party-stat-value " + (grossProfit >= 0 ? "ok" : "due")}>{grossProfit < 0 ? "−" : ""}₹ {inr(Math.abs(grossProfit))}</div>
-          <div className="party-stat-sub">{grossProfit >= 0 ? "carried to P&L" : "trading loss"}</div>
-        </div>
-      </div>
-
-      {/* Trading account in formal T-account style (two columns) */}
-      <div className="books-grid" style={{ marginTop: 0 }}>
-        <div className="party-card">
-          <div className="party-stat-label" style={{ marginBottom: 10 }}>Dr — Costs &amp; Expenses</div>
-          <div className="books-row"><span>Opening stock <small>(not tracked)</small></span><b>₹0</b></div>
-          {directCosts.byLabel.size === 0 && <div className="books-row"><span>No direct costs this month</span><b>—</b></div>}
-          {[...directCosts.byLabel.entries()].sort((a, b) => b[1] - a[1]).map(([l, amt]) => (
-            <div className="books-row" key={l}><span>{l}</span><b className="due">₹{inr(amt)}</b></div>
-          ))}
-          <div className="books-row books-total"><span>Total direct costs</span><b className="due">₹{inr(directCosts.total)}</b></div>
-          {grossProfit >= 0 && (
-            <div className="books-row" style={{ color: "var(--green)", fontWeight: 700, borderTop: "2px solid var(--ochre)", marginTop: 6, paddingTop: 9 }}>
-              <span>Gross Profit (to P&L)</span><b>₹{inr(grossProfit)}</b>
-            </div>
-          )}
-        </div>
-        <div className="party-card">
-          <div className="party-stat-label" style={{ marginBottom: 10 }}>Cr — Sales &amp; Income</div>
-          <div className="books-row"><span>Cash sales</span><b className="ok">₹{inr(income.cash)}</b></div>
-          <div className="books-row"><span>UPI sales</span><b className="ok">₹{inr(income.upi)}</b></div>
-          {billedMonth > 0 && <div className="books-row"><span>Billed quotations</span><b className="ok">₹{inr(billedMonth)}</b></div>}
-          <div className="books-row books-total"><span>Total sales</span><b className="ok">₹{inr(income.total + billedMonth)}</b></div>
-          <div className="books-row" style={{ color: "var(--ink-faint)", fontSize: 11 }}><span>Closing stock</span><b>₹0</b></div>
-          {grossProfit < 0 && (
-            <div className="books-row" style={{ color: "var(--danger)", fontWeight: 700, borderTop: "2px solid var(--ochre)", marginTop: 6, paddingTop: 9 }}>
-              <span>Gross Loss</span><b>₹{inr(Math.abs(grossProfit))}</b>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  /** 2. Profit & Loss — GP − Indirect expenses = Net Profit */
+  /** 1. Profit & Loss — GP − Indirect expenses = Net Profit */
   const renderPL = () => (
     <div>
       <div className="party-grid" style={{ marginTop: 6 }}>
@@ -624,8 +589,14 @@ export default function BooksView() {
 
   return (
     <div className="ledger-page">
-      <div className="sectitle">
-        Books <small>— accounting books: Trading, P&amp;L, Balance Sheet, Sales, Cash, Expenses</small>
+      <div className="sectitle" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span>Books <small>— accounting books: P&amp;L, Balance Sheet, Sales, Cash, Expenses</small></span>
+        <button
+          className="btn primary sm"
+          style={{ marginLeft: "auto" }}
+          disabled={pdfBusy}
+          onClick={downloadPdf}
+        >{pdfBusy ? "Preparing…" : "Download PDF"}</button>
       </div>
 
       {/* month picker */}
@@ -660,12 +631,457 @@ export default function BooksView() {
       </div>
 
       {/* active tab content */}
-      {tab === "trading" && renderTrading()}
       {tab === "pl" && renderPL()}
       {tab === "bs" && renderBS()}
       {tab === "sales" && renderSalesBook()}
       {tab === "cash" && renderCashBook()}
       {tab === "expenses" && renderExpensesBook()}
+
+      {/* ---- printable book (matches the active tab) ---- */}
+      <div className="cd-print rep-doc" ref={printRef}>
+        <div className="rep-head">
+          <div className="rep-brand">
+            <h1>{brand.name || "Books"}</h1>
+            {brand.addr && <div>{brand.addr}</div>}
+            {brand.gstin && <div>GSTIN: {brand.gstin}</div>}
+          </div>
+          <div className="rep-meta">
+            <div className="rep-title">{bookName}</div>
+            <div className="rep-period">{monthLabel}</div>
+          </div>
+        </div>
+
+        {(() => {
+          switch (tab) {
+            case "pl": {
+              return (
+                <>
+                  <div className="rep-summary cols3">
+                    <div>
+                      <b className={grossProfit >= 0 ? "ok" : "due"}>{grossProfit < 0 ? "−" : ""}₹{inr(Math.abs(grossProfit))}</b>
+                      <span>Gross Profit</span>
+                    </div>
+                    <div>
+                      <b>₹{inr(indirectCosts.total)}</b>
+                      <span>Indirect Expenses</span>
+                    </div>
+                    <div>
+                      <b className={netProfit >= 0 ? "ok" : "due"}>{netProfit < 0 ? "−" : ""}₹{inr(Math.abs(netProfit))}</b>
+                      <span>Net Profit</span>
+                    </div>
+                  </div>
+                  <table className="rep-table">
+                    <colgroup>
+                      <col style={{ width: "50%" }} />
+                      <col style={{ width: "25%" }} />
+                      <col style={{ width: "25%" }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>Dr — Expenses</th>
+                        <th className="amt">Amount</th>
+                        <th className="amt">Cr — Income</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {indirectCosts.byType.size === 0 && spends.byType.size === 0 ? (
+                        <tr>
+                          <td colSpan={3}>No expenses</td>
+                        </tr>
+                      ) : (
+                        <>
+                          {[...indirectCosts.byType.entries()].sort((a, b) => b[1] - a[1]).map(([t, amt]) => (
+                            <tr key={t}>
+                              <td>{typeLabel(t as Expense["type"])}</td>
+                              <td className="amt due">₹{inr(amt)}</td>
+                              <td></td>
+                            </tr>
+                          ))}
+                          {[...spends.byType.entries()]
+                            .filter(([t]) => t !== "salary" && t !== "food")
+                            .sort((a, b) => b[1].amount - a[1].amount)
+                            .map(([t, g]) => (
+                              <tr key={t}>
+                                <td>{typeLabel(t as Expense["type"])}</td>
+                                <td className="amt due">₹{inr(g.amount)}</td>
+                                <td></td>
+                              </tr>
+                            ))}
+                        </>
+                      )}
+                      <tr className="rep-tot">
+                        <td>Total expenses</td>
+                        <td className="amt due">₹{inr(indirectCosts.total)}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Gross profit brought down</td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td></td>
+                        <td className="amt ok">₹{inr(grossProfit)}</td>
+                      </tr>
+                      {duesAdded > 0 && (
+                        <>
+                          <tr>
+                            <td></td>
+                            <td></td>
+                            <td>Dues added (non-cash)</td>
+                          </tr>
+                          <tr>
+                            <td></td>
+                            <td></td>
+                            <td className="amt">₹{inr(duesAdded)}</td>
+                          </tr>
+                        </>
+                      )}
+                      <tr className="rep-tot">
+                        <td></td>
+                        <td></td>
+                        <td>Total income</td>
+                      </tr>
+                      <tr className="rep-tot">
+                        <td></td>
+                        <td></td>
+                        <td className="amt ok">₹{inr(grossProfit)}</td>
+                      </tr>
+                      <tr style={{ borderTop: "2px solid var(--ochre)", fontWeight: 700 }}>
+                        <td>{netProfit >= 0 ? "Net Profit" : "Net Loss"}</td>
+                        <td></td>
+                        <td className={"amt " + (netProfit >= 0 ? "ok" : "due")}>₹{inr(Math.abs(netProfit))}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              );
+            }
+            case "bs": {
+              return (
+                <>
+                  <div className="rep-summary cols3">
+                    <div>
+                      <b>₹{inr(snapshot.assets)}</b>
+                      <span>Total Assets</span>
+                    </div>
+                    <div>
+                      <b>₹{inr(snapshot.liabilities)}</b>
+                      <span>Total Liabilities</span>
+                    </div>
+                    <div>
+                      <b className={snapshot.position >= 0 ? "ok" : "due"}>{snapshot.position < 0 ? "−" : ""}₹{inr(Math.abs(snapshot.position))}</b>
+                      <span>Capital</span>
+                    </div>
+                  </div>
+                  <table className="rep-table">
+                    <colgroup>
+                      <col style={{ width: "50%" }} />
+                      <col style={{ width: "25%" }} />
+                      <col style={{ width: "25%" }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>Assets</th>
+                        <th className="amt"></th>
+                        <th className="amt">Liabilities & Capital</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Cash in hand <small>· Daybook</small></td>
+                        <td className="amt ok">₹{inr(snapshot.cashInHand)}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td>UPI with holders <small>· Accounts</small></td>
+                        <td className="amt ok">₹{inr(snapshot.upiWithHolders)}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td>Customer dues <small>· Balances</small></td>
+                        <td className="amt ok">₹{inr(snapshot.receivables)}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td>Worker advances <small>· Attendance</small></td>
+                        <td className="amt ok">₹{inr(snapshot.workerAdvances)}</td>
+                        <td></td>
+                      </tr>
+                      <tr className="rep-tot">
+                        <td>Total assets</td>
+                        <td className="amt ok">₹{inr(snapshot.assets)}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Unpaid wages <small>· Attendance</small></td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td></td>
+                        <td className="amt due">₹{inr(snapshot.unpaidWages)}</td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Customer advances <small>· Balances</small></td>
+                      </tr>
+                      <tr>
+                        <td></td>
+                        <td></td>
+                        <td className="amt due">₹{inr(snapshot.custAdvances)}</td>
+                      </tr>
+                      <tr className="rep-tot">
+                        <td></td>
+                        <td></td>
+                        <td>Total liabilities</td>
+                      </tr>
+                      <tr className="rep-tot">
+                        <td></td>
+                        <td></td>
+                        <td className="amt due">₹{inr(snapshot.liabilities)}</td>
+                      </tr>
+                      <tr style={{ borderTop: "2px solid var(--ochre)", fontWeight: 700 }}>
+                        <td></td>
+                        <td></td>
+                        <td>Capital (net worth)</td>
+                      </tr>
+                      <tr style={{ fontWeight: 700 }}>
+                        <td></td>
+                        <td></td>
+                        <td className={"amt " + (snapshot.position >= 0 ? "ok" : "due")}>{snapshot.position < 0 ? "−" : ""}₹{inr(Math.abs(snapshot.position))}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              );
+            }
+            case "sales": {
+              const totalSales = income.total + billedMonth;
+              return (
+                <>
+                  <div className="rep-summary cols3">
+                    <div>
+                      <b>{salesBookRows.length}</b>
+                      <span>Entries</span>
+                    </div>
+                    <div>
+                      <b>₹{inr(totalSales)}</b>
+                      <span>Total Sales</span>
+                    </div>
+                    <div>
+                      <b>{monthLabel}</b>
+                      <span>Period</span>
+                    </div>
+                  </div>
+                  <table className="rep-table">
+                    <colgroup>
+                      <col style={{ width: "5%" }} />
+                      <col style={{ width: "13%" }} />
+                      <col style={{ width: "35%" }} />
+                      <col style={{ width: "17%" }} />
+                      <col style={{ width: "15%" }} />
+                      <col style={{ width: "15%" }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th className="c-n">#</th>
+                        <th>Date</th>
+                        <th>Customer / Ref</th>
+                        <th>Mode</th>
+                        <th className="amt">Amount ₹</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {salesBookRows.length ? (
+                        salesBookRows.map((row, i) => (
+                          <tr key={row.id + "-" + i}>
+                            <td className="c-n">{i + 1}</td>
+                            <td className="c-date">{row.date}</td>
+                            <td className="c-cust">
+                              {row.customer || "—"}
+                              {row.note && <small>{row.note}</small>}
+                            </td>
+                            <td style={{ fontSize: 10, textTransform: "uppercase", color: "var(--ink-faint)", fontWeight: 600 }}>{row.mode}</td>
+                            <td className="amt cr">₹{inr(row.amount)}</td>
+                            <td></td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="rep-empty">No sales in {monthLabel}.</td>
+                        </tr>
+                      )}
+                      <tr className="rep-tot">
+                        <td colSpan={4}>Total sales</td>
+                        <td className="amt cr">₹{inr(totalSales)}</td>
+                        <td></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              );
+            }
+            case "cash": {
+              const totalIn = cashBookRows.reduce((s, r) => s + r.credit, 0);
+              const totalOut = cashBookRows.reduce((s, r) => s + r.debit, 0);
+              const closingBal = cashBookRows.length ? cashBookRows[cashBookRows.length - 1].balance : 0;
+              return (
+                <>
+                  <div className="rep-summary cols4">
+                    <div>
+                      <b>{cashBookRows.length}</b>
+                      <span>Entries</span>
+                    </div>
+                    <div>
+                      <b>₹{inr(totalIn)}</b>
+                      <span>In</span>
+                    </div>
+                    <div>
+                      <b>₹{inr(totalOut)}</b>
+                      <span>Out</span>
+                    </div>
+                    <div>
+                      <b>₹{inr(closingBal)}</b>
+                      <span>Closing Balance</span>
+                    </div>
+                  </div>
+                  <table className="rep-table">
+                    <colgroup>
+                      <col style={{ width: "5%" }} />
+                      <col style={{ width: "12%" }} />
+                      <col style={{ width: "35%" }} />
+                      <col style={{ width: "16%" }} />
+                      <col style={{ width: "16%" }} />
+                      <col style={{ width: "16%" }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th className="c-n">#</th>
+                        <th>Date</th>
+                        <th>Particulars</th>
+                        <th className="amt">Out ₹</th>
+                        <th className="amt">In ₹</th>
+                        <th className="amt">Balance ₹</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cashBookRows.length ? (
+                        cashBookRows.map((row, i) => (
+                          <tr key={row.id}>
+                            <td className="c-n">{i + 1}</td>
+                            <td className="c-date">{row.date}</td>
+                            <td className="c-cust">
+                              {row.particulars}
+                              {row.detail && <small>{row.detail}</small>}
+                            </td>
+                            <td className={"amt " + (row.debit > 0 ? "dr" : "")}>{row.debit > 0 ? "₹" + inr(row.debit) : ""}</td>
+                            <td className={"amt " + (row.credit > 0 ? "cr" : "")}>{row.credit > 0 ? "₹" + inr(row.credit) : ""}</td>
+                            <td className="amt bal">
+                              ₹{inr(Math.abs(row.balance))}
+                              <span className={"bal-tag " + (row.balance >= 0 ? "cr" : "dr")}>{row.balance >= 0 ? "Cr" : "Dr"}</span>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="rep-empty">No cash movements in {monthLabel}.</td>
+                        </tr>
+                      )}
+                      <tr className="rep-tot">
+                        <td colSpan={3}>Net cash movement</td>
+                        <td className="amt dr">₹{inr(totalOut)}</td>
+                        <td className="amt cr">₹{inr(totalIn)}</td>
+                        <td className={"amt " + (closingBal >= 0 ? "ok" : "due")}>₹{inr(Math.abs(closingBal))}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              );
+            }
+            case "expenses": {
+              return (
+                <>
+                  <div className="rep-summary cols3">
+                    <div>
+                      <b>₹{inr(spends.total)}</b>
+                      <span>Total Spent</span>
+                    </div>
+                    <div>
+                      <b>₹{inr(directCosts.total)}</b>
+                      <span>Direct Costs</span>
+                    </div>
+                    <div>
+                      <b>₹{inr(indirectCosts.total)}</b>
+                      <span>Indirect Costs</span>
+                    </div>
+                  </div>
+                  <table className="rep-table">
+                    <colgroup>
+                      <col style={{ width: "50%" }} />
+                      <col style={{ width: "25%" }} />
+                      <col style={{ width: "25%" }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>Category</th>
+                        <th className="amt">Amount ₹</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ fontWeight: 700, background: "var(--panel-2)" }}>
+                        <td>Direct (Trading)</td>
+                        <td className="amt">₹{inr(directCosts.total)}</td>
+                        <td></td>
+                      </tr>
+                      {directCosts.byLabel.size === 0 ? (
+                        <tr>
+                          <td colSpan={2} style={{ paddingLeft: "24px" }}>None</td>
+                          <td></td>
+                        </tr>
+                      ) : (
+                        [...directCosts.byLabel.entries()].sort((a, b) => b[1] - a[1]).map(([l, amt]) => (
+                          <tr key={l} style={{ paddingLeft: "24px" }}>
+                            <td>{l}</td>
+                            <td className="amt due">₹{inr(amt)}</td>
+                            <td></td>
+                          </tr>
+                        ))
+                      )}
+                      <tr style={{ fontWeight: 700, background: "var(--panel-2)" }}>
+                        <td>Indirect (Overheads)</td>
+                        <td className="amt">₹{inr(indirectCosts.total)}</td>
+                        <td></td>
+                      </tr>
+                      {[...spends.byType.entries()].filter(([t]) => t === "salary" || t === "food").sort((a, b) => b[1].amount - a[1].amount).map(([t, g]) => (
+                        <tr key={t} style={{ paddingLeft: "24px" }}>
+                          <td>{typeLabel(t as Expense["type"])}</td>
+                          <td className="amt due">₹{inr(g.amount)}</td>
+                          <td></td>
+                        </tr>
+                      ))}
+                      <tr className="rep-tot">
+                        <td>Total spent</td>
+                        <td className="amt due">₹{inr(spends.total)}</td>
+                        <td></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              );
+            }
+            default:
+              return null;
+          }
+        })()}
+
+        <div className="rep-foot">Generated {genOn} · {brand.name}</div>
+      </div>
     </div>
   );
 }
