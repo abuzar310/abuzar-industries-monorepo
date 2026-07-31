@@ -118,7 +118,7 @@ export default function CustomersView() {
                 <h3>{c.name}</h3>
                 <div className="ph">{c.phone || "—"}</div>
                 <div className="meta2">
-                  {c.site && <>Carpenter: {c.site}<br /></>}
+                  {c.site && <>Carpenter: {c.site}{c.sitePhone ? " · " + c.sitePhone : ""}<br /></>}
                   <b>{f.quoteCount}</b> quote{f.quoteCount === 1 ? "" : "s"}
                   {invoiceMode && (
                     <> · <b>{f.invoiceCount}</b> invoice{f.invoiceCount === 1 ? "" : "s"}</>

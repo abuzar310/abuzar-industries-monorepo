@@ -95,6 +95,7 @@ export async function saveCustomer(fields: {
   name: string;
   phone?: string;
   site?: string;
+  sitePhone?: string;
   address?: string;
   gstin?: string;
   opening?: string | number;
@@ -106,6 +107,7 @@ export async function saveCustomer(fields: {
   cust.name = fields.name.trim();
   cust.phone = (fields.phone || "").trim();
   cust.site = (fields.site || "").trim();
+  cust.sitePhone = (fields.sitePhone || "").trim();
   cust.address = (fields.address || "").trim();
   cust.gstin = (fields.gstin || "").trim().toUpperCase();
   cust.opening = Math.round((+(fields.opening || 0) || 0) * 100) / 100;
@@ -132,6 +134,7 @@ export async function upsertCustomerFromDoc(d: Doc): Promise<Customer | undefine
   cust.name = name;
   cust.phone = d.phone || cust.phone || "";
   cust.site = d.site || cust.site || "";
+  cust.sitePhone = d.sitePhone || cust.sitePhone || "";
   cust.address = d.address || cust.address || "";
   cust.notes = d.notes || cust.notes || "";
   cust.updatedAt = nowIso();

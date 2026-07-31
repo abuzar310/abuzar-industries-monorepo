@@ -45,6 +45,8 @@ export interface Doc {
   customerName: string;
   phone: string;
   site: string;
+  /** Carpenter's phone (Cut Size quotations). */
+  sitePhone?: string;
   address: string;
   notes: string;
   date: string;
@@ -126,6 +128,8 @@ export interface Customer {
   name: string;
   phone: string;
   site: string;
+  /** Carpenter phone (optional). */
+  sitePhone?: string;
   address: string;
   notes: string;
   /** GSTIN — used when the customer is treated as a debtor in the Ledger. */

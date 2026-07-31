@@ -320,6 +320,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                   {d.phone}
                   <br />
                   {d.site}
+                  {d.sitePhone ? <><br />{d.sitePhone}</> : null}
                 </span>
                 <span className="mut col-date">{d.date}</span>
                 <span className="col-status">

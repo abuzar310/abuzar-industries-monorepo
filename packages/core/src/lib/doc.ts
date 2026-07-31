@@ -31,6 +31,7 @@ export function blankDoc(id: string): Doc {
     customerName: "",
     phone: "",
     site: "",
+    sitePhone: "",
     address: "",
     notes: "",
     date: todayStr(),

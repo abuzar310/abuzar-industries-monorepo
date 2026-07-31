@@ -245,6 +245,7 @@ export default function Editor({
       d.customerName = c.name;
       d.phone = c.phone || "";
       d.site = c.site || "";
+      d.sitePhone = c.sitePhone || "";
       d.address = c.address || "";
       d.custGstin = c.gstin || "";
     });
@@ -577,6 +578,7 @@ export default function Editor({
       customerName: cur.customerName,
       phone: cur.phone,
       site: cur.site,
+      sitePhone: cur.sitePhone || "",
       address: cur.address,
       notes: cur.notes,
       custGstin: cur.custGstin || "",
@@ -804,7 +806,7 @@ export default function Editor({
           <DateField value={doc.date} onChange={(v) => setField("date", v)} />
         </div>
       </div>
-      <div className="cust-block">
+      <div className="cust-block c4">
         <div className="f">
           <label>Customer Name</label>
           <CustomerPicker value={doc.customerName} customers={customers} onType={onCustomerType} onPick={pickCustomer} />
@@ -816,6 +818,10 @@ export default function Editor({
         <div className="f">
           <label>Carpenter</label>
           <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
+        </div>
+        <div className="f">
+          <label>Carpenter phone</label>
+          <input placeholder="—" value={doc.sitePhone || ""} onChange={(e) => setField("sitePhone", e.target.value)} />
         </div>
       </div>
     </>
@@ -1052,7 +1058,7 @@ export default function Editor({
             )}
           </div>
           )}
-          <div className={"cust-block" + (isInv && !isBuy && !isRent ? " c4" : "")}>
+          <div className={"cust-block" + (!isInv || (isInv && !isBuy && !isRent) ? " c4" : "")}>
             <div className="f">
               <label>{isBuy ? "Supplier Name" : "Customer Name"}</label>
               <CustomerPicker value={doc.customerName} customers={customers} onType={onCustomerType} onPick={pickCustomer} />
@@ -1062,10 +1068,16 @@ export default function Editor({
               <input placeholder="—" value={doc.phone} onChange={(e) => setField("phone", e.target.value)} />
             </div>
             {!isInv && (
-              <div className="f">
-                <label>Carpenter</label>
-                <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
-              </div>
+              <>
+                <div className="f">
+                  <label>Carpenter</label>
+                  <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
+                </div>
+                <div className="f">
+                  <label>Carpenter phone</label>
+                  <input placeholder="—" value={doc.sitePhone || ""} onChange={(e) => setField("sitePhone", e.target.value)} />
+                </div>
+              </>
             )}
             {isInv && (
               <>
