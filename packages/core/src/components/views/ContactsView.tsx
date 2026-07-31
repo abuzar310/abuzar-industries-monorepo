@@ -1,5 +1,5 @@
 "use client";
-// Owner-only contacts directory — report-style layout, parties under each carpenter.
+// Owner-only contacts directory — report-style: Customers or Carpenters.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -16,14 +16,14 @@ type Party = {
   carpenterPhone: string;
 };
 
-type CarpGroup = {
+type CarpenterRow = {
   key: string;
-  carpenter: string;
-  carpenterPhone: string;
-  parties: Party[];
+  name: string;
+  phone: string;
+  parties: { id: string; name: string; phone: string }[];
 };
 
-type ViewMode = "carpenter" | "flat";
+type ViewMode = "customers" | "carpenters";
 
 const norm = (s: string) => s.trim().toLowerCase();
 
@@ -34,7 +34,7 @@ export default function ContactsView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [q, setQ] = useState("");
-  const [mode, setMode] = useState<ViewMode>("carpenter");
+  const [mode, setMode] = useState<ViewMode>("customers");
 
   const load = useCallback(() => {
     Promise.all([allRec<Customer>("customers"), allRec<Doc>("quotations")]).then(([cs, qs]) => {
@@ -74,7 +74,7 @@ export default function ContactsView() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [customers, quotes]);
 
-  const filtered = useMemo(() => {
+  const filteredParties = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return parties;
     return parties.filter((p) =>
@@ -82,29 +82,30 @@ export default function ContactsView() {
     );
   }, [parties, q]);
 
-  const groups = useMemo(() => {
-    const map = new Map<string, CarpGroup>();
-    for (const p of filtered) {
-      const key = p.carpenter ? "c:" + norm(p.carpenter) : "none";
-      let g = map.get(key);
-      if (!g) {
-        g = {
-          key,
-          carpenter: p.carpenter || "No carpenter",
-          carpenterPhone: p.carpenterPhone,
-          parties: [],
-        };
-        map.set(key, g);
+  const carpenters = useMemo(() => {
+    const map = new Map<string, CarpenterRow>();
+    for (const p of parties) {
+      if (!p.carpenter) continue;
+      const key = norm(p.carpenter);
+      let row = map.get(key);
+      if (!row) {
+        row = { key, name: p.carpenter, phone: p.carpenterPhone, parties: [] };
+        map.set(key, row);
       }
-      g.parties.push(p);
-      if (!g.carpenterPhone && p.carpenterPhone) g.carpenterPhone = p.carpenterPhone;
+      if (!row.phone && p.carpenterPhone) row.phone = p.carpenterPhone;
+      row.parties.push({ id: p.id, name: p.name, phone: p.phone });
     }
-    return [...map.values()].sort((a, b) => {
-      if (a.key === "none") return 1;
-      if (b.key === "none") return -1;
-      return a.carpenter.localeCompare(b.carpenter);
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [parties]);
+
+  const filteredCarpenters = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return carpenters;
+    return carpenters.filter((c) => {
+      const partyBlob = c.parties.map((p) => p.name + " " + p.phone).join(" ");
+      return [c.name, c.phone, partyBlob].join(" ").toLowerCase().includes(needle);
     });
-  }, [filtered]);
+  }, [carpenters, q]);
 
   if (user && user.role !== "owner") {
     return (
@@ -114,35 +115,42 @@ export default function ContactsView() {
     );
   }
 
-  const withCarp = filtered.filter((p) => !!p.carpenter).length;
-  const withPhone = filtered.filter((p) => !!p.phone).length;
+  const listCount = mode === "customers" ? filteredParties.length : filteredCarpenters.length;
 
   return (
     <div className="repwrap">
       <div className="sectitle no-print">
-        Contacts <small>— parties &amp; carpenters</small>
+        Contacts <small>— customers &amp; carpenters</small>
       </div>
 
       <div className="rep-controls no-print">
         <div className="rep-range">
+          <div className="rep-seg" role="group" aria-label="Contact type">
+            <button
+              className={mode === "customers" ? "on" : ""}
+              type="button"
+              onClick={() => setMode("customers")}
+            >
+              Customers
+            </button>
+            <button
+              className={mode === "carpenters" ? "on" : ""}
+              type="button"
+              onClick={() => setMode("carpenters")}
+            >
+              Carpenters
+            </button>
+          </div>
           <label>
             Search
             <input
               type="search"
-              placeholder="Name or phone…"
+              placeholder={mode === "customers" ? "Customer or phone…" : "Carpenter or party…"}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               style={{ minWidth: 200 }}
             />
           </label>
-          <div className="rep-seg" role="group" aria-label="Layout">
-            <button className={mode === "carpenter" ? "on" : ""} type="button" onClick={() => setMode("carpenter")}>
-              By carpenter
-            </button>
-            <button className={mode === "flat" ? "on" : ""} type="button" onClick={() => setMode("flat")}>
-              All parties
-            </button>
-          </div>
           <button className="btn primary sm rep-print" type="button" onClick={() => window.print()}>
             Print
           </button>
@@ -156,108 +164,113 @@ export default function ContactsView() {
             {brand.addr && <div>{brand.addr}</div>}
           </div>
           <div className="rep-meta">
-            <div className="rep-title">Contacts</div>
+            <div className="rep-title">{mode === "customers" ? "Customers" : "Carpenters"}</div>
             <div className="rep-period">
-              {mode === "carpenter" ? "Grouped by carpenter" : "All parties"}
+              {listCount} {mode === "customers" ? (listCount === 1 ? "party" : "parties") : listCount === 1 ? "carpenter" : "carpenters"}
               {q.trim() ? " · filtered" : ""}
             </div>
           </div>
         </div>
 
-        <div className="rep-summary cols4">
+        <div className="rep-summary cols3">
           <div>
-            <b>{filtered.length}</b>
-            <span>Parties</span>
+            <b>{parties.length}</b>
+            <span>Customers</span>
           </div>
           <div>
-            <b>{groups.filter((g) => g.key !== "none").length}</b>
+            <b>{carpenters.length}</b>
             <span>Carpenters</span>
           </div>
           <div>
-            <b>{withCarp}</b>
-            <span>With carpenter</span>
-          </div>
-          <div>
-            <b>{withPhone}</b>
-            <span>With phone</span>
+            <b>{listCount}</b>
+            <span>Showing</span>
           </div>
         </div>
 
-        {filtered.length === 0 ? (
-          <div className="rep-empty">No contacts match.</div>
-        ) : mode === "flat" ? (
-          <PartyTable rows={filtered} showCarpenter />
+        {mode === "customers" ? (
+          filteredParties.length === 0 ? (
+            <div className="rep-empty">No customers match.</div>
+          ) : (
+            <table className="rep-table">
+              <colgroup>
+                <col style={{ width: "6%" }} />
+                <col style={{ width: "30%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "24%" }} />
+                <col style={{ width: "22%" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="c-n">#</th>
+                  <th>Customer</th>
+                  <th>Phone</th>
+                  <th>Carpenter</th>
+                  <th>Carpenter phone</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredParties.map((p, i) => (
+                  <tr key={p.id}>
+                    <td className="c-n">{i + 1}</td>
+                    <td className="c-cust">
+                      <Link href={"/customers/" + p.id} style={{ color: "inherit", fontWeight: 600 }}>
+                        {p.name}
+                      </Link>
+                    </td>
+                    <td className="c-no">{p.phone || "—"}</td>
+                    <td>{p.carpenter || "—"}</td>
+                    <td className="c-no">{p.carpenterPhone || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        ) : filteredCarpenters.length === 0 ? (
+          <div className="rep-empty">No carpenters match.</div>
         ) : (
-          groups.map((g) => (
-            <div className="rep-month" key={g.key}>
-              <div
-                className="rep-title rep-subhead rep-month-head"
-                style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}
-              >
-                <span>{g.key === "none" ? "No carpenter" : g.carpenter}</span>
-                {g.carpenterPhone ? <span className="rep-subcount">{g.carpenterPhone}</span> : null}
-                <span className="rep-subcount" style={{ marginLeft: "auto" }}>
-                  {g.parties.length} part{g.parties.length === 1 ? "y" : "ies"}
-                </span>
-              </div>
-              <PartyTable rows={g.parties} showCarpenter={false} />
-            </div>
-          ))
+          <table className="rep-table">
+            <colgroup>
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "24%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "44%" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="c-n">#</th>
+                <th>Carpenter</th>
+                <th>Phone</th>
+                <th className="c-n">Parties</th>
+                <th>Customers</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCarpenters.map((c, i) => (
+                <tr key={c.key}>
+                  <td className="c-n">{i + 1}</td>
+                  <td style={{ fontWeight: 600 }}>{c.name}</td>
+                  <td className="c-no">{c.phone || "—"}</td>
+                  <td className="c-n">{c.parties.length}</td>
+                  <td className="c-cust">
+                    {c.parties.map((p, j) => (
+                      <span key={p.id}>
+                        {j > 0 ? ", " : ""}
+                        <Link href={"/customers/" + p.id} style={{ color: "inherit" }}>
+                          {p.name}
+                        </Link>
+                        {p.phone ? <span style={{ color: "var(--ink-faint)" }}> ({p.phone})</span> : null}
+                      </span>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
 
-        <div className="rep-foot no-print">Tap a name to open the customer · owner only</div>
+        <div className="rep-foot no-print">Tap a customer name to open · owner only</div>
       </div>
     </div>
-  );
-}
-
-function PartyTable({ rows, showCarpenter }: { rows: Party[]; showCarpenter: boolean }) {
-  return (
-    <table className="rep-table">
-      <colgroup>
-        <col style={{ width: "8%" }} />
-        <col style={{ width: showCarpenter ? "28%" : "42%" }} />
-        <col style={{ width: showCarpenter ? "18%" : "25%" }} />
-        {showCarpenter && <col style={{ width: "24%" }} />}
-        {showCarpenter && <col style={{ width: "22%" }} />}
-        {!showCarpenter && <col style={{ width: "25%" }} />}
-      </colgroup>
-      <thead>
-        <tr>
-          <th className="c-n">#</th>
-          <th>Customer</th>
-          <th>Phone</th>
-          {showCarpenter ? (
-            <>
-              <th>Carpenter</th>
-              <th>Carpenter phone</th>
-            </>
-          ) : (
-            <th>Carpenter phone</th>
-          )}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((p, i) => (
-          <tr key={p.id}>
-            <td className="c-n">{i + 1}</td>
-            <td className="c-cust">
-              <Link href={"/customers/" + p.id} style={{ color: "inherit", fontWeight: 600 }}>
-                {p.name}
-              </Link>
-            </td>
-            <td className="c-no">{p.phone || "—"}</td>
-            {showCarpenter ? (
-              <>
-                <td>{p.carpenter || "—"}</td>
-                <td className="c-no">{p.carpenterPhone || "—"}</td>
-              </>
-            ) : (
-              <td className="c-no">{p.carpenterPhone || "—"}</td>
-            )}
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }
