@@ -51,27 +51,9 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
       <div className="topnav-in">
         <div className="nav-brand">{brand.name}</div>
         <div className="tabs">
-          {TABS.map((t) => {
+          {TABS.filter((t) => !t.owner || isOwner).map((t) => {
             const active = isActive(t.href, path);
             const cls = "tab" + (active ? " active" : "");
-            if (t.owner) {
-              return (
-                <Link
-                  key={t.href}
-                  href={t.href}
-                  className={cls}
-                  onClick={(e) => {
-                    if (!isOwner) {
-                      e.preventDefault();
-                      toast("Only the owner can open Settings");
-                    }
-                  }}
-                >
-                  <TabIcon icon={t.icon} size={16} />
-                  {t.label}
-                </Link>
-              );
-            }
             return (
               <Link key={t.href} href={t.href} className={cls}>
                 <TabIcon icon={t.icon} size={16} />
