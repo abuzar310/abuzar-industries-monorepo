@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, fetchAllTransactions, type AllTransaction } from "@/lib/data";
-import { computeDoc, inr } from "@/lib/calc";
+import { computeDoc, inr, qty } from "@/lib/calc";
 import { partyLedger, quoteBill, quoteLedger } from "@/lib/payments";
 import { computeTrading, docTrade, getStockConfig, type StockConfig } from "@/lib/trading";
 import { getFeatures } from "@/lib/features";
@@ -29,7 +29,7 @@ const MONTHS: [string, string][] = [
 ];
 
 export default function DashboardView() {
-  const { dataVersion, user } = useApp();
+  const { dataVersion, user, cloakMoney } = useApp();
   const router = useRouter();
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [invs, setInvs] = useState<Doc[]>([]);
@@ -233,7 +233,7 @@ export default function DashboardView() {
                 k: "Sales (received)",
                 v: "₹ " + inr(periodReceived),
                 money: true,
-                sub: `${periodPayCount} payment${periodPayCount === 1 ? "" : "s"} · ${periodLabel}`,
+                sub: cloakMoney ? "—" : `${periodPayCount} payment${periodPayCount === 1 ? "" : "s"} · ${periodLabel}`,
                 onClick: () => router.push("/logs"),
               },
             ]
@@ -242,7 +242,7 @@ export default function DashboardView() {
           k: "Billed (quotes)",
           v: "₹ " + inr(periodRev),
           money: true,
-          sub: `${periodSaleCount} quote${periodSaleCount === 1 ? "" : "s"} · ${periodLabel}`,
+          sub: cloakMoney ? "—" : `${periodSaleCount} quote${periodSaleCount === 1 ? "" : "s"} · ${periodLabel}`,
           onClick: () => router.push("/quotations"),
         },
         // the piece Balances adds on top of quotes — so Dashboard and Balances always agree:
@@ -253,27 +253,27 @@ export default function DashboardView() {
                 k: "Old dues & charges",
                 v: "₹ " + inr(oldDues),
                 money: true,
-                sub: "opening balances + added dues · overall",
+                sub: cloakMoney ? "—" : "opening balances + added dues · overall",
                 onClick: () => router.push("/payments?focus=billed"),
               },
               {
                 k: "Total billed",
                 v: "₹ " + inr(ledger.totalBilled),
                 money: true,
-                sub: "quotes + old dues · overall — same as Balances",
+                sub: cloakMoney ? "—" : "quotes + old dues · overall — same as Balances",
                 onClick: () => router.push("/payments?focus=billed"),
               },
             ]
           : []),
-        { k: "Quotes", v: String(periodSaleCount), sub: periodLabel, onClick: () => router.push("/quotations") },
-        { k: "CFT Sold", v: periodCft.toFixed(2), sub: periodLabel, onClick: () => router.push("/quotations") },
+        { k: "Quotes", v: qty(periodSaleCount), sub: periodLabel, onClick: () => router.push("/quotations") },
+        { k: "CFT Sold", v: qty(periodCft, 2), sub: periodLabel, onClick: () => router.push("/quotations") },
         ...(feat.acceptPayment
           ? [
               {
                 k: "Outstanding",
                 v: "₹ " + inr(totalOutstanding),
                 money: true,
-                sub: dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"} · overall` : "all clear",
+                sub: cloakMoney ? "all clear" : dueCount ? `${dueCount} ${dueCount === 1 ? "party owes" : "parties owe"} · overall` : "all clear",
                 onClick: () => router.push("/payments?focus=pending"),
               },
             ]

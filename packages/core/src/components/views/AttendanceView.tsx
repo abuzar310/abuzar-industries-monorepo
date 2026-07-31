@@ -1,7 +1,7 @@
 "use client";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { delRec } from "@/lib/data";
-import { dateSortKey, inr, todayStr } from "@/lib/calc";
+import { dateSortKey, inr, qty, todayStr } from "@/lib/calc";
 import { allExpenses } from "@/lib/expenses";
 import {
   deductAdvance,
@@ -61,12 +61,12 @@ const nextMark = (cur: number | undefined): number | null =>
 const markGlyph = (v: number | undefined) => (v === 1 ? "1" : v === 0.5 ? "½" : v === 0 ? "0" : "");
 const markCls = (v: number | undefined) => (v === 1 ? " f" : v === 0.5 ? " h" : v === 0 ? " a" : "");
 // WAGE pot convention: POSITIVE = still to pay the worker · NEGATIVE = paid over what was earned
-const balWords = (bal: number) =>
-  bal < -0.5
-    ? { text: "−₹" + inr(-bal) + " extra taken", color: "var(--danger)" }
-    : bal > 0.5
-      ? { text: "to pay ₹" + inr(bal), color: "var(--green)" }
-      : { text: "✓ square", color: "var(--ink-faint)" };
+const balWords = (bal: number, cloaked = false) =>
+  cloaked || Math.abs(bal) <= 0.5
+    ? { text: "✓ square", color: "var(--ink-faint)" }
+    : bal < -0.5
+      ? { text: "−₹" + inr(-bal) + " extra taken", color: "var(--danger)" }
+      : { text: "to pay ₹" + inr(bal), color: "var(--green)" };
 // statement line look, per pot
 const KIND_UI = {
   wage: { label: "Wage", color: "var(--danger)", sign: "−", ic: "₹", icCls: "att-given" },
@@ -76,7 +76,7 @@ const KIND_UI = {
 } as const;
 
 export default function AttendanceView() {
-  const { ready, dataVersion, user } = useApp();
+  const { ready, dataVersion, user, cloakMoney } = useApp();
   const isOwner = user?.role === "owner";
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [marks, setMarks] = useState<AttendanceMark[]>([]);
@@ -416,13 +416,17 @@ export default function AttendanceView() {
             <div className="att-pp-sum">
               <span>
                 {cw.presentDays || 0} day{cw.presentDays === 1 ? "" : "s"} this week · earned ₹{inr(cw.earned)} · paid ₹{inr(cw.paid)} ·{" "}
-                <b style={{ color: balWords(weekBal).color }}>{balWords(weekBal).text}</b>
+                <b style={{ color: balWords(weekBal, cloakMoney).color }}>{balWords(weekBal, cloakMoney).text}</b>
               </span>
               {differs && (
                 <span className="att-pp-sub">
                   {earlier > 0 ? "+ ₹" + inr(earlier) + " from earlier weeks" : "− ₹" + inr(-earlier) + " taken extra earlier"} ·{" "}
-                  <b style={{ color: balWords(a.wageBalance).color }}>
-                    {a.wageBalance > 0.5 ? "total to pay ₹" + inr(a.wageBalance) : a.wageBalance < -0.5 ? "overall took extra ₹" + inr(-a.wageBalance) : "overall square ✓"}
+                  <b style={{ color: balWords(a.wageBalance, cloakMoney).color }}>
+                    {cloakMoney || Math.abs(a.wageBalance) <= 0.5
+                      ? "overall square ✓"
+                      : a.wageBalance > 0.5
+                        ? "total to pay ₹" + inr(a.wageBalance)
+                        : "overall took extra ₹" + inr(-a.wageBalance)}
                   </b>
                 </span>
               )}
@@ -567,7 +571,7 @@ export default function AttendanceView() {
   function accountCard(x: WeekRow) {
     const w = x.worker;
     const a = acctOf(w.id);
-    const bw = balWords(a.wageBalance);
+    const bw = balWords(a.wageBalance, cloakMoney);
     // full statement, all pots, newest first
     const stmt = workerPayments(expenses, w.id).sort(
       (p, q) => (q.e.createdAt || "").localeCompare(p.e.createdAt || ""),
@@ -772,12 +776,12 @@ export default function AttendanceView() {
                   <button className="att-hist-toggle" type="button" onClick={() => setHistOpen((v) => !v)}>
                     <span className="um-caret">{histOpen ? "▾" : "▸"}</span>
                     Past weeks · {pastStmt.length} {pastStmt.length === 1 ? "entry" : "entries"}
-                    <b style={{ marginLeft: "auto", color: balWords(x.carryIn).color }}>
-                      {x.carryIn > 0.5
-                        ? "carried in: to pay ₹" + inr(x.carryIn)
-                        : x.carryIn < -0.5
-                          ? "carried in: −₹" + inr(-x.carryIn) + " extra taken"
-                          : "settled ✓"}
+                    <b style={{ marginLeft: "auto", color: balWords(x.carryIn, cloakMoney).color }}>
+                      {cloakMoney || Math.abs(x.carryIn) <= 0.5
+                        ? "settled ✓"
+                        : x.carryIn > 0.5
+                          ? "carried in: to pay ₹" + inr(x.carryIn)
+                          : "carried in: −₹" + inr(-x.carryIn) + " extra taken"}
                     </b>
                   </button>
                   {histOpen &&
@@ -889,12 +893,12 @@ export default function AttendanceView() {
       <div className="dash-grid" style={{ marginTop: 12 }}>
         <div className="stat">
           <div className="k">Workers</div>
-          <div className="v">{active.length}</div>
-          {inactive.length > 0 && <div className="sub">+ {inactive.length} inactive</div>}
+          <div className="v">{qty(active.length)}</div>
+          {!cloakMoney && inactive.length > 0 && <div className="sub">+ {inactive.length} inactive</div>}
         </div>
         <div className="stat">
           <div className="k">Days this week</div>
-          <div className="v">{totDays}</div>
+          <div className="v">{qty(totDays, totDays % 1 ? 1 : 0)}</div>
         </div>
         <div className="stat">
           <div className="k">Wages earned</div>
@@ -908,13 +912,25 @@ export default function AttendanceView() {
         </div>
         <div className="stat">
           <div className="k">Week closing</div>
-          <div className="v" style={{ color: balWords(totClosing).color }}>₹ {inr(Math.abs(totClosing))}</div>
-          <div className="sub">{totClosing > 0.5 ? "carries to next week" : totClosing < -0.5 ? "taken extra — carries" : "week settled ✓"}</div>
+          <div className="v" style={{ color: balWords(totClosing, cloakMoney).color }}>₹ {inr(Math.abs(totClosing))}</div>
+          <div className="sub">
+            {cloakMoney || Math.abs(totClosing) <= 0.5
+              ? "week settled ✓"
+              : totClosing > 0.5
+                ? "carries to next week"
+                : "taken extra — carries"}
+          </div>
         </div>
         <div className="stat">
           <div className="k">Wages net</div>
-          <div className="v" style={{ color: balWords(totNet).color }}>₹ {inr(Math.abs(totNet))}</div>
-          <div className="sub">{totNet > 0.5 ? "to pay overall" : totNet < -0.5 ? "taken extra overall" : "all square"}</div>
+          <div className="v" style={{ color: balWords(totNet, cloakMoney).color }}>₹ {inr(Math.abs(totNet))}</div>
+          <div className="sub">
+            {cloakMoney || Math.abs(totNet) <= 0.5
+              ? "all square"
+              : totNet > 0.5
+                ? "to pay overall"
+                : "taken extra overall"}
+          </div>
         </div>
       </div>
 
@@ -946,7 +962,7 @@ export default function AttendanceView() {
               <tbody>
                 {rows.map((x) => {
                   const a = acctOf(x.worker.id);
-                  const bw = balWords(x.closing); // the WEEK'S closing — frozen for old weeks
+                  const bw = balWords(x.closing, cloakMoney); // the WEEK'S closing — frozen for old weeks
                   const open = openAcct === x.worker.id;
                   return (
                     <Fragment key={x.worker.id}>

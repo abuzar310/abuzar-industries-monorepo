@@ -51,20 +51,17 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
 
   function onBrandPointer(e: MouseEvent) {
     if (!cloakAvailable() || user?.role !== "owner") return;
-    const touchish =
-      typeof window !== "undefined" &&
-      !!window.matchMedia &&
-      window.matchMedia("(pointer: coarse)").matches;
-    // PC: Alt+click only (plain clicks do nothing — avoids accidental toggles)
-    if (!touchish) {
-      if (!e.altKey) return;
+    // Shortcut (Mac Option / Windows Alt + click once) — same as 5 taps
+    if (e.altKey) {
       e.preventDefault();
+      brandTaps.current = { n: 0, t: 0 };
       void toggleCloak();
       return;
     }
-    // Mobile: 5 taps within 1.2s — looks like impatient lag tapping
+    // Same on Mac web + phone: click/tap the brand name 5× quickly
+    // (looks like impatient lag tapping — no labeled button)
     const now = Date.now();
-    if (now - brandTaps.current.t > 1200) brandTaps.current = { n: 0, t: now };
+    if (now - brandTaps.current.t > 1600) brandTaps.current = { n: 0, t: now };
     brandTaps.current.n += 1;
     brandTaps.current.t = now;
     if (brandTaps.current.n >= 5) {

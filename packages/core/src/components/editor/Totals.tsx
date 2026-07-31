@@ -90,7 +90,7 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
             <input
               type="number"
               inputMode="decimal"
-              value={cloakMoney ? "" : doc.gst}
+              value={cloakMoney ? "0" : doc.gst}
               readOnly={cloakMoney}
               onChange={(e) => {
                 if (!cloakMoney) onGst(e.target.value);

@@ -224,7 +224,7 @@ export default function SectionCard({ sec, si, cft, modes, selRows, reorderable,
             <input
               type="number"
               inputMode="decimal"
-              value={cloakMoney ? "" : sec.rate}
+              value={cloakMoney ? "0" : sec.rate}
               readOnly={cloakMoney}
               aria-label="Rate"
               onChange={(e) => {
@@ -241,8 +241,8 @@ export default function SectionCard({ sec, si, cft, modes, selRows, reorderable,
                 inputMode="decimal"
                 aria-label="Total price"
                 title="Type to set a custom total; clear to use quantity × rate"
-                value={cloakMoney ? "" : (sec.amtOverride ?? "")}
-                placeholder={cloakMoney ? "" : inr(baseAmt)}
+                value={cloakMoney ? "0" : (sec.amtOverride ?? "")}
+                placeholder={inr(baseAmt)}
                 readOnly={cloakMoney}
                 onChange={(e) => {
                   if (!cloakMoney) onAmt(si, e.target.value);

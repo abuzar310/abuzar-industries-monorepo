@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
-import { computeDoc, dateSortKey, inr } from "@/lib/calc";
+import { computeDoc, dateSortKey, inr, qty } from "@/lib/calc";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { seriesOf } from "@/lib/invoice-id";
 import { trashDoc } from "@/lib/trash";
@@ -259,7 +259,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
         {q && (
           <button className="s-clear" onClick={() => setQ("")} aria-label="Clear search">×</button>
         )}
-        <span className="s-count">{filtered.length}</span>
+        <span className="s-count">{qty(filtered.length)}</span>
       </div>
 
       {canDelete && sel.size > 0 && (
@@ -402,7 +402,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
           </div>
 
           <div className="rep-summary cols3">
-            <div><b>{report.total.count}</b><span>Quotations</span></div>
+            <div><b>{qty(report.total.count)}</b><span>Quotations</span></div>
             <div><b>₹{inr(report.total.billed)}</b><span>Billed amount</span></div>
             <div><b>₹{inr(report.total.paid)}</b><span>Received</span></div>
           </div>
