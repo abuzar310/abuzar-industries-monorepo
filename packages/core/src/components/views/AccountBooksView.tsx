@@ -28,12 +28,15 @@ interface Row extends BookEntry {
 }
 
 export default function AccountBooksView() {
-  const { ready, dataVersion, brandMode } = useApp();
+  const { ready, dataVersion, brandMode, cloakMoney } = useApp();
   const [seg, setSeg] = useState<"cash" | "banks">("cash");
   const [bank, setBank] = useState("");
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [invoices, setInvoices] = useState<Doc[]>([]);
-  const [banks, setBanks] = useState<string[]>([]);
+  const [expensesRaw, setExpenses] = useState<Expense[]>([]);
+  const [invoicesRaw, setInvoices] = useState<Doc[]>([]);
+  const [banksRaw, setBanks] = useState<string[]>([]);
+  const expenses = cloakMoney ? [] : expensesRaw;
+  const invoices = cloakMoney ? [] : invoicesRaw;
+  const banks = cloakMoney ? [] : banksRaw;
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [q, setQ] = useState("");

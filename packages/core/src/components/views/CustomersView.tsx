@@ -20,7 +20,7 @@ function applySearch(list: Customer[], q: string) {
 }
 
 export default function CustomersView() {
-  const { dataVersion, searchTerm } = useApp();
+  const { dataVersion, searchTerm, cloakMoney } = useApp();
   const router = useRouter();
   const [list, setList] = useState<Customer[]>([]);
   const [quotes, setQuotes] = useState<Doc[]>([]);
@@ -86,7 +86,7 @@ export default function CustomersView() {
   }
 
   // financials once per customer, so the list can sort by outstanding
-  const entries = applySearch(list, searchTerm).map((c) => ({
+  const entries = applySearch(cloakMoney ? [] : list, searchTerm).map((c) => ({
     c,
     f: customerFinancials(c.id, quotes, invs, c.opening || 0, expenses, quotesAsBills),
   }));

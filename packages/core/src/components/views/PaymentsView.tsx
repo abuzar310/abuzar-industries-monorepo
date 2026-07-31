@@ -153,15 +153,17 @@ export default function PaymentsView() {
   }, [ready, dataVersion, load]);
 
   const flash = useFocusFlash();
-  const { parties, totalBilled, totalPaid, totalPending } = partyLedger(quotes, expenses, customers);
-  const dueCount = cloakMoney ? 0 : parties.filter((p) => p.balance > 0.5).length;
+  // panic cloak: no party rows / balances at all
+  const { parties, totalBilled, totalPaid, totalPending } = partyLedger(
+    cloakMoney ? [] : quotes,
+    cloakMoney ? [] : expenses,
+    cloakMoney ? [] : customers,
+  );
+  const dueCount = parties.filter((p) => p.balance > 0.5).length;
   const term = q.trim().toLowerCase();
-  // cloaked → look like every account is clear (list empty / settled)
-  const shown = cloakMoney
-    ? []
-    : parties
-        .filter((p) => p.balance > 0.5)
-        .filter((p) => (term ? p.name.toLowerCase().includes(term) || p.phone.includes(term) : true));
+  const shown = parties
+    .filter((p) => p.balance > 0.5)
+    .filter((p) => (term ? p.name.toLowerCase().includes(term) || p.phone.includes(term) : true));
 
   const balClass = (b: number) => (cloakMoney || b <= 0.5 ? "ok" : b < -0.5 ? "adv" : "due");
   const balText = (b: number) =>

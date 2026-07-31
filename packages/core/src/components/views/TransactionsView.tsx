@@ -25,12 +25,14 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function TransactionsView() {
-  const { dataVersion, user } = useApp();
+  const { dataVersion, user, cloakMoney } = useApp();
   const router = useRouter();
-  const [txns, setTxns] = useState<AllTransaction[]>([]);
+  const [txnsRaw, setTxns] = useState<AllTransaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
-  const [total, setTotal] = useState(0);
+  const [totalRaw, setTotal] = useState(0);
+  const txns = cloakMoney ? [] : txnsRaw;
+  const total = cloakMoney ? 0 : totalRaw;
 
   // Filters
   const [typeFilter, setTypeFilter] = useState("");

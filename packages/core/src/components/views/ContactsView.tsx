@@ -28,11 +28,13 @@ type ViewMode = "customers" | "carpenters";
 const norm = (s: string) => s.trim().toLowerCase();
 
 export default function ContactsView() {
-  const { ready, dataVersion, user, brandMode } = useApp();
+  const { ready, dataVersion, user, brandMode, cloakMoney } = useApp();
   const brand = brandFor(brandMode);
   const router = useRouter();
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [quotes, setQuotes] = useState<Doc[]>([]);
+  const [customersRaw, setCustomers] = useState<Customer[]>([]);
+  const [quotesRaw, setQuotes] = useState<Doc[]>([]);
+  const customers = cloakMoney ? [] : customersRaw;
+  const quotes = cloakMoney ? [] : quotesRaw;
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<ViewMode>("customers");
 

@@ -80,7 +80,7 @@ function applySearch(arr: Doc[], q: string) {
 }
 
 export default function DocListView({ store, title, sub, statusCol, empty, showNew }: Props) {
-  const { dataVersion, searchTerm, user, brandMode } = useApp();
+  const { dataVersion, searchTerm, user, brandMode, cloakMoney } = useApp();
   // manager can delete quotations too (soft-delete → Recycle bin; owner controls restore/purge);
   // invoices stay owner-only
   const canDelete = user?.role === "owner" || store === "quotations";
@@ -125,9 +125,11 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
   }, [store, dataVersion]);
 
   const filtered = useMemo(() => {
+    // panic cloak: not a single quotation/invoice row — looks like a fresh empty app
+    if (cloakMoney) return [];
     const base = isInv && trade !== "all" ? docs.filter((d) => seriesOf(d) === trade) : docs;
     return applySearch(base, q || searchTerm);
-  }, [docs, q, searchTerm, isInv, trade]);
+  }, [docs, q, searchTerm, isInv, trade, cloakMoney]);
   // report follows the active search, so what you export is what you see
   const report = useMemo(() => (canReport ? monthlyReport(filtered) : null), [canReport, filtered]);
   const reportRef = useRef<HTMLDivElement>(null);

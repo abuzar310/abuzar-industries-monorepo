@@ -18,6 +18,15 @@ export function isCloaked(): boolean {
   return cloakAvailable() && !!getState().cloakMoney;
 }
 
+/**
+ * While cloaked, return no rows so every screen shows its normal empty state.
+ * Cloud data is untouched — toggle off and lists refill from cache.
+ */
+export function cloakList<T>(items: readonly T[] | T[] | null | undefined): T[] {
+  if (isCloaked()) return [];
+  return items ? [...items] : [];
+}
+
 /** Sync app-store + body class from cloud meta (and one-time legacy pref migrate). */
 export function hydrateCloak(): void {
   if (typeof document === "undefined") return;

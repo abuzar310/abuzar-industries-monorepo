@@ -128,11 +128,20 @@ export default function AttendanceView() {
 
   const days = useMemo(() => weekDays(start), [start]);
   const active = useMemo(
-    () => workers.filter((w) => w.active).sort((a, b) => a.name.localeCompare(b.name)),
-    [workers],
+    () =>
+      cloakMoney
+        ? []
+        : workers.filter((w) => w.active).sort((a, b) => a.name.localeCompare(b.name)),
+    [workers, cloakMoney],
   );
-  const inactive = useMemo(() => workers.filter((w) => !w.active), [workers]);
-  const rows = useMemo(() => weekRollup(active, marks, expenses, days), [active, marks, expenses, days]);
+  const inactive = useMemo(
+    () => (cloakMoney ? [] : workers.filter((w) => !w.active)),
+    [workers, cloakMoney],
+  );
+  const rows = useMemo(
+    () => weekRollup(active, cloakMoney ? [] : marks, cloakMoney ? [] : expenses, days),
+    [active, marks, expenses, days, cloakMoney],
+  );
   // all-time running account per worker (wage pot + separate debt pot)
   const accounts = useMemo(() => {
     const m = new Map<string, WorkerAccount>();

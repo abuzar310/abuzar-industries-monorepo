@@ -26,9 +26,10 @@ function fmtWhen(iso: string): { day: string; time: string; full: string } {
 }
 
 export default function LogsView() {
-  const { ready, dataVersion, user } = useApp();
+  const { ready, dataVersion, user, cloakMoney } = useApp();
   const router = useRouter();
-  const [rows, setRows] = useState<Activity[]>([]);
+  const [rowsRaw, setRows] = useState<Activity[]>([]);
+  const rows = cloakMoney ? [] : rowsRaw;
   const [q, setQ] = useState("");
   const [actionF, setActionF] = useState<"all" | Act>("all");
   const [whoF, setWhoF] = useState<"all" | string>("all");

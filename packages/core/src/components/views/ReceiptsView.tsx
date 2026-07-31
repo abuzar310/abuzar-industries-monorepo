@@ -48,12 +48,12 @@ type Kind = "received" | "due" | "paid";
 type RecvVia = "customer" | "name";
 
 export default function ReceiptsView() {
-  const { ready, dataVersion, user } = useApp();
+  const { ready, dataVersion, user, cloakMoney } = useApp();
   const router = useRouter();
   const isOwner = user?.role === "owner";
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [quotes, setQuotes] = useState<Doc[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [customersRaw, setCustomers] = useState<Customer[]>([]);
+  const [quotesRaw, setQuotes] = useState<Doc[]>([]);
+  const [expensesRaw, setExpenses] = useState<Expense[]>([]);
   const [upiAccts, setUpiAccts] = useState<string[]>([]);
   const [picked, setPicked] = useState<Customer | null>(null);
   const [name, setName] = useState("");
@@ -88,7 +88,7 @@ export default function ReceiptsView() {
   const [applyTo, setApplyTo] = useState<"quotes" | "quote" | "account">("quotes");
   const [quoteId, setQuoteId] = useState("");
   // worker salary-account quick panel
-  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [workersRaw, setWorkers] = useState<Worker[]>([]);
   const [showWkr, setShowWkr] = useState(false);
   const [wkrId, setWkrId] = useState("");
   const [wKind, setWKind] = useState<"give" | "repay">("give");
@@ -112,6 +112,12 @@ export default function ReceiptsView() {
   useEffect(() => {
     if (ready) load();
   }, [ready, dataVersion, load]);
+
+  // panic cloak: hide every party / receipt / worker row
+  const customers = cloakMoney ? [] : customersRaw;
+  const quotes = cloakMoney ? [] : quotesRaw;
+  const expenses = cloakMoney ? [] : expensesRaw;
+  const workers = cloakMoney ? [] : workersRaw;
 
   // arrived from Accounts (a receipt line) → auto-open that customer's group
   useEffect(() => {

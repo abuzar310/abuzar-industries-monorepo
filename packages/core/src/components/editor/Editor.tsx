@@ -817,6 +817,23 @@ export default function Editor({
   const showLink = isInv && !!doc.quotationId;
   const freeMode = feat.simpleQuote && !!doc.freeLayout;
 
+  // panic cloak: open quote must not show customer/lines — look like nothing is open
+  if (cloakMoney && feat.simpleQuote) {
+    return (
+      <div className="view active" id="v-editor">
+        <div className="doctool">
+          <span className="lab">New</span>
+          <button className="btn sm" onClick={onNewQuote}>
+            + Quotation
+          </button>
+        </div>
+        <div className="empty" style={{ padding: 48, textAlign: "center" }}>
+          No quotation open.
+        </div>
+      </div>
+    );
+  }
+
   // one wood box (shared by the auto-layout and the free-arrange canvas)
   const renderCard = (si: number) => {
     const sec = doc.sections[si];

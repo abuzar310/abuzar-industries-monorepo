@@ -85,17 +85,23 @@ interface PrintDoc {
 }
 
 export default function AccountsView() {
-  const { ready, dataVersion, user, brandMode } = useApp();
+  const { ready, dataVersion, user, brandMode, cloakMoney } = useApp();
   const brand = brandFor(brandMode);
   const router = useRouter();
   const [printDoc, setPrintDoc] = useState<PrintDoc | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
-  const [quotes, setQuotes] = useState<Doc[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [collections, setCollections] = useState<AccountCollection[]>([]);
-  const [registry, setRegistry] = useState<PayAccount[]>([]);
-  const [holders, setHolders] = useState<PayHolder[]>([]);
+  const [quotesRaw, setQuotes] = useState<Doc[]>([]);
+  const [expensesRaw, setExpenses] = useState<Expense[]>([]);
+  const [customersRaw, setCustomers] = useState<Customer[]>([]);
+  const [collectionsRaw, setCollections] = useState<AccountCollection[]>([]);
+  const [registryRaw, setRegistry] = useState<PayAccount[]>([]);
+  const [holdersRaw, setHolders] = useState<PayHolder[]>([]);
+  const quotes = cloakMoney ? [] : quotesRaw;
+  const expenses = cloakMoney ? [] : expensesRaw;
+  const customers = cloakMoney ? [] : customersRaw;
+  const collections = cloakMoney ? [] : collectionsRaw;
+  const registry = cloakMoney ? [] : registryRaw;
+  const holders = cloakMoney ? [] : holdersRaw;
   // "cleared log" watermarks — everything at/before a mark is hidden HERE only
   // (never deleted; quotations / Statements / Balances / Daybook keep it all)
   const [clearMarks, setClearMarks] = useState<Record<string, string>>({});

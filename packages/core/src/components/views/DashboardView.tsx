@@ -31,11 +31,16 @@ const MONTHS: [string, string][] = [
 export default function DashboardView() {
   const { dataVersion, user, cloakMoney } = useApp();
   const router = useRouter();
-  const [quotes, setQuotes] = useState<Doc[]>([]);
-  const [invs, setInvs] = useState<Doc[]>([]);
+  const [quotesRaw, setQuotes] = useState<Doc[]>([]);
+  const [invsRaw, setInvs] = useState<Doc[]>([]);
   const [stk, setStk] = useState<Stock[]>([]);
-  const [exp, setExp] = useState<Expense[]>([]);
-  const [custs, setCusts] = useState<Customer[]>([]);
+  const [expRaw, setExp] = useState<Expense[]>([]);
+  const [custsRaw, setCusts] = useState<Customer[]>([]);
+  // panic cloak: zero records on screen (cloud data stays)
+  const quotes = cloakMoney ? [] : quotesRaw;
+  const invs = cloakMoney ? [] : invsRaw;
+  const exp = cloakMoney ? [] : expRaw;
+  const custs = cloakMoney ? [] : custsRaw;
   const [stockCfg, setStockCfg] = useState<StockConfig>({ value: 0, cft: 0, closingCft: null });
   const [month, setMonth] = useState(""); // "" = all months
   const [year, setYear] = useState(""); // "" = all years
@@ -456,9 +461,9 @@ export default function DashboardView() {
             </div>
           </div>
 
-          {txnsLoading ? (
+          {txnsLoading && !cloakMoney ? (
             <div className="empty" style={{ textAlign: "center", padding: 24 }}>Loading transactions…</div>
-          ) : allTxns.length === 0 ? (
+          ) : cloakMoney || allTxns.length === 0 ? (
             <div className="empty" style={{ padding: 24, textAlign: "center" }}>No transactions found. Create a receipt, expense, or daybook entry.</div>
           ) : (
             <div className="txns-table" style={{ overflowX: "auto" }}>
