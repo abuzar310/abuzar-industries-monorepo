@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
-import { inDaybook, isInflow, openingCarry, spendCategoryOf, spendCatKey } from "@/lib/expenses";
+import { inDaybook, isInflow, openingCarry, spendCategoryOf, spendCatKey, spendDetailOf, SPEND_CATEGORIES } from "@/lib/expenses";
 import { partyLedger, quoteBill } from "@/lib/payments";
 import { acctLedger, listCollections, listHolders, type AccountCollection, type PayHolder } from "@/lib/accounts";
 import { listAttendance, listWorkers, workerAccount, type AttendanceMark, type Worker } from "@/lib/attendance";
@@ -133,7 +133,11 @@ export default function BooksView() {
         const inflow = isInflow(e.type);
         const what = inflow
           ? (e.custId ? "Received" : "Sale") + (e.mode === "upi" ? " · UPI" + (e.account ? " · " + e.account : "") : " · Cash") + (e.toOwner ? " → Owner" : "")
-          : spendCategoryOf(e);
+          : (() => {
+              const cat = spendCategoryOf(e);
+              const detail = spendDetailOf(e);
+              return detail && detail !== cat ? cat + " · " + detail : cat;
+            })();
         return {
           id: e.id,
           date: e.date,
@@ -265,12 +269,17 @@ export default function BooksView() {
         <div className="party-card">
           <div className="party-stat-label" style={{ marginBottom: 10 }}>Expense breakdown</div>
           {spends.byCat.size === 0 && <div className="books-row"><span>No expenses this month</span><b>—</b></div>}
-          {[...spends.byCat.entries()].sort((a, b) => b[1].amount - a[1].amount).map(([key, g]) => (
-            <div className="books-row" key={key}>
-              <span>{g.label} <small>· {g.count}</small></span>
-              <b className="due">₹{inr(g.amount)}</b>
-            </div>
-          ))}
+          {SPEND_CATEGORIES.filter((c) => spends.byCat.has(c.id))
+            .sort((a, b) => (spends.byCat.get(b.id)!.amount - spends.byCat.get(a.id)!.amount))
+            .map((c) => {
+              const g = spends.byCat.get(c.id)!;
+              return (
+                <div className="books-row" key={c.id}>
+                  <span>{c.label} <small>· {g.count}</small></span>
+                  <b className="due">₹{inr(g.amount)}</b>
+                </div>
+              );
+            })}
           <div className="books-row books-total"><span>Total expenses</span><b className="due">₹{inr(spends.total)}</b></div>
         </div>
       </div>

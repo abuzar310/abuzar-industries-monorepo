@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { allRec, delRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
-import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, inDaybook, isInflow, isUpi, requestHandover, spendCategoryOf, SPEND_CATEGORIES, upiAccounts } from "@/lib/expenses";
+import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, inDaybook, isInflow, isUpi, requestHandover, spendCategoryOf, spendDetailOf, SPEND_CATEGORIES, upiAccounts } from "@/lib/expenses";
 import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
 import { isIOS, isStandalone } from "@/lib/pwa";
 import { USERS } from "@/lib/local-auth";
@@ -457,7 +457,7 @@ export default function ExpensesView() {
                 <div className="db-srow" key={e.id}>
                   <span className={"exptag " + (cin > 0 ? "in" : "out")}>{spendCategoryOf(e).split(" ")[0]}</span>
                   <span className="expnote">
-                    {e.note || spendCategoryOf(e)}
+                    {spendDetailOf(e)}
                     <small>
                       {userName(e.enteredBy)}
                       {cin > 0 && e.mode ? " · " + e.mode.toUpperCase() : ""}
@@ -608,7 +608,7 @@ export default function ExpensesView() {
                       <div className="exprow" key={e.id}>
                         <span className={"exptag " + (isInflow(e.type) ? "in" : "out")}>{spendCategoryOf(e).split(" ")[0]}</span>
                         <span className="expnote">
-                          {e.note || spendCategoryOf(e)}
+                          {spendDetailOf(e)}
                           <small>
                             {e.date} · {userName(e.enteredBy)}
                             {isInflow(e.type) && e.mode ? " · " + e.mode.toUpperCase() : ""}

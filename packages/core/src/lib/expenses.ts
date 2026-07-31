@@ -16,26 +16,37 @@ export const SPEND_CATEGORIES: { id: string; label: string; type: EntryType }[] 
 
 const SPEND_LABELS = new Set(SPEND_CATEGORIES.map((c) => c.label));
 
-/** Human label for an expense (category-aware). Legacy additional/custom keep their label. */
+/**
+ * Books / reports category bucket. Only the prebuilt SPEND_CATEGORIES.
+ * Legacy Additional + freeform Custom labels all roll into Other — notes stay on the row.
+ */
 export function spendCategoryOf(e: Expense): string {
   if (e.type === "sale") return e.charge ? "Due" : "Sale";
   if (e.type === "food") return "Food";
   if (e.type === "salary") return "Salary";
-  if (e.type === "additional") return (e.label || "").trim() || "Additional";
   if (e.type === "custom") {
     const lab = (e.label || "").trim();
     if (SPEND_LABELS.has(lab)) return lab;
-    if (lab.startsWith("Paid to ")) return lab; // legacy customer paid-out
-    return lab || "Other";
   }
-  return e.type;
+  // additional, old custom notes ("Afsar bhaiya", "Carp com…"), etc.
+  return "Other";
 }
 
-/** Stable group key for Books category breakdown. */
+/** Stable group key for Books — always one of the prebuilt category ids (or sale/due). */
 export function spendCatKey(e: Expense): string {
   const label = spendCategoryOf(e);
-  const known = SPEND_CATEGORIES.find((c) => c.label === label);
-  return known ? known.id : "x:" + label.toLowerCase();
+  if (label === "Sale") return "sale";
+  if (label === "Due") return "due";
+  return SPEND_CATEGORIES.find((c) => c.label === label)?.id || "other";
+}
+
+/** Detail line for lists: note, else legacy freeform label, else category name. */
+export function spendDetailOf(e: Expense): string {
+  const note = (e.note || "").trim();
+  if (note) return note;
+  const lab = (e.label || "").trim();
+  if (lab && !SPEND_LABELS.has(lab)) return lab;
+  return spendCategoryOf(e);
 }
 
 export const ENTRY_TYPES: { value: EntryType; label: string; flow: "in" | "out" }[] = [
