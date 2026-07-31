@@ -71,6 +71,8 @@ export interface Doc {
   finalPrice?: number;
   /** print the agreed final price on the sheet (default OFF — clean quote format). */
   showFinalOnPrint?: boolean;
+  /** print sizes/quantities only — hide rates, prices, and bill totals (default OFF). */
+  hidePricesOnPrint?: boolean;
   quotationId: string;
   paymentStatus: string;
   amountPaid: number;
@@ -87,6 +89,18 @@ export interface Doc {
   /** selling invoice: consignee "Ship To" address + transport vehicle number (shown on the invoice). */
   shipTo?: string;
   vehicleNo?: string;
+  /** customer / bill-to PIN (6 digits) — required for e-way bill JSON. */
+  custPincode?: string;
+  /** ship-to PIN when different from bill-to (defaults to custPincode). */
+  shipToPincode?: string;
+  /** transporter GSTIN / TRANSIN (optional on Part A). */
+  transporterId?: string;
+  /** approx. distance in km (portal may recalculate). */
+  transDistance?: number;
+  /** e-way bill number pasted back after NIC portal generate. */
+  ewbNo?: string;
+  /** e-way bill date from portal (dd-mm-yy display). */
+  ewbDate?: string;
   /** which brand bank to print on this invoice (index into brand.banks) — picker not printed */
   bankIdx?: number;
   /** App A (daybook): cash / UPI split accepted against this quotation. */
@@ -134,6 +148,8 @@ export interface Customer {
   notes: string;
   /** GSTIN — used when the customer is treated as a debtor in the Ledger. */
   gstin?: string;
+  /** 6-digit PIN for e-way / shipping. */
+  pincode?: string;
   /** opening balance — money they owed before using the app (positive = they owe us). */
   opening?: number;
   createdAt: string;

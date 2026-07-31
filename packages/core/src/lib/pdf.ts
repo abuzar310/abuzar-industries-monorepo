@@ -73,9 +73,13 @@ async function renderPdf(sheet: HTMLElement) {
   // same set hidden by `@media print` in globals.css, plus the on-screen-only editing controls
   clone
     .querySelectorAll(
-      ".no-print,.doctool,.add-row,.add-sec,.x-row,.x-sec,.ic-row,.sec-tools,.mode-seg,.mode-btn,.formula,.hint,.btn,.iconbtn",
+      ".no-print,.doctool,.add-row,.add-sec,.x-row,.x-sec,.ic-row,.sec-tools,.mode-seg,.mode-btn,.formula,.hint,.btn,.iconbtn,.sec-name-caret,.sec-name-menu",
     )
     .forEach((el) => el.remove());
+  // "Hide prices" on quotations — drop rates, section totals, and the bill box from PDF too
+  if (clone.classList.contains("hide-prices")) {
+    clone.querySelectorAll(".print-money,.totals,.words,.pay-sheet").forEach((el) => el.remove());
+  }
   // print-only elements (e.g. the solid Total-Price value) are display:none on screen — show them
   clone.querySelectorAll<HTMLElement>(".amt-print").forEach((el) => (el.style.display = "inline"));
   // drop the screen-only selection highlight classes so nothing is tinted in the PDF

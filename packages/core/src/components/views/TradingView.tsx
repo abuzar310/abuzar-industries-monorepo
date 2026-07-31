@@ -266,8 +266,10 @@ export default function TradingView() {
         : num(Math.round((rightCft + Math.max(0, cftDiff)) * 100) / 100);
     const n = Math.max(leftRows.length, rightRows.length);
     const cell = (r?: [string, string]) => (r ? r : ["", ""]);
+    // single ₹ or CFT table alone → stretch to ~70% of the printed page
+    const fillPage = (printCols === "amount" || printCols === "cft") && !printMonths;
     return (
-      <table className="rep-table rep-tacct" key={measure}>
+      <table className={"rep-table rep-tacct" + (fillPage ? " tacct-fill" : "")} key={measure}>
         <colgroup>
           <col style={{ width: "34%" }} />
           <col style={{ width: "16%" }} />
@@ -615,7 +617,7 @@ export default function TradingView() {
       </div>
 
       {/* clean printable TRADING ACCOUNT — rendered only on print (Print Trading A/C button) */}
-      <div className="cd-print rep-doc" ref={printRef}>
+      <div className="cd-print rep-doc cd-tacct" ref={printRef}>
         <div className="rep-head">
           <div className="rep-brand">
             <h1>{brand.name || "Trading Account"}</h1>

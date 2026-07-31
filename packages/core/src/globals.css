@@ -2024,6 +2024,15 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .rep-table{min-width:680px}
 }
 
+/* quotation: Hide prices — rates / totals stay on screen, drop from Print & PDF */
+@media print{
+  #sheet.hide-prices .print-money,
+  #sheet.hide-prices .totals,
+  #sheet.hide-prices .words,
+  #sheet.hide-prices .pay-sheet{display:none !important}
+  #sheet.hide-prices .sec-calc.oneline{justify-content:flex-start}
+}
+
 @media print{
   .wrap{padding:0 !important; max-width:none !important}
   /* phones: the on-screen rule (overflow-x + min-width 680px) leaked into the print
@@ -2068,6 +2077,48 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .cd-qreport .rep-table tbody tr:nth-child(10n){break-after:page; page-break-after:always}
   .cd-qreport .rep-table tbody tr:nth-child(10n):last-child{break-after:auto; page-break-after:auto}
   .cd-qreport .rep-table tbody tr.rep-tot{break-after:auto; page-break-after:auto}
+
+  /* Stock / Trading A/C: fill ~70% of the A4 sheet (generic .rep-table print rules shrink it) */
+  .cd-tacct.rep-doc{display:flex !important; flex-direction:column; min-height:285mm}
+  .cd-tacct .rep-head{padding-bottom:12px; margin-bottom:18px}
+  .cd-tacct .rep-brand h1{font-size:24px}
+  .cd-tacct .rep-brand div{font-size:12.5px}
+  .cd-tacct .rep-title{font-size:18px}
+  .cd-tacct .rep-period{font-size:13px; margin-top:6px}
+  .cd-tacct .rep-tacct{
+    flex:0 0 auto;
+    width:100% !important;
+    min-height:110mm;
+    font-size:18px !important;
+    margin-top:4px;
+  }
+  /* one T-account alone → stretch to ~70% of the printable page */
+  .cd-tacct .rep-tacct.tacct-fill{height:200mm}
+  .cd-tacct .rep-tacct th,
+  .cd-tacct .rep-tacct td{
+    padding:22px 16px !important;
+    font-size:17px !important;
+    vertical-align:middle !important;
+    overflow:visible !important;
+    word-break:normal !important;
+  }
+  .cd-tacct .rep-tacct thead th{
+    font-size:12px !important;
+    letter-spacing:.08em;
+    height:14mm;
+    padding:12px 16px !important;
+  }
+  .cd-tacct .rep-tacct td.amt,
+  .cd-tacct .rep-tacct th.amt{font-size:17px !important}
+  .cd-tacct .rep-tacct .rep-tot td{
+    font-size:18px !important;
+    font-weight:800;
+    padding:20px 16px !important;
+    height:16mm;
+  }
+  .cd-tacct .rep-tacct tbody tr:nth-child(30n){break-after:auto; page-break-after:auto}
+  .cd-tacct .rep-foot{margin-top:auto; padding-top:16px; font-size:12px}
+
   /* fixed A4 canvas so phone prints lay out exactly like PC (not the phone's screen width).
      6mm matches the main print block — a later 10mm here was silently widening EVERY
      print's margins (last @page wins document-wide). */
@@ -2337,4 +2388,102 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .ledger-page .bal-tag{display:inline-block; font-size:8px; padding:0 4px; margin-left:3px}
   .ledger-page .sq-bal{font-size:11px; padding:4px 9px}
   .ledger-page .lch-bal{font-size:15px}
+}
+
+/* ===== E-way bill panel (official sell invoices) ===== */
+.eway-panel{margin-top:14px; padding:14px 16px}
+.eway-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px}
+.eway-head b{font-family:var(--disp); font-size:15px; letter-spacing:.04em; text-transform:uppercase; color:var(--walnut)}
+.eway-head small{display:block; font-weight:400; color:var(--ink-faint); font-size:12px; letter-spacing:0; text-transform:none; margin-top:2px}
+.eway-steps{margin:0 0 12px; font-size:13px; color:var(--ink-soft); line-height:1.45}
+.eway-guide{margin:0 0 12px; padding:10px 12px 10px 28px; background:rgba(176,124,40,.06); border:1px solid var(--line); border-radius:10px; font-size:13px; color:var(--ink-soft); line-height:1.45}
+.eway-guide li{margin:0 0 8px}
+.eway-guide li:last-child{margin-bottom:0}
+.eway-guide strong{display:block; color:var(--walnut); font-family:var(--disp); font-size:12px; letter-spacing:.03em; margin-bottom:2px}
+.eway-guide span{display:block}
+.eway-portal-line{list-style:none; margin-left:-16px !important; padding-top:4px}
+.eway-portal-line a{color:var(--ochre-deep); font-weight:600}
+.eway-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:10px}
+.eway-grid label{display:flex; flex-direction:column; gap:4px; font-family:var(--disp); font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft)}
+.eway-grid input{font-family:var(--mono); font-size:13px; padding:8px 10px; border:1px solid var(--line-2); border-radius:8px; background:var(--panel-2); color:var(--ink); text-transform:uppercase}
+.eway-summary{display:flex; flex-wrap:wrap; gap:8px 14px; font-size:12.5px; color:var(--ink-soft); margin-bottom:8px; font-family:var(--mono)}
+.eway-errors{margin:0 0 8px; padding-left:18px; color:var(--danger); font-size:12.5px}
+.eway-warn{margin:0 0 8px; font-size:12.5px; color:var(--ochre-deep)}
+.eway-actions{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px}
+.eway-ewb-row{display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; padding-top:10px; border-top:1px solid var(--line)}
+.eway-ewb-row label{display:flex; flex-direction:column; gap:4px; flex:1 1 140px; font-family:var(--disp); font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft)}
+.eway-ewb-row input{font-family:var(--mono); font-size:13px; padding:8px 10px; border:1px solid var(--line-2); border-radius:8px; background:var(--panel-2); color:var(--ink)}
+.eway-slip{padding:18px 20px; background:#fff; color:#222; font-family:var(--body)}
+.eway-slip-head{display:flex; justify-content:space-between; gap:16px; border-bottom:2px solid var(--walnut,#3d2a18); padding-bottom:10px; margin-bottom:12px}
+.eway-slip-head h1{margin:0 0 4px; font-family:var(--disp); font-size:20px; color:var(--walnut,#3d2a18)}
+.eway-slip-head div{font-size:12px; line-height:1.4; color:#555}
+.eway-slip-title{text-align:right; font-family:var(--disp); font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--ochre-deep,#8a5a16)}
+.eway-slip-no{font-family:var(--mono); font-size:16px; letter-spacing:0; margin-top:6px; color:#222; text-transform:none}
+.eway-slip-tbl{width:100%; border-collapse:collapse; font-size:13px}
+.eway-slip-tbl td{padding:8px 6px; border-bottom:1px solid #ddd; vertical-align:top}
+.eway-slip-tbl td:first-child{width:28%; font-family:var(--disp); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#777; font-weight:700}
+.eway-slip-foot{margin:12px 0 0; font-size:11px; color:#888}
+@media(max-width:720px){
+  .eway-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:480px){
+  .eway-grid{grid-template-columns:1fr}
+}
+
+/* unofficial owner panic cloak — blank money/rates on screen (data stays in cloud) */
+body.cloak-money .print-money,
+body.cloak-money .sc.amt,
+body.cloak-money .amt-edit,
+body.cloak-money .amt-print,
+body.cloak-money .amt,
+body.cloak-money .totals,
+body.cloak-money .words,
+body.cloak-money .pay-sheet,
+body.cloak-money .lrow .amt,
+body.cloak-money .stat .v.money,
+body.cloak-money .stat .sub,
+body.cloak-money .att-rate,
+body.cloak-money .att-bal,
+body.cloak-money .att-day-amt,
+body.cloak-money .att-hero,
+body.cloak-money .att-carry,
+body.cloak-money .db-srow .amt,
+body.cloak-money .db-shead .amt,
+body.cloak-money .acct-chip,
+body.cloak-money .acct-day-chip .amt,
+body.cloak-money .party-stat-value,
+body.cloak-money .rep-summary b,
+body.cloak-money .stmt-amt,
+body.cloak-money .pay-amt,
+body.cloak-money .inv-pay,
+body.cloak-money .final-block,
+body.cloak-money .mut{
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+  border-color: transparent !important;
+  caret-color: transparent !important;
+}
+body.cloak-money .print-money input,
+body.cloak-money .sc.amt input,
+body.cloak-money .totals input,
+body.cloak-money .amt-edit input{
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  caret-color: transparent !important;
+}
+body.cloak-money .print-money input::placeholder,
+body.cloak-money .amt-edit input::placeholder{
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  opacity: 0 !important;
+}
+/* bare "₹ …" text nodes that use inr() — collapse empty currency leftovers */
+body.cloak-money .money,
+body.cloak-money .doc-amt,
+body.cloak-money .dash-amt,
+body.cloak-money .cust-bal,
+body.cloak-money .bal-pill{
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
 }

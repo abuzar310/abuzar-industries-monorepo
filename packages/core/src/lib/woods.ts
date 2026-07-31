@@ -15,11 +15,14 @@ export const WOOD_TYPES = [
   "Rosewood",
 ] as const;
 
+/** Official default wood name (invoices + quotations). */
+export const OFFICIAL_DEFAULT_WOOD = "Imported Teak Wood";
+
 /** First wood box on a brand-new quotation / invoice. */
 export function defaultWoodSection(): Section {
   const official = !getFeatures().simpleQuote;
   return {
-    name: official ? "Imported Teak Wood" : "Teak",
+    name: official ? OFFICIAL_DEFAULT_WOOD : "Teak",
     rate: 4000,
     rows: [{ l: "", w: "", t: "", pcs: "" }],
   };

@@ -1,12 +1,15 @@
 import type { Doc, Row, Section } from "./types";
+import { isCloaked } from "./cloak";
 
 // ---- tiny formatting helpers (identical to legacy) ----
 
-export const inr = (n: number) =>
-  (isFinite(n) ? n : 0).toLocaleString("en-IN", {
+export const inr = (n: number) => {
+  if (isCloaked()) return "";
+  return (isFinite(n) ? n : 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+};
 
 /** Cubic feet for one line: (L ft × W in × T in × Pcs) ÷ 144 — ROUNDED to 2 decimals.
  *  Round-first billing: the CFT figure printed on the line is exactly what's billed,
