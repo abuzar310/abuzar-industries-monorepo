@@ -13,7 +13,7 @@ import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import AccountPicker from "@/components/AccountPicker";
 import CustomerPicker from "@/components/editor/CustomerPicker";
-import type { Customer, Doc, Expense } from "@/lib/types";
+import type { Customer, Doc, EntryType, Expense } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
 const toDmy = (v: string) => {
@@ -25,6 +25,25 @@ const fromDmy = (v: string) => {
   return d && m && y ? `20${y}-${m}-${d}` : "";
 };
 const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Paid-out spend categories (daybook-style) — not tied to a customer. */
+const PAID_OUT_CATS: { id: string; label: string; type: EntryType }[] = [
+  { id: "food", label: "Food", type: "food" },
+  { id: "salary", label: "Salary", type: "salary" },
+  { id: "carpenter", label: "Carpenter commission", type: "custom" },
+  { id: "truck", label: "Truck rent", type: "custom" },
+  { id: "bills", label: "Bills", type: "custom" },
+  { id: "tea", label: "Tea bill", type: "custom" },
+  { id: "other", label: "Other", type: "custom" },
+];
+const PAID_OUT_LABELS = new Set(PAID_OUT_CATS.map((c) => c.label));
+const catOf = (e: Expense) =>
+  e.type === "food" ? "Food" : e.type === "salary" ? "Salary" : e.label || "Other";
+/** Category spends recorded as Paid out (and daybook food/salary/custom with our labels). */
+const isCategoryPayout = (e: Expense) =>
+  !e.custId &&
+  !e.charge &&
+  (e.type === "food" || e.type === "salary" || (e.type === "custom" && PAID_OUT_LABELS.has(e.label || "")));
 
 type Kind = "received" | "due" | "paid";
 
@@ -47,6 +66,8 @@ export default function ReceiptsView() {
   const [openCust, setOpenCust] = useState<string | null>(null);
   /** whose cash the "Paid out" money left (null = default to the logged-in role) */
   const [paidBy, setPaidBy] = useState<"owner" | "manager" | null>(null);
+  /** Paid out category — Food / Salary / Truck rent / … */
+  const [paidCat, setPaidCat] = useState(PAID_OUT_CATS[0].id);
   const [editId, setEditId] = useState<string | null>(null);
   /** editing a whole receipt (possibly split across quotes): its pieces get unwound + re-applied on save */
   const [editRcpt, setEditRcpt] = useState<{ id: string; pieces: Expense[] } | null>(null);
@@ -138,6 +159,7 @@ export default function ReceiptsView() {
     setDate("");
     setMode("cash");
     setPaidBy(null);
+    setPaidCat(PAID_OUT_CATS[0].id);
     setEditId(null);
     setEditRcpt(null);
     setApplyTo("quotes");
@@ -168,9 +190,50 @@ export default function ReceiptsView() {
   const pickedQuote = openQuotes.find((x) => x.d.id === quoteId) || null;
 
   async function record() {
-    if (!picked) return toast("Pick an existing customer");
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return toast("Enter an amount");
+
+    // ---- Paid out: category spend (no customer) ----
+    if (kind === "paid" && !editRcpt) {
+      const cat = PAID_OUT_CATS.find((c) => c.id === paidCat) || PAID_OUT_CATS[PAID_OUT_CATS.length - 1];
+      const by = paidBy ?? (isOwner ? "owner" : "manager");
+      if (editId) {
+        const e = await getRec<Expense>("expenses", editId);
+        if (!e || e.type === "sale") return resetForm();
+        e.amount = a;
+        e.type = cat.type;
+        e.label = cat.label;
+        e.note = note.trim();
+        e.toOwner = by === "owner";
+        e.date = date ? toDmy(date) : e.date;
+        e.custId = undefined;
+        e.updatedAt = nowIso();
+        await put("expenses", e);
+        resetForm();
+        load();
+        bumpData();
+        return toast("Updated ✓");
+      }
+      await addExpense({
+        type: cat.type,
+        amount: a,
+        mode: "cash",
+        label: cat.label,
+        note: note.trim(),
+        date: date ? toDmy(date) : undefined,
+        toOwner: by === "owner",
+        enteredBy: user?.id || "unknown",
+      });
+      resetForm();
+      load();
+      bumpData();
+      return toast(
+        "₹" + inr(a) + " · " + cat.label +
+          (by === "owner" ? " — Owner's cash (not in Daybook)" : " — cut from the Daybook"),
+      );
+    }
+
+    if (!picked) return toast("Pick an existing customer");
 
     if (editRcpt) {
       // safest edit of a receipt: unwind every old piece (rolling quote totals back),
@@ -202,15 +265,7 @@ export default function ReceiptsView() {
     if (editId) {
       const e = await getRec<Expense>("expenses", editId);
       if (!e || e.custId !== picked.id) return resetForm();
-      if (e.type === "custom") {
-        // a "Paid out" entry — money we handed to this customer
-        const by = paidBy ?? (e.toOwner ? "owner" : "manager");
-        e.amount = a;
-        e.label = "Paid to " + picked.name;
-        e.note = note.trim();
-        e.toOwner = by === "owner";
-        e.date = date ? toDmy(date) : e.date;
-      } else if (e.charge) {
+      if (e.charge) {
         e.amount = a;
         e.label = note.trim() || picked.name;
         e.date = date ? toDmy(date) : e.date;
@@ -231,27 +286,6 @@ export default function ReceiptsView() {
       load();
       bumpData();
       return toast("Updated ✓");
-    }
-
-    if (kind === "paid") {
-      // money paid OUT to this person — lands in the Daybook as a spend (custom entry),
-      // tagged with the customer so it lists under them here
-      const by = paidBy ?? (isOwner ? "owner" : "manager");
-      await addExpense({
-        type: "custom",
-        amount: a,
-        mode: "cash",
-        label: "Paid to " + picked.name,
-        custId: picked.id,
-        note: note.trim(),
-        date: date ? toDmy(date) : undefined,
-        toOwner: by === "owner",
-        enteredBy: user?.id || "unknown",
-      });
-      resetForm();
-      load();
-      bumpData();
-      return toast("₹" + inr(a) + " paid to " + picked.name + (by === "owner" ? " — Owner's cash (not in Daybook)" : " — cut from the Daybook cash"));
     }
 
     const isUpiMode = mode === "upi" || mode === "uowner";
@@ -294,12 +328,13 @@ export default function ReceiptsView() {
 
   async function remove(entry: Entry) {
     const { e, pieces, settled } = entry;
-    const label = entry.paid ? "payment" : e.charge ? "due" : "receipt";
+    const label = entry.paid ? "paid out" : e.charge ? "due" : "receipt";
     const total = pieces ? r2(pieces.reduce((s, x) => s + (+x.amount || 0), 0)) : +e.amount || 0;
+    const who = entry.paid && !entry.cid ? catOf(e) : custName(entry.cid);
     const ok = await confirmDialog({
       title: "Delete " + label + "?",
       message:
-        custName(entry.cid) + " — ₹" + inr(total) +
+        who + " — ₹" + inr(total) +
         (e.charge ? "" : " · " + (e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : "Cash")) +
         (settled ? "\nThis receipt " + settled + " — those quotations go back to due." : ""),
       confirmLabel: "Delete",
@@ -333,6 +368,19 @@ export default function ReceiptsView() {
         setApplyTo("account");
         setQuoteId("");
       }
+    } else if (entry.paid && isCategoryPayout(e)) {
+      setEditId(e.id);
+      setEditRcpt(null);
+      setKind("paid");
+      setAmt(String(e.amount));
+      const match = PAID_OUT_CATS.find((c) => c.label === catOf(e));
+      setPaidCat(match?.id || "other");
+      setPaidBy(e.toOwner ? "owner" : "manager");
+      setNote(e.note || "");
+      setDate(e.date ? fromDmy(e.date) : "");
+      setPicked(null);
+      setName("");
+      return;
     } else {
       setEditId(e.id);
       setEditRcpt(null);
@@ -392,7 +440,7 @@ export default function ReceiptsView() {
       arr.push(entry);
       byCust.set(cid, arr);
     });
-  // "Paid out" entries — money we handed to the customer (Daybook custom spends tagged with custId)
+  // Legacy "Paid to customer" outs — still under that customer
   expenses
     .filter((e) => e.type === "custom" && !!e.custId)
     .forEach((e) => {
@@ -401,6 +449,12 @@ export default function ReceiptsView() {
       arr.push({ key: e.id, cid, e, amount: +e.amount || 0, locked: false, paid: true });
       byCust.set(cid, arr);
     });
+  // Category paid-outs (Food / Salary / Truck rent / …) — listed separately, no customer
+  const paidOutList = expenses
+    .filter(isCategoryPayout)
+    .map((e) => ({ key: e.id, cid: "", e, amount: +e.amount || 0, locked: false, paid: true as const }))
+    .sort((a, b) => (b.e.createdAt || "").localeCompare(a.e.createdAt || ""));
+  const paidOutTotal = r2(paidOutList.reduce((s, x) => s + x.amount, 0));
   for (const [rid, g] of rcptGroups) {
     const pieces = g.pieces.sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
     const quoteNos = pieces.map((x) => (x.sourceId ? quoteById.get(x.sourceId)?.number || "" : "")).filter(Boolean);
@@ -473,25 +527,7 @@ export default function ReceiptsView() {
       </div>
 
       <div className="panel-card" style={{ padding: 16 }}>
-        <label className="modal-field" style={{ width: "100%" }}>
-          <span>Customer</span>
-          <CustomerPicker value={name} customers={customers} onType={onType} onPick={pickCustomer} placeholder="Search an existing customer…" />
-        </label>
-
-        {picked && (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "10px 0 4px" }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>
-              Outstanding: <b style={{ color: outstanding > 0.5 ? "var(--danger)" : "var(--green)" }}>₹ {inr(outstanding)}</b>
-            </span>
-            {outstanding > 0.5 && kind === "received" && !editing && (
-              <button className="btn sm" type="button" onClick={() => setAmt(String(r2(outstanding)))}>
-                Pay full
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="db-seg sm" style={{ margin: "12px 0 14px" }}>
+        <div className="db-seg sm" style={{ margin: "0 0 14px" }}>
           <button className={"seg-btn" + (kind === "received" ? " on" : "")} type="button" onClick={() => setKind("received")} disabled={editing}>
             Received
           </button>
@@ -499,6 +535,37 @@ export default function ReceiptsView() {
             Paid out
           </button>
         </div>
+
+        {kind === "received" && (
+          <label className="modal-field" style={{ width: "100%" }}>
+            <span>Customer</span>
+            <CustomerPicker value={name} customers={customers} onType={onType} onPick={pickCustomer} placeholder="Search an existing customer…" />
+          </label>
+        )}
+
+        {kind === "paid" && (
+          <label className="modal-field" style={{ width: "100%", marginBottom: 4 }}>
+            <span>Category</span>
+            <select value={paidCat} onChange={(e) => setPaidCat(e.target.value)}>
+              {PAID_OUT_CATS.map((c) => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {kind === "received" && picked && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "10px 0 4px" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>
+              Outstanding: <b style={{ color: outstanding > 0.5 ? "var(--danger)" : "var(--green)" }}>₹ {inr(outstanding)}</b>
+            </span>
+            {outstanding > 0.5 && !editing && (
+              <button className="btn sm" type="button" onClick={() => setAmt(String(r2(outstanding)))}>
+                Pay full
+              </button>
+            )}
+          </div>
+        )}
 
         <div className={"rec-grid" + (showReceivedFields ? "" : " rec-grid-due")}>
           <label className="modal-field">
@@ -651,7 +718,11 @@ export default function ReceiptsView() {
         )}
 
         <button className="btn primary" type="button" onClick={record} style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: 12 }}>
-          {editing ? "Save changes" : kind === "paid" ? "Record payment" : "Record receipt"}
+          {editing
+            ? "Save changes"
+            : kind === "paid"
+              ? "Record paid out — " + (PAID_OUT_CATS.find((c) => c.id === paidCat)?.label || "Other")
+              : "Record receipt"}
         </button>
       </div>
 
@@ -723,6 +794,40 @@ export default function ReceiptsView() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+        Paid out <small>— ₹{inr(paidOutTotal)} · {paidOutList.length}</small>
+      </div>
+      {paidOutList.length ? (
+        <div className="panel-card" style={{ padding: "0 0 4px" }}>
+          {paidOutList.map((entry) => (
+            <div className="stmt" key={entry.key}>
+              <div className="stmt-ic due">{catOf(entry.e).slice(0, 3)}</div>
+              <div className="stmt-main">
+                <div className="stmt-to">
+                  {catOf(entry.e)}
+                  <span className="acct-overall-hint">
+                    {" · "}{entry.e.toOwner ? "Owner's cash" : "Daybook"}
+                    {" · "}{entry.e.date}
+                  </span>
+                </div>
+                <div className="stmt-sub">
+                  {entry.e.note ? entry.e.note + " · " : ""}by {userName(entry.e.enteredBy)}
+                </div>
+              </div>
+              <div className="stmt-amt due">−₹{inr(entry.amount)}</div>
+              <span className="pb-rowacts">
+                <button className="pb-x" title="Edit" type="button" onClick={() => startEdit(entry)} style={{ marginRight: 4 }}>✎</button>
+                <button className="pb-x" title="Delete" type="button" onClick={() => remove(entry)}>×</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="panel-card">
+          <div className="empty">No category paid-outs yet — Food, Salary, Truck rent, etc.</div>
         </div>
       )}
 
