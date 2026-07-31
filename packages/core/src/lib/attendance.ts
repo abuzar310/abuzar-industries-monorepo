@@ -19,7 +19,7 @@ export interface Worker {
   name: string;
   /** CURRENT daily wage ₹ (what new days earn) */
   rate: number;
-  /** rate history — a hike applies only FROM its date; past days keep the old wage.
+  /** rate history — a hike applies FROM its date (week-aligned to Monday by default).
    *  Sorted by `from`. Days before the first entry use the first entry's rate. */
   rateHist?: RateChange[];
   /** Debt-account opening ₹ (rarely used) — a loan the worker already owed when the register started. */
@@ -69,7 +69,8 @@ export async function saveWorker(fields: {
   name: string;
   rate: number;
   opening?: number;
-  /** yyyy-mm-dd the new rate takes effect (defaults to today) — past days keep the old rate */
+  /** yyyy-mm-dd hint for when the new rate takes effect — aligned to that week's Monday
+   *  so the whole Mon–Sun week earns the new wage (defaults to today → this week's Monday). */
   rateFrom?: string;
 }): Promise<Worker | null> {
   const name = (fields.name || "").trim();
@@ -78,11 +79,20 @@ export async function saveWorker(fields: {
   const now = nowIso();
   const prev = fields.id ? await getRec<Worker>("workers", fields.id) : undefined;
   const opening = fields.opening === undefined ? prev?.opening || 0 : r2(Math.max(0, +fields.opening || 0));
-  // rate change on an existing worker → RECORD it; earlier days keep earning the old wage
+  // rate change → apply from Monday of that week so the full week uses the new wage;
+  // earlier weeks keep whatever rate was in force then.
   let rateHist = prev?.rateHist;
   if (prev && r2(+prev.rate || 0) !== rate) {
-    const eff = fields.rateFrom || nowIso().slice(0, 10);
-    const hist = [...(prev.rateHist?.length ? prev.rateHist : [{ from: "1970-01-01", rate: +prev.rate || 0 }])];
+    const day = fields.rateFrom || now.slice(0, 10);
+    const [yy, mm, dd] = day.split("-").map(Number);
+    const mon = weekStart(new Date(yy, (mm || 1) - 1, dd || 1));
+    const eff = isoOf(mon);
+    const sun = new Date(mon);
+    sun.setDate(sun.getDate() + 6);
+    const weekEnd = isoOf(sun);
+    const hist = [...(prev.rateHist?.length ? prev.rateHist : [{ from: "1970-01-01", rate: +prev.rate || 0 }])]
+      // drop any mid-week entries in this same week (legacy day-scoped hikes)
+      .filter((h) => h.from === "1970-01-01" || h.from < eff || h.from > weekEnd);
     const at = hist.findIndex((h) => h.from === eff);
     if (at >= 0) hist[at] = { from: eff, rate };
     else hist.push({ from: eff, rate });

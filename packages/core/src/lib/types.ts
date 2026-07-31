@@ -45,6 +45,8 @@ export interface Doc {
   customerName: string;
   phone: string;
   site: string;
+  /** Carpenter's phone (Cut Size quotations). */
+  sitePhone?: string;
   address: string;
   notes: string;
   date: string;
@@ -126,6 +128,8 @@ export interface Customer {
   name: string;
   phone: string;
   site: string;
+  /** Carpenter phone (optional). */
+  sitePhone?: string;
   address: string;
   notes: string;
   /** GSTIN — used when the customer is treated as a debtor in the Ledger. */
@@ -163,7 +167,33 @@ export type StoreName =
   | "collections"
   | "payHolders"
   | "workers"
-  | "attendance";
+  | "attendance"
+  | "activity";
+
+/** Owner audit trail — login/logout/create/update/delete (unofficial Logs tab). */
+export interface Activity {
+  id: string;
+  /** ISO timestamp */
+  at: string;
+  by: string;
+  byName: string;
+  /** owner | manager */
+  role?: string;
+  action: "login" | "logout" | "create" | "update" | "delete";
+  /** store name when the action is about a record */
+  store?: string;
+  targetId?: string;
+  /** short one-line headline */
+  summary: string;
+  /** longer detail lines (amount, mode, party, note, field diffs…) */
+  detail?: string;
+  amount?: number;
+  mode?: string;
+  date?: string;
+  party?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 // ---- app navigation (each app supplies its own tab set) ----
 export interface Tab {
@@ -195,6 +225,16 @@ export interface Expense {
   mode: PayMode;
   amount: number;
   note?: string;
+  /** Person / party name on a category spend (carpenter, truck, etc.) — display only, not a ledger link. */
+  party?: string;
+  /** Trip/round count (e.g. Mini truck). */
+  rounds?: number;
+  /** Carpenter name on a commission payout (from customer/quote). */
+  carpenter?: string;
+  /** Quotation linked for logging only (not cascade-deleted with the quote — unlike sourceId). */
+  refQuoteId?: string;
+  /** Snapshot of quotation number at save time (survives quote delete). */
+  quoteNo?: string;
   /** UPI recipient / account this money went to (only for mode "upi"); "" for cash. */
   account?: string;
   /** counter-account for transfers: journal voucher's TO-bank (account = FROM-bank). */

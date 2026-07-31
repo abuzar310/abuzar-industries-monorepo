@@ -2,16 +2,80 @@ import { allRec, delRec, put } from "./data";
 import { nowIso, splitHandover, todayStr, uid } from "./calc";
 import type { DaybookSession, EntryType, Expense, PayMode } from "./types";
 
+/** Prebuilt money-out categories — Daybook, Receipts Paid out, and Books all share these.
+ *  Food/Salary use native types; the rest store as `custom` with `label` = category name. */
+export const SPEND_CATEGORIES: { id: string; label: string; type: EntryType }[] = [
+  { id: "food", label: "Food", type: "food" },
+  { id: "salary", label: "Salary", type: "salary" },
+  { id: "carpenter", label: "Carpenter commission", type: "custom" },
+  { id: "truck", label: "Truck rent", type: "custom" },
+  { id: "minitruck", label: "Mini truck", type: "custom" },
+  { id: "bills", label: "Bills", type: "custom" },
+  { id: "tea", label: "Tea bill", type: "custom" },
+  { id: "pigmy", label: "Pignee", type: "custom" },
+  { id: "shop", label: "Shop expenses", type: "custom" },
+  { id: "unload", label: "Unloading charges", type: "custom" },
+  { id: "other", label: "Other", type: "custom" },
+];
+
+const SPEND_LABELS = new Set(SPEND_CATEGORIES.map((c) => c.label));
+
+/**
+ * Books / reports category bucket. Only the prebuilt SPEND_CATEGORIES.
+ * Legacy Additional + freeform Custom labels all roll into Other — notes stay on the row.
+ */
+export function spendCategoryOf(e: Expense): string {
+  if (e.type === "sale") return e.charge ? "Due" : "Sale";
+  if (e.type === "food") return "Food";
+  if (e.type === "salary") return "Salary";
+  if (e.type === "custom") {
+    const lab = (e.label || "").trim();
+    if (lab === "Pigmy") return "Pignee"; // renamed
+    if (SPEND_LABELS.has(lab)) return lab;
+  }
+  // additional, old custom notes ("Afsar bhaiya", "Carp com…"), etc.
+  return "Other";
+}
+
+/** Stable group key for Books — always one of the prebuilt category ids (or sale/due). */
+export function spendCatKey(e: Expense): string {
+  const label = spendCategoryOf(e);
+  if (label === "Sale") return "sale";
+  if (label === "Due") return "due";
+  return SPEND_CATEGORIES.find((c) => c.label === label)?.id || "other";
+}
+
+/** Detail line for lists: party · carpenter · quote · rounds · note. */
+export function spendDetailOf(e: Expense): string {
+  const bits: string[] = [];
+  const party = (e.party || "").trim();
+  if (party) bits.push(party);
+  const carpenter = (e.carpenter || "").trim();
+  if (carpenter) bits.push("Carpenter " + carpenter);
+  const qNo = (e.quoteNo || "").trim();
+  if (qNo) bits.push("Q#" + qNo);
+  const rounds = +(e.rounds || 0);
+  if (rounds > 0) bits.push(rounds === 1 ? "1 round" : rounds + " rounds");
+  const note = (e.note || "").trim();
+  if (note) bits.push(note);
+  if (bits.length) return bits.join(" · ");
+  const lab = (e.label || "").trim();
+  if (lab && !SPEND_LABELS.has(lab)) return lab;
+  return "";
+}
+
 export const ENTRY_TYPES: { value: EntryType; label: string; flow: "in" | "out" }[] = [
   { value: "sale", label: "Sale (money in)", flow: "in" },
-  { value: "salary", label: "Salary given", flow: "out" },
+  { value: "salary", label: "Salary", flow: "out" },
   { value: "food", label: "Food", flow: "out" },
-  { value: "additional", label: "Additional cost", flow: "out" },
-  { value: "custom", label: "Custom", flow: "out" },
+  // additional / custom kept for old rows — new UI uses SPEND_CATEGORIES instead
+  { value: "additional", label: "Additional", flow: "out" },
+  { value: "custom", label: "Other", flow: "out" },
 ];
 
 export const typeLabel = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t)?.label ?? t;
-export const isInflow = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t)?.flow === "in";
+/** Money-in is only `sale`. Everything else (food, salary, custom…) is money-out. */
+export const isInflow = (t: EntryType) => t === "sale";
 /** UPI money-in: kept OUT of the cash daybook (Manager only owes cash) and shown in its own section. */
 export const isUpi = (e: Expense) => isInflow(e.type) && e.mode === "upi";
 /** Does this entry belong in the manager's cash daybook? Excludes UPI, cash sent straight to owner,
@@ -54,6 +118,11 @@ export async function addExpense(fields: {
   mode: PayMode;
   note?: string;
   label?: string;
+  party?: string;
+  rounds?: number;
+  carpenter?: string;
+  refQuoteId?: string;
+  quoteNo?: string;
   account?: string;
   /** transfer counter-account (journal voucher's TO-bank) */
   account2?: string;
@@ -67,6 +136,7 @@ export async function addExpense(fields: {
   rcptId?: string;
 }): Promise<Expense> {
   const mode = fields.charge ? "" : isInflow(fields.type) ? fields.mode || "cash" : "";
+  const rounds = Math.max(0, Math.floor(+(fields.rounds || 0) || 0));
   const e: Expense = {
     id: "EXP-" + uid(),
     date: fields.date || todayStr(),
@@ -75,6 +145,11 @@ export async function addExpense(fields: {
     mode,
     amount: r2(fields.amount),
     note: fields.note || "",
+    party: (fields.party || "").trim() || undefined,
+    rounds: rounds > 0 ? rounds : undefined,
+    carpenter: (fields.carpenter || "").trim() || undefined,
+    refQuoteId: (fields.refQuoteId || "").trim() || undefined,
+    quoteNo: (fields.quoteNo || "").trim() || undefined,
     account: (fields.account || "").trim(),
     account2: (fields.account2 || "").trim() || undefined,
     // outflows (mode "") can also be owner-paid — e.g. the owner hands a worker money

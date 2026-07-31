@@ -11,20 +11,31 @@ import { brandFor } from "@/lib/brand";
 import { generatePdf, printOrSavePdf } from "@/lib/pdf";
 import {
   addBankAccount,
+  addLoanType,
   CASH_DAY_LIMIT,
   cashTakenFromCustomerOn,
   contraDir,
   getBankAccounts,
+  getLoanTypes,
   isContra,
+  isDrawing,
   isJournal,
+  isLoan,
+  isLoanTaken,
   isPaymentVoucher,
+  loanParticulars,
   recordAdvanceCashSplit,
   recordAdvanceReceipt,
   recordContra,
+  recordDrawing,
   recordJournal,
+  recordLoanRepay,
+  recordLoanTaken,
   recordPaymentVoucher,
   removeBankAccount,
+  removeLoanType,
   liveInvoices,
+  type LoanKind,
 } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
@@ -68,7 +79,7 @@ function groupByDay(list: Expense[]): DayGroup[] {
 export default function VouchersView() {
   const { ready, dataVersion, user, brandMode } = useApp();
   const router = useRouter();
-  const [seg, setSeg] = useState<"receipts" | "payments" | "contra" | "journal">("receipts");
+  const [seg, setSeg] = useState<"receipts" | "payments" | "contra" | "journal" | "loans" | "drawings">("receipts");
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [invoices, setInvoices] = useState<Doc[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -110,17 +121,48 @@ export default function VouchersView() {
   const [advTaken, setAdvTaken] = useState(0);
   /** big cash split mode: book ₹10k/day automatically from the chosen date forward */
   const [advSplit, setAdvSplit] = useState(false);
+  /** after a cash receipt — offer one-tap “add more next day” with the same customer */
+  const [nextDay, setNextDay] = useState<{
+    cust: Customer;
+    amount: number;
+    lastIso: string;
+    note: string;
+  } | null>(null);
+  // ---- loans form ----
+  const [loanTypes, setLoanTypes] = useState<string[]>([]);
+  const [lnType, setLnType] = useState("");
+  const [newLoanType, setNewLoanType] = useState("");
+  const [lnKind, setLnKind] = useState<LoanKind>("secured");
+  const [lnDir, setLnDir] = useState<"taken" | "repay">("taken");
+  const [lnLender, setLnLender] = useState("");
+  const [lnAmt, setLnAmt] = useState("");
+  const [lnVia, setLnVia] = useState<"cash" | "bank">("bank");
+  const [lnBank, setLnBank] = useState("");
+  const [lnDate, setLnDate] = useState("");
+  const [lnNote, setLnNote] = useState("");
+  // ---- personal drawings form ----
+  const [drAmt, setDrAmt] = useState("");
+  const [drVia, setDrVia] = useState<"cash" | "bank">("cash");
+  const [drBank, setDrBank] = useState("");
+  const [drDate, setDrDate] = useState("");
+  const [drNote, setDrNote] = useState("");
   const printRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
-    Promise.all([allExpenses(), allRec<Doc>("invoices"), allRec<Customer>("customers"), getBankAccounts()]).then(
-      ([es, is, cs, bs]) => {
-        setExpenses(es);
-        setInvoices(is);
-        setCustomers(cs);
-        setBanks(bs);
-      },
-    );
+    Promise.all([
+      allExpenses(),
+      allRec<Doc>("invoices"),
+      allRec<Customer>("customers"),
+      getBankAccounts(),
+      getLoanTypes(),
+    ]).then(([es, is, cs, bs, lts]) => {
+      setExpenses(es);
+      setInvoices(is);
+      setCustomers(cs);
+      setBanks(bs);
+      setLoanTypes(lts);
+      setLnType((cur) => (cur && lts.includes(cur) ? cur : lts[0] || ""));
+    });
   }, []);
   useEffect(() => {
     if (ready) load();
@@ -189,17 +231,39 @@ export default function VouchersView() {
       isJournal(e) && inRange(e) && (!bankF || e.account === bankF || e.account2 === bankF) &&
       qTextOk(e, [e.account, e.account2, e.note].filter(Boolean).join(" ")),
   );
+  const lns = expenses.filter(
+    (e) => isLoan(e) && inRange(e) && viaOk(e) && bankOk(e) && qOk(e, "out"),
+  );
+  const drws = expenses.filter(
+    (e) => isDrawing(e) && inRange(e) && viaOk(e) && bankOk(e) && qOk(e, "out"),
+  );
   const rGroups = groupByDay(receipts);
   const pGroups = groupByDay(pvs);
   const cGroups = groupByDay(cvs);
   const jGroups = groupByDay(jvs);
+  const lnGroups = groupByDay(lns);
+  const drGroups = groupByDay(drws);
   const rTotal = r2(receipts.reduce((s, e) => s + (+e.amount || 0), 0));
   const pTotal = r2(pvs.reduce((s, e) => s + (+e.amount || 0), 0));
   const cTotal = r2(cvs.reduce((s, e) => s + (+e.amount || 0), 0));
   const jTotal = r2(jvs.reduce((s, e) => s + (+e.amount || 0), 0));
+  const lnTotal = r2(lns.reduce((s, e) => s + (+e.amount || 0), 0));
+  const drTotal = r2(drws.reduce((s, e) => s + (+e.amount || 0), 0));
 
-  const shown = seg === "receipts" ? receipts : seg === "payments" ? pvs : seg === "contra" ? cvs : jvs;
-  const segTotal = seg === "receipts" ? rTotal : seg === "payments" ? pTotal : seg === "contra" ? cTotal : jTotal;
+  const shown =
+    seg === "receipts" ? receipts
+    : seg === "payments" ? pvs
+    : seg === "contra" ? cvs
+    : seg === "journal" ? jvs
+    : seg === "loans" ? lns
+    : drws;
+  const segTotal =
+    seg === "receipts" ? rTotal
+    : seg === "payments" ? pTotal
+    : seg === "contra" ? cTotal
+    : seg === "journal" ? jTotal
+    : seg === "loans" ? lnTotal
+    : drTotal;
   // the movement text for a contra / journal row (books + print)
   const moveText = (e: Expense) =>
     isJournal(e)
@@ -267,6 +331,7 @@ export default function VouchersView() {
       setAdvAmt("");
       setAdvNote("");
       setAdvDate("");
+      setNextDay(null);
       load();
       bumpData();
       const total = r2(made.reduce((s, m) => s + m.amount, 0));
@@ -281,6 +346,7 @@ export default function VouchersView() {
       if (taken + a > CASH_DAY_LIMIT + 0.005)
         return toast("Cash limit — max ₹" + inr(CASH_DAY_LIMIT) + " from one customer per day");
     }
+    const bookedIso = advDate || isoOf(new Date());
     await recordAdvanceReceipt({
       custId: advCust.id,
       custName: advCust.name,
@@ -291,12 +357,62 @@ export default function VouchersView() {
       note: advNote,
       by: user?.id || "unknown",
     });
+    const keptNote = advNote.trim();
     setAdvAmt("");
     setAdvNote("");
     setAdvDate("");
+    // cash receipts: offer “add more next day” (same customer, next calendar day)
+    if (advVia === "cash") {
+      setNextDay({ cust: advCust, amount: a, lastIso: bookedIso, note: keptNote });
+    } else {
+      setNextDay(null);
+    }
     load();
     bumpData();
     toast("₹" + inr(a) + " advance from " + advCust.name + " — it will clear onto their next invoice");
+  }
+
+  /** Prefill the receipt form for the day after the last cash booking. */
+  async function addMoreNextDay() {
+    if (!nextDay) return;
+    const d = new Date(nextDay.lastIso + "T00:00:00");
+    if (isNaN(+d)) return;
+    d.setDate(d.getDate() + 1);
+    const nextIso = isoOf(d);
+    const nextDmy = toDmy(nextIso);
+    const taken = await cashTakenFromCustomerOn(nextDay.cust.id, nextDmy, expenses);
+    const room = Math.max(0, r2(CASH_DAY_LIMIT - taken));
+    if (room <= 0.5) {
+      // that day is already full — skip forward one more and try again (up to a week)
+      let iso = nextIso;
+      let found = 0;
+      for (let i = 0; i < 7; i++) {
+        const dd = new Date(iso + "T00:00:00");
+        dd.setDate(dd.getDate() + 1);
+        iso = isoOf(dd);
+        const t = await cashTakenFromCustomerOn(nextDay.cust.id, toDmy(iso), expenses);
+        found = Math.max(0, r2(CASH_DAY_LIMIT - t));
+        if (found > 0.5) break;
+      }
+      if (found <= 0.5) return toast("No cash room in the next week for " + nextDay.cust.name);
+      setAdvCust(nextDay.cust);
+      setAdvName(nextDay.cust.name);
+      setAdvVia("cash");
+      setAdvSplit(false);
+      setAdvBank("");
+      setAdvDate(iso);
+      setAdvNote(nextDay.note);
+      setAdvAmt(String(Math.min(nextDay.amount, found, CASH_DAY_LIMIT)));
+      return toast("Jumped to " + toDmy(iso) + " — cash room ₹" + inr(found));
+    }
+    setAdvCust(nextDay.cust);
+    setAdvName(nextDay.cust.name);
+    setAdvVia("cash");
+    setAdvSplit(false);
+    setAdvBank("");
+    setAdvDate(nextIso);
+    setAdvNote(nextDay.note);
+    setAdvAmt(String(Math.min(nextDay.amount, room, CASH_DAY_LIMIT)));
   }
 
   // ---- record: payment voucher ----
@@ -380,6 +496,83 @@ export default function VouchersView() {
     toast("₹" + inr(a) + " transferred: " + jvFrom + " → " + jvTo);
   }
 
+  async function addLnType() {
+    const next = await addLoanType(newLoanType);
+    setLoanTypes(next);
+    const n = newLoanType.trim();
+    if (n) setLnType(next.find((x) => x.toLowerCase() === n.toLowerCase()) || n);
+    setNewLoanType("");
+    bumpData();
+  }
+
+  // ---- record: loan taken / repaid ----
+  async function recordLn() {
+    const a = Math.max(0, +lnAmt || 0);
+    if (!lnType.trim()) return toast("Pick or add a loan type (Car, Home, …)");
+    if (!lnLender.trim()) return toast(lnKind === "secured" ? "Which bank lent it?" : "Who lent the money?");
+    if (a <= 0) return toast("Enter an amount");
+    if (lnVia === "bank" && !lnBank.trim()) return toast("Pick which of our accounts this hits");
+    const f = {
+      loanType: lnType.trim(),
+      kind: lnKind,
+      lender: lnLender.trim(),
+      amount: a,
+      via: lnVia,
+      bank: lnBank,
+      date: lnDate ? toDmy(lnDate) : undefined,
+      note: lnNote.trim(),
+      by: user?.id || "unknown",
+    };
+    if (lnDir === "taken") await recordLoanTaken(f);
+    else await recordLoanRepay(f);
+    setLnAmt("");
+    setLnNote("");
+    setLnDate("");
+    load();
+    bumpData();
+    const where = lnVia === "cash" ? "Cash" : lnBank;
+    toast(
+      lnDir === "taken"
+        ? lnType.trim() + " loan ₹" + inr(a) + " into " + where
+        : "Repaid ₹" + inr(a) + " (" + lnType.trim() + ") from " + where,
+    );
+  }
+
+  // ---- record: personal drawings ----
+  async function recordDr() {
+    const a = Math.max(0, +drAmt || 0);
+    if (a <= 0) return toast("Enter an amount");
+    if (drVia === "bank" && !drBank.trim()) return toast("Pick which bank this comes from");
+    await recordDrawing({
+      amount: a,
+      via: drVia,
+      bank: drBank,
+      date: drDate ? toDmy(drDate) : undefined,
+      note: drNote.trim(),
+      by: user?.id || "unknown",
+    });
+    setDrAmt("");
+    setDrNote("");
+    setDrDate("");
+    load();
+    bumpData();
+    toast("₹" + inr(a) + " personal drawings from " + (drVia === "cash" ? "Cash" : drBank));
+  }
+
+  async function removeCustom(e: Expense, title: string) {
+    const ok = await confirmDialog({
+      title: "Delete " + title + "?",
+      message: (e.label || "—") + " — ₹" + inr(e.amount) + " · " + (e.account || "Cash"),
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    await delRec("expenses", e.id); // soft delete
+    load();
+    bumpData();
+    toast("Removed");
+  }
+
   async function removeMove(e: Expense) {
     const ok = await confirmDialog({
       title: "Delete " + (isJournal(e) ? "journal" : "contra") + " voucher?",
@@ -441,7 +634,7 @@ export default function VouchersView() {
             title={kind === "in" && inv ? "Open invoice #" + inv.number : undefined}
           >
             <div className={"stmt-ic " + (kind === "out" ? "due" : e.mode === "upi" ? "upi" : "cash")}>
-              {kind === "out" ? "PV" : e.mode === "upi" ? "Bank" : "₹"}
+              {kind === "out" ? (isDrawing(e) ? "DR" : "PV") : e.mode === "upi" ? "Bank" : "₹"}
             </div>
             <div className="stmt-main">
               <div className="stmt-to">
@@ -468,7 +661,7 @@ export default function VouchersView() {
                   title={kind === "out" ? "Delete voucher" : "Delete advance"}
                   onClick={async (ev) => {
                     ev.stopPropagation();
-                    if (kind === "out") return removePv(e);
+                    if (kind === "out") return isDrawing(e) ? removeCustom(e, "drawing") : removePv(e);
                     const ok = await confirmDialog({
                       title: "Delete advance?",
                       message: (e.note || "—") + " — ₹" + inr(e.amount),
@@ -531,6 +724,12 @@ export default function VouchersView() {
         </button>
         <button className={"seg-btn" + (seg === "journal" ? " on" : "")} type="button" onClick={() => setSeg("journal")} title="Bank → bank transfers between our own accounts">
           Journal · ₹{inr(jTotal)}
+        </button>
+        <button className={"seg-btn" + (seg === "loans" ? " on" : "")} type="button" onClick={() => setSeg("loans")} title="Secured bank loans & unsecured loans from individuals — land on cash/bank statements">
+          Loans · ₹{inr(lnTotal)}
+        </button>
+        <button className={"seg-btn" + (seg === "drawings" ? " on" : "")} type="button" onClick={() => setSeg("drawings")} title="Personal drawings — money taken for own use from cash or a bank">
+          Drawings · ₹{inr(drTotal)}
         </button>
       </div>
 
@@ -641,6 +840,19 @@ export default function VouchersView() {
                 ? "Record " + Math.ceil((+advAmt || 0) / CASH_DAY_LIMIT) + " daily receipts"
                 : "Record receipt"}
             </button>
+            {nextDay && (
+              <div className="acct-add-row" style={{ marginTop: 10, alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <button className="btn sm" type="button" onClick={addMoreNextDay} style={{ flex: "1 1 auto" }}>
+                  Add ₹{inr(Math.min(nextDay.amount, CASH_DAY_LIMIT))} more next day
+                  <small style={{ marginLeft: 6, opacity: 0.75 }}>
+                    {nextDay.cust.name} · after {toDmy(nextDay.lastIso)}
+                  </small>
+                </button>
+                <button className="btn sm" type="button" onClick={() => setNextDay(null)} title="Dismiss">
+                  ×
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="panel-card" style={{ padding: "0 0 4px", marginTop: 14 }}>
@@ -753,6 +965,235 @@ export default function VouchersView() {
               <div className="empty">
                 <div className="empty-title">No payment vouchers{from || to || q || viaF !== "all" ? " in this filter" : " yet"}</div>
                 <div className="empty-note">Money you pay out — freight, labour, purchases — recorded cash or bank.</div>
+              </div>
+            )}
+          </div>
+        </>
+      ) : seg === "loans" ? (
+        <>
+          {/* loan types — add Car / Home / whatever once, then pick every time */}
+          <div className="panel-card" style={{ padding: 14 }}>
+            <div className="pc-head" style={{ paddingLeft: 0 }}>
+              Loan types
+              <small style={{ marginLeft: 8, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>
+                Car, Home, or anything you add — shown clearly on every entry
+              </small>
+            </div>
+            {loanTypes.length > 0 && (
+              <div className="vch-banks">
+                {loanTypes.map((t) => (
+                  <span className="vch-bank" key={t}>
+                    {t}
+                    <button
+                      className="pb-x"
+                      type="button"
+                      title={"Remove " + t + " from the list (old vouchers keep it)"}
+                      onClick={async () => {
+                        const next = await removeLoanType(t);
+                        setLoanTypes(next);
+                        if (lnType === t) setLnType(next[0] || "");
+                        bumpData();
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="acct-add-row" style={{ alignItems: "flex-end", marginTop: loanTypes.length ? 10 : 4 }}>
+              <label className="modal-field" style={{ flex: "2 1 220px" }}>
+                <span>Add a loan type</span>
+                <input
+                  type="text"
+                  placeholder="e.g. Car, Home, Tractor, Shop…"
+                  value={newLoanType}
+                  onChange={(e) => setNewLoanType(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addLnType()}
+                />
+              </label>
+              <button className="btn primary sm" type="button" onClick={addLnType} disabled={!newLoanType.trim()}>
+                Add type
+              </button>
+            </div>
+          </div>
+
+          <div className="panel-card" style={{ padding: 14, marginTop: 14 }}>
+            <div className="pc-head" style={{ paddingLeft: 0 }}>
+              New loan entry
+              <small style={{ marginLeft: 8, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>
+                full details — type, who lent it, and which of our books it hits
+              </small>
+            </div>
+            <div className="rec-grid">
+              <label className="modal-field">
+                <span>What kind of loan</span>
+                <select value={lnType} onChange={(e) => setLnType(e.target.value)}>
+                  <option value="">— pick type —</option>
+                  {loanTypes.map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="modal-field">
+                <span>Amount ₹</span>
+                <input type="number" inputMode="decimal" placeholder="0" value={lnAmt} onChange={(e) => setLnAmt(e.target.value)} />
+              </label>
+              <label className="modal-field">
+                <span>Date (optional)</span>
+                <input type="date" value={lnDate} onChange={(e) => setLnDate(e.target.value)} />
+              </label>
+            </div>
+            <div className="att-paidby" style={{ marginTop: 10 }}>
+              <span className="att-paidby-lbl">Lent by</span>
+              <div className="db-seg sm">
+                <button className={"seg-btn" + (lnKind === "secured" ? " on" : "")} type="button" onClick={() => setLnKind("secured")}>
+                  A bank
+                </button>
+                <button className={"seg-btn" + (lnKind === "unsecured" ? " on" : "")} type="button" onClick={() => setLnKind("unsecured")}>
+                  A person
+                </button>
+              </div>
+            </div>
+            <label className="modal-field" style={{ marginTop: 10, width: "100%" }}>
+              <span>{lnKind === "secured" ? "Which bank" : "Who (name)"}</span>
+              <input
+                type="text"
+                placeholder={lnKind === "secured" ? "e.g. Canara Bank Chitradurga" : "e.g. Abdul Rahman"}
+                value={lnLender}
+                onChange={(e) => setLnLender(e.target.value)}
+              />
+            </label>
+            <div className="att-paidby" style={{ marginTop: 10 }}>
+              <span className="att-paidby-lbl">This is</span>
+              <div className="db-seg sm">
+                <button className={"seg-btn" + (lnDir === "taken" ? " on" : "")} type="button" onClick={() => setLnDir("taken")}>
+                  Taking the loan (money in)
+                </button>
+                <button className={"seg-btn" + (lnDir === "repay" ? " on" : "")} type="button" onClick={() => setLnDir("repay")}>
+                  Repaying (money out)
+                </button>
+              </div>
+            </div>
+            <div className="att-paidby" style={{ marginTop: 10 }}>
+              <span className="att-paidby-lbl">{lnDir === "taken" ? "Money into" : "Money from"}</span>
+              <div className="db-seg sm">
+                <button className={"seg-btn" + (lnVia === "cash" ? " on" : "")} type="button" onClick={() => setLnVia("cash")}>Cash</button>
+                <button className={"seg-btn" + (lnVia === "bank" ? " on" : "")} type="button" onClick={() => setLnVia("bank")}>Our bank</button>
+              </div>
+              {lnVia === "bank" && (
+                <select className="pb-sel" value={lnBank} onChange={(e) => setLnBank(e.target.value)} style={{ minWidth: 160 }}>
+                  <option value="">— our bank account —</option>
+                  {banks.map((b) => (
+                    <option key={b}>{b}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <label className="modal-field" style={{ marginTop: 10, width: "100%" }}>
+              <span>Note (optional)</span>
+              <input type="text" placeholder="e.g. EMI 1 · account no…" value={lnNote} onChange={(e) => setLnNote(e.target.value)} />
+            </label>
+            <button className="btn primary" type="button" onClick={recordLn} style={{ width: "100%", justifyContent: "center", marginTop: 12, padding: 12 }}>
+              {lnDir === "taken" ? "Record loan taken" : "Record repayment"}
+              {lnType ? " — " + lnType : ""}
+              {lnVia === "bank" && lnBank ? " → " + lnBank : lnVia === "cash" ? " → Cash" : ""}
+            </button>
+          </div>
+
+          <div className="panel-card" style={{ padding: "0 0 4px", marginTop: 14 }}>
+            {lnGroups.length ? (
+              lnGroups.map((g) => (
+                <div className="db-day" key={g.date}>
+                  <div className="db-day-head">
+                    <span className="db-day-date">{g.date}</span>
+                    <span className="db-day-mini">
+                      {g.entries.length} {g.entries.length === 1 ? "entry" : "entries"} · ₹{inr(g.total)}
+                    </span>
+                  </div>
+                  {g.entries.map((e) => {
+                    const taken = isLoanTaken(e);
+                    return (
+                      <div className="stmt" key={e.id}>
+                        <div className={"stmt-ic " + (taken ? "cash" : "due")}>{taken ? "IN" : "OUT"}</div>
+                        <div className="stmt-main">
+                          <div className="stmt-to">
+                            {(taken ? "Taken · " : "Repaid · ") + loanParticulars(e)}
+                            <span className="acct-overall-hint">{" · "}{e.account || "Cash"}</span>
+                          </div>
+                          <div className="stmt-sub">
+                            {e.note ? e.note + " · " : ""}by {userName(e.enteredBy)}
+                          </div>
+                        </div>
+                        <div className={"stmt-amt" + (taken ? "" : " due")}>
+                          {taken ? "+" : "−"}₹{inr(e.amount)}
+                        </div>
+                        <span className="pb-rowacts">
+                          <button className="pb-x" title="Delete" onClick={() => removeCustom(e, "loan voucher")}>×</button>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))
+            ) : (
+              <div className="empty">
+                <div className="empty-title">No loan vouchers{from || to || q || viaF !== "all" ? " in this filter" : " yet"}</div>
+                <div className="empty-note">Add a type (Car, Home…), then record taken or repaid — it shows on the Accounts cash/bank you pick.</div>
+              </div>
+            )}
+          </div>
+        </>
+      ) : seg === "drawings" ? (
+        <>
+          <div className="panel-card" style={{ padding: 14 }}>
+            <div className="pc-head" style={{ paddingLeft: 0 }}>
+              Personal drawings
+              <small style={{ marginLeft: 8, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>
+                money taken for personal use — reduces the cash or bank statement you pick
+              </small>
+            </div>
+            <div className="rec-grid">
+              <label className="modal-field">
+                <span>Amount ₹</span>
+                <input type="number" inputMode="decimal" placeholder="0" value={drAmt} onChange={(e) => setDrAmt(e.target.value)} />
+              </label>
+              <label className="modal-field">
+                <span>Date (optional)</span>
+                <input type="date" value={drDate} onChange={(e) => setDrDate(e.target.value)} />
+              </label>
+              <label className="modal-field">
+                <span>Note (optional)</span>
+                <input type="text" placeholder="e.g. house expense" value={drNote} onChange={(e) => setDrNote(e.target.value)} />
+              </label>
+            </div>
+            <div className="att-paidby" style={{ marginTop: 10 }}>
+              <span className="att-paidby-lbl">From</span>
+              <div className="db-seg sm">
+                <button className={"seg-btn" + (drVia === "cash" ? " on" : "")} type="button" onClick={() => setDrVia("cash")}>Cash</button>
+                <button className={"seg-btn" + (drVia === "bank" ? " on" : "")} type="button" onClick={() => setDrVia("bank")}>Bank</button>
+              </div>
+              {drVia === "bank" && (
+                <select className="pb-sel" value={drBank} onChange={(e) => setDrBank(e.target.value)} style={{ minWidth: 160 }}>
+                  <option value="">— bank account —</option>
+                  {banks.map((b) => (
+                    <option key={b}>{b}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <button className="btn primary" type="button" onClick={recordDr} style={{ width: "100%", justifyContent: "center", marginTop: 12, padding: 12 }}>
+              Record personal drawings{drVia === "bank" && drBank ? " — " + drBank : " — Cash"}
+            </button>
+          </div>
+
+          <div className="panel-card" style={{ padding: "0 0 4px", marginTop: 14 }}>
+            {drGroups.length ? (
+              drGroups.map((g) => dayBlock(g, "out"))
+            ) : (
+              <div className="empty">
+                <div className="empty-title">No drawings{from || to || q || viaF !== "all" ? " in this filter" : " yet"}</div>
+                <div className="empty-note">Personal drawings show as OUT on the Accounts cash book or the bank you chose.</div>
               </div>
             )}
           </div>
@@ -890,7 +1331,12 @@ export default function VouchersView() {
           </div>
           <div className="rep-meta">
             <div className="rep-title">
-              {seg === "receipts" ? "Receipt Vouchers" : seg === "payments" ? "Payment Vouchers" : seg === "contra" ? "Contra Vouchers" : "Journal Vouchers"}
+              {seg === "receipts" ? "Receipt Vouchers"
+                : seg === "payments" ? "Payment Vouchers"
+                : seg === "contra" ? "Contra Vouchers"
+                : seg === "journal" ? "Journal Vouchers"
+                : seg === "loans" ? "Loan Vouchers"
+                : "Personal Drawings"}
             </div>
             <div className="rep-period">
               {periodLabel}
@@ -901,7 +1347,7 @@ export default function VouchersView() {
 
         <div className="rep-summary cols3">
           <div><b>{shownOldestFirst.length}</b><span>Vouchers</span></div>
-          <div><b>₹{inr(segTotal)}</b><span>{seg === "receipts" ? "Received" : seg === "payments" ? "Paid" : "Moved"}</span></div>
+          <div><b>₹{inr(segTotal)}</b><span>{seg === "receipts" ? "Received" : seg === "payments" || seg === "drawings" ? "Paid" : seg === "loans" ? "Amount" : "Moved"}</span></div>
           <div><b>{periodLabel}</b><span>Period</span></div>
         </div>
 
@@ -918,7 +1364,13 @@ export default function VouchersView() {
             <tr>
               <th className="c-n">#</th>
               <th>Date</th>
-              <th>{seg === "receipts" ? "Customer · Invoice" : seg === "payments" ? "Paid to" : "Movement"}</th>
+              <th>
+                {seg === "receipts" ? "Customer · Invoice"
+                  : seg === "payments" ? "Paid to"
+                  : seg === "loans" ? "Lender · Direction"
+                  : seg === "drawings" ? "Drawings"
+                  : "Movement"}
+              </th>
               <th>Via</th>
               <th>Note</th>
               <th className="amt">Amount ₹</th>
@@ -932,9 +1384,11 @@ export default function VouchersView() {
                   ? inv
                     ? (inv.customerName || "Walk-in") + " · #" + inv.number
                     : (e.note || custName(e.custId)) + " · Advance"
-                  : seg === "payments"
+                  : seg === "payments" || seg === "drawings"
                     ? e.label || "—"
-                    : moveText(e);
+                    : seg === "loans"
+                      ? (isLoanTaken(e) ? "Taken · " : "Repaid · ") + loanParticulars(e)
+                      : moveText(e);
               const viaTxt =
                 seg === "contra" || seg === "journal" ? (isJournal(e) ? "Transfer" : contraDir(e) === "dep" ? "Deposit" : "Withdrawal") : e.account || "Cash";
               return (

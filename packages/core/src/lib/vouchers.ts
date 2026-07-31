@@ -121,6 +121,152 @@ export async function recordJournal(f: {
   });
 }
 
+// ---- loans ----
+// User-named types (Car, Home, …) + who lent it (a bank or a person).
+// Taken: `ln:sec:` / `ln:uns:` — money IN. Repaid: `lnr:sec:` / `lnr:uns:` — money OUT.
+// label = loan type · account2 = lender · account = our cash/bank book.
+
+export type LoanKind = "secured" | "unsecured"; // bank-lent vs person-lent (kept in sourceId)
+
+export const LN_SEC_PREFIX = "ln:sec:";
+export const LN_UNS_PREFIX = "ln:uns:";
+export const LNR_SEC_PREFIX = "lnr:sec:";
+export const LNR_UNS_PREFIX = "lnr:uns:";
+
+const LOAN_TYPES_KEY = "loanTypes";
+const DEFAULT_LOAN_TYPES = ["Car", "Home", "Personal", "Business"];
+
+/** Loan types the user manages (Car, Home, …) — same idea as bank accounts. */
+export async function getLoanTypes(): Promise<string[]> {
+  const cur = await metaGet<string[] | null>(LOAN_TYPES_KEY, null);
+  return cur && cur.length ? cur : DEFAULT_LOAN_TYPES;
+}
+export async function addLoanType(name: string): Promise<string[]> {
+  const n = (name || "").trim();
+  const cur = await getLoanTypes();
+  if (!n || cur.some((x) => x.toLowerCase() === n.toLowerCase())) return cur;
+  const next = [...cur, n];
+  await metaSet(LOAN_TYPES_KEY, next);
+  return next;
+}
+export async function removeLoanType(name: string): Promise<string[]> {
+  const cur = await getLoanTypes();
+  const next = cur.filter((x) => x !== name);
+  await metaSet(LOAN_TYPES_KEY, next);
+  return next;
+}
+
+export const isLoanTaken = (e: Expense) =>
+  e.type === "custom" &&
+  ((e.sourceId || "").startsWith(LN_SEC_PREFIX) || (e.sourceId || "").startsWith(LN_UNS_PREFIX));
+export const isLoanRepay = (e: Expense) =>
+  e.type === "custom" &&
+  ((e.sourceId || "").startsWith(LNR_SEC_PREFIX) || (e.sourceId || "").startsWith(LNR_UNS_PREFIX));
+export const isLoan = (e: Expense) => isLoanTaken(e) || isLoanRepay(e);
+/** Bank-lent (secured) vs person-lent (unsecured). */
+export const loanKindOf = (e: Expense): LoanKind =>
+  (e.sourceId || "").includes(":sec:") ? "secured" : "unsecured";
+/** User-facing loan type — Car / Home / … (legacy rows had only the lender in label). */
+export const loanTypeOf = (e: Expense): string => (e.account2 ? e.label || "Loan" : "Loan");
+/** Who lent the money — bank or person name. */
+export const loanLenderOf = (e: Expense): string => e.account2 || e.label || "—";
+
+/** One clear line for books / lists: "Car · from Canara Bank (bank)". */
+export function loanParticulars(e: Expense): string {
+  const type = loanTypeOf(e);
+  const lender = loanLenderOf(e);
+  const from = loanKindOf(e) === "secured" ? "bank" : "person";
+  return type + " · from " + lender + " (" + from + ")";
+}
+
+/** Loan money received into cash or a bank — hits that book's IN side. */
+export async function recordLoanTaken(f: {
+  /** Car / Home / … */
+  loanType: string;
+  /** bank-lent or person-lent */
+  kind: LoanKind;
+  lender: string;
+  amount: number;
+  via: "cash" | "bank";
+  bank?: string;
+  /** dd-mm-yy */
+  date?: string;
+  note?: string;
+  by: string;
+}): Promise<Expense> {
+  const type = (f.loanType || "").trim() || "Loan";
+  const lender = (f.lender || "").trim() || (f.kind === "secured" ? "Bank" : "Person");
+  return addExpense({
+    type: "custom",
+    label: type,
+    amount: f.amount,
+    mode: "cash",
+    account: f.via === "bank" ? (f.bank || "").trim() : "",
+    account2: lender,
+    note: f.note,
+    sourceId: (f.kind === "secured" ? LN_SEC_PREFIX : LN_UNS_PREFIX) + uid(),
+    date: f.date,
+    enteredBy: f.by,
+  });
+}
+
+/** Loan repayment from cash or a bank — hits that book's OUT side. */
+export async function recordLoanRepay(f: {
+  loanType: string;
+  kind: LoanKind;
+  lender: string;
+  amount: number;
+  via: "cash" | "bank";
+  bank?: string;
+  /** dd-mm-yy */
+  date?: string;
+  note?: string;
+  by: string;
+}): Promise<Expense> {
+  const type = (f.loanType || "").trim() || "Loan";
+  const lender = (f.lender || "").trim() || (f.kind === "secured" ? "Bank" : "Person");
+  return addExpense({
+    type: "custom",
+    label: type,
+    amount: f.amount,
+    mode: "cash",
+    account: f.via === "bank" ? (f.bank || "").trim() : "",
+    account2: lender,
+    note: f.note,
+    sourceId: (f.kind === "secured" ? LNR_SEC_PREFIX : LNR_UNS_PREFIX) + uid(),
+    date: f.date,
+    enteredBy: f.by,
+  });
+}
+
+// ---- personal drawings (owner takes money for personal use) ----
+
+export const DRW_PREFIX = "drw:";
+export const isDrawing = (e: Expense) => e.type === "custom" && (e.sourceId || "").startsWith(DRW_PREFIX);
+
+/** Personal drawings — money OUT of cash or a bank (hits that statement). */
+export async function recordDrawing(f: {
+  amount: number;
+  via: "cash" | "bank";
+  bank?: string;
+  /** dd-mm-yy */
+  date?: string;
+  note?: string;
+  by: string;
+}): Promise<Expense> {
+  return addExpense({
+    type: "custom",
+    label: "Personal drawings",
+    amount: f.amount,
+    mode: "cash",
+    account: f.via === "bank" ? (f.bank || "").trim() : "",
+    note: f.note,
+    sourceId: DRW_PREFIX + uid(),
+    date: f.date,
+    enteredBy: f.by,
+  });
+}
+
 // ---- the account books (cash book + one statement per bank) ----
 
 export interface BookEntry {
@@ -135,8 +281,8 @@ const oldestFirst = (a: BookEntry, b: BookEntry) =>
   (dateSortKey(a.e.date) || "").localeCompare(dateSortKey(b.e.date) || "") ||
   (a.e.createdAt || "").localeCompare(b.e.createdAt || "");
 
-/** Every cash movement, oldest first: cash receipts/advances in, cash payment vouchers out,
- *  contra deposits out, contra withdrawals in. */
+/** Every cash movement, oldest first: receipts/advances in, payment vouchers / drawings /
+ *  loan repayments out, loans taken in, contra both ways. */
 export function cashBook(expenses: Expense[], invoiceById: Map<string, Doc>): BookEntry[] {
   const out: BookEntry[] = [];
   for (const e of expenses) {
@@ -145,6 +291,12 @@ export function cashBook(expenses: Expense[], invoiceById: Map<string, Doc>): Bo
       out.push({ e, in: true, what: inv ? (inv.customerName || "Walk-in") + " · #" + inv.number : "Advance · " + (e.note || "customer") });
     } else if (isPaymentVoucher(e) && !e.account) {
       out.push({ e, in: false, what: "Paid · " + (e.label || "—") });
+    } else if (isLoanTaken(e) && !e.account) {
+      out.push({ e, in: true, what: "Loan taken · " + loanParticulars(e) });
+    } else if (isLoanRepay(e) && !e.account) {
+      out.push({ e, in: false, what: "Loan repay · " + loanParticulars(e) });
+    } else if (isDrawing(e) && !e.account) {
+      out.push({ e, in: false, what: "Personal drawings" + (e.note ? " · " + e.note : "") });
     } else if (isContra(e)) {
       if (contraDir(e) === "dep") out.push({ e, in: false, what: "Deposited → " + (e.account || "bank") });
       else out.push({ e, in: true, what: "Withdrawn ← " + (e.account || "bank") });
@@ -153,8 +305,8 @@ export function cashBook(expenses: Expense[], invoiceById: Map<string, Doc>): Bo
   return out.sort(oldestFirst);
 }
 
-/** One bank's statement, oldest first: receipts in, payment vouchers out, contra deposits in,
- *  withdrawals out, journal transfers both ways. */
+/** One bank's statement, oldest first: receipts in, payment vouchers / drawings / loan
+ *  repayments out, loans taken in, contra + journal both ways. */
 export function bankBook(expenses: Expense[], invoiceById: Map<string, Doc>, bank: string): BookEntry[] {
   const b = (bank || "").trim();
   if (!b) return [];
@@ -165,6 +317,12 @@ export function bankBook(expenses: Expense[], invoiceById: Map<string, Doc>, ban
       out.push({ e, in: true, what: inv ? (inv.customerName || "Walk-in") + " · #" + inv.number : "Advance · " + (e.note || "customer") });
     } else if (isPaymentVoucher(e) && e.account === b) {
       out.push({ e, in: false, what: "Paid · " + (e.label || "—") });
+    } else if (isLoanTaken(e) && e.account === b) {
+      out.push({ e, in: true, what: "Loan taken · " + loanParticulars(e) });
+    } else if (isLoanRepay(e) && e.account === b) {
+      out.push({ e, in: false, what: "Loan repay · " + loanParticulars(e) });
+    } else if (isDrawing(e) && e.account === b) {
+      out.push({ e, in: false, what: "Personal drawings" + (e.note ? " · " + e.note : "") });
     } else if (isContra(e) && e.account === b) {
       if (contraDir(e) === "dep") out.push({ e, in: true, what: "Cash deposit" });
       else out.push({ e, in: false, what: "Withdrawn to cash" });

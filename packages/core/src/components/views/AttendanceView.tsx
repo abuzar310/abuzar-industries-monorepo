@@ -196,7 +196,14 @@ export default function AttendanceView() {
       title: "Edit worker",
       fields: [
         { name: "name", label: "Name", value: w.name, required: true },
-        { name: "rate", label: "Daily rate ₹", type: "number", inputMode: "decimal", value: String(w.rate) },
+        {
+          name: "rate",
+          label: "Daily rate ₹",
+          type: "number",
+          inputMode: "decimal",
+          value: String(w.rate),
+          placeholder: "Applies to the whole week on screen (Mon–Sun)",
+        },
         // debt-account setup is owner-only and rarely touched — kept out of everyone else's way
         ...(isOwner
           ? [{
@@ -210,15 +217,22 @@ export default function AttendanceView() {
       ],
     });
     if (res === null) return;
+    const nextRate = +res.rate || 0;
     await saveWorker({
       id: w.id,
       name: res.name,
-      rate: +res.rate || 0,
+      rate: nextRate,
       opening: isOwner ? +res.opening || 0 : undefined,
+      // align to the week currently shown in the register (not just today)
+      rateFrom: days[0],
     });
     load();
     bumpData();
-    toast("Saved");
+    toast(
+      r2(+w.rate || 0) !== r2(nextRate)
+        ? "Rate ₹" + inr(nextRate) + "/day · whole week " + fmtWeekLabel(days)
+        : "Saved",
+    );
   }
 
   async function deactivate(w: Worker) {

@@ -11,6 +11,7 @@ export async function editCustomerDialog(existing?: Customer): Promise<Customer 
       { name: "name", label: "Name", value: existing?.name, placeholder: "Customer name", required: true },
       { name: "phone", label: "Phone", type: "tel", inputMode: "numeric", value: existing?.phone, placeholder: "10-digit mobile" },
       { name: "site", label: "Carpenter", value: existing?.site, placeholder: "Carpenter name (optional)" },
+      { name: "sitePhone", label: "Carpenter phone", value: existing?.sitePhone, placeholder: "Carpenter phone (optional)" },
       { name: "address", label: "Address", value: existing?.address, placeholder: "Full address (optional)" },
       { name: "gstin", label: "GSTIN", value: existing?.gstin, placeholder: "GST number (optional)" },
       {

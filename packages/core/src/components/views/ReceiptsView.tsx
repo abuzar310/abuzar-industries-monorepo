@@ -3,9 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, getRec, put } from "@/lib/data";
 import { inr, nowIso } from "@/lib/calc";
-import { addExpense, upiAccounts } from "@/lib/expenses";
+import { addExpense, spendCategoryOf, spendDetailOf, SPEND_CATEGORIES, upiAccounts } from "@/lib/expenses";
 import { listWorkers, payWorker, repayWorker, type Worker } from "@/lib/attendance";
-import { partyLedger } from "@/lib/payments";
+import { partyLedger, quoteBill } from "@/lib/payments";
 import { applyCustomerReceipt, unwindReceiptPieces } from "@/lib/receipts";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
@@ -26,7 +26,26 @@ const fromDmy = (v: string) => {
 };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+const SPEND_LABELS = new Set(SPEND_CATEGORIES.map((c) => c.label));
+/** Category spends recorded as Paid out (and daybook food/salary/custom with our labels). */
+const isCategoryPayout = (e: Expense) =>
+  !e.custId &&
+  !e.charge &&
+  (e.type === "food" ||
+    e.type === "salary" ||
+    (e.type === "custom" && SPEND_LABELS.has(e.label || "")));
+
+/** Money received back from a person/name (not a customer ledger receipt). */
+const isNameReceipt = (e: Expense) =>
+  e.type === "sale" &&
+  !e.charge &&
+  !e.custId &&
+  !e.sourceId &&
+  !e.rcptId &&
+  !!(e.party || "").trim();
+
 type Kind = "received" | "due" | "paid";
+type RecvVia = "customer" | "name";
 
 export default function ReceiptsView() {
   const { ready, dataVersion, user } = useApp();
@@ -39,6 +58,11 @@ export default function ReceiptsView() {
   const [picked, setPicked] = useState<Customer | null>(null);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<Kind>("received");
+  /** Received: settle a customer, or take money back from a free name (refund of paid-out). */
+  const [recvVia, setRecvVia] = useState<RecvVia>("customer");
+  const [recvName, setRecvName] = useState("");
+  /** Optional category this name-receipt is against (refund of Food / Truck / …) */
+  const [recvCat, setRecvCat] = useState("");
   const [amt, setAmt] = useState("");
   const [mode, setMode] = useState<"cash" | "owner" | "upi" | "uowner">("cash");
   const [acct, setAcct] = useState("");
@@ -47,11 +71,22 @@ export default function ReceiptsView() {
   const [openCust, setOpenCust] = useState<string | null>(null);
   /** whose cash the "Paid out" money left (null = default to the logged-in role) */
   const [paidBy, setPaidBy] = useState<"owner" | "manager" | null>(null);
+  /** Paid out category — Food / Salary / Truck rent / … */
+  const [paidCat, setPaidCat] = useState(SPEND_CATEGORIES[0].id);
+  /** Paid out: party (carpenter = customer pick/type) or free name for other cats */
+  const [paidParty, setPaidParty] = useState("");
+  /** Carpenter commission: linked customer (for quote list) — not written to expense.custId */
+  const [paidCustId, setPaidCustId] = useState("");
+  const [paidQuoteId, setPaidQuoteId] = useState("");
+  const [paidCarpenter, setPaidCarpenter] = useState("");
+  /** Mini truck rounds */
+  const [paidRounds, setPaidRounds] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   /** editing a whole receipt (possibly split across quotes): its pieces get unwound + re-applied on save */
   const [editRcpt, setEditRcpt] = useState<{ id: string; pieces: Expense[] } | null>(null);
-  /** where a received amount goes: waterfall over open quotations, or straight onto the account (old dues) */
-  const [applyTo, setApplyTo] = useState<"quotes" | "account">("quotes");
+  /** where a received amount goes: oldest-first · one specific quote · account only */
+  const [applyTo, setApplyTo] = useState<"quotes" | "quote" | "account">("quotes");
+  const [quoteId, setQuoteId] = useState("");
   // worker salary-account quick panel
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [showWkr, setShowWkr] = useState(false);
@@ -122,10 +157,13 @@ export default function ReceiptsView() {
   function pickCustomer(c: Customer) {
     setPicked(c);
     setName(c.name);
+    setQuoteId("");
+    if (applyTo === "quote") setApplyTo("quotes");
   }
   function onType(v: string) {
     setName(v);
     setPicked(null);
+    setQuoteId("");
   }
   function resetForm() {
     setAmt("");
@@ -134,21 +172,178 @@ export default function ReceiptsView() {
     setDate("");
     setMode("cash");
     setPaidBy(null);
+    setPaidCat(SPEND_CATEGORIES[0].id);
+    setPaidParty("");
+    setPaidCustId("");
+    setPaidQuoteId("");
+    setPaidCarpenter("");
+    setPaidRounds("");
+    setRecvVia("customer");
+    setRecvName("");
+    setRecvCat("");
     setEditId(null);
     setEditRcpt(null);
     setApplyTo("quotes");
+    setQuoteId("");
   }
 
+  /** open quotations for the picked customer — total + due for the pick list */
+  const openQuotes = picked
+    ? quotes
+        .filter((d) => {
+          if (d.deletedAt || d.purgedAt || d.customerId !== picked.id) return false;
+          const billable =
+            d.status === "Created" ||
+            (+(d.payCash || 0)) > 0 ||
+            (+(d.payUpi || 0)) > 0 ||
+            (+(d.amountPaid || 0)) > 0;
+          if (!billable) return false;
+          return r2(quoteBill(d) - (+d.amountPaid || 0)) > 0.5;
+        })
+        .map((d) => {
+          const total = quoteBill(d);
+          const due = r2(total - (+d.amountPaid || 0));
+          const no = d.displayNumber || d.number || d.id;
+          return { d, total, due, no };
+        })
+        .sort((a, b) => (a.d.createdAt || "").localeCompare(b.d.createdAt || ""))
+    : [];
+  const pickedQuote = openQuotes.find((x) => x.d.id === quoteId) || null;
+
+  /** All quotations for the carpenter-commission party (not only open/due). */
+  const paidCustQuotes = paidCustId
+    ? quotes
+        .filter((d) => !d.deletedAt && !d.purgedAt && d.customerId === paidCustId)
+        .map((d) => ({
+          d,
+          no: d.displayNumber || d.number || d.id,
+          carpenter: (d.site || "").trim(),
+          total: quoteBill(d),
+        }))
+        .sort((a, b) => (b.d.createdAt || "").localeCompare(a.d.createdAt || ""))
+    : [];
+  const paidCust = paidCustId ? customers.find((c) => c.id === paidCustId) || null : null;
+
   async function record() {
-    if (!picked) return toast("Pick an existing customer");
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return toast("Enter an amount");
+
+    // ---- Received from name (money back — not on a customer account) ----
+    if (kind === "received" && recvVia === "name" && !editRcpt) {
+      const who = recvName.trim();
+      if (!who) return toast("Enter who paid / gave money back");
+      const isUpiMode = mode === "upi" || mode === "uowner";
+      if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
+      const isCash = !isUpiMode;
+      const toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
+      const catLab = recvCat ? SPEND_CATEGORIES.find((c) => c.id === recvCat)?.label || "" : "";
+      if (editId) {
+        const e = await getRec<Expense>("expenses", editId);
+        if (!e || !isNameReceipt(e)) return resetForm();
+        e.amount = a;
+        e.mode = isUpiMode ? "upi" : "cash";
+        e.account = mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "";
+        e.toOwner = toOwner;
+        e.party = who;
+        e.label = catLab || undefined;
+        e.note = note.trim();
+        e.date = date ? toDmy(date) : e.date;
+        e.custId = undefined;
+        e.sourceId = undefined;
+        e.updatedAt = nowIso();
+        await put("expenses", e);
+        resetForm();
+        load();
+        bumpData();
+        return toast("Updated ✓");
+      }
+      await addExpense({
+        type: "sale",
+        amount: a,
+        mode: isUpiMode ? "upi" : "cash",
+        account: mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "",
+        toOwner,
+        party: who,
+        label: catLab || undefined,
+        note: note.trim(),
+        date: date ? toDmy(date) : undefined,
+        enteredBy: user?.id || "unknown",
+      });
+      resetForm();
+      load();
+      bumpData();
+      return toast(
+        "₹" + inr(a) + " received from " + who +
+          (catLab ? " · " + catLab : "") +
+          (toOwner ? " — Owner" : " — Daybook"),
+      );
+    }
+
+    // ---- Paid out: category spend (party/name logged; not a customer ledger link) ----
+    if (kind === "paid" && !editRcpt) {
+      const cat = SPEND_CATEGORIES.find((c) => c.id === paidCat) || SPEND_CATEGORIES[SPEND_CATEGORIES.length - 1];
+      const by = paidBy ?? (isOwner ? "owner" : "manager");
+      const party = paidParty.trim();
+      const rounds = cat.id === "minitruck" ? Math.max(0, Math.floor(+paidRounds || 0)) : 0;
+      const isCarp = cat.id === "carpenter";
+      const carpenter = isCarp ? paidCarpenter.trim() : "";
+      const q = isCarp && paidQuoteId ? paidCustQuotes.find((x) => x.d.id === paidQuoteId) : null;
+      const refQuoteId = q?.d.id || "";
+      const quoteNo = q ? q.no : "";
+      if (editId) {
+        const e = await getRec<Expense>("expenses", editId);
+        if (!e || e.type === "sale") return resetForm();
+        e.amount = a;
+        e.type = cat.type;
+        e.label = cat.label;
+        e.note = note.trim();
+        e.party = party || undefined;
+        e.rounds = rounds > 0 ? rounds : undefined;
+        e.carpenter = carpenter || undefined;
+        e.refQuoteId = refQuoteId || undefined;
+        e.quoteNo = quoteNo || undefined;
+        e.toOwner = by === "owner";
+        e.date = date ? toDmy(date) : e.date;
+        e.custId = undefined;
+        e.updatedAt = nowIso();
+        await put("expenses", e);
+        resetForm();
+        load();
+        bumpData();
+        return toast("Updated ✓");
+      }
+      await addExpense({
+        type: cat.type,
+        amount: a,
+        mode: "cash",
+        label: cat.label,
+        note: note.trim(),
+        party,
+        rounds: rounds > 0 ? rounds : undefined,
+        carpenter: carpenter || undefined,
+        refQuoteId: refQuoteId || undefined,
+        quoteNo: quoteNo || undefined,
+        date: date ? toDmy(date) : undefined,
+        toOwner: by === "owner",
+        enteredBy: user?.id || "unknown",
+      });
+      resetForm();
+      load();
+      bumpData();
+      return toast(
+        "₹" + inr(a) + " · " + cat.label +
+          (by === "owner" ? " — Owner's cash (not in Daybook)" : " — cut from the Daybook"),
+      );
+    }
+
+    if (!picked) return toast("Pick an existing customer");
 
     if (editRcpt) {
       // safest edit of a receipt: unwind every old piece (rolling quote totals back),
       // then re-apply the corrected amount fresh — money can never be double-counted
       const isUpiMode = mode === "upi" || mode === "uowner";
       if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
+      if (applyTo === "quote" && !quoteId) return toast("Pick which quotation to settle");
       const isCash = !isUpiMode;
       await unwindReceiptPieces(editRcpt.pieces);
       await applyCustomerReceipt({
@@ -161,6 +356,7 @@ export default function ReceiptsView() {
         note: note.trim(),
         date: date ? toDmy(date) : editRcpt.pieces[0]?.date,
         toAccount: applyTo === "account",
+        quoteId: applyTo === "quote" ? quoteId : undefined,
         enteredBy: user?.id || "unknown",
       });
       resetForm();
@@ -172,15 +368,7 @@ export default function ReceiptsView() {
     if (editId) {
       const e = await getRec<Expense>("expenses", editId);
       if (!e || e.custId !== picked.id) return resetForm();
-      if (e.type === "custom") {
-        // a "Paid out" entry — money we handed to this customer
-        const by = paidBy ?? (e.toOwner ? "owner" : "manager");
-        e.amount = a;
-        e.label = "Paid to " + picked.name;
-        e.note = note.trim();
-        e.toOwner = by === "owner";
-        e.date = date ? toDmy(date) : e.date;
-      } else if (e.charge) {
+      if (e.charge) {
         e.amount = a;
         e.label = note.trim() || picked.name;
         e.date = date ? toDmy(date) : e.date;
@@ -203,49 +391,12 @@ export default function ReceiptsView() {
       return toast("Updated ✓");
     }
 
-    if (kind === "due") {
-      await addExpense({
-        type: "sale",
-        amount: a,
-        mode: "cash",
-        charge: true,
-        custId: picked.id,
-        note: note.trim() || picked.name,
-        date: date ? toDmy(date) : undefined,
-        enteredBy: user?.id || "unknown",
-      });
-      resetForm();
-      load();
-      bumpData();
-      return toast("₹" + inr(a) + " due added for " + picked.name);
-    }
-
-    if (kind === "paid") {
-      // money paid OUT to this person — lands in the Daybook as a spend (custom entry),
-      // tagged with the customer so it lists under them here
-      const by = paidBy ?? (isOwner ? "owner" : "manager");
-      await addExpense({
-        type: "custom",
-        amount: a,
-        mode: "cash",
-        label: "Paid to " + picked.name,
-        custId: picked.id,
-        note: note.trim(),
-        date: date ? toDmy(date) : undefined,
-        toOwner: by === "owner",
-        enteredBy: user?.id || "unknown",
-      });
-      resetForm();
-      load();
-      bumpData();
-      return toast("₹" + inr(a) + " paid to " + picked.name + (by === "owner" ? " — Owner's cash (not in Daybook)" : " — cut from the Daybook cash"));
-    }
-
     const isUpiMode = mode === "upi" || mode === "uowner";
     if (mode === "upi" && !acct.trim()) return toast("Pick the UPI account");
+    if (applyTo === "quote" && !quoteId) return toast("Pick which quotation to settle");
     const isCash = !isUpiMode;
     const toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
-    // apply the receipt across the customer's open quotations (oldest first); leftover → account credit
+    // apply the receipt across open quotations (oldest-first, or one picked quote); leftover → account
     const { applied, leftover } = await applyCustomerReceipt({
       custId: picked.id,
       custName: picked.name,
@@ -257,6 +408,7 @@ export default function ReceiptsView() {
       note: note.trim(),
       date: date ? toDmy(date) : undefined,
       toAccount: applyTo === "account",
+      quoteId: applyTo === "quote" ? quoteId : undefined,
       enteredBy: user?.id || "unknown",
     });
     resetForm();
@@ -265,7 +417,8 @@ export default function ReceiptsView() {
     const nq = applied.length;
     const msg =
       nq > 0
-        ? "₹" + inr(a) + " received from " + picked.name + " · applied to " + nq + " quote" + (nq === 1 ? "" : "s") +
+        ? "₹" + inr(a) + " received from " + picked.name + " · applied to " +
+          (nq === 1 ? "#" + (applied[0]?.number || "quote") : nq + " quotes") +
           (leftover > 0.5 ? " · ₹" + inr(leftover) + " to account" : "")
         : "₹" + inr(a) + " received from " + picked.name +
           (isUpiMode
@@ -278,12 +431,18 @@ export default function ReceiptsView() {
 
   async function remove(entry: Entry) {
     const { e, pieces, settled } = entry;
-    const label = entry.paid ? "payment" : e.charge ? "due" : "receipt";
+    const label = entry.paid ? "paid out" : e.charge ? "due" : "receipt";
     const total = pieces ? r2(pieces.reduce((s, x) => s + (+x.amount || 0), 0)) : +e.amount || 0;
+    const who =
+      entry.paid && !entry.cid
+        ? spendCategoryOf(e)
+        : !entry.cid && e.party
+          ? e.party
+          : custName(entry.cid);
     const ok = await confirmDialog({
       title: "Delete " + label + "?",
       message:
-        custName(entry.cid) + " — ₹" + inr(total) +
+        who + " — ₹" + inr(total) +
         (e.charge ? "" : " · " + (e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : "Cash")) +
         (settled ? "\nThis receipt " + settled + " — those quotations go back to due." : ""),
       confirmLabel: "Delete",
@@ -306,7 +465,56 @@ export default function ReceiptsView() {
       setEditId(null);
       setKind("received");
       setAmt(String(r2(pieces.reduce((s, x) => s + (+x.amount || 0), 0))));
-      setApplyTo(pieces.some((x) => !!x.sourceId) ? "quotes" : "account");
+      const linked = pieces.filter((x) => !!x.sourceId);
+      if (linked.length === 1) {
+        setApplyTo("quote");
+        setQuoteId(linked[0].sourceId || "");
+      } else if (linked.length > 1) {
+        setApplyTo("quotes");
+        setQuoteId("");
+      } else {
+        setApplyTo("account");
+        setQuoteId("");
+      }
+    } else if (entry.paid && isCategoryPayout(e)) {
+      setEditId(e.id);
+      setEditRcpt(null);
+      setKind("paid");
+      setAmt(String(e.amount));
+      const match = SPEND_CATEGORIES.find((c) => c.label === spendCategoryOf(e));
+      setPaidCat(match?.id || "other");
+      setPaidBy(e.toOwner ? "owner" : "manager");
+      setNote(e.note || "");
+      setPaidParty(e.party || "");
+      setPaidCarpenter(e.carpenter || "");
+      setPaidQuoteId(e.refQuoteId || "");
+      setPaidRounds(e.rounds ? String(e.rounds) : "");
+      setDate(e.date ? fromDmy(e.date) : "");
+      setPicked(null);
+      setName("");
+      // resolve customer id from party name or linked quote
+      const fromQuote = e.refQuoteId ? quotes.find((q) => q.id === e.refQuoteId) : null;
+      const byName = (e.party || "").trim()
+        ? customers.find((c) => c.name.trim().toLowerCase() === (e.party || "").trim().toLowerCase())
+        : null;
+      setPaidCustId(fromQuote?.customerId || byName?.id || "");
+      return;
+    } else if (!entry.paid && isNameReceipt(e)) {
+      setEditId(e.id);
+      setEditRcpt(null);
+      setKind("received");
+      setRecvVia("name");
+      setRecvName(e.party || "");
+      const catMatch = SPEND_CATEGORIES.find((c) => c.label === (e.label || "").trim());
+      setRecvCat(catMatch?.id || "");
+      setAmt(String(e.amount));
+      setNote(e.note || "");
+      setDate(e.date ? fromDmy(e.date) : "");
+      setMode(e.mode === "upi" ? (e.toOwner ? "uowner" : "upi") : e.toOwner ? "owner" : "cash");
+      setAcct(e.account || "");
+      setPicked(null);
+      setName("");
+      return;
     } else {
       setEditId(e.id);
       setEditRcpt(null);
@@ -366,7 +574,7 @@ export default function ReceiptsView() {
       arr.push(entry);
       byCust.set(cid, arr);
     });
-  // "Paid out" entries — money we handed to the customer (Daybook custom spends tagged with custId)
+  // Legacy "Paid to customer" outs — still under that customer
   expenses
     .filter((e) => e.type === "custom" && !!e.custId)
     .forEach((e) => {
@@ -375,6 +583,17 @@ export default function ReceiptsView() {
       arr.push({ key: e.id, cid, e, amount: +e.amount || 0, locked: false, paid: true });
       byCust.set(cid, arr);
     });
+  // Category paid-outs (Food / Salary / Truck rent / …) — listed separately, no customer
+  const paidOutList = expenses
+    .filter(isCategoryPayout)
+    .map((e) => ({ key: e.id, cid: "", e, amount: +e.amount || 0, locked: false, paid: true as const }))
+    .sort((a, b) => (b.e.createdAt || "").localeCompare(a.e.createdAt || ""));
+  const paidOutTotal = r2(paidOutList.reduce((s, x) => s + x.amount, 0));
+  const nameRecvList = expenses
+    .filter(isNameReceipt)
+    .map((e) => ({ key: e.id, cid: "", e, amount: +e.amount || 0, locked: false, paid: false as const }))
+    .sort((a, b) => (b.e.createdAt || "").localeCompare(a.e.createdAt || ""));
+  const nameRecvTotal = r2(nameRecvList.reduce((s, x) => s + x.amount, 0));
   for (const [rid, g] of rcptGroups) {
     const pieces = g.pieces.sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
     const quoteNos = pieces.map((x) => (x.sourceId ? quoteById.get(x.sourceId)?.number || "" : "")).filter(Boolean);
@@ -413,6 +632,7 @@ export default function ReceiptsView() {
 
   const editing = !!editId || !!editRcpt;
   const showReceivedFields = kind === "received";
+  const recvFromCustomer = kind === "received" && recvVia === "customer";
   const activeWorkers = workers.filter((w) => w.active).sort((a, b) => a.name.localeCompare(b.name));
 
   async function recordWorker() {
@@ -443,39 +663,101 @@ export default function ReceiptsView() {
   return (
     <div className="ledger-page">
       <div className="sectitle">
-        Receipts <small>— record a payment or add a due</small>
+        Receipts <small>— record a payment received or paid out</small>
       </div>
 
       <div className="panel-card" style={{ padding: 16 }}>
-        <label className="modal-field" style={{ width: "100%" }}>
-          <span>Customer</span>
-          <CustomerPicker value={name} customers={customers} onType={onType} onPick={pickCustomer} placeholder="Search an existing customer…" />
-        </label>
-
-        {picked && (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "10px 0 4px" }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>
-              Outstanding: <b style={{ color: outstanding > 0.5 ? "var(--danger)" : "var(--green)" }}>₹ {inr(outstanding)}</b>
-            </span>
-            {outstanding > 0.5 && kind === "received" && !editing && (
-              <button className="btn sm" type="button" onClick={() => setAmt(String(r2(outstanding)))}>
-                Pay full
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="db-seg sm" style={{ margin: "12px 0 14px" }}>
+        <div className="db-seg sm" style={{ margin: "0 0 14px" }}>
           <button className={"seg-btn" + (kind === "received" ? " on" : "")} type="button" onClick={() => setKind("received")} disabled={editing}>
             Received
           </button>
           <button className={"seg-btn" + (kind === "paid" ? " on" : "")} type="button" onClick={() => setKind("paid")} disabled={editing}>
             Paid out
           </button>
-          <button className={"seg-btn" + (kind === "due" ? " on" : "")} type="button" onClick={() => setKind("due")} disabled={editing}>
-            Add due
-          </button>
         </div>
+
+        {kind === "received" && (
+          <>
+            <div className="db-seg sm" style={{ margin: "0 0 12px" }}>
+              <button
+                className={"seg-btn" + (recvVia === "customer" ? " on" : "")}
+                type="button"
+                disabled={editing && recvVia !== "customer"}
+                onClick={() => { setRecvVia("customer"); setRecvName(""); setRecvCat(""); }}
+              >
+                Customer
+              </button>
+              <button
+                className={"seg-btn" + (recvVia === "name" ? " on" : "")}
+                type="button"
+                disabled={editing && recvVia !== "name"}
+                onClick={() => { setRecvVia("name"); setPicked(null); setName(""); setQuoteId(""); }}
+              >
+                From name
+              </button>
+            </div>
+            {recvVia === "customer" ? (
+              <label className="modal-field" style={{ width: "100%" }}>
+                <span>Customer</span>
+                <CustomerPicker value={name} customers={customers} onType={onType} onPick={pickCustomer} placeholder="Search an existing customer…" />
+              </label>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%" }}>
+                <label className="modal-field" style={{ width: "100%" }}>
+                  <span>Received from (name)</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. driver · carpenter · who gave money back"
+                    value={recvName}
+                    onChange={(e) => setRecvName(e.target.value)}
+                  />
+                </label>
+                <label className="modal-field" style={{ width: "100%" }}>
+                  <span>Against category (optional)</span>
+                  <select value={recvCat} onChange={(e) => setRecvCat(e.target.value)}>
+                    <option value="">— none —</option>
+                    {SPEND_CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                  <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
+                    If they returned money from a paid-out (Food, Truck rent, etc.), pick that category.
+                  </small>
+                </label>
+              </div>
+            )}
+          </>
+        )}
+
+        {kind === "paid" && (
+          <label className="modal-field" style={{ width: "100%", marginBottom: 4 }}>
+            <span>Category</span>
+            <select
+              value={paidCat}
+              onChange={(e) => {
+                setPaidCat(e.target.value);
+                if (e.target.value !== "minitruck") setPaidRounds("");
+              }}
+            >
+              {SPEND_CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {recvFromCustomer && picked && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "10px 0 4px" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 13 }}>
+              Outstanding: <b style={{ color: outstanding > 0.5 ? "var(--danger)" : "var(--green)" }}>₹ {inr(outstanding)}</b>
+            </span>
+            {outstanding > 0.5 && !editing && (
+              <button className="btn sm" type="button" onClick={() => setAmt(String(r2(outstanding)))}>
+                Pay full
+              </button>
+            )}
+          </div>
+        )}
 
         <div className={"rec-grid" + (showReceivedFields ? "" : " rec-grid-due")}>
           <label className="modal-field">
@@ -528,21 +810,158 @@ export default function ReceiptsView() {
           </label>
         )}
 
-        {showReceivedFields && (
+        {kind === "paid" && (
+          <div style={{ marginTop: 12, width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
+            {paidCat === "carpenter" ? (
+              <>
+                <label className="modal-field" style={{ width: "100%" }}>
+                  <span>Party / customer</span>
+                  <CustomerPicker
+                    value={paidParty}
+                    customers={customers}
+                    onType={(v) => {
+                      setPaidParty(v);
+                      setPaidCustId("");
+                      setPaidQuoteId("");
+                      setPaidCarpenter("");
+                    }}
+                    onPick={(c) => {
+                      setPaidParty(c.name);
+                      setPaidCustId(c.id);
+                      setPaidQuoteId("");
+                      setPaidCarpenter((c.site || "").trim());
+                    }}
+                    placeholder="Search customer or type a name…"
+                    maxResults={12}
+                  />
+                </label>
+                {paidCustId && (
+                  <label className="modal-field" style={{ width: "100%" }}>
+                    <span>Quotation (optional)</span>
+                    <select
+                      value={paidQuoteId}
+                      onChange={(ev) => {
+                        const id = ev.target.value;
+                        setPaidQuoteId(id);
+                        const q = paidCustQuotes.find((x) => x.d.id === id);
+                        if (q?.carpenter) setPaidCarpenter(q.carpenter);
+                        else if (paidCust?.site) setPaidCarpenter(paidCust.site.trim());
+                      }}
+                    >
+                      <option value="">— none / all for this party —</option>
+                      {paidCustQuotes.map((q) => (
+                        <option key={q.d.id} value={q.d.id}>
+                          #{q.no}
+                          {q.d.date ? " · " + q.d.date : ""}
+                          {q.carpenter ? " · " + q.carpenter : ""}
+                          {" · ₹" + inr(q.total)}
+                        </option>
+                      ))}
+                    </select>
+                    {paidCustQuotes.length === 0 && (
+                      <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
+                        No quotations for this customer yet.
+                      </small>
+                    )}
+                  </label>
+                )}
+                <label className="modal-field" style={{ width: "100%" }}>
+                  <span>Carpenter</span>
+                  <input
+                    type="text"
+                    placeholder={paidCust?.site ? "From customer: " + paidCust.site : "Carpenter name (optional)"}
+                    value={paidCarpenter}
+                    onChange={(ev) => setPaidCarpenter(ev.target.value)}
+                  />
+                </label>
+              </>
+            ) : (
+              <label className="modal-field" style={{ width: "100%" }}>
+                <span>Name (optional)</span>
+                <input
+                  type="text"
+                  placeholder={paidCat === "minitruck" ? "e.g. driver / vehicle" : "e.g. who / where"}
+                  value={paidParty}
+                  onChange={(e) => setPaidParty(e.target.value)}
+                />
+              </label>
+            )}
+            {paidCat === "minitruck" && (
+              <label className="modal-field" style={{ width: "100%", maxWidth: 200 }}>
+                <span>Rounds</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
+                  placeholder="0"
+                  value={paidRounds}
+                  onChange={(e) => setPaidRounds(e.target.value)}
+                />
+              </label>
+            )}
+          </div>
+        )}
+
+        {recvFromCustomer && (
           <div className="modal-field" style={{ marginTop: 12, width: "100%" }}>
             <span>Use this money for</span>
-            <div className="db-seg sm" style={{ marginTop: 4 }}>
-              <button className={"seg-btn" + (applyTo === "quotes" ? " on" : "")} type="button" onClick={() => setApplyTo("quotes")}>
-                Settle quotations (oldest first)
+            <div className="db-seg sm" style={{ marginTop: 4, flexWrap: "wrap" }}>
+              <button
+                className={"seg-btn" + (applyTo === "quotes" ? " on" : "")}
+                type="button"
+                onClick={() => { setApplyTo("quotes"); setQuoteId(""); }}
+              >
+                Oldest first
               </button>
-              <button className={"seg-btn" + (applyTo === "account" ? " on" : "")} type="button" onClick={() => setApplyTo("account")}>
-                Account only (old dues)
+              <button
+                className={"seg-btn" + (applyTo === "quote" ? " on" : "")}
+                type="button"
+                onClick={() => setApplyTo("quote")}
+                disabled={!picked || openQuotes.length === 0}
+                title={!picked ? "Pick a customer first" : openQuotes.length ? "Settle one quotation" : "No open quotations for this customer"}
+              >
+                This quotation
+              </button>
+              <button
+                className={"seg-btn" + (applyTo === "account" ? " on" : "")}
+                type="button"
+                onClick={() => { setApplyTo("account"); setQuoteId(""); }}
+              >
+                Account only
               </button>
             </div>
+            {applyTo === "quote" && (
+              <div style={{ marginTop: 10 }}>
+                <label className="modal-field" style={{ width: "100%" }}>
+                  <span>Which quotation</span>
+                  <select value={quoteId} onChange={(e) => setQuoteId(e.target.value)}>
+                    <option value="">— pick quotation —</option>
+                    {openQuotes.map((q) => (
+                      <option key={q.d.id} value={q.d.id}>
+                        #{q.no} · Total ₹{inr(q.total)} · Due ₹{inr(q.due)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {pickedQuote && (
+                  <div style={{ marginTop: 8, fontFamily: "var(--mono)", fontSize: 13, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    <span>Total <b>₹{inr(pickedQuote.total)}</b></span>
+                    <span>Paid <b>₹{inr(r2(pickedQuote.total - pickedQuote.due))}</b></span>
+                    <span style={{ color: "var(--danger)" }}>Due <b>₹{inr(pickedQuote.due)}</b></span>
+                    <button className="btn sm" type="button" onClick={() => setAmt(String(pickedQuote.due))}>
+                      Fill due
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
               {applyTo === "quotes"
-                ? "The amount clears their open quotations oldest-first; anything beyond stays on the account."
-                : "Nothing is linked to any quotation — the whole amount pays down their account balance (e.g. an opening balance from before the app)."}
+                ? "Clears open quotations oldest-first; anything beyond stays on the account."
+                : applyTo === "quote"
+                  ? "Applies only to the quotation you pick — enter the amount manually (or Fill due)."
+                  : "Whole amount pays the account balance only — not linked to any quotation."}
             </small>
           </div>
         )}
@@ -584,7 +1003,13 @@ export default function ReceiptsView() {
         )}
 
         <button className="btn primary" type="button" onClick={record} style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: 12 }}>
-          {editing ? "Save changes" : kind === "due" ? "Add due" : kind === "paid" ? "Record payment" : "Record receipt"}
+          {editing
+            ? "Save changes"
+            : kind === "paid"
+              ? "Record paid out — " + (SPEND_CATEGORIES.find((c) => c.id === paidCat)?.label || "Other")
+              : recvVia === "name"
+                ? "Record received from " + (recvName.trim() || "name")
+                : "Record receipt"}
         </button>
       </div>
 
@@ -656,6 +1081,81 @@ export default function ReceiptsView() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+        Received from name <small>— ₹{inr(nameRecvTotal)} · {nameRecvList.length}</small>
+      </div>
+      {nameRecvList.length ? (
+        <div className="panel-card" style={{ padding: "0 0 4px" }}>
+          {nameRecvList.map((entry) => (
+            <div className="stmt" key={entry.key}>
+              <div className={"stmt-ic " + (entry.e.mode === "upi" ? "upi" : "cash")}>
+                {(entry.e.party || "?").slice(0, 3)}
+              </div>
+              <div className="stmt-main">
+                <div className="stmt-to">
+                  {entry.e.party || "—"}
+                  <span className="acct-overall-hint">
+                    {entry.e.label ? " · " + entry.e.label : ""}
+                    {" · "}{entry.e.mode === "upi" ? "UPI" : "Cash"}
+                    {entry.e.toOwner ? " → Owner" : " · Daybook"}
+                    {" · "}{entry.e.date}
+                  </span>
+                </div>
+                <div className="stmt-sub">
+                  {(entry.e.note ? entry.e.note + " · " : "") + "by " + userName(entry.e.enteredBy)}
+                </div>
+              </div>
+              <div className="stmt-amt" style={{ color: "var(--green)" }}>+₹{inr(entry.amount)}</div>
+              <span className="pb-rowacts">
+                <button className="pb-x" title="Edit" type="button" onClick={() => startEdit(entry)} style={{ marginRight: 4 }}>✎</button>
+                <button className="pb-x" title="Delete" type="button" onClick={() => remove(entry)}>×</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="panel-card">
+          <div className="empty">No name receipts yet — use Received → From name when someone returns money.</div>
+        </div>
+      )}
+
+      <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+        Paid out <small>— ₹{inr(paidOutTotal)} · {paidOutList.length}</small>
+      </div>
+      {paidOutList.length ? (
+        <div className="panel-card" style={{ padding: "0 0 4px" }}>
+          {paidOutList.map((entry) => (
+            <div className="stmt" key={entry.key}>
+              <div className="stmt-ic due">{spendCategoryOf(entry.e).slice(0, 3)}</div>
+              <div className="stmt-main">
+                <div className="stmt-to">
+                  {spendCategoryOf(entry.e)}
+                  <span className="acct-overall-hint">
+                    {" · "}{entry.e.toOwner ? "Owner's cash" : "Daybook"}
+                    {" · "}{entry.e.date}
+                  </span>
+                </div>
+                <div className="stmt-sub">
+                  {(() => {
+                    const d = spendDetailOf(entry.e);
+                    return (d ? d + " · " : "") + "by " + userName(entry.e.enteredBy);
+                  })()}
+                </div>
+              </div>
+              <div className="stmt-amt due">−₹{inr(entry.amount)}</div>
+              <span className="pb-rowacts">
+                <button className="pb-x" title="Edit" type="button" onClick={() => startEdit(entry)} style={{ marginRight: 4 }}>✎</button>
+                <button className="pb-x" title="Delete" type="button" onClick={() => remove(entry)}>×</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="panel-card">
+          <div className="empty">No category paid-outs yet — Food, Salary, Truck rent, etc.</div>
         </div>
       )}
 

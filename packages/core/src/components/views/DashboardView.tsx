@@ -71,10 +71,11 @@ export default function DashboardView() {
   }, [dataVersion]);
 
   const feat = getFeatures();
+  const isOwner = user?.role === "owner";
 
-  // Fetch all transactions for unified view
+  // Fetch all transactions for unified view (owner analytics only)
   useEffect(() => {
-    if (!feat.acceptPayment) return; // only for unofficial app
+    if (!feat.acceptPayment || !isOwner) return;
     let live = true;
     setTxnsLoading(true);
     fetchAllTransactions(TXNS_PAGE_SIZE, txnsPage * TXNS_PAGE_SIZE).then((r) => {
@@ -87,7 +88,7 @@ export default function DashboardView() {
       setTxnsLoading(false);
     });
     return () => { live = false; };
-  }, [feat.acceptPayment, dataVersion, txnsPage]);
+  }, [feat.acceptPayment, isOwner, dataVersion, txnsPage]);
 
   // period filter over createdAt (ISO "YYYY-MM-…")
   const inPeriod = (createdAt?: string) => {
@@ -233,7 +234,7 @@ export default function DashboardView() {
                 v: "₹ " + inr(periodReceived),
                 money: true,
                 sub: `${periodPayCount} payment${periodPayCount === 1 ? "" : "s"} · ${periodLabel}`,
-                onClick: () => router.push("/statements?focus=received"),
+                onClick: () => router.push("/logs"),
               },
             ]
           : []),
@@ -287,6 +288,24 @@ export default function DashboardView() {
         { k: "Follow-ups", v: String(follow.length), sub: "to chase", onClick: () => router.push("/quotations") },
         { k: "Low Stock", v: String(lowStock.length), danger: lowStock.length > 0, sub: "wood type(s)", onClick: () => router.push("/stock") },
       ];
+  // Cut Size managers: no analytics / statements — owner-only board below
+  if (feat.simpleQuote && !isOwner) {
+    return (
+      <div>
+        <div className="sectitle">
+          Dashboard <small>— welcome, {user?.name || "Manager"}</small>
+        </div>
+        <div className="panel-card" style={{ padding: 20, marginTop: 8 }}>
+          <div className="empty-title" style={{ marginBottom: 6 }}>Ready to work</div>
+          <div className="empty-note">
+            Use the nav for Receipts, Quotations, Daybook, Balances and Attendance.
+            Analytics and Logs are for the owner.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="sectitle">
@@ -364,8 +383,8 @@ export default function DashboardView() {
       {feat.acceptPayment && (
         <>
           <div className="dash-section" style={{ marginTop: 22 }}>
-            Statements
-            <button className="dash-link" onClick={() => router.push("/statements")}>View all →</button>
+            Recent payments
+            <button className="dash-link" onClick={() => router.push("/logs")}>Open logs →</button>
           </div>
           <div className="panel-card">
             {recentPays.length ? (

@@ -184,6 +184,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
     // numbering is allocated atomically by the server — no pre-pull needed
     const d = isInv ? await createInvoice() : await createQuotation();
     toast("New " + d.number + " created");
+    if (!isInv) openTab(d.id, d.number, d.displayNumber);
     router.push("/editor/" + d.id);
   }
   function onNewPurchase() {
@@ -320,6 +321,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                   {d.phone}
                   <br />
                   {d.site}
+                  {d.sitePhone ? <><br />{d.sitePhone}</> : null}
                 </span>
                 <span className="mut col-date">{d.date}</span>
                 <span className="col-status">
