@@ -84,13 +84,42 @@ export async function q<T = Row>(text: string, params: unknown[] = []): Promise<
   return r.rows as T[];
 }
 
+/**
+ * Self-heal tables that were added to the schema after the database was first
+ * provisioned (the cloud schema is only applied by hand via psql). Mirrors the
+ * `ensureUsers` pattern in auth.ts so a fresh/older database converges on boot
+ * instead of 500-ing when a newly-synced table is missing. Idempotent + cached.
+ */
+const ensuredTables: Partial<Record<string, boolean>> = {};
+export async function ensureTable(schema: AppSchema, table: string): Promise<void> {
+  const key = schema + "." + table;
+  if (ensuredTables[key]) return;
+  const ref = tableRef(schema, table);
+  await q(`create or replace function public.touch_updated_at() returns trigger
+    language plpgsql as $$ begin new.updated_at := now(); return new; end $$`);
+  await q(`create table if not exists ${ref} (
+    id         text primary key,
+    data       jsonb not null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    deleted_at timestamptz
+  )`);
+  await q(`create index if not exists ${ident(table + "_updated_at_idx")} on ${ref} (updated_at)`);
+  await q(`drop trigger if exists touch_updated_at on ${ref}`);
+  await q(`create trigger touch_updated_at before update on ${ref}
+    for each row execute function public.touch_updated_at()`);
+  ensuredTables[key] = true;
+}
+
 /** All live rows of a table (deleted rows excluded). */
 export async function listRows(schema: AppSchema, table: string): Promise<Row[]> {
+  await ensureTable(schema, table);
   return q(`select * from ${tableRef(schema, table)} where deleted_at is null order by created_at`);
 }
 
 /** Rows changed since a timestamp — INCLUDING soft-deleted ones, so every client converges. */
 export async function changedRows(schema: AppSchema, table: string, sinceIso: string): Promise<Row[]> {
+  await ensureTable(schema, table);
   return q(
     `select * from ${tableRef(schema, table)} where updated_at > $1 order by updated_at`,
     [sinceIso],
@@ -109,6 +138,7 @@ export async function upsertRow(
   id: string,
   data: Record<string, unknown>,
 ): Promise<Row> {
+  await ensureTable(schema, table);
   const rows = await q(
     `insert into ${tableRef(schema, table)} (id, data) values ($1, $2::jsonb)
      on conflict (id) do update set data = excluded.data, deleted_at = null, updated_at = now()
