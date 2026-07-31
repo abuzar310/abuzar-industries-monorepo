@@ -95,8 +95,14 @@ export default function BooksView() {
   const income = useMemo(() => {
     const sales = monthExp.filter((e) => e.type === "sale" && !e.charge);
     const cash = r2(sales.filter((e) => e.mode !== "upi").reduce((s, e) => s + (+e.amount || 0), 0));
-    const upi = r2(sales.filter((e) => e.mode === "upi").reduce((s, e) => s + (+e.amount || 0), 0));
-    return { cash, upi, total: r2(cash + upi), count: sales.length };
+    const upiOwner = r2(
+      sales.filter((e) => e.mode === "upi" && e.toOwner).reduce((s, e) => s + (+e.amount || 0), 0),
+    );
+    const upiOther = r2(
+      sales.filter((e) => e.mode === "upi" && !e.toOwner).reduce((s, e) => s + (+e.amount || 0), 0),
+    );
+    const upi = r2(upiOwner + upiOther);
+    return { cash, upi, upiOwner, upiOther, total: r2(cash + upi), count: sales.length };
   }, [monthExp]);
 
   const spends = useMemo(() => {
@@ -267,7 +273,10 @@ export default function BooksView() {
         <div className="party-card">
           <div className="party-stat-label">Income · {monthLabel}</div>
           <div className="party-stat-value ok">₹ {inr(income.total)}</div>
-          <div className="party-stat-sub">{income.count} receipts · cash ₹{inr(income.cash)} · UPI ₹{inr(income.upi)}</div>
+          <div className="party-stat-sub">
+            {income.count} receipts · cash ₹{inr(income.cash)} · UPI ₹{inr(income.upi)}
+            {income.upi > 0 ? ` (owner ₹${inr(income.upiOwner)} · other ₹${inr(income.upiOther)})` : ""}
+          </div>
         </div>
         <div className="party-card">
           <div className="party-stat-label">Expenses · {monthLabel}</div>
@@ -286,7 +295,8 @@ export default function BooksView() {
         <div className="party-card">
           <div className="party-stat-label" style={{ marginBottom: 10 }}>Income breakdown</div>
           <div className="books-row"><span>Cash received</span><b className="ok">₹{inr(income.cash)}</b></div>
-          <div className="books-row"><span>UPI received</span><b className="ok">₹{inr(income.upi)}</b></div>
+          <div className="books-row"><span>UPI received by owner</span><b className="ok">₹{inr(income.upiOwner)}</b></div>
+          <div className="books-row"><span>UPI others</span><b className="ok">₹{inr(income.upiOther)}</b></div>
           {billedMonth > 0 && <div className="books-row"><span>Billed (quotes of {monthLabel})</span><b>₹{inr(billedMonth)}</b></div>}
           {duesAdded > 0 && <div className="books-row"><span>Dues added (no cash)</span><b className="due">₹{inr(duesAdded)}</b></div>}
           <div className="books-row books-total"><span>Total income</span><b className="ok">₹{inr(income.total)}</b></div>
@@ -365,27 +375,42 @@ export default function BooksView() {
               <span className="bank-amt">In ₹</span>
               <span className="bank-amt">Net</span>
             </div>
-            {monthRows.map((row) => (
+            {monthRows.map((row) => {
+              // Net Cr/Dr = running balance (surplus Cr, deficit Dr)
+              const balDr = row.balance < -0.005;
+              // Line tag: money-out = Dr, money-in = Cr
+              const lineDr = row.debit > 0.005;
+              return (
               <div className="bank-row" key={row.id}>
                 <span className="bank-date">{row.date}</span>
                 <span className="bank-parts">
                   {row.particulars}
                   {row.detail && <small>{row.detail}</small>}
                 </span>
-                <span className={"bank-amt" + (row.debit > 0 ? " dr" : "")}>{row.debit > 0 ? "₹" + inr(row.debit) : ""}</span>
-                <span className={"bank-amt" + (row.credit > 0 ? " cr" : "")}>{row.credit > 0 ? "₹" + inr(row.credit) : ""}</span>
-                <span className="bank-amt bal">
+                <span className={"bank-amt" + (lineDr ? " dr" : "")}>
+                  {lineDr ? "₹" + inr(row.debit) : ""}
+                  {lineDr ? <span className="bal-tag dr">Dr</span> : null}
+                </span>
+                <span className={"bank-amt" + (row.credit > 0.005 ? " cr" : "")}>
+                  {row.credit > 0.005 ? "₹" + inr(row.credit) : ""}
+                  {row.credit > 0.005 ? <span className="bal-tag cr">Cr</span> : null}
+                </span>
+                <span className={"bank-amt bal" + (balDr ? " dr" : " cr")}>
                   ₹{inr(Math.abs(row.balance))}
-                  <span className={"bal-tag " + (row.balance >= 0 ? "cr" : "dr")}>{row.balance >= 0 ? "Cr" : "Dr"}</span>
+                  <span className={"bal-tag " + (balDr ? "dr" : "cr")}>{balDr ? "Dr" : "Cr"}</span>
                 </span>
               </div>
-            ))}
+              );
+            })}
             <div className="bank-row bank-total">
               <span className="bank-date"></span>
               <span className="bank-parts">{ledFiltered ? "Filtered net" : "Net for " + monthLabel}</span>
               <span className="bank-amt dr">₹{inr(ledOut)}</span>
               <span className="bank-amt cr">₹{inr(ledIn)}</span>
-              <span className={"bank-amt bal " + (ledNet >= 0 ? "ok" : "due")}>₹{inr(Math.abs(ledNet))}</span>
+              <span className={"bank-amt bal" + (ledNet < -0.005 ? " dr" : " cr")}>
+                ₹{inr(Math.abs(ledNet))}
+                <span className={"bal-tag " + (ledNet < -0.005 ? "dr" : "cr")}>{ledNet < -0.005 ? "Dr" : "Cr"}</span>
+              </span>
             </div>
           </div>
         ) : (

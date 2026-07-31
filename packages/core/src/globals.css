@@ -2290,7 +2290,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .ledger-page .bank-row{grid-template-columns:minmax(0,1fr) 56px 56px 80px; gap:3px; padding:5px 6px}
   .ledger-page .bank-amt{font-size:10.5px}
   .ledger-page .bank-parts{font-size:11px}
-  .ledger-page .bal-tag{display:none}
+  .ledger-page .bal-tag{display:inline-block; font-size:8px; padding:0 4px; margin-left:3px}
   .ledger-page .sq-bal{font-size:11px; padding:4px 9px}
   .ledger-page .lch-bal{font-size:15px}
 }
