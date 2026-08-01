@@ -54,6 +54,66 @@ const emptyPayForm = () => ({
 const money = (n: number) => (n ? inr(n) : "—");
 const vol = (n: number) => (n ? qty(n, 2) : "—");
 
+/** Real <select> + optional custom input — datalist is unreliable in the app shell. */
+function FromAccountField({
+  buyerId,
+  options,
+  value,
+  onChange,
+  onSave,
+}: {
+  buyerId: string;
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+  onSave: () => void;
+}) {
+  const inList = options.some((o) => o === value);
+  // known saved value → select it; otherwise show "+ Add new"
+  const selectVal = !buyerId ? "" : inList ? value : "__custom__";
+
+  return (
+    <>
+      <label className="span2">
+        From name
+        <select
+          value={selectVal}
+          disabled={!buyerId}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "__custom__") onChange("");
+            else onChange(v);
+          }}
+        >
+          <option value="">{buyerId ? "Select from-account…" : "Pick buyer first"}</option>
+          {options.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+          <option value="__custom__">+ Add new from name…</option>
+        </select>
+      </label>
+      {buyerId && selectVal === "__custom__" && (
+        <label className="span2">
+          New from name
+          <div className="buys-from-row">
+            <input
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="Type from-account name"
+              autoFocus
+            />
+            <button type="button" className="btn sm" onClick={onSave} disabled={!value.trim()}>
+              Save
+            </button>
+          </div>
+        </label>
+      )}
+    </>
+  );
+}
+
 export default function BuysView() {
   const { ready, dataVersion, cloakMoney, user } = useApp();
   const router = useRouter();
@@ -539,26 +599,13 @@ export default function BuysView() {
                     ))}
                   </select>
                 </label>
-                <label className="span2">
-                  From name
-                  <input
-                    list="buys-pay-from-list"
-                    value={payForm.fromName}
-                    onChange={(e) => setPF("fromName", e.target.value)}
-                    placeholder="Type or pick from-account"
-                  />
-                  <datalist id="buys-pay-from-list">
-                    {payFromOpts.map((n) => (
-                      <option key={n} value={n} />
-                    ))}
-                  </datalist>
-                </label>
-                <label>
-                  <span style={{ visibility: "hidden" }}>Save</span>
-                  <button type="button" className="btn sm" onClick={() => void savePayFromAccount()}>
-                    Save from
-                  </button>
-                </label>
+                <FromAccountField
+                  buyerId={payForm.supplierId}
+                  options={payFromOpts}
+                  value={payForm.fromName}
+                  onChange={(v) => setPF("fromName", v)}
+                  onSave={() => void savePayFromAccount()}
+                />
                 <label>
                   Cash ₹
                   <input
@@ -678,26 +725,13 @@ export default function BuysView() {
                     ))}
                   </select>
                 </label>
-                <label className="span2">
-                  From name
-                  <input
-                    list="buys-from-list"
-                    value={form.fromName}
-                    onChange={(e) => setF("fromName", e.target.value)}
-                    placeholder="Yard / party under this agent"
-                  />
-                  <datalist id="buys-from-list">
-                    {fromOpts.map((n) => (
-                      <option key={n} value={n} />
-                    ))}
-                  </datalist>
-                </label>
-                <label>
-                  <span style={{ visibility: "hidden" }}>Save</span>
-                  <button type="button" className="btn sm" onClick={() => void saveFromAccount()}>
-                    Save from
-                  </button>
-                </label>
+                <FromAccountField
+                  buyerId={form.supplierId}
+                  options={fromOpts}
+                  value={form.fromName}
+                  onChange={(v) => setF("fromName", v)}
+                  onSave={() => void saveFromAccount()}
+                />
                 <label>
                   Bill no
                   <input value={form.billNo} onChange={(e) => setF("billNo", e.target.value)} />
