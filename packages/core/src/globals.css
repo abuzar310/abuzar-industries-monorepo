@@ -2574,16 +2574,94 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .buys-from-row input{flex:1; min-width:0}
 .buys-from-row .btn{flex:0 0 auto; white-space:nowrap}
 .buys-empty{display:flex; flex-direction:column; align-items:center; gap:14px; padding:56px 20px; color:var(--ink-faint); font-size:15px}
-.buys-buyer-list{list-style:none; margin:0; padding:0}
-.buys-buyer-list li{display:flex; align-items:center; gap:14px; padding:18px 22px; border-bottom:1px solid var(--line)}
-.buys-buyer-list li:last-child{border-bottom:none}
-.buys-buyer-main{flex:1; min-width:0; text-align:left; border:0; background:none; cursor:pointer; padding:0; color:inherit}
-.buys-buyer-main strong{display:block; font-size:16px; font-weight:600; color:var(--ink)}
-.buys-buyer-main span{display:block; margin-top:4px; font-size:13px; color:var(--ink-faint); font-family:var(--mono)}
-.buys-buyer-acts{display:flex; gap:14px; flex:0 0 auto}
-.buys-buyer-acts button{border:0; background:none; padding:0; cursor:pointer; font-family:var(--disp); font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ochre-deep)}
-.buys-buyer-acts button:last-child{color:var(--ink-faint)}
-.buys-buyer-acts button:last-child:hover{color:var(--danger)}
+/* Buyers dashboard — agent → from-accounts */
+.buys-dash{display:flex; flex-direction:column; gap:16px}
+.buys-dash-card{
+  border:1px solid var(--line-2); border-radius:16px;
+  background:var(--panel-2); box-shadow:var(--shadow-card); overflow:hidden;
+}
+.buys-dash-head{
+  display:flex; justify-content:space-between; gap:16px; align-items:flex-start;
+  padding:22px 24px 8px;
+}
+.buys-dash-who{
+  flex:1; min-width:0; text-align:left; border:0; background:none; cursor:pointer; padding:0; color:inherit;
+}
+.buys-dash-who strong{
+  display:block; font-size:20px; font-weight:600; color:var(--ink); line-height:1.2;
+}
+.buys-dash-who span{
+  display:block; margin-top:5px; font-size:13px; color:var(--ink-faint); font-family:var(--mono);
+}
+.buys-dash-due{text-align:right; flex:0 0 auto}
+.buys-dash-due em{
+  display:block; font-style:normal; font-family:var(--disp); font-size:10px; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:2px;
+}
+.buys-dash-due b{font-family:var(--mono); font-size:24px; font-weight:700; font-variant-numeric:tabular-nums}
+.buys-dash-due.ok b{color:var(--green)}
+.buys-dash-due.due b{color:#c43028}
+.buys-dash-metrics{
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:14px 18px; padding:10px 24px 18px;
+}
+.buys-dash-metrics > div{display:flex; flex-direction:column; gap:3px; min-width:0}
+.buys-dash-metrics em{
+  font-style:normal; font-family:var(--disp); font-size:10px; font-weight:700;
+  letter-spacing:.07em; text-transform:uppercase; color:var(--ink-faint);
+}
+.buys-dash-metrics b{
+  font-family:var(--mono); font-size:17px; font-weight:700; color:var(--ink);
+  font-variant-numeric:tabular-nums; line-height:1.25;
+}
+.buys-dash-metrics b.paid{color:var(--green)}
+.buys-dash-metrics span{font-family:var(--mono); font-size:12px; color:var(--ink-faint); line-height:1.35}
+.buys-dash-froms{
+  list-style:none; margin:0; padding:0;
+  border-top:1px solid var(--line);
+  background:rgba(246,240,228,.35);
+}
+.buys-dash-froms li{
+  display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr);
+  gap:10px 18px; align-items:center;
+  padding:14px 24px; border-bottom:1px solid var(--line);
+}
+.buys-dash-froms li:last-child{border-bottom:none}
+.buys-dash-froms li.idle{opacity:.55}
+.buys-dash-from-main{
+  min-width:0; text-align:left; border:0; background:none; cursor:pointer; padding:0 0 0 14px;
+  border-left:2px solid var(--ochre); color:inherit;
+}
+.buys-dash-from-main strong{
+  display:block; font-size:14.5px; font-weight:600; color:var(--ink); line-height:1.25;
+}
+.buys-dash-from-main span{
+  display:block; margin-top:2px; font-size:12px; color:var(--ink-faint); font-family:var(--mono);
+}
+.buys-dash-from-nums{
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px 12px; font-family:var(--mono); font-size:13px; font-weight:600;
+  font-variant-numeric:tabular-nums; color:var(--ink);
+}
+.buys-dash-from-nums em{
+  display:block; font-style:normal; font-family:var(--disp); font-size:9.5px; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:2px;
+}
+.buys-dash-from-nums .paid{color:var(--green)}
+.buys-dash-from-nums .due{color:#c43028}
+.buys-dash-from-nums .ok{color:var(--green)}
+.buys-dash-foot{
+  display:flex; flex-wrap:wrap; gap:16px; padding:12px 24px 16px;
+  border-top:1px solid var(--line);
+}
+@media(max-width:720px){
+  .buys-dash-metrics{grid-template-columns:1fr 1fr}
+  .buys-dash-froms li{grid-template-columns:1fr}
+  .buys-dash-from-nums{grid-template-columns:1fr 1fr}
+  .buys-dash-who strong{font-size:17px}
+  .buys-dash-due b{font-size:20px}
+  .buys-dash-head,.buys-dash-metrics,.buys-dash-froms li,.buys-dash-foot{padding-left:16px; padding-right:16px}
+}
 @media(max-width:900px){
   .buys-page{margin-left:0; margin-right:0; width:auto}
   .buys-h1{font-size:26px}

@@ -245,3 +245,47 @@ export function fromAccountsOf(buyer: Supplier | undefined, rows: Purchase[]): s
   }
   return [...set].sort((a, b) => a.localeCompare(b));
 }
+
+export type FromDash = {
+  name: string;
+  totals: PurchaseTotals;
+};
+
+export type BuyerDash = {
+  buyer: Supplier;
+  totals: PurchaseTotals;
+  froms: FromDash[];
+};
+
+/** Per-agent rollup + nested from-account totals (buys + payments). */
+export function buyerDashboards(buyers: Supplier[], rows: Purchase[]): BuyerDash[] {
+  const out: BuyerDash[] = buyers.map((buyer) => {
+    const mine = rows.filter((r) => r.supplierId === buyer.id);
+    const fromNames = fromAccountsOf(buyer, rows);
+    const froms: FromDash[] = fromNames.map((name) => ({
+      name,
+      totals: purchaseTotals(
+        mine.filter((r) => (r.fromName || "").trim().toLowerCase() === name.toLowerCase()),
+      ),
+    }));
+    const empty = mine.filter((r) => !(r.fromName || "").trim());
+    if (empty.length) {
+      froms.push({ name: "(no from-account)", totals: purchaseTotals(empty) });
+    }
+    // busiest / most owed first within the agent
+    froms.sort(
+      (a, b) =>
+        Math.abs(b.totals.balance) - Math.abs(a.totals.balance) ||
+        b.totals.total - a.totals.total ||
+        a.name.localeCompare(b.name),
+    );
+    return { buyer, totals: purchaseTotals(mine), froms };
+  });
+  out.sort(
+    (a, b) =>
+      Math.abs(b.totals.balance) - Math.abs(a.totals.balance) ||
+      b.totals.total - a.totals.total ||
+      (a.buyer.name || "").localeCompare(b.buyer.name || ""),
+  );
+  return out;
+}

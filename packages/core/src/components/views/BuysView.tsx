@@ -7,6 +7,7 @@ import { editBuyerDialog } from "@/lib/customer-form";
 import {
   addFromAccount,
   allPurchases,
+  buyerDashboards,
   cashAmount,
   deletePurchase,
   fromAccountsOf,
@@ -185,14 +186,7 @@ export default function BuysView() {
   const payBuyer = buyers.find((b) => b.id === payForm.supplierId);
   const payFromOpts = useMemo(() => fromAccountsOf(payBuyer, rows), [payBuyer, rows]);
 
-  const buyCount = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of buys) {
-      if (!p.supplierId) continue;
-      m.set(p.supplierId, (m.get(p.supplierId) || 0) + 1);
-    }
-    return m;
-  }, [buys]);
+  const dash = useMemo(() => buyerDashboards(buyers, rows), [buyers, rows]);
 
   const liveTotal = useMemo(() => {
     const amount = form.amount !== "" ? +form.amount || 0 : lineAmount(+form.cft || 0, +form.rate || 0);
@@ -427,7 +421,7 @@ export default function BuysView() {
   }
 
   async function removeBuyer(s: Supplier) {
-    const n = buyCount.get(s.id) || 0;
+    const n = rows.filter((r) => r.supplierId === s.id).length;
     const ok = await confirmDialog({
       title: "Delete " + s.name + "?",
       message:
@@ -521,23 +515,25 @@ export default function BuysView() {
       </div>
 
       {seg === "buyers" ? (
-        <div className="buys-card">
-          {buyers.length === 0 ? (
+        buyers.length === 0 ? (
+          <div className="buys-card">
             <div className="buys-empty">
               No buyers / agents yet.
               <button type="button" className="btn primary sm" onClick={addBuyer}>
                 + Add buyer
               </button>
             </div>
-          ) : (
-            <ul className="buys-buyer-list">
-              {buyers.map((b) => {
-                const froms = fromAccountsOf(b, rows);
-                return (
-                  <li key={b.id}>
+          </div>
+        ) : (
+          <div className="buys-dash">
+            {dash.map(({ buyer: b, totals: t, froms }) => {
+              const due = Math.abs(t.balance) <= 0.5;
+              return (
+                <article key={b.id} className="buys-dash-card">
+                  <header className="buys-dash-head">
                     <button
                       type="button"
-                      className="buys-buyer-main"
+                      className="buys-dash-who"
                       onClick={() => {
                         setBuyerFilter(b.id);
                         setSeg("ledger");
@@ -545,27 +541,124 @@ export default function BuysView() {
                     >
                       <strong>{b.name}</strong>
                       <span>
-                        {froms.length
-                          ? froms.slice(0, 4).join(" · ") + (froms.length > 4 ? ` · +${froms.length - 4}` : "")
-                          : "No from-accounts yet"}
-                        {" · "}
-                        {buyCount.get(b.id) || 0} buy{(buyCount.get(b.id) || 0) === 1 ? "" : "s"}
+                        {t.count} buy{t.count === 1 ? "" : "s"}
+                        {t.cft ? ` · ${vol(t.cft)} cft` : ""}
+                        {froms.length ? ` · ${froms.length} from` : ""}
                       </span>
                     </button>
-                    <div className="buys-buyer-acts">
-                      <button type="button" onClick={() => void editBuyer(b)}>
-                        Edit
-                      </button>
-                      <button type="button" onClick={() => void removeBuyer(b)}>
-                        Del
-                      </button>
+                    <div className={`buys-dash-due ${due ? "ok" : "due"}`}>
+                      <em>{due ? "Settled" : "To pay"}</em>
+                      <b>{due ? "—" : "₹" + inr(Math.abs(t.balance))}</b>
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
+                  </header>
+
+                  <div className="buys-dash-metrics">
+                    <div>
+                      <em>Total</em>
+                      <b>₹{money(t.total)}</b>
+                    </div>
+                    <div>
+                      <em>Bill</em>
+                      <b>₹{money(t.billAmount)}</b>
+                      <span>bank side</span>
+                    </div>
+                    <div>
+                      <em>Cash</em>
+                      <b>₹{money(t.cashAmount)}</b>
+                      <span>cash side</span>
+                    </div>
+                    <div>
+                      <em>Paid</em>
+                      <b className="paid">₹{money(t.paid)}</b>
+                      <span>
+                        cash {money(t.cashPaid)} · bank {money(t.bankPaid)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {froms.length > 0 && (
+                    <ul className="buys-dash-froms">
+                      {froms.map((f) => {
+                        const ft = f.totals;
+                        const fDue = Math.abs(ft.balance) <= 0.5;
+                        const idle = ft.count === 0 && ft.paid === 0;
+                        return (
+                          <li key={f.name} className={idle ? "idle" : undefined}>
+                            <button
+                              type="button"
+                              className="buys-dash-from-main"
+                              onClick={() => {
+                                setBuyerFilter(b.id);
+                                setQ(f.name.startsWith("(") ? "" : f.name);
+                                setSeg("ledger");
+                              }}
+                            >
+                              <strong>{f.name}</strong>
+                              {idle ? (
+                                <span>No buys yet</span>
+                              ) : (
+                                <span>
+                                  {ft.count} buy{ft.count === 1 ? "" : "s"}
+                                  {ft.cft ? ` · ${vol(ft.cft)} cft` : ""}
+                                </span>
+                              )}
+                            </button>
+                            {!idle && (
+                              <div className="buys-dash-from-nums">
+                                <span>
+                                  <em>Bill</em> ₹{money(ft.billAmount)}
+                                </span>
+                                <span>
+                                  <em>Cash</em> ₹{money(ft.cashAmount)}
+                                </span>
+                                <span className="paid">
+                                  <em>Paid</em> ₹{money(ft.paid)}
+                                </span>
+                                <span className={fDue ? "ok" : "due"}>
+                                  <em>{fDue ? "Ok" : "Due"}</em>{" "}
+                                  {fDue ? "—" : "₹" + inr(Math.abs(ft.balance))}
+                                </span>
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+
+                  <footer className="buys-dash-foot">
+                    <button
+                      type="button"
+                      className="buys-link"
+                      onClick={() => {
+                        setBuyerFilter(b.id);
+                        setSeg("ledger");
+                      }}
+                    >
+                      Register
+                    </button>
+                    <button
+                      type="button"
+                      className="buys-link"
+                      onClick={() => {
+                        setBuyerFilter(b.id);
+                        setSeg("payments");
+                      }}
+                    >
+                      Payments
+                    </button>
+                    <button type="button" className="buys-link" onClick={() => void editBuyer(b)}>
+                      Edit
+                    </button>
+                    <button type="button" className="buys-link danger" onClick={() => void removeBuyer(b)}>
+                      Del
+                    </button>
+                  </footer>
+                </article>
+              );
+            })}
+          </div>
+        )
       ) : seg === "payments" ? (
         <div className="buys-card">
           {showPayForm && (
