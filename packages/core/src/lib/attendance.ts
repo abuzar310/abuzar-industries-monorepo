@@ -201,6 +201,30 @@ export const fmtWeekLabel = (days: string[]) => dmy(days[0]) + " — " + dmy(day
 export const prevWeek = (start: Date) => { const d = new Date(start); d.setDate(d.getDate() - 7); return d; };
 export const nextWeek = (start: Date) => { const d = new Date(start); d.setDate(d.getDate() + 7); return d; };
 
+/** Week Mondays to pick when a salary hike starts (register week ± range). */
+export function rateFromWeekOptions(
+  registerMonday: Date,
+  opts?: { back?: number; forward?: number },
+): { value: string; label: string }[] {
+  const back = opts?.back ?? 16;
+  const forward = opts?.forward ?? 2;
+  const anchor = weekStart(registerMonday);
+  const todayMon = isoOf(weekStart(new Date()));
+  const screenMon = isoOf(anchor);
+  const out: { value: string; label: string }[] = [];
+  for (let i = -back; i <= forward; i++) {
+    const mon = new Date(anchor);
+    mon.setDate(mon.getDate() + i * 7);
+    const days = weekDays(mon);
+    const value = days[0];
+    let tag = "";
+    if (value === screenMon) tag = " · on screen";
+    else if (value === todayMon) tag = " · this week";
+    out.push({ value, label: fmtWeekLabel(days) + tag });
+  }
+  return out;
+}
+
 // ---- payments (daybook is the single source of truth) ----
 // Two separate pots per worker, told apart by the expense sourceId prefix:
 //   "wkr:<id>"    + type "salary"              = WAGE payment (cash out)

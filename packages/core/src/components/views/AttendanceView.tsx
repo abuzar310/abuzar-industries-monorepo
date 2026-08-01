@@ -14,6 +14,7 @@ import {
   payWorker,
   prevWeek,
   repayWorker,
+  rateFromWeekOptions,
   rateOn,
   saveWorker,
   setAttendanceCfg,
@@ -202,8 +203,17 @@ export default function AttendanceView() {
   }
 
   async function editWorker(w: Worker) {
+    const screenMon = days[0];
+    const weekRate = rateOn(w, screenMon);
+    const weekOpts = rateFromWeekOptions(start);
     const res = await formDialog({
       title: "Edit worker",
+      message:
+        "Week on screen earns ₹" +
+        inr(weekRate) +
+        "/day · current rate ₹" +
+        inr(w.rate) +
+        "/day. If you change the rate, pick which week it starts from.",
       fields: [
         { name: "name", label: "Name", value: w.name, required: true },
         {
@@ -212,7 +222,14 @@ export default function AttendanceView() {
           type: "number",
           inputMode: "decimal",
           value: String(w.rate),
-          placeholder: "Applies to the whole week on screen (Mon–Sun)",
+          placeholder: "New daily wage",
+        },
+        {
+          name: "rateFrom",
+          label: "New rate starts from week (Mon–Sun)",
+          type: "select",
+          value: screenMon,
+          options: weekOpts,
         },
         // debt-account setup is owner-only and rarely touched — kept out of everyone else's way
         ...(isOwner
@@ -228,19 +245,20 @@ export default function AttendanceView() {
     });
     if (res === null) return;
     const nextRate = +res.rate || 0;
+    const rateFrom = res.rateFrom || screenMon;
     await saveWorker({
       id: w.id,
       name: res.name,
       rate: nextRate,
       opening: isOwner ? +res.opening || 0 : undefined,
-      // align to the week currently shown in the register (not just today)
-      rateFrom: days[0],
+      rateFrom,
     });
     load();
     bumpData();
+    const applyDays = weekDays(weekStart(new Date(rateFrom + "T12:00:00")));
     toast(
       r2(+w.rate || 0) !== r2(nextRate)
-        ? "Rate ₹" + inr(nextRate) + "/day · whole week " + fmtWeekLabel(days)
+        ? "Rate ₹" + inr(nextRate) + "/day from week " + fmtWeekLabel(applyDays)
         : "Saved",
     );
   }
