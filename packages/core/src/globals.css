@@ -2431,20 +2431,20 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 }
 
 /* ===== Buys — broad, airy purchase register ===== */
-.buys-page{margin:0 0 36px}
-/* use more of the shell width on desktop */
-@media(min-width:1100px){
-  .buys-page{margin-left:-18px; margin-right:-18px; width:calc(100% + 36px)}
+.buys-page{margin:0 0 40px}
+/* bleed into shell padding for a wider register */
+@media(min-width:960px){
+  .buys-page{margin-left:-28px; margin-right:-28px; width:calc(100% + 56px)}
 }
-.buys-top{display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:18px; padding:0 4px}
-.buys-h1{margin:0; font-family:var(--serif); font-weight:600; font-size:32px; letter-spacing:-.02em; color:var(--ink); line-height:1.1}
+.buys-top{display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:20px; padding:0 8px}
+.buys-h1{margin:0; font-family:var(--serif); font-weight:600; font-size:34px; letter-spacing:-.02em; color:var(--ink); line-height:1.1}
 .buys-sub{margin:6px 0 0; font-size:14px; color:var(--ink-faint)}
 .buys-bal{
-  text-align:right; min-width:168px; padding:12px 18px; border-radius:12px;
+  text-align:right; min-width:180px; padding:14px 20px; border-radius:12px;
   background:rgba(246,240,228,.55); border:1px solid var(--line);
 }
 .buys-bal span{display:block; font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:4px}
-.buys-bal b{font-family:var(--mono); font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.15}
+.buys-bal b{font-family:var(--mono); font-size:28px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.15}
 /* outstanding → clear red figure (soft wash, not a loud badge) */
 .buys-bal-due{background:rgba(196,48,40,.07); border-color:rgba(196,48,40,.22)}
 .buys-bal-due span{color:#c43028}
@@ -2454,7 +2454,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .buys-bal-ok b{color:var(--green)}
 .buys-bal-adv{background:rgba(176,124,40,.08); border-color:rgba(176,124,40,.22)}
 .buys-bal-adv span,.buys-bal-adv b{color:var(--ochre-deep)}
-.buys-bar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px; padding:0 4px}
+.buys-bar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px; padding:0 8px}
 .buys-bar select,.buys-search{
   font-family:var(--mono); font-size:14px; padding:10px 12px; min-height:42px;
   border:1px solid var(--line-2); border-radius:10px; background:var(--panel-2); color:var(--ink);
@@ -2463,42 +2463,51 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .buys-search{flex:1 1 200px; min-width:160px}
 .buys-check{display:inline-flex; align-items:center; gap:8px; font-size:13.5px; color:var(--ink-soft); user-select:none}
 .buys-card{
-  border:1px solid var(--line-2); border-radius:14px;
+  border:1px solid var(--line-2); border-radius:16px;
   background:var(--panel-2); box-shadow:var(--shadow-card); overflow:hidden;
 }
 .buys-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
-.buys-grid{width:100%; border-collapse:separate; border-spacing:0; font-size:14.5px; min-width:1280px}
+.buys-grid{width:100%; border-collapse:separate; border-spacing:0; font-size:15px; min-width:960px}
+.buys-grid-reg{min-width:1100px}
 .buys-grid th,.buys-grid td{
-  padding:16px 18px; border-bottom:1px solid var(--line);
-  vertical-align:middle; white-space:nowrap; line-height:1.35;
+  padding:20px 22px; border-bottom:1px solid var(--line);
+  vertical-align:middle; white-space:nowrap; line-height:1.4;
 }
 .buys-grid thead th{
   position:sticky; top:0; z-index:1;
-  background:rgba(246,240,228,.97); backdrop-filter:blur(8px);
-  font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:.07em;
+  background:rgba(246,240,228,.98); backdrop-filter:blur(8px);
+  font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:.08em;
   text-transform:uppercase; color:var(--ink-faint); text-align:left;
-  border-bottom:1px solid var(--line-2); padding:14px 18px;
+  border-bottom:1px solid var(--line-2); padding:16px 22px;
 }
 .buys-grid th.num,.buys-grid td.num,.buys-grid tfoot td.num{text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums}
 .buys-grid th.l,.buys-grid td.l{text-align:left}
-.buys-grid td.mono{font-family:var(--mono); font-size:13.5px; color:var(--ink-soft)}
+.buys-grid td.mono,.buys-td-date{font-family:var(--mono); font-size:14px; color:var(--ink-soft)}
 .buys-grid td.name{font-weight:600; font-size:15px; color:var(--ink)}
 .buys-grid td.note{max-width:200px; overflow:hidden; text-overflow:ellipsis; color:var(--ink-soft); font-weight:400; font-size:13.5px}
-.buys-grid td.num{font-size:14.5px}
-.buys-grid td.paid{color:var(--green)}
+.buys-grid td.num{font-size:15px}
+.buys-grid td.paid,.buys-grid td.paid strong{color:var(--green)}
+.buys-grid td.bal-ok,.buys-grid td.bal-ok strong{color:var(--green)}
+.buys-grid td.bal-due,.buys-grid td.bal-due strong{color:#c43028}
+.buys-cell-stack{display:flex; flex-direction:column; gap:4px; align-items:flex-start; white-space:normal; min-width:140px}
+.buys-cell-stack.end{align-items:flex-end}
+.buys-cell-stack strong{font-size:15.5px; font-weight:600; color:var(--ink); line-height:1.25}
+.buys-cell-stack.end strong{font-family:var(--mono); font-weight:700; font-variant-numeric:tabular-nums}
+.buys-cell-stack span{font-size:12.5px; color:var(--ink-faint); font-family:var(--mono); line-height:1.3}
+.buys-foot-sub{font-size:12px; font-weight:600; color:var(--ink-faint); margin-top:2px}
 .buys-grid tbody tr{cursor:default; transition:background .12s ease-out}
 .buys-grid tbody tr:hover td{background:rgba(176,124,40,.045)}
 .buys-grid tbody tr.on td{background:rgba(176,124,40,.1)}
 .buys-grid tbody tr:last-child td{border-bottom:none}
 .buys-grid tfoot td{
   background:rgba(246,240,228,.75); border-top:1px solid var(--line-2); border-bottom:none;
-  font-family:var(--mono); font-weight:700; font-size:14px; padding:16px 18px; color:var(--ink);
+  font-family:var(--mono); font-weight:700; font-size:14.5px; padding:18px 22px; color:var(--ink);
 }
 .buys-grid tfoot .bal-ok{color:var(--green)}
 .buys-grid tfoot .bal-due{color:#c43028; font-weight:800}
 .buys-grid tfoot .bal-adv{color:var(--ochre-deep)}
-.buys-grid .acts{text-align:right; width:1%; padding-right:20px}
-.buys-grid .acts .buys-link + .buys-link{margin-left:14px}
+.buys-grid .acts{text-align:right; width:1%; padding-right:22px}
+.buys-grid .acts .buys-link + .buys-link{margin-left:16px}
 .buys-link{
   border:0; background:none; padding:0; cursor:pointer;
   font-family:var(--disp); font-size:12px; font-weight:700; letter-spacing:.04em;
@@ -2543,8 +2552,9 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .buys-page{margin-left:0; margin-right:0; width:auto}
   .buys-h1{font-size:26px}
   .buys-bal b{font-size:20px}
-  .buys-grid{font-size:13.5px; min-width:1180px}
-  .buys-grid th,.buys-grid td{padding:14px 14px}
+  .buys-grid{font-size:14px; min-width:920px}
+  .buys-grid-reg{min-width:980px}
+  .buys-grid th,.buys-grid td{padding:16px 14px}
   .buys-entry-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .buys-entry-grid label.span2,.buys-entry-grid label.span3{grid-column:span 2}
 }

@@ -818,30 +818,24 @@ export default function BuysView() {
           )}
 
           <div className="buys-scroll">
-            <table className="buys-grid">
+            <table className="buys-grid buys-grid-reg">
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th className="l">Buyer</th>
-                  <th className="l">From</th>
+                  <th className="l">Buyer / from</th>
                   <th>Bill</th>
-                  <th className="num">CFT</th>
-                  <th className="num">Rate</th>
-                  <th className="num">Amount</th>
-                  <th className="num">GST</th>
-                  <th className="num">Total</th>
-                  <th className="num">Bill amt</th>
-                  <th className="num">Cash amt</th>
-                  <th className="num">Cash paid</th>
-                  <th className="num">Bank paid</th>
-                  <th className="num">Bal</th>
+                  <th className="num">CFT · rate</th>
+                  <th className="num">Purchase</th>
+                  <th className="num">Split</th>
+                  <th className="num">Paid</th>
+                  <th className="num">Balance</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {filteredBuys.length === 0 ? (
                   <tr>
-                    <td colSpan={15}>
+                    <td colSpan={9}>
                       <div className="buys-empty">
                         No buys yet.
                         <button type="button" className="btn primary sm" onClick={startNew}>
@@ -855,30 +849,52 @@ export default function BuysView() {
                     const p = normalizePurchase(raw);
                     const tot = totalPurchase(p);
                     const bal = rowBalance(p);
+                    const paid = paidTotal(p);
                     return (
                       <tr
                         key={p.id}
                         className={editId === p.id ? "on" : undefined}
                         onDoubleClick={() => startEdit(p)}
                       >
-                        <td className="mono">{p.date || "—"}</td>
-                        <td className="l name">{p.buyerName || "—"}</td>
-                        <td className="l">{p.fromName || "—"}</td>
+                        <td className="mono buys-td-date">{p.date || "—"}</td>
+                        <td className="l">
+                          <div className="buys-cell-stack">
+                            <strong>{p.buyerName || "—"}</strong>
+                            <span>{p.fromName || "—"}</span>
+                          </div>
+                        </td>
                         <td className="mono">{p.billNo || "—"}</td>
-                        <td className="num">{vol(p.cft)}</td>
-                        <td className="num">{money(p.rate)}</td>
-                        <td className="num">{money(p.amount)}</td>
-                        <td className="num">{money(p.gst)}</td>
-                        <td className="num">{money(tot)}</td>
-                        <td className="num">{money(p.billAmount)}</td>
-                        <td className="num">{money(cashAmount(p))}</td>
-                        <td className="num paid">{money(p.cashPaid)}</td>
-                        <td className="num paid">{money(p.bankPaid)}</td>
-                        <td
-                          className="num"
-                          style={{ color: Math.abs(bal) <= 0.5 ? "var(--green)" : "#c43028", fontWeight: 700 }}
-                        >
-                          {Math.abs(bal) <= 0.5 ? "—" : inr(Math.abs(bal))}
+                        <td className="num">
+                          <div className="buys-cell-stack end">
+                            <strong>{vol(p.cft)} cft</strong>
+                            <span>@ {money(p.rate)}</span>
+                          </div>
+                        </td>
+                        <td className="num">
+                          <div className="buys-cell-stack end">
+                            <strong>{money(tot)}</strong>
+                            <span>
+                              amt {money(p.amount)}
+                              {p.gst ? ` · gst ${money(p.gst)}` : ""}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="num">
+                          <div className="buys-cell-stack end">
+                            <strong>Bill {money(p.billAmount)}</strong>
+                            <span>Cash {money(cashAmount(p))}</span>
+                          </div>
+                        </td>
+                        <td className="num paid">
+                          <div className="buys-cell-stack end">
+                            <strong>{money(paid)}</strong>
+                            <span>
+                              cash {money(p.cashPaid)} · bank {money(p.bankPaid)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className={`num ${Math.abs(bal) <= 0.5 ? "bal-ok" : "bal-due"}`}>
+                          <strong>{Math.abs(bal) <= 0.5 ? "Settled" : "₹" + inr(Math.abs(bal))}</strong>
                         </td>
                         <td className="acts">
                           <button type="button" className="buys-link" onClick={() => startEdit(p)}>
@@ -896,18 +912,16 @@ export default function BuysView() {
               {filteredBuys.length > 0 && (
                 <tfoot>
                   <tr>
-                    <td colSpan={4} className="l">
+                    <td colSpan={3} className="l">
                       {totals.count} buy{totals.count === 1 ? "" : "s"}
                     </td>
-                    <td className="num">{vol(totals.cft)}</td>
-                    <td />
-                    <td className="num">{money(totals.amount)}</td>
-                    <td className="num">{money(totals.gst)}</td>
+                    <td className="num">{vol(totals.cft)} cft</td>
                     <td className="num">{money(totals.total)}</td>
-                    <td className="num">{money(totals.billAmount)}</td>
-                    <td className="num">{money(totals.cashAmount)}</td>
-                    <td className="num paid">{money(totals.cashPaid)}</td>
-                    <td className="num paid">{money(totals.bankPaid)}</td>
+                    <td className="num">
+                      Bill {money(totals.billAmount)}
+                      <div className="buys-foot-sub">Cash {money(totals.cashAmount)}</div>
+                    </td>
+                    <td className="num paid">{money(totals.paid)}</td>
                     <td className={`num bal-${balTone}`}>
                       {balAbs <= 0.5 ? "Settled" : "₹" + inr(balAbs)}
                     </td>
