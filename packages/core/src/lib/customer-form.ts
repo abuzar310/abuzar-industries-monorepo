@@ -48,3 +48,20 @@ export async function editSupplierDialog(existing?: Supplier): Promise<Supplier 
   if (!res) return null;
   return saveSupplier({ id: existing?.id, ...res, name: res.name });
 }
+
+/** Unofficial Buys: same suppliers store, buyer wording. */
+export async function editBuyerDialog(existing?: Supplier): Promise<Supplier | null> {
+  const fields: DialogField[] = [
+    { name: "name", label: "Buyer name", value: existing?.name, placeholder: "Who you bought from", required: true },
+    { name: "phone", label: "Phone", type: "tel", inputMode: "numeric", value: existing?.phone, placeholder: "10-digit mobile" },
+    { name: "address", label: "Address", value: existing?.address, placeholder: "Optional" },
+    { name: "notes", label: "Notes", type: "textarea", value: existing?.notes, placeholder: "Anything to remember" },
+  ];
+  const res = await formDialog({
+    title: existing ? "Edit buyer" : "Add buyer",
+    fields,
+    submitLabel: existing ? "Save" : "Add buyer",
+  });
+  if (!res) return null;
+  return saveSupplier({ id: existing?.id, ...res, name: res.name });
+}

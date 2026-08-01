@@ -184,7 +184,34 @@ export type StoreName =
   | "payHolders"
   | "workers"
   | "attendance"
-  | "activity";
+  | "activity"
+  | "purchases";
+
+/** Unofficial Buys ledger — one timber-in bill line (Excel-style purchase register). */
+export interface Purchase {
+  id: string;
+  /** dd-mm-yy */
+  date: string;
+  /** party timber came from (suppliers store) */
+  supplierId: string;
+  fromName: string;
+  billNo: string;
+  cft: number;
+  rate: number;
+  /** line = cft × rate (or override) */
+  amount: number;
+  billAmount: number;
+  topAmount: number;
+  note: string;
+  topPaid: number;
+  billPaid: number;
+  /** dd-mm-yy when bill was paid (optional) */
+  billPayDate: string;
+  /** how / which a/c — Excel "MY A/C TRA" */
+  accountNote: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /** Owner audit trail — login/logout/create/update/delete (unofficial Logs tab). */
 export interface Activity {
