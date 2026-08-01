@@ -35,6 +35,23 @@ const emptyForm = () => ({
   accountNote: "",
 });
 
+const COLS = [
+  "Date",
+  "From name",
+  "Bill no",
+  "CFT",
+  "Rate",
+  "Amount",
+  "Bill amount",
+  "Top amount",
+  "Description",
+  "Top paid",
+  "Bill pay date",
+  "Bill paid",
+  "My a/c tra",
+  "",
+] as const;
+
 export default function BuysView() {
   const { ready, dataVersion, cloakMoney } = useApp();
   const [seg, setSeg] = useState<Seg>("ledger");
@@ -43,7 +60,7 @@ export default function BuysView() {
   const [buyerFilter, setBuyerFilter] = useState("");
   const [unpaidOnly, setUnpaidOnly] = useState(false);
   const [q, setQ] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(true);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -90,7 +107,6 @@ export default function BuysView() {
   function setF<K extends keyof ReturnType<typeof emptyForm>>(k: K, v: string) {
     setForm((prev) => {
       const next = { ...prev, [k]: v };
-      // keep line amount in sync when cft/rate change (unless editing a locked override later)
       if (k === "cft" || k === "rate") {
         const amt = lineAmount(+next.cft || 0, +next.rate || 0);
         next.amount = amt ? String(amt) : "";
@@ -104,11 +120,9 @@ export default function BuysView() {
 
   function startNew() {
     setEditId(null);
-    setForm({
-      ...emptyForm(),
-      supplierId: buyerFilter || "",
-    });
+    setForm({ ...emptyForm(), supplierId: buyerFilter || "" });
     setShowForm(true);
+    setSeg("ledger");
   }
 
   function startEdit(p: Purchase) {
@@ -157,10 +171,10 @@ export default function BuysView() {
         billPayDate: form.billPayDate,
         accountNote: form.accountNote,
       });
-      toast(editId ? "Buy updated" : "Buy saved");
-      setShowForm(false);
+      toast(editId ? "Updated" : "Saved");
       setEditId(null);
-      setForm(emptyForm());
+      setForm({ ...emptyForm(), supplierId: buyerFilter || buyer.id });
+      setShowForm(true);
       bumpData();
       load();
     } catch (e) {
@@ -172,13 +186,17 @@ export default function BuysView() {
 
   async function onDelete(p: Purchase) {
     const ok = await confirmDialog({
-      title: "Delete this buy?",
+      title: "Delete this row?",
       message: `${p.fromName || "Buy"} · bill ${p.billNo || "—"} · ₹${inr(p.billAmount)}`,
       confirmLabel: "Delete",
       danger: true,
     });
     if (!ok) return;
     await deletePurchase(p.id);
+    if (editId === p.id) {
+      setEditId(null);
+      setForm(emptyForm());
+    }
     bumpData();
     load();
     toast("Deleted");
@@ -190,6 +208,7 @@ export default function BuysView() {
     bumpData();
     load();
     setBuyerFilter(b.id);
+    setForm((f) => ({ ...f, supplierId: b.id }));
     toast("Buyer " + b.name + " added");
   }
 
@@ -207,7 +226,7 @@ export default function BuysView() {
       title: "Delete " + s.name + "?",
       message:
         n > 0
-          ? `${n} buy record${n === 1 ? "" : "s"} stay in the ledger; only this buyer contact is removed.`
+          ? `${n} row${n === 1 ? "" : "s"} stay in the sheet; only this buyer is removed.`
           : "Only this buyer contact is removed.",
       confirmLabel: "Delete",
       danger: true,
@@ -220,114 +239,66 @@ export default function BuysView() {
     toast("Buyer removed");
   }
 
+  const balAbs = Math.abs(totals.balance);
   const balColor =
-    Math.abs(totals.balance) <= 0.5 ? "var(--green)" : totals.balance > 0 ? "var(--danger)" : "var(--ochre-deep)";
+    balAbs <= 0.5 ? "var(--green)" : totals.balance > 0 ? "var(--danger)" : "var(--ochre-deep)";
 
   return (
-    <div>
-      <div className="sectitle">
-        Buys <small>— timber in · purchase records</small>
-      </div>
-
-      <div className="rowbtns" style={{ marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-        <button
-          type="button"
-          className={"btn sm" + (seg === "ledger" ? " primary" : "")}
-          onClick={() => setSeg("ledger")}
-        >
-          Ledger
-        </button>
-        <button
-          type="button"
-          className={"btn sm" + (seg === "buyers" ? " primary" : "")}
-          onClick={() => setSeg("buyers")}
-        >
-          Buyers
-        </button>
-        {seg === "ledger" && (
-          <button type="button" className="btn primary sm" onClick={startNew} style={{ marginLeft: "auto" }}>
-            + New buy
+    <div className="buys-page">
+      <div className="rowbtns" style={{ marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+        <div className="rep-seg">
+          <button type="button" className={seg === "ledger" ? "on" : ""} onClick={() => setSeg("ledger")}>
+            Sheet
           </button>
-        )}
-        {seg === "buyers" && (
+          <button type="button" className={seg === "buyers" ? "on" : ""} onClick={() => setSeg("buyers")}>
+            Buyers
+          </button>
+        </div>
+        {seg === "ledger" ? (
+          <>
+            <button type="button" className="btn primary sm" onClick={startNew} style={{ marginLeft: "auto" }}>
+              + Add row
+            </button>
+            <button type="button" className="btn sm" onClick={addBuyer}>
+              + Buyer
+            </button>
+          </>
+        ) : (
           <button type="button" className="btn primary sm" onClick={addBuyer} style={{ marginLeft: "auto" }}>
             + Buyer
           </button>
         )}
       </div>
 
-      {/* summary */}
-      <div
-        className="panel-card"
-        style={{
-          padding: "12px 14px",
-          marginBottom: 14,
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
-          gap: 10,
-        }}
-      >
-        <div>
-          <div className="sub" style={{ fontSize: 11 }}>
-            Balance
-          </div>
-          <div style={{ fontFamily: "var(--mono)", fontWeight: 700, fontSize: 18, color: balColor }}>
-            ₹ {inr(Math.abs(totals.balance))}
-          </div>
-          <div className="sub" style={{ fontSize: 10 }}>
-            {Math.abs(totals.balance) <= 0.5 ? "settled" : totals.balance > 0 ? "still due" : "advance"}
-          </div>
-        </div>
-        <div>
-          <div className="sub" style={{ fontSize: 11 }}>
-            Total CFT
-          </div>
-          <div style={{ fontFamily: "var(--mono)", fontWeight: 700, fontSize: 18 }}>{qty(totals.cft, 2)}</div>
-        </div>
-        <div>
-          <div className="sub" style={{ fontSize: 11 }}>
-            Bill amount
-          </div>
-          <div style={{ fontFamily: "var(--mono)", fontWeight: 700, fontSize: 18 }}>₹ {inr(totals.billAmount)}</div>
-        </div>
-        <div>
-          <div className="sub" style={{ fontSize: 11 }}>
-            Paid
-          </div>
-          <div style={{ fontFamily: "var(--mono)", fontWeight: 700, fontSize: 18, color: "var(--green)" }}>
-            ₹ {inr(totals.paid)}
-          </div>
-        </div>
-      </div>
-
       {seg === "buyers" ? (
-        <div className="panel-card">
+        <div className="panel-card buys-buyers">
           {buyers.length === 0 ? (
-            <div className="empty" style={{ padding: 28, textAlign: "center" }}>
-              <div className="empty-title">No buyers yet</div>
-              <div className="empty-note">Add the parties you buy timber from.</div>
-              <button type="button" className="btn primary sm" style={{ marginTop: 12 }} onClick={addBuyer}>
-                + Add buyer
-              </button>
+            <div className="buys-empty">
+              No buyers yet. Add the parties timber comes from.
+              <div style={{ marginTop: 12 }}>
+                <button type="button" className="btn primary sm" onClick={addBuyer}>
+                  + Add buyer
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="listwrap">
+            <div className="listwrap" style={{ marginTop: 0, border: "none", borderRadius: 0, boxShadow: "none" }}>
               {buyers.map((b) => (
                 <div
                   key={b.id}
                   className="lrow"
-                  style={{ cursor: "pointer" }}
+                  style={{ cursor: "pointer", gridTemplateColumns: "1fr auto auto" }}
                   onClick={() => {
                     setBuyerFilter(b.id);
                     setSeg("ledger");
                   }}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700 }}>{b.name}</div>
-                    <div className="sub" style={{ fontSize: 11 }}>
+                  <div>
+                    <div className="nm">{b.name}</div>
+                    <div className="mut">
                       {[b.phone, b.address].filter(Boolean).join(" · ") || "—"}
                       {" · "}
-                      {buyCount.get(b.id) || 0} buy{(buyCount.get(b.id) || 0) === 1 ? "" : "s"}
+                      {buyCount.get(b.id) || 0} row{(buyCount.get(b.id) || 0) === 1 ? "" : "s"}
                     </div>
                   </div>
                   <button
@@ -356,15 +327,23 @@ export default function BuysView() {
           )}
         </div>
       ) : (
-        <>
-          <div
-            className="panel-card"
-            style={{ padding: 12, marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}
-          >
+        <div className="buys-sheet">
+          {/* Excel-style title + BALANCE */}
+          <div className="buys-sheet-head">
+            <div style={{ width: 168 }} aria-hidden />
+            <h1 className="buys-sheet-title">Buys register</h1>
+            <div className="buys-sheet-bal">
+              <span className="lab">Balance</span>
+              <span className="val" style={{ color: balColor }}>
+                {balAbs <= 0.5 ? "—" : "₹ " + inr(balAbs)}
+              </span>
+            </div>
+          </div>
+
+          <div className="buys-toolbar">
             <select
               value={buyerFilter}
               onChange={(e) => setBuyerFilter(e.target.value)}
-              style={{ minWidth: 160, flex: "1 1 160px" }}
               aria-label="Filter buyer"
             >
               <option value="">All buyers</option>
@@ -374,43 +353,31 @@ export default function BuysView() {
                 </option>
               ))}
             </select>
-            <button type="button" className="btn sm" onClick={addBuyer}>
-              + Buyer
-            </button>
             <label className="sub" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
               <input type="checkbox" checked={unpaidOnly} onChange={(e) => setUnpaidOnly(e.target.checked)} />
               Unpaid only
             </label>
             <input
+              className="grow"
+              type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search bill, note…"
-              aria-label="Search buys"
-              style={{ flex: "2 1 160px", minWidth: 120 }}
+              placeholder="Search bill, name, note…"
+              aria-label="Search"
             />
           </div>
 
           {showForm && (
-            <div className="panel-card" style={{ padding: 16, marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, marginBottom: 10 }}>{editId ? "Edit buy" : "New buy"}</div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                  gap: 10,
-                }}
-              >
-                <label className="f">
-                  <span>Date</span>
+            <div className="buys-entry">
+              <div className="buys-entry-title">{editId ? "Edit row" : "New row"}</div>
+              <div className="buys-entry-grid">
+                <label>
+                  Date
                   <DateField value={form.date} onChange={(v) => setF("date", v)} />
                 </label>
-                <label className="f" style={{ gridColumn: "span 2" }}>
-                  <span>Buyer (from)</span>
-                  <select
-                    value={form.supplierId}
-                    onChange={(e) => setF("supplierId", e.target.value)}
-                    required
-                  >
+                <label className="span2">
+                  From name
+                  <select value={form.supplierId} onChange={(e) => setF("supplierId", e.target.value)}>
                     <option value="">Select buyer…</option>
                     {buyers.map((b) => (
                       <option key={b.id} value={b.id}>
@@ -419,246 +386,202 @@ export default function BuysView() {
                     ))}
                   </select>
                 </label>
-                <label className="f">
-                  <span>Bill no</span>
+                <label>
+                  Bill no
                   <input value={form.billNo} onChange={(e) => setF("billNo", e.target.value)} placeholder="—" />
                 </label>
-                <label className="f">
-                  <span>CFT</span>
-                  <input
-                    inputMode="decimal"
-                    value={form.cft}
-                    onChange={(e) => setF("cft", e.target.value)}
-                    placeholder="0"
-                  />
+                <label>
+                  CFT
+                  <input inputMode="decimal" value={form.cft} onChange={(e) => setF("cft", e.target.value)} />
                 </label>
-                <label className="f">
-                  <span>Rate</span>
-                  <input
-                    inputMode="decimal"
-                    value={form.rate}
-                    onChange={(e) => setF("rate", e.target.value)}
-                    placeholder="0"
-                  />
+                <label>
+                  Rate
+                  <input inputMode="decimal" value={form.rate} onChange={(e) => setF("rate", e.target.value)} />
                 </label>
-                <label className="f">
-                  <span>Amount</span>
-                  <input
-                    inputMode="decimal"
-                    value={form.amount}
-                    onChange={(e) => setF("amount", e.target.value)}
-                    placeholder="CFT × rate"
-                  />
+                <label>
+                  Amount
+                  <input inputMode="decimal" value={form.amount} onChange={(e) => setF("amount", e.target.value)} />
                 </label>
-                <label className="f">
-                  <span>Bill amount</span>
+                <label>
+                  Bill amount
                   <input
                     inputMode="decimal"
                     value={form.billAmount}
                     onChange={(e) => setF("billAmount", e.target.value)}
-                    placeholder="—"
                   />
                 </label>
-                <label className="f">
-                  <span>Top amount</span>
+                <label>
+                  Top amount
                   <input
                     inputMode="decimal"
                     value={form.topAmount}
                     onChange={(e) => setF("topAmount", e.target.value)}
-                    placeholder="0"
                   />
                 </label>
-                <label className="f">
-                  <span>Bill paid</span>
+                <label>
+                  Top paid
+                  <input inputMode="decimal" value={form.topPaid} onChange={(e) => setF("topPaid", e.target.value)} />
+                </label>
+                <label>
+                  Bill paid
                   <input
                     inputMode="decimal"
                     value={form.billPaid}
                     onChange={(e) => setF("billPaid", e.target.value)}
-                    placeholder="0"
                   />
                 </label>
-                <label className="f">
-                  <span>Top paid</span>
-                  <input
-                    inputMode="decimal"
-                    value={form.topPaid}
-                    onChange={(e) => setF("topPaid", e.target.value)}
-                    placeholder="0"
-                  />
-                </label>
-                <label className="f">
-                  <span>Bill pay date</span>
+                <label>
+                  Bill pay date
                   <DateField value={form.billPayDate} onChange={(v) => setF("billPayDate", v)} />
                 </label>
-                <label className="f" style={{ gridColumn: "1 / -1" }}>
-                  <span>Description</span>
+                <label className="span3">
+                  Description
                   <input value={form.note} onChange={(e) => setF("note", e.target.value)} placeholder="—" />
                 </label>
-                <label className="f" style={{ gridColumn: "1 / -1" }}>
-                  <span>My a/c / transfer</span>
+                <label className="span3">
+                  My a/c tra
                   <input
                     value={form.accountNote}
                     onChange={(e) => setF("accountNote", e.target.value)}
-                    placeholder="How paid / which account"
+                    placeholder="Account / transfer"
                   />
                 </label>
               </div>
-              <div className="rowbtns" style={{ marginTop: 14, gap: 8 }}>
-                <button type="button" className="btn primary" disabled={saving} onClick={() => void onSave()}>
-                  {saving ? "Saving…" : editId ? "Save changes" : "Save buy"}
+              <div className="buys-entry-actions">
+                <button type="button" className="btn primary sm" disabled={saving} onClick={() => void onSave()}>
+                  {saving ? "Saving…" : editId ? "Save changes" : "Save row"}
                 </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditId(null);
-                  }}
-                >
-                  Cancel
-                </button>
+                {editId && (
+                  <button
+                    type="button"
+                    className="btn sm"
+                    onClick={() => {
+                      setEditId(null);
+                      setForm({ ...emptyForm(), supplierId: buyerFilter || "" });
+                    }}
+                  >
+                    Cancel edit
+                  </button>
+                )}
+                {buyers.length === 0 && (
+                  <button type="button" className="btn sm" onClick={addBuyer}>
+                    + Add buyer first
+                  </button>
+                )}
               </div>
             </div>
           )}
 
-          <div className="panel-card">
-            {filtered.length === 0 ? (
-              <div className="empty" style={{ padding: 28, textAlign: "center" }}>
-                <div className="empty-title">No buys yet</div>
-                <div className="empty-note">
-                  {buyers.length === 0
-                    ? "Add a buyer, then record the first purchase."
-                    : "Record CFT, rate, bill and payments here."}
-                </div>
-                <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                  {buyers.length === 0 ? (
-                    <button type="button" className="btn primary sm" onClick={addBuyer}>
-                      + Add buyer
-                    </button>
-                  ) : (
-                    <button type="button" className="btn primary sm" onClick={startNew}>
-                      + New buy
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* desktop table */}
-                <div className="buys-table" style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 720 }}>
-                    <thead>
-                      <tr style={{ background: "var(--t-cream2, #f6f0e4)", borderBottom: "1px solid var(--line)" }}>
-                        {["Date", "From", "Bill", "CFT", "Rate", "Amount", "Bill amt", "Top", "Paid", "Bal", ""].map(
-                          (h) => (
-                            <th
-                              key={h}
-                              style={{
-                                padding: "8px 6px",
-                                textAlign: h === "From" || h === "Date" || h === "Bill" ? "left" : "right",
-                                fontFamily: "var(--disp)",
-                                letterSpacing: ".04em",
-                                fontSize: 10,
-                                textTransform: "uppercase",
-                              }}
-                            >
-                              {h}
-                            </th>
-                          ),
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((p) => {
-                        const bal = rowBalance(p);
-                        return (
-                          <tr key={p.id} style={{ borderBottom: "1px solid var(--line)" }}>
-                            <td style={{ padding: "8px 6px", fontFamily: "var(--mono)", fontSize: 11 }}>{p.date}</td>
-                            <td style={{ padding: "8px 6px", fontWeight: 600 }}>{p.fromName || "—"}</td>
-                            <td style={{ padding: "8px 6px", fontFamily: "var(--mono)", fontSize: 11 }}>
-                              {p.billNo || "—"}
-                            </td>
-                            <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "var(--mono)" }}>
-                              {qty(p.cft, 2)}
-                            </td>
-                            <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "var(--mono)" }}>
-                              {inr(p.rate)}
-                            </td>
-                            <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "var(--mono)" }}>
-                              {inr(p.amount)}
-                            </td>
-                            <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "var(--mono)" }}>
-                              {inr(p.billAmount)}
-                            </td>
-                            <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "var(--mono)" }}>
-                              {inr(p.topAmount)}
-                            </td>
-                            <td style={{ padding: "8px 6px", textAlign: "right", fontFamily: "var(--mono)", color: "var(--green)" }}>
-                              {inr((+p.billPaid || 0) + (+p.topPaid || 0))}
-                            </td>
-                            <td
-                              style={{
-                                padding: "8px 6px",
-                                textAlign: "right",
-                                fontFamily: "var(--mono)",
-                                fontWeight: 700,
-                                color: Math.abs(bal) <= 0.5 ? "var(--green)" : "var(--danger)",
-                              }}
-                            >
-                              {inr(Math.abs(bal))}
-                            </td>
-                            <td style={{ padding: "8px 6px", whiteSpace: "nowrap" }}>
-                              <button type="button" className="btn sm" onClick={() => startEdit(p)}>
-                                Edit
-                              </button>{" "}
-                              <button type="button" className="btn sm" onClick={() => void onDelete(p)}>
-                                Del
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ borderTop: "2px solid var(--line)", fontWeight: 700 }}>
-                        <td colSpan={3} style={{ padding: "10px 6px" }}>
-                          Totals · {filtered.length}
-                        </td>
-                        <td style={{ padding: "10px 6px", textAlign: "right", fontFamily: "var(--mono)" }}>
-                          {qty(totals.cft, 2)}
-                        </td>
-                        <td />
-                        <td style={{ padding: "10px 6px", textAlign: "right", fontFamily: "var(--mono)" }}>
-                          {inr(totals.amount)}
-                        </td>
-                        <td style={{ padding: "10px 6px", textAlign: "right", fontFamily: "var(--mono)" }}>
-                          {inr(totals.billAmount)}
-                        </td>
-                        <td style={{ padding: "10px 6px", textAlign: "right", fontFamily: "var(--mono)" }}>
-                          {inr(totals.topAmount)}
-                        </td>
-                        <td style={{ padding: "10px 6px", textAlign: "right", fontFamily: "var(--mono)", color: "var(--green)" }}>
-                          {inr(totals.paid)}
-                        </td>
-                        <td
-                          style={{
-                            padding: "10px 6px",
-                            textAlign: "right",
-                            fontFamily: "var(--mono)",
-                            color: balColor,
-                          }}
-                        >
-                          {inr(Math.abs(totals.balance))}
-                        </td>
-                        <td />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </>
-            )}
+          <div className="buys-scroll">
+            <table className="buys-grid">
+              <colgroup>
+                <col style={{ width: "78px" }} />
+                <col style={{ width: "140px" }} />
+                <col style={{ width: "72px" }} />
+                <col style={{ width: "64px" }} />
+                <col style={{ width: "72px" }} />
+                <col style={{ width: "88px" }} />
+                <col style={{ width: "92px" }} />
+                <col style={{ width: "88px" }} />
+                <col style={{ width: "120px" }} />
+                <col style={{ width: "80px" }} />
+                <col style={{ width: "88px" }} />
+                <col style={{ width: "84px" }} />
+                <col style={{ width: "110px" }} />
+                <col style={{ width: "88px" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  {COLS.map((h) => (
+                    <th key={h || "acts"} className={h && !["Date", "From name", "Bill no", "Description", "My a/c tra", "Bill pay date"].includes(h) ? "num" : ""}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={COLS.length} style={{ border: "none", padding: 0 }}>
+                      <div className="buys-empty">
+                        No rows yet — fill the form above and save.
+                        {buyers.length === 0 ? " Add a buyer first." : ""}
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((p) => (
+                    <tr
+                      key={p.id}
+                      className={editId === p.id ? "on" : undefined}
+                      onDoubleClick={() => startEdit(p)}
+                      title="Double-click to edit"
+                    >
+                      <td className="muted">{p.date || "—"}</td>
+                      <td className="txt">{p.fromName || "—"}</td>
+                      <td className="muted">{p.billNo || "—"}</td>
+                      <td className="num">{p.cft ? qty(p.cft, 2) : "—"}</td>
+                      <td className="num">{p.rate ? inr(p.rate) : "—"}</td>
+                      <td className="num">{p.amount ? inr(p.amount) : "—"}</td>
+                      <td className="num">{p.billAmount ? inr(p.billAmount) : "—"}</td>
+                      <td className="num">{p.topAmount ? inr(p.topAmount) : "—"}</td>
+                      <td>{p.note || "—"}</td>
+                      <td className="num">{p.topPaid ? inr(p.topPaid) : "—"}</td>
+                      <td className="muted">{p.billPayDate || "—"}</td>
+                      <td className="num">{p.billPaid ? inr(p.billPaid) : "—"}</td>
+                      <td>{p.accountNote || "—"}</td>
+                      <td className="acts">
+                        <button type="button" onClick={() => startEdit(p)}>
+                          Edit
+                        </button>{" "}
+                        <button type="button" className="danger" onClick={() => void onDelete(p)}>
+                          Del
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={3} className="foot-lab">
+                    Totals
+                  </td>
+                  <td className="num">
+                    <span className="foot-lab" style={{ display: "block", marginBottom: 2 }}>
+                      Total cft
+                    </span>
+                    {totals.cft ? qty(totals.cft, 2) : "—"}
+                  </td>
+                  <td />
+                  <td className="num">
+                    <span className="foot-lab" style={{ display: "block", marginBottom: 2 }}>
+                      Total amt
+                    </span>
+                    {totals.amount ? "₹ " + inr(totals.amount) : "—"}
+                  </td>
+                  <td className="num">{totals.billAmount ? "₹ " + inr(totals.billAmount) : "—"}</td>
+                  <td className="num">{totals.topAmount ? "₹ " + inr(totals.topAmount) : "—"}</td>
+                  <td />
+                  <td className="num" colSpan={2}>
+                    <span className="foot-lab" style={{ display: "block", marginBottom: 2 }}>
+                      Total paid amount
+                    </span>
+                    {totals.paid ? "₹ " + inr(totals.paid) : "—"}
+                  </td>
+                  <td className="num" style={{ color: balColor }}>
+                    <span className="foot-lab" style={{ display: "block", marginBottom: 2 }}>
+                      Balance
+                    </span>
+                    {balAbs <= 0.5 ? "—" : "₹ " + inr(balAbs)}
+                  </td>
+                  <td />
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
