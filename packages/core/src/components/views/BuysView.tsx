@@ -25,7 +25,7 @@ import {
 } from "@/lib/purchases";
 import { useApp } from "@/store/useApp";
 import { bumpData, setBuysDue, toast } from "@/store/app-store";
-import { confirmDialog } from "@/store/dialog-store";
+import { confirmDialog, formDialog } from "@/store/dialog-store";
 import DateField from "@/components/editor/DateField";
 import type { Purchase, Supplier } from "@/lib/types";
 
@@ -319,11 +319,20 @@ export default function BuysView() {
     setSaving(true);
     try {
       await addFromAccount(buyer.id, form.fromName);
-      const remindDays = form.remindIn === "" ? null : Number(form.remindIn);
-      const remindAt =
-        remindDays == null || !Number.isFinite(remindDays)
-          ? undefined
-          : addDaysStr(form.date || todayStr(), remindDays);
+      const remindRaw = form.remindIn.trim();
+      if (remindRaw === "custom") {
+        toast("Enter custom reminder days");
+        return;
+      }
+      const remindPatch: { remindAt?: string } = {};
+      if (remindRaw !== "") {
+        const n = Number(remindRaw);
+        if (!Number.isFinite(n) || n < 0) {
+          toast("Enter a valid number of days");
+          return;
+        }
+        remindPatch.remindAt = addDaysStr(form.date || todayStr(), n);
+      }
       await savePurchase({
         id: editId || undefined,
         kind: "buy",
@@ -341,7 +350,7 @@ export default function BuysView() {
         cashPaid: form.cashPaid,
         bankPaid: form.bankPaid,
         payDate: form.payDate,
-        ...(remindAt !== undefined ? { remindAt } : {}),
+        ...remindPatch,
       });
       toast(editId ? "Updated" : "Saved");
       closeForm();
@@ -356,12 +365,45 @@ export default function BuysView() {
 
   async function onRemind(p: Purchase, days: string) {
     if (days === "") return;
-    const next =
-      days === "clear" ? "" : addDaysStr(todayStr(), Number(days) || 0);
+    if (days === "off" || days === "clear") {
+      await setPurchaseReminder(p.id, "");
+      bumpData();
+      load();
+      toast("Reminder off");
+      return;
+    }
+    let n: number;
+    if (days === "custom") {
+      const res = await formDialog({
+        title: "Custom reminder",
+        message: "Remind in how many days?",
+        fields: [
+          {
+            name: "days",
+            label: "Days",
+            type: "number",
+            inputMode: "numeric",
+            placeholder: "e.g. 45",
+            required: true,
+          },
+        ],
+        submitLabel: "Set",
+      });
+      if (!res) return;
+      n = Math.floor(Number(res.days));
+      if (!Number.isFinite(n) || n < 0) {
+        toast("Enter a valid number of days");
+        return;
+      }
+    } else {
+      n = Number(days);
+      if (!Number.isFinite(n) || n < 0) return;
+    }
+    const next = addDaysStr(todayStr(), n);
     await setPurchaseReminder(p.id, next);
     bumpData();
     load();
-    toast(next ? "Reminder " + next : "Reminder cleared");
+    toast("Reminder " + next);
   }
 
   async function onSavePay() {
@@ -939,14 +981,39 @@ export default function BuysView() {
                   </label>
                   <label>
                     Remind
-                    <select value={form.remindIn} onChange={(e) => setF("remindIn", e.target.value)}>
+                    <select
+                      value={
+                        form.remindIn === "" || ["0", "7", "15", "30"].includes(form.remindIn)
+                          ? form.remindIn
+                          : "custom"
+                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "custom") setF("remindIn", "custom");
+                        else setF("remindIn", v);
+                      }}
+                    >
                       <option value="">Off</option>
                       <option value="0">Today</option>
                       <option value="7">In 7 days</option>
                       <option value="15">In 15 days</option>
                       <option value="30">In 30 days</option>
+                      <option value="custom">Custom days…</option>
                     </select>
                   </label>
+                  {(form.remindIn === "custom" ||
+                    (form.remindIn !== "" && !["0", "7", "15", "30"].includes(form.remindIn))) && (
+                    <label>
+                      Days
+                      <input
+                        inputMode="numeric"
+                        value={form.remindIn === "custom" ? "" : form.remindIn}
+                        onChange={(e) => setF("remindIn", e.target.value.replace(/[^\d]/g, ""))}
+                        placeholder="e.g. 45"
+                        autoFocus
+                      />
+                    </label>
+                  )}
                   <label className="span4">
                     Note
                     <input value={form.note} onChange={(e) => setF("note", e.target.value)} />
@@ -1050,7 +1117,8 @@ export default function BuysView() {
                             <option value="7">In 7 days</option>
                             <option value="15">In 15 days</option>
                             <option value="30">In 30 days</option>
-                            {p.remindAt ? <option value="clear">Clear</option> : null}
+                            <option value="custom">Custom days…</option>
+                            <option value="off">Off</option>
                           </select>
                         </label>
                         <button type="button" className="buys-link" onClick={() => startEdit(p)}>
