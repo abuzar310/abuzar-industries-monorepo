@@ -434,18 +434,18 @@ export default function BuysView() {
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th className="l">From</th>
-                  <th>Bill</th>
+                  <th className="l">From name</th>
+                  <th>Bill no</th>
                   <th className="num">CFT</th>
                   <th className="num">Rate</th>
                   <th className="num">Amount</th>
-                  <th className="num">Bill</th>
-                  <th className="num">Top</th>
-                  <th className="l">Note</th>
+                  <th className="num">Bill amt</th>
+                  <th className="num">Top amt</th>
+                  <th className="l">Description</th>
                   <th className="num">Top paid</th>
                   <th>Pay date</th>
                   <th className="num">Bill paid</th>
-                  <th className="l">A/c</th>
+                  <th className="l">My a/c</th>
                   <th />
                 </tr>
               </thead>
