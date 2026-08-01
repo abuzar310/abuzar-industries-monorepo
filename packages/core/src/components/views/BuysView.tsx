@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { allRec, delRec } from "@/lib/data";
 import { inr, qty, todayStr } from "@/lib/calc";
 import { editBuyerDialog } from "@/lib/customer-form";
@@ -39,7 +40,8 @@ const money = (n: number) => (n ? inr(n) : "—");
 const vol = (n: number) => (n ? qty(n, 2) : "—");
 
 export default function BuysView() {
-  const { ready, dataVersion, cloakMoney } = useApp();
+  const { ready, dataVersion, cloakMoney, user } = useApp();
+  const router = useRouter();
   const [seg, setSeg] = useState<Seg>("ledger");
   const [buyersRaw, setBuyers] = useState<Supplier[]>([]);
   const [rowsRaw, setRows] = useState<Purchase[]>([]);
@@ -60,8 +62,12 @@ export default function BuysView() {
   }, []);
 
   useEffect(() => {
-    if (ready) load();
-  }, [ready, dataVersion, load]);
+    if (user && user.role !== "owner") router.replace("/");
+  }, [user, router]);
+
+  useEffect(() => {
+    if (ready && user?.role === "owner") load();
+  }, [ready, dataVersion, load, user?.role]);
 
   const buyers = cloakMoney ? [] : buyersRaw;
   const rows = cloakMoney ? [] : rowsRaw;
