@@ -35,22 +35,8 @@ const emptyForm = () => ({
   accountNote: "",
 });
 
-const COLS = [
-  "Date",
-  "From name",
-  "Bill no",
-  "CFT",
-  "Rate",
-  "Amount",
-  "Bill amount",
-  "Top amount",
-  "Description",
-  "Top paid",
-  "Bill pay date",
-  "Bill paid",
-  "My a/c tra",
-  "",
-] as const;
+const money = (n: number) => (n ? inr(n) : "—");
+const vol = (n: number) => (n ? qty(n, 2) : "—");
 
 export default function BuysView() {
   const { ready, dataVersion, cloakMoney } = useApp();
@@ -60,7 +46,7 @@ export default function BuysView() {
   const [buyerFilter, setBuyerFilter] = useState("");
   const [unpaidOnly, setUnpaidOnly] = useState(false);
   const [q, setQ] = useState("");
-  const [showForm, setShowForm] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -110,9 +96,7 @@ export default function BuysView() {
       if (k === "cft" || k === "rate") {
         const amt = lineAmount(+next.cft || 0, +next.rate || 0);
         next.amount = amt ? String(amt) : "";
-        if (!next.billAmount || next.billAmount === prev.amount) {
-          next.billAmount = next.amount;
-        }
+        if (!next.billAmount || next.billAmount === prev.amount) next.billAmount = next.amount;
       }
       return next;
     });
@@ -146,6 +130,12 @@ export default function BuysView() {
     setSeg("ledger");
   }
 
+  function closeForm() {
+    setShowForm(false);
+    setEditId(null);
+    setForm(emptyForm());
+  }
+
   async function onSave() {
     const buyer = buyers.find((b) => b.id === form.supplierId);
     if (!buyer) {
@@ -172,9 +162,7 @@ export default function BuysView() {
         accountNote: form.accountNote,
       });
       toast(editId ? "Updated" : "Saved");
-      setEditId(null);
-      setForm({ ...emptyForm(), supplierId: buyerFilter || buyer.id });
-      setShowForm(true);
+      closeForm();
       bumpData();
       load();
     } catch (e) {
@@ -187,16 +175,13 @@ export default function BuysView() {
   async function onDelete(p: Purchase) {
     const ok = await confirmDialog({
       title: "Delete this row?",
-      message: `${p.fromName || "Buy"} · bill ${p.billNo || "—"} · ₹${inr(p.billAmount)}`,
+      message: `${p.fromName || "Buy"} · ${p.billNo || "no bill"} · ₹${inr(p.billAmount)}`,
       confirmLabel: "Delete",
       danger: true,
     });
     if (!ok) return;
     await deletePurchase(p.id);
-    if (editId === p.id) {
-      setEditId(null);
-      setForm(emptyForm());
-    }
+    if (editId === p.id) closeForm();
     bumpData();
     load();
     toast("Deleted");
@@ -226,7 +211,7 @@ export default function BuysView() {
       title: "Delete " + s.name + "?",
       message:
         n > 0
-          ? `${n} row${n === 1 ? "" : "s"} stay in the sheet; only this buyer is removed.`
+          ? `${n} row${n === 1 ? "" : "s"} stay on the sheet; only this buyer is removed.`
           : "Only this buyer contact is removed.",
       confirmLabel: "Delete",
       danger: true,
@@ -240,107 +225,33 @@ export default function BuysView() {
   }
 
   const balAbs = Math.abs(totals.balance);
-  const balColor =
-    balAbs <= 0.5 ? "var(--green)" : totals.balance > 0 ? "var(--danger)" : "var(--ochre-deep)";
+  const balTone = balAbs <= 0.5 ? "ok" : totals.balance > 0 ? "due" : "adv";
 
   return (
     <div className="buys-page">
-      <div className="rowbtns" style={{ marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+      <div className="buys-top">
+        <div>
+          <h1 className="buys-h1">Buys</h1>
+          <p className="buys-sub">Timber in · purchase register</p>
+        </div>
+        <div className={`buys-bal buys-bal-${balTone}`}>
+          <span>Balance</span>
+          <b>{balAbs <= 0.5 ? "Settled" : "₹ " + inr(balAbs)}</b>
+        </div>
+      </div>
+
+      <div className="buys-bar">
         <div className="rep-seg">
           <button type="button" className={seg === "ledger" ? "on" : ""} onClick={() => setSeg("ledger")}>
-            Sheet
+            Register
           </button>
           <button type="button" className={seg === "buyers" ? "on" : ""} onClick={() => setSeg("buyers")}>
             Buyers
           </button>
         </div>
-        {seg === "ledger" ? (
+
+        {seg === "ledger" && (
           <>
-            <button type="button" className="btn primary sm" onClick={startNew} style={{ marginLeft: "auto" }}>
-              + Add row
-            </button>
-            <button type="button" className="btn sm" onClick={addBuyer}>
-              + Buyer
-            </button>
-          </>
-        ) : (
-          <button type="button" className="btn primary sm" onClick={addBuyer} style={{ marginLeft: "auto" }}>
-            + Buyer
-          </button>
-        )}
-      </div>
-
-      {seg === "buyers" ? (
-        <div className="panel-card buys-buyers">
-          {buyers.length === 0 ? (
-            <div className="buys-empty">
-              No buyers yet. Add the parties timber comes from.
-              <div style={{ marginTop: 12 }}>
-                <button type="button" className="btn primary sm" onClick={addBuyer}>
-                  + Add buyer
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="listwrap" style={{ marginTop: 0, border: "none", borderRadius: 0, boxShadow: "none" }}>
-              {buyers.map((b) => (
-                <div
-                  key={b.id}
-                  className="lrow"
-                  style={{ cursor: "pointer", gridTemplateColumns: "1fr auto auto" }}
-                  onClick={() => {
-                    setBuyerFilter(b.id);
-                    setSeg("ledger");
-                  }}
-                >
-                  <div>
-                    <div className="nm">{b.name}</div>
-                    <div className="mut">
-                      {[b.phone, b.address].filter(Boolean).join(" · ") || "—"}
-                      {" · "}
-                      {buyCount.get(b.id) || 0} row{(buyCount.get(b.id) || 0) === 1 ? "" : "s"}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void editBuyer(b);
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="btn sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void removeBuyer(b);
-                    }}
-                  >
-                    Del
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="buys-sheet">
-          {/* Excel-style title + BALANCE */}
-          <div className="buys-sheet-head">
-            <div style={{ width: 168 }} aria-hidden />
-            <h1 className="buys-sheet-title">Buys register</h1>
-            <div className="buys-sheet-bal">
-              <span className="lab">Balance</span>
-              <span className="val" style={{ color: balColor }}>
-                {balAbs <= 0.5 ? "—" : "₹ " + inr(balAbs)}
-              </span>
-            </div>
-          </div>
-
-          <div className="buys-toolbar">
             <select
               value={buyerFilter}
               onChange={(e) => setBuyerFilter(e.target.value)}
@@ -353,30 +264,92 @@ export default function BuysView() {
                 </option>
               ))}
             </select>
-            <label className="sub" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+            <label className="buys-check">
               <input type="checkbox" checked={unpaidOnly} onChange={(e) => setUnpaidOnly(e.target.checked)} />
-              Unpaid only
+              Unpaid
             </label>
             <input
-              className="grow"
+              className="buys-search"
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search bill, name, note…"
+              placeholder="Search…"
               aria-label="Search"
             />
-          </div>
+            <button type="button" className="btn sm" onClick={addBuyer}>
+              + Buyer
+            </button>
+            <button type="button" className="btn primary sm" onClick={startNew}>
+              + Row
+            </button>
+          </>
+        )}
 
+        {seg === "buyers" && (
+          <button type="button" className="btn primary sm" onClick={addBuyer} style={{ marginLeft: "auto" }}>
+            + Buyer
+          </button>
+        )}
+      </div>
+
+      {seg === "buyers" ? (
+        <div className="buys-card">
+          {buyers.length === 0 ? (
+            <div className="buys-empty">
+              No buyers yet.
+              <button type="button" className="btn primary sm" onClick={addBuyer}>
+                + Add buyer
+              </button>
+            </div>
+          ) : (
+            <ul className="buys-buyer-list">
+              {buyers.map((b) => (
+                <li key={b.id}>
+                  <button
+                    type="button"
+                    className="buys-buyer-main"
+                    onClick={() => {
+                      setBuyerFilter(b.id);
+                      setSeg("ledger");
+                    }}
+                  >
+                    <strong>{b.name}</strong>
+                    <span>
+                      {[b.phone, b.address].filter(Boolean).join(" · ") || "—"}
+                      {" · "}
+                      {buyCount.get(b.id) || 0} row{(buyCount.get(b.id) || 0) === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                  <div className="buys-buyer-acts">
+                    <button type="button" onClick={() => void editBuyer(b)}>
+                      Edit
+                    </button>
+                    <button type="button" onClick={() => void removeBuyer(b)}>
+                      Del
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : (
+        <div className="buys-card">
           {showForm && (
             <div className="buys-entry">
-              <div className="buys-entry-title">{editId ? "Edit row" : "New row"}</div>
+              <div className="buys-entry-head">
+                <span>{editId ? "Edit row" : "New row"}</span>
+                <button type="button" className="buys-link" onClick={closeForm}>
+                  Close
+                </button>
+              </div>
               <div className="buys-entry-grid">
                 <label>
                   Date
                   <DateField value={form.date} onChange={(v) => setF("date", v)} />
                 </label>
                 <label className="span2">
-                  From name
+                  From
                   <select value={form.supplierId} onChange={(e) => setF("supplierId", e.target.value)}>
                     <option value="">Select buyer…</option>
                     {buyers.map((b) => (
@@ -388,7 +361,7 @@ export default function BuysView() {
                 </label>
                 <label>
                   Bill no
-                  <input value={form.billNo} onChange={(e) => setF("billNo", e.target.value)} placeholder="—" />
+                  <input value={form.billNo} onChange={(e) => setF("billNo", e.target.value)} />
                 </label>
                 <label>
                   CFT
@@ -403,7 +376,7 @@ export default function BuysView() {
                   <input inputMode="decimal" value={form.amount} onChange={(e) => setF("amount", e.target.value)} />
                 </label>
                 <label>
-                  Bill amount
+                  Bill amt
                   <input
                     inputMode="decimal"
                     value={form.billAmount}
@@ -411,7 +384,7 @@ export default function BuysView() {
                   />
                 </label>
                 <label>
-                  Top amount
+                  Top amt
                   <input
                     inputMode="decimal"
                     value={form.topAmount}
@@ -431,41 +404,25 @@ export default function BuysView() {
                   />
                 </label>
                 <label>
-                  Bill pay date
+                  Pay date
                   <DateField value={form.billPayDate} onChange={(v) => setF("billPayDate", v)} />
                 </label>
                 <label className="span3">
-                  Description
-                  <input value={form.note} onChange={(e) => setF("note", e.target.value)} placeholder="—" />
+                  Note
+                  <input value={form.note} onChange={(e) => setF("note", e.target.value)} />
                 </label>
                 <label className="span3">
-                  My a/c tra
-                  <input
-                    value={form.accountNote}
-                    onChange={(e) => setF("accountNote", e.target.value)}
-                    placeholder="Account / transfer"
-                  />
+                  A/c tra
+                  <input value={form.accountNote} onChange={(e) => setF("accountNote", e.target.value)} />
                 </label>
               </div>
               <div className="buys-entry-actions">
                 <button type="button" className="btn primary sm" disabled={saving} onClick={() => void onSave()}>
-                  {saving ? "Saving…" : editId ? "Save changes" : "Save row"}
+                  {saving ? "Saving…" : "Save"}
                 </button>
-                {editId && (
-                  <button
-                    type="button"
-                    className="btn sm"
-                    onClick={() => {
-                      setEditId(null);
-                      setForm({ ...emptyForm(), supplierId: buyerFilter || "" });
-                    }}
-                  >
-                    Cancel edit
-                  </button>
-                )}
                 {buyers.length === 0 && (
                   <button type="button" className="btn sm" onClick={addBuyer}>
-                    + Add buyer first
+                    + Buyer first
                   </button>
                 )}
               </div>
@@ -474,67 +431,57 @@ export default function BuysView() {
 
           <div className="buys-scroll">
             <table className="buys-grid">
-              <colgroup>
-                <col style={{ width: "78px" }} />
-                <col style={{ width: "140px" }} />
-                <col style={{ width: "72px" }} />
-                <col style={{ width: "64px" }} />
-                <col style={{ width: "72px" }} />
-                <col style={{ width: "88px" }} />
-                <col style={{ width: "92px" }} />
-                <col style={{ width: "88px" }} />
-                <col style={{ width: "120px" }} />
-                <col style={{ width: "80px" }} />
-                <col style={{ width: "88px" }} />
-                <col style={{ width: "84px" }} />
-                <col style={{ width: "110px" }} />
-                <col style={{ width: "88px" }} />
-              </colgroup>
               <thead>
                 <tr>
-                  {COLS.map((h) => (
-                    <th key={h || "acts"} className={h && !["Date", "From name", "Bill no", "Description", "My a/c tra", "Bill pay date"].includes(h) ? "num" : ""}>
-                      {h}
-                    </th>
-                  ))}
+                  <th>Date</th>
+                  <th className="l">From</th>
+                  <th>Bill</th>
+                  <th className="num">CFT</th>
+                  <th className="num">Rate</th>
+                  <th className="num">Amount</th>
+                  <th className="num">Bill</th>
+                  <th className="num">Top</th>
+                  <th className="l">Note</th>
+                  <th className="num">Top paid</th>
+                  <th>Pay date</th>
+                  <th className="num">Bill paid</th>
+                  <th className="l">A/c</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={COLS.length} style={{ border: "none", padding: 0 }}>
+                    <td colSpan={14}>
                       <div className="buys-empty">
-                        No rows yet — fill the form above and save.
-                        {buyers.length === 0 ? " Add a buyer first." : ""}
+                        No rows yet.
+                        <button type="button" className="btn primary sm" onClick={startNew}>
+                          + Add row
+                        </button>
                       </div>
                     </td>
                   </tr>
                 ) : (
                   filtered.map((p) => (
-                    <tr
-                      key={p.id}
-                      className={editId === p.id ? "on" : undefined}
-                      onDoubleClick={() => startEdit(p)}
-                      title="Double-click to edit"
-                    >
-                      <td className="muted">{p.date || "—"}</td>
-                      <td className="txt">{p.fromName || "—"}</td>
-                      <td className="muted">{p.billNo || "—"}</td>
-                      <td className="num">{p.cft ? qty(p.cft, 2) : "—"}</td>
-                      <td className="num">{p.rate ? inr(p.rate) : "—"}</td>
-                      <td className="num">{p.amount ? inr(p.amount) : "—"}</td>
-                      <td className="num">{p.billAmount ? inr(p.billAmount) : "—"}</td>
-                      <td className="num">{p.topAmount ? inr(p.topAmount) : "—"}</td>
-                      <td>{p.note || "—"}</td>
-                      <td className="num">{p.topPaid ? inr(p.topPaid) : "—"}</td>
-                      <td className="muted">{p.billPayDate || "—"}</td>
-                      <td className="num">{p.billPaid ? inr(p.billPaid) : "—"}</td>
-                      <td>{p.accountNote || "—"}</td>
+                    <tr key={p.id} className={editId === p.id ? "on" : undefined} onDoubleClick={() => startEdit(p)}>
+                      <td className="mono">{p.date || "—"}</td>
+                      <td className="l name">{p.fromName || "—"}</td>
+                      <td className="mono">{p.billNo || "—"}</td>
+                      <td className="num">{vol(p.cft)}</td>
+                      <td className="num">{money(p.rate)}</td>
+                      <td className="num">{money(p.amount)}</td>
+                      <td className="num">{money(p.billAmount)}</td>
+                      <td className="num">{money(p.topAmount)}</td>
+                      <td className="l note">{p.note || "—"}</td>
+                      <td className="num paid">{money(p.topPaid)}</td>
+                      <td className="mono">{p.billPayDate || "—"}</td>
+                      <td className="num paid">{money(p.billPaid)}</td>
+                      <td className="l note">{p.accountNote || "—"}</td>
                       <td className="acts">
-                        <button type="button" onClick={() => startEdit(p)}>
+                        <button type="button" className="buys-link" onClick={() => startEdit(p)}>
                           Edit
-                        </button>{" "}
-                        <button type="button" className="danger" onClick={() => void onDelete(p)}>
+                        </button>
+                        <button type="button" className="buys-link danger" onClick={() => void onDelete(p)}>
                           Del
                         </button>
                       </td>
@@ -542,43 +489,28 @@ export default function BuysView() {
                   ))
                 )}
               </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={3} className="foot-lab">
-                    Totals
-                  </td>
-                  <td className="num">
-                    <span className="foot-lab" style={{ display: "block", marginBottom: 2 }}>
-                      Total cft
-                    </span>
-                    {totals.cft ? qty(totals.cft, 2) : "—"}
-                  </td>
-                  <td />
-                  <td className="num">
-                    <span className="foot-lab" style={{ display: "block", marginBottom: 2 }}>
-                      Total amt
-                    </span>
-                    {totals.amount ? "₹ " + inr(totals.amount) : "—"}
-                  </td>
-                  <td className="num">{totals.billAmount ? "₹ " + inr(totals.billAmount) : "—"}</td>
-                  <td className="num">{totals.topAmount ? "₹ " + inr(totals.topAmount) : "—"}</td>
-                  <td />
-                  <td className="num" colSpan={2}>
-                    <span className="foot-lab" style={{ display: "block", marginBottom: 2 }}>
-                      Total paid amount
-                    </span>
-                    {totals.paid ? "₹ " + inr(totals.paid) : "—"}
-                  </td>
-                  <td className="num" style={{ color: balColor }}>
-                    <span className="foot-lab" style={{ display: "block", marginBottom: 2 }}>
-                      Balance
-                    </span>
-                    {balAbs <= 0.5 ? "—" : "₹ " + inr(balAbs)}
-                  </td>
-                  <td />
-                  <td />
-                </tr>
-              </tfoot>
+              {filtered.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} className="l">
+                      {filtered.length} row{filtered.length === 1 ? "" : "s"}
+                    </td>
+                    <td className="num">{vol(totals.cft)}</td>
+                    <td />
+                    <td className="num">{money(totals.amount)}</td>
+                    <td className="num">{money(totals.billAmount)}</td>
+                    <td className="num">{money(totals.topAmount)}</td>
+                    <td />
+                    <td className="num paid" colSpan={2}>
+                      Paid {money(totals.paid)}
+                    </td>
+                    <td className={`num bal-${balTone}`} colSpan={2}>
+                      {balAbs <= 0.5 ? "Settled" : "₹ " + inr(balAbs)}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>
