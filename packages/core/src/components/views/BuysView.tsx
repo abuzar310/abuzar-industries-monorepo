@@ -817,120 +817,90 @@ export default function BuysView() {
             </div>
           )}
 
-          <div className="buys-scroll">
-            <table className="buys-grid buys-grid-reg">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th className="l">Buyer / from</th>
-                  <th>Bill</th>
-                  <th className="num">CFT · rate</th>
-                  <th className="num">Purchase</th>
-                  <th className="num">Split</th>
-                  <th className="num">Paid</th>
-                  <th className="num">Balance</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {filteredBuys.length === 0 ? (
-                  <tr>
-                    <td colSpan={9}>
-                      <div className="buys-empty">
-                        No buys yet.
-                        <button type="button" className="btn primary sm" onClick={startNew}>
-                          + Buy
+          {filteredBuys.length === 0 ? (
+            <div className="buys-empty">
+              No buys yet.
+              <button type="button" className="btn primary sm" onClick={startNew}>
+                + Buy
+              </button>
+            </div>
+          ) : (
+            <>
+              <ul className="buys-reg">
+                {filteredBuys.map((raw) => {
+                  const p = normalizePurchase(raw);
+                  const tot = totalPurchase(p);
+                  const bal = rowBalance(p);
+                  const paid = paidTotal(p);
+                  return (
+                    <li
+                      key={p.id}
+                      className={"buys-reg-row" + (editId === p.id ? " on" : "")}
+                      onDoubleClick={() => startEdit(p)}
+                    >
+                      <div className="buys-reg-main">
+                        <div className="buys-reg-who">
+                          <span className="buys-reg-date">{p.date || "—"}</span>
+                          <strong>{p.buyerName || "—"}</strong>
+                          <span className="buys-reg-from">{p.fromName || "No from-account"}</span>
+                          {p.billNo ? <span className="buys-reg-bill">Bill {p.billNo}</span> : null}
+                        </div>
+                        <div className={`buys-reg-bal ${Math.abs(bal) <= 0.5 ? "ok" : "due"}`}>
+                          <em>Balance</em>
+                          <b>{Math.abs(bal) <= 0.5 ? "Settled" : "₹" + inr(Math.abs(bal))}</b>
+                        </div>
+                      </div>
+                      <div className="buys-reg-metrics">
+                        <div>
+                          <em>CFT</em>
+                          <b>{vol(p.cft)}</b>
+                          <span>@ {money(p.rate)}</span>
+                        </div>
+                        <div>
+                          <em>Total</em>
+                          <b>₹{money(tot)}</b>
+                          <span>
+                            amt {money(p.amount)}
+                            {p.gst ? ` · gst ${money(p.gst)}` : ""}
+                          </span>
+                        </div>
+                        <div>
+                          <em>Split</em>
+                          <b>Bill ₹{money(p.billAmount)}</b>
+                          <span>Cash ₹{money(cashAmount(p))}</span>
+                        </div>
+                        <div>
+                          <em>Paid</em>
+                          <b className="paid">₹{money(paid)}</b>
+                          <span>
+                            cash {money(p.cashPaid)} · bank {money(p.bankPaid)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="buys-reg-acts">
+                        <button type="button" className="buys-link" onClick={() => startEdit(p)}>
+                          Edit
+                        </button>
+                        <button type="button" className="buys-link danger" onClick={() => void onDelete(p)}>
+                          Del
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredBuys.map((raw) => {
-                    const p = normalizePurchase(raw);
-                    const tot = totalPurchase(p);
-                    const bal = rowBalance(p);
-                    const paid = paidTotal(p);
-                    return (
-                      <tr
-                        key={p.id}
-                        className={editId === p.id ? "on" : undefined}
-                        onDoubleClick={() => startEdit(p)}
-                      >
-                        <td className="mono buys-td-date">{p.date || "—"}</td>
-                        <td className="l">
-                          <div className="buys-cell-stack">
-                            <strong>{p.buyerName || "—"}</strong>
-                            <span>{p.fromName || "—"}</span>
-                          </div>
-                        </td>
-                        <td className="mono">{p.billNo || "—"}</td>
-                        <td className="num">
-                          <div className="buys-cell-stack end">
-                            <strong>{vol(p.cft)} cft</strong>
-                            <span>@ {money(p.rate)}</span>
-                          </div>
-                        </td>
-                        <td className="num">
-                          <div className="buys-cell-stack end">
-                            <strong>{money(tot)}</strong>
-                            <span>
-                              amt {money(p.amount)}
-                              {p.gst ? ` · gst ${money(p.gst)}` : ""}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="num">
-                          <div className="buys-cell-stack end">
-                            <strong>Bill {money(p.billAmount)}</strong>
-                            <span>Cash {money(cashAmount(p))}</span>
-                          </div>
-                        </td>
-                        <td className="num paid">
-                          <div className="buys-cell-stack end">
-                            <strong>{money(paid)}</strong>
-                            <span>
-                              cash {money(p.cashPaid)} · bank {money(p.bankPaid)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className={`num ${Math.abs(bal) <= 0.5 ? "bal-ok" : "bal-due"}`}>
-                          <strong>{Math.abs(bal) <= 0.5 ? "Settled" : "₹" + inr(Math.abs(bal))}</strong>
-                        </td>
-                        <td className="acts">
-                          <button type="button" className="buys-link" onClick={() => startEdit(p)}>
-                            Edit
-                          </button>
-                          <button type="button" className="buys-link danger" onClick={() => void onDelete(p)}>
-                            Del
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-              {filteredBuys.length > 0 && (
-                <tfoot>
-                  <tr>
-                    <td colSpan={3} className="l">
-                      {totals.count} buy{totals.count === 1 ? "" : "s"}
-                    </td>
-                    <td className="num">{vol(totals.cft)} cft</td>
-                    <td className="num">{money(totals.total)}</td>
-                    <td className="num">
-                      Bill {money(totals.billAmount)}
-                      <div className="buys-foot-sub">Cash {money(totals.cashAmount)}</div>
-                    </td>
-                    <td className="num paid">{money(totals.paid)}</td>
-                    <td className={`num bal-${balTone}`}>
-                      {balAbs <= 0.5 ? "Settled" : "₹" + inr(balAbs)}
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="buys-reg-foot">
+                <span>
+                  {totals.count} buy{totals.count === 1 ? "" : "s"} · {vol(totals.cft)} cft
+                </span>
+                <span>Total ₹{money(totals.total)}</span>
+                <span className="paid">Paid ₹{money(totals.paid)}</span>
+                <span className={balTone === "due" ? "due" : "ok"}>
+                  {balAbs <= 0.5 ? "Settled" : "Bal ₹" + inr(balAbs)}
+                </span>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
