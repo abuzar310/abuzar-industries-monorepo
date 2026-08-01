@@ -157,9 +157,11 @@ export interface Customer {
   synced?: boolean;
 }
 
-/** Purchase-side party — same shape as Customer, stored separately so sales customers
- *  never appear in the purchase supplier picker (and vice versa). */
-export type Supplier = Customer;
+/** Purchase-side party (Buys agent / buyer). Stored separately from sales customers. */
+export interface Supplier extends Customer {
+  /** From-accounts under this agent (e.g. Dhannaram → several timber yards). */
+  fromAccounts?: string[];
+}
 
 export interface Stock {
   key: string;
@@ -187,28 +189,44 @@ export type StoreName =
   | "activity"
   | "purchases";
 
-/** Unofficial Buys ledger — one timber-in bill line (Excel-style purchase register). */
+/**
+ * Unofficial Buys entry.
+ * - kind "buy": timber-in purchase row (agent + from-account)
+ * - kind "pay": payment register row (cash / bank against agent + from)
+ */
 export interface Purchase {
   id: string;
+  kind?: "buy" | "pay";
   /** dd-mm-yy */
   date: string;
-  /** party timber came from (suppliers store) */
+  /** Agent / buyer (suppliers store) — e.g. Dhannaram */
   supplierId: string;
+  /** Denormalized agent name */
+  buyerName?: string;
+  /** From-account under the agent (yard / party name) */
   fromName: string;
   billNo: string;
   cft: number;
   rate: number;
   /** line = cft × rate (or override) */
   amount: number;
+  /** optional GST ₹ — user typed, may be empty */
+  gst: number;
+  /** optional bill / credit portion — leave empty if none */
   billAmount: number;
-  topAmount: number;
   note: string;
-  topPaid: number;
-  billPaid: number;
-  /** dd-mm-yy when bill was paid (optional) */
-  billPayDate: string;
-  /** how / which a/c — Excel "MY A/C TRA" */
-  accountNote: string;
+  /** money paid in cash */
+  cashPaid: number;
+  /** money paid by bank transfer */
+  bankPaid: number;
+  /** dd-mm-yy of payment (optional) */
+  payDate: string;
+  /** @deprecated legacy — migrated into cashPaid */
+  topAmount?: number;
+  topPaid?: number;
+  billPaid?: number;
+  billPayDate?: string;
+  accountNote?: string;
   createdAt: string;
   updatedAt: string;
 }

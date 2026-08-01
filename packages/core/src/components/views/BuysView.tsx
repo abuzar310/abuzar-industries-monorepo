@@ -5,12 +5,18 @@ import { allRec, delRec } from "@/lib/data";
 import { inr, qty, todayStr } from "@/lib/calc";
 import { editBuyerDialog } from "@/lib/customer-form";
 import {
+  addFromAccount,
   allPurchases,
+  cashAmount,
   deletePurchase,
+  fromAccountsOf,
   lineAmount,
+  normalizePurchase,
+  paidTotal,
   purchaseTotals,
   rowBalance,
   savePurchase,
+  totalPurchase,
 } from "@/lib/purchases";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -18,22 +24,31 @@ import { confirmDialog } from "@/store/dialog-store";
 import DateField from "@/components/editor/DateField";
 import type { Purchase, Supplier } from "@/lib/types";
 
-type Seg = "ledger" | "buyers";
+type Seg = "ledger" | "payments" | "buyers";
 
-const emptyForm = () => ({
+const emptyBuyForm = () => ({
   date: todayStr(),
   supplierId: "",
+  fromName: "",
   billNo: "",
   cft: "",
   rate: "",
   amount: "",
+  gst: "",
   billAmount: "",
-  topAmount: "",
   note: "",
-  topPaid: "",
-  billPaid: "",
-  billPayDate: "",
-  accountNote: "",
+  cashPaid: "",
+  bankPaid: "",
+  payDate: "",
+});
+
+const emptyPayForm = () => ({
+  date: todayStr(),
+  supplierId: "",
+  fromName: "",
+  cashPaid: "",
+  bankPaid: "",
+  note: "",
 });
 
 const money = (n: number) => (n ? inr(n) : "—");
@@ -50,7 +65,10 @@ export default function BuysView() {
   const [q, setQ] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(emptyBuyForm);
+  const [payForm, setPayForm] = useState(emptyPayForm);
+  const [showPayForm, setShowPayForm] = useState(false);
+  const [editPayId, setEditPayId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
@@ -72,65 +90,103 @@ export default function BuysView() {
   const buyers = cloakMoney ? [] : buyersRaw;
   const rows = cloakMoney ? [] : rowsRaw;
 
-  const filtered = useMemo(() => {
+  const buys = useMemo(() => rows.filter((r) => (r.kind || "buy") === "buy"), [rows]);
+  const pays = useMemo(() => rows.filter((r) => r.kind === "pay"), [rows]);
+
+  const filteredBuys = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return rows.filter((p) => {
+    return buys.filter((p) => {
       if (buyerFilter && p.supplierId !== buyerFilter) return false;
       if (unpaidOnly && Math.abs(rowBalance(p)) <= 0.5) return false;
       if (!needle) return true;
-      return [p.fromName, p.billNo, p.note, p.accountNote, p.date]
+      return [p.buyerName, p.fromName, p.billNo, p.note, p.date]
         .join(" ")
         .toLowerCase()
         .includes(needle);
     });
-  }, [rows, buyerFilter, unpaidOnly, q]);
+  }, [buys, buyerFilter, unpaidOnly, q]);
 
-  const totals = useMemo(() => purchaseTotals(filtered), [filtered]);
+  const filteredPays = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return pays.filter((p) => {
+      if (buyerFilter && p.supplierId !== buyerFilter) return false;
+      if (!needle) return true;
+      return [p.buyerName, p.fromName, p.note, p.date].join(" ").toLowerCase().includes(needle);
+    });
+  }, [pays, buyerFilter, q]);
+
+  const totals = useMemo(() => purchaseTotals([...filteredBuys, ...filteredPays]), [filteredBuys, filteredPays]);
+
+  const selectedBuyer = buyers.find((b) => b.id === form.supplierId);
+  const fromOpts = useMemo(
+    () => fromAccountsOf(selectedBuyer, rows),
+    [selectedBuyer, rows],
+  );
+  const payBuyer = buyers.find((b) => b.id === payForm.supplierId);
+  const payFromOpts = useMemo(() => fromAccountsOf(payBuyer, rows), [payBuyer, rows]);
 
   const buyCount = useMemo(() => {
     const m = new Map<string, number>();
-    for (const p of rows) {
+    for (const p of buys) {
       if (!p.supplierId) continue;
       m.set(p.supplierId, (m.get(p.supplierId) || 0) + 1);
     }
     return m;
-  }, [rows]);
+  }, [buys]);
 
-  function setF<K extends keyof ReturnType<typeof emptyForm>>(k: K, v: string) {
+  const liveTotal = useMemo(() => {
+    const amount = form.amount !== "" ? +form.amount || 0 : lineAmount(+form.cft || 0, +form.rate || 0);
+    const gst = +form.gst || 0;
+    const bill = +form.billAmount || 0;
+    const total = Math.round((amount + gst) * 100) / 100;
+    const cash = Math.round(Math.max(0, total - bill) * 100) / 100;
+    return { amount, gst, total, bill, cash };
+  }, [form.amount, form.cft, form.rate, form.gst, form.billAmount]);
+
+  function setF<K extends keyof ReturnType<typeof emptyBuyForm>>(k: K, v: string) {
     setForm((prev) => {
       const next = { ...prev, [k]: v };
       if (k === "cft" || k === "rate") {
         const amt = lineAmount(+next.cft || 0, +next.rate || 0);
         next.amount = amt ? String(amt) : "";
-        if (!next.billAmount || next.billAmount === prev.amount) next.billAmount = next.amount;
       }
+      if (k === "supplierId") next.fromName = "";
+      return next;
+    });
+  }
+
+  function setPF<K extends keyof ReturnType<typeof emptyPayForm>>(k: K, v: string) {
+    setPayForm((prev) => {
+      const next = { ...prev, [k]: v };
+      if (k === "supplierId") next.fromName = "";
       return next;
     });
   }
 
   function startNew() {
     setEditId(null);
-    setForm({ ...emptyForm(), supplierId: buyerFilter || "" });
+    setForm({ ...emptyBuyForm(), supplierId: buyerFilter || "" });
     setShowForm(true);
     setSeg("ledger");
   }
 
-  function startEdit(p: Purchase) {
+  function startEdit(raw: Purchase) {
+    const p = normalizePurchase(raw);
     setEditId(p.id);
     setForm({
       date: p.date || todayStr(),
       supplierId: p.supplierId || "",
+      fromName: p.fromName || "",
       billNo: p.billNo || "",
       cft: p.cft ? String(p.cft) : "",
       rate: p.rate ? String(p.rate) : "",
       amount: p.amount ? String(p.amount) : "",
+      gst: p.gst ? String(p.gst) : "",
       billAmount: p.billAmount ? String(p.billAmount) : "",
-      topAmount: p.topAmount ? String(p.topAmount) : "",
       note: p.note || "",
-      topPaid: p.topPaid ? String(p.topPaid) : "",
-      billPaid: p.billPaid ? String(p.billPaid) : "",
-      billPayDate: p.billPayDate || "",
-      accountNote: p.accountNote || "",
+      cashPaid: p.cashPaid ? String(p.cashPaid) : "",
+      bankPaid: p.bankPaid ? String(p.bankPaid) : "",
+      payDate: p.payDate || "",
     });
     setShowForm(true);
     setSeg("ledger");
@@ -139,33 +195,83 @@ export default function BuysView() {
   function closeForm() {
     setShowForm(false);
     setEditId(null);
-    setForm(emptyForm());
+    setForm(emptyBuyForm());
+  }
+
+  function startNewPay() {
+    setEditPayId(null);
+    setPayForm({ ...emptyPayForm(), supplierId: buyerFilter || "" });
+    setShowPayForm(true);
+    setSeg("payments");
+  }
+
+  function startEditPay(raw: Purchase) {
+    const p = normalizePurchase(raw);
+    setEditPayId(p.id);
+    setPayForm({
+      date: p.date || todayStr(),
+      supplierId: p.supplierId || "",
+      fromName: p.fromName || "",
+      cashPaid: p.cashPaid ? String(p.cashPaid) : "",
+      bankPaid: p.bankPaid ? String(p.bankPaid) : "",
+      note: p.note || "",
+    });
+    setShowPayForm(true);
+    setSeg("payments");
+  }
+
+  async function saveFromAccount() {
+    if (!form.supplierId || !form.fromName.trim()) {
+      toast("Pick buyer and type a from name");
+      return;
+    }
+    await addFromAccount(form.supplierId, form.fromName);
+    bumpData();
+    load();
+    toast("From account saved under buyer");
+  }
+
+  async function savePayFromAccount() {
+    if (!payForm.supplierId || !payForm.fromName.trim()) {
+      toast("Pick buyer and type a from name");
+      return;
+    }
+    await addFromAccount(payForm.supplierId, payForm.fromName);
+    bumpData();
+    load();
+    toast("From account saved under buyer");
   }
 
   async function onSave() {
     const buyer = buyers.find((b) => b.id === form.supplierId);
     if (!buyer) {
-      toast("Pick a buyer first");
+      toast("Pick a buyer / agent");
+      return;
+    }
+    if (!form.fromName.trim()) {
+      toast("Enter from name");
       return;
     }
     setSaving(true);
     try {
+      await addFromAccount(buyer.id, form.fromName);
       await savePurchase({
         id: editId || undefined,
+        kind: "buy",
         date: form.date,
         supplierId: buyer.id,
-        fromName: buyer.name,
+        buyerName: buyer.name,
+        fromName: form.fromName,
         billNo: form.billNo,
         cft: form.cft,
         rate: form.rate,
         amount: form.amount,
+        gst: form.gst,
         billAmount: form.billAmount,
-        topAmount: form.topAmount,
         note: form.note,
-        topPaid: form.topPaid,
-        billPaid: form.billPaid,
-        billPayDate: form.billPayDate,
-        accountNote: form.accountNote,
+        cashPaid: form.cashPaid,
+        bankPaid: form.bankPaid,
+        payDate: form.payDate,
       });
       toast(editId ? "Updated" : "Saved");
       closeForm();
@@ -178,16 +284,64 @@ export default function BuysView() {
     }
   }
 
+  async function onSavePay() {
+    const buyer = buyers.find((b) => b.id === payForm.supplierId);
+    if (!buyer) {
+      toast("Pick a buyer / agent");
+      return;
+    }
+    if (!payForm.fromName.trim()) {
+      toast("Enter from name");
+      return;
+    }
+    const cash = +payForm.cashPaid || 0;
+    const bank = +payForm.bankPaid || 0;
+    if (cash + bank <= 0) {
+      toast("Enter cash and/or bank amount");
+      return;
+    }
+    setSaving(true);
+    try {
+      await addFromAccount(buyer.id, payForm.fromName);
+      await savePurchase({
+        id: editPayId || undefined,
+        kind: "pay",
+        date: payForm.date,
+        supplierId: buyer.id,
+        buyerName: buyer.name,
+        fromName: payForm.fromName,
+        cashPaid: payForm.cashPaid,
+        bankPaid: payForm.bankPaid,
+        note: payForm.note,
+        payDate: payForm.date,
+      });
+      toast(editPayId ? "Payment updated" : "Payment saved");
+      setShowPayForm(false);
+      setEditPayId(null);
+      setPayForm(emptyPayForm());
+      bumpData();
+      load();
+    } catch (e) {
+      toast("Save failed: " + ((e as Error)?.message || e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function onDelete(p: Purchase) {
     const ok = await confirmDialog({
-      title: "Delete this row?",
-      message: `${p.fromName || "Buy"} · ${p.billNo || "no bill"} · ₹${inr(p.billAmount)}`,
+      title: p.kind === "pay" ? "Delete this payment?" : "Delete this buy?",
+      message: `${p.buyerName || "Buyer"} · ${p.fromName || "—"} · ₹${inr(p.kind === "pay" ? paidTotal(p) : totalPurchase(p))}`,
       confirmLabel: "Delete",
       danger: true,
     });
     if (!ok) return;
     await deletePurchase(p.id);
     if (editId === p.id) closeForm();
+    if (editPayId === p.id) {
+      setShowPayForm(false);
+      setEditPayId(null);
+    }
     bumpData();
     load();
     toast("Deleted");
@@ -200,6 +354,7 @@ export default function BuysView() {
     load();
     setBuyerFilter(b.id);
     setForm((f) => ({ ...f, supplierId: b.id }));
+    setPayForm((f) => ({ ...f, supplierId: b.id }));
     toast("Buyer " + b.name + " added");
   }
 
@@ -218,7 +373,7 @@ export default function BuysView() {
       message:
         n > 0
           ? `${n} row${n === 1 ? "" : "s"} stay on the sheet; only this buyer is removed.`
-          : "Only this buyer contact is removed.",
+          : "Only this buyer / agent is removed.",
       confirmLabel: "Delete",
       danger: true,
     });
@@ -238,9 +393,9 @@ export default function BuysView() {
       <div className="buys-top">
         <div>
           <h1 className="buys-h1">Buys</h1>
-          <p className="buys-sub">Timber in · purchase register</p>
+          <p className="buys-sub">Timber in · agent buyers & from-accounts</p>
         </div>
-        <div className={`buys-bal buys-bal-${balTone}`} title={balTone === "due" ? "Still unpaid" : balTone === "adv" ? "Advance / overpaid" : "All clear"}>
+        <div className={`buys-bal buys-bal-${balTone}`}>
           <span>Balance</span>
           <b>{balAbs <= 0.5 ? "Settled" : "₹" + inr(balAbs)}</b>
         </div>
@@ -251,18 +406,17 @@ export default function BuysView() {
           <button type="button" className={seg === "ledger" ? "on" : ""} onClick={() => setSeg("ledger")}>
             Register
           </button>
+          <button type="button" className={seg === "payments" ? "on" : ""} onClick={() => setSeg("payments")}>
+            Payments
+          </button>
           <button type="button" className={seg === "buyers" ? "on" : ""} onClick={() => setSeg("buyers")}>
             Buyers
           </button>
         </div>
 
-        {seg === "ledger" && (
+        {(seg === "ledger" || seg === "payments") && (
           <>
-            <select
-              value={buyerFilter}
-              onChange={(e) => setBuyerFilter(e.target.value)}
-              aria-label="Filter buyer"
-            >
+            <select value={buyerFilter} onChange={(e) => setBuyerFilter(e.target.value)} aria-label="Filter buyer">
               <option value="">All buyers</option>
               {buyers.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -270,10 +424,12 @@ export default function BuysView() {
                 </option>
               ))}
             </select>
-            <label className="buys-check">
-              <input type="checkbox" checked={unpaidOnly} onChange={(e) => setUnpaidOnly(e.target.checked)} />
-              Unpaid
-            </label>
+            {seg === "ledger" && (
+              <label className="buys-check">
+                <input type="checkbox" checked={unpaidOnly} onChange={(e) => setUnpaidOnly(e.target.checked)} />
+                Unpaid
+              </label>
+            )}
             <input
               className="buys-search"
               type="search"
@@ -285,9 +441,15 @@ export default function BuysView() {
             <button type="button" className="btn sm" onClick={addBuyer}>
               + Buyer
             </button>
-            <button type="button" className="btn primary sm" onClick={startNew}>
-              + Row
-            </button>
+            {seg === "ledger" ? (
+              <button type="button" className="btn primary sm" onClick={startNew}>
+                + Buy
+              </button>
+            ) : (
+              <button type="button" className="btn primary sm" onClick={startNewPay}>
+                + Payment
+              </button>
+            )}
           </>
         )}
 
@@ -302,49 +464,200 @@ export default function BuysView() {
         <div className="buys-card">
           {buyers.length === 0 ? (
             <div className="buys-empty">
-              No buyers yet.
+              No buyers / agents yet.
               <button type="button" className="btn primary sm" onClick={addBuyer}>
                 + Add buyer
               </button>
             </div>
           ) : (
             <ul className="buys-buyer-list">
-              {buyers.map((b) => (
-                <li key={b.id}>
-                  <button
-                    type="button"
-                    className="buys-buyer-main"
-                    onClick={() => {
-                      setBuyerFilter(b.id);
-                      setSeg("ledger");
-                    }}
-                  >
-                    <strong>{b.name}</strong>
-                    <span>
-                      {[b.phone, b.address].filter(Boolean).join(" · ") || "—"}
-                      {" · "}
-                      {buyCount.get(b.id) || 0} row{(buyCount.get(b.id) || 0) === 1 ? "" : "s"}
-                    </span>
-                  </button>
-                  <div className="buys-buyer-acts">
-                    <button type="button" onClick={() => void editBuyer(b)}>
-                      Edit
+              {buyers.map((b) => {
+                const froms = fromAccountsOf(b, rows);
+                return (
+                  <li key={b.id}>
+                    <button
+                      type="button"
+                      className="buys-buyer-main"
+                      onClick={() => {
+                        setBuyerFilter(b.id);
+                        setSeg("ledger");
+                      }}
+                    >
+                      <strong>{b.name}</strong>
+                      <span>
+                        {froms.length
+                          ? froms.slice(0, 4).join(" · ") + (froms.length > 4 ? ` · +${froms.length - 4}` : "")
+                          : "No from-accounts yet"}
+                        {" · "}
+                        {buyCount.get(b.id) || 0} buy{(buyCount.get(b.id) || 0) === 1 ? "" : "s"}
+                      </span>
                     </button>
-                    <button type="button" onClick={() => void removeBuyer(b)}>
-                      Del
-                    </button>
-                  </div>
-                </li>
-              ))}
+                    <div className="buys-buyer-acts">
+                      <button type="button" onClick={() => void editBuyer(b)}>
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => void removeBuyer(b)}>
+                        Del
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
+        </div>
+      ) : seg === "payments" ? (
+        <div className="buys-card">
+          {showPayForm && (
+            <div className="buys-entry">
+              <div className="buys-entry-head">
+                <span>{editPayId ? "Edit payment" : "New payment"}</span>
+                <button
+                  type="button"
+                  className="buys-link"
+                  onClick={() => {
+                    setShowPayForm(false);
+                    setEditPayId(null);
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="buys-entry-grid">
+                <label>
+                  Date
+                  <DateField value={payForm.date} onChange={(v) => setPF("date", v)} />
+                </label>
+                <label className="span2">
+                  Buyer / agent
+                  <select value={payForm.supplierId} onChange={(e) => setPF("supplierId", e.target.value)}>
+                    <option value="">Select buyer…</option>
+                    {buyers.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="span2">
+                  From name
+                  <input
+                    list="buys-pay-from-list"
+                    value={payForm.fromName}
+                    onChange={(e) => setPF("fromName", e.target.value)}
+                    placeholder="Type or pick from-account"
+                  />
+                  <datalist id="buys-pay-from-list">
+                    {payFromOpts.map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
+                </label>
+                <label>
+                  <span style={{ visibility: "hidden" }}>Save</span>
+                  <button type="button" className="btn sm" onClick={() => void savePayFromAccount()}>
+                    Save from
+                  </button>
+                </label>
+                <label>
+                  Cash ₹
+                  <input
+                    inputMode="decimal"
+                    value={payForm.cashPaid}
+                    onChange={(e) => setPF("cashPaid", e.target.value)}
+                    placeholder="0"
+                  />
+                </label>
+                <label>
+                  Bank transfer ₹
+                  <input
+                    inputMode="decimal"
+                    value={payForm.bankPaid}
+                    onChange={(e) => setPF("bankPaid", e.target.value)}
+                    placeholder="0"
+                  />
+                </label>
+                <label className="span2">
+                  Total
+                  <input
+                    readOnly
+                    value={
+                      (+payForm.cashPaid || 0) + (+payForm.bankPaid || 0)
+                        ? inr((+payForm.cashPaid || 0) + (+payForm.bankPaid || 0))
+                        : ""
+                    }
+                  />
+                </label>
+                <label className="span3">
+                  Note
+                  <input value={payForm.note} onChange={(e) => setPF("note", e.target.value)} />
+                </label>
+              </div>
+              <div className="buys-entry-actions">
+                <button type="button" className="btn primary sm" disabled={saving} onClick={() => void onSavePay()}>
+                  {saving ? "Saving…" : "Save payment"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="buys-scroll">
+            <table className="buys-grid">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th className="l">Buyer</th>
+                  <th className="l">From</th>
+                  <th className="num">Cash</th>
+                  <th className="num">Bank</th>
+                  <th className="num">Total</th>
+                  <th className="l">Note</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPays.length === 0 ? (
+                  <tr>
+                    <td colSpan={8}>
+                      <div className="buys-empty">
+                        No payments yet.
+                        <button type="button" className="btn primary sm" onClick={startNewPay}>
+                          + Payment
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPays.map((p) => (
+                    <tr key={p.id} onDoubleClick={() => startEditPay(p)}>
+                      <td className="mono">{p.date || "—"}</td>
+                      <td className="l name">{p.buyerName || "—"}</td>
+                      <td className="l">{p.fromName || "—"}</td>
+                      <td className="num paid">{money(p.cashPaid)}</td>
+                      <td className="num paid">{money(p.bankPaid)}</td>
+                      <td className="num paid">{money(paidTotal(p))}</td>
+                      <td className="l note">{p.note || "—"}</td>
+                      <td className="acts">
+                        <button type="button" className="buys-link" onClick={() => startEditPay(p)}>
+                          Edit
+                        </button>
+                        <button type="button" className="buys-link danger" onClick={() => void onDelete(p)}>
+                          Del
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <div className="buys-card">
           {showForm && (
             <div className="buys-entry">
               <div className="buys-entry-head">
-                <span>{editId ? "Edit row" : "New row"}</span>
+                <span>{editId ? "Edit buy" : "New buy"}</span>
                 <button type="button" className="buys-link" onClick={closeForm}>
                   Close
                 </button>
@@ -355,7 +668,7 @@ export default function BuysView() {
                   <DateField value={form.date} onChange={(v) => setF("date", v)} />
                 </label>
                 <label className="span2">
-                  From
+                  Buyer / agent
                   <select value={form.supplierId} onChange={(e) => setF("supplierId", e.target.value)}>
                     <option value="">Select buyer…</option>
                     {buyers.map((b) => (
@@ -364,6 +677,26 @@ export default function BuysView() {
                       </option>
                     ))}
                   </select>
+                </label>
+                <label className="span2">
+                  From name
+                  <input
+                    list="buys-from-list"
+                    value={form.fromName}
+                    onChange={(e) => setF("fromName", e.target.value)}
+                    placeholder="Yard / party under this agent"
+                  />
+                  <datalist id="buys-from-list">
+                    {fromOpts.map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
+                </label>
+                <label>
+                  <span style={{ visibility: "hidden" }}>Save</span>
+                  <button type="button" className="btn sm" onClick={() => void saveFromAccount()}>
+                    Save from
+                  </button>
                 </label>
                 <label>
                   Bill no
@@ -382,45 +715,60 @@ export default function BuysView() {
                   <input inputMode="decimal" value={form.amount} onChange={(e) => setF("amount", e.target.value)} />
                 </label>
                 <label>
+                  GST (optional)
+                  <input
+                    inputMode="decimal"
+                    value={form.gst}
+                    onChange={(e) => setF("gst", e.target.value)}
+                    placeholder="Leave empty"
+                  />
+                </label>
+                <label>
+                  Total purchase
+                  <input readOnly value={liveTotal.total ? inr(liveTotal.total) : ""} />
+                </label>
+                <label>
                   Bill amt
                   <input
                     inputMode="decimal"
                     value={form.billAmount}
                     onChange={(e) => setF("billAmount", e.target.value)}
+                    placeholder="Leave empty"
                   />
                 </label>
                 <label>
-                  Top amt
+                  Cash amount
+                  <input readOnly value={liveTotal.cash ? inr(liveTotal.cash) : liveTotal.total ? inr(0) : ""} />
+                </label>
+                <label>
+                  Cash paid
                   <input
                     inputMode="decimal"
-                    value={form.topAmount}
-                    onChange={(e) => setF("topAmount", e.target.value)}
+                    value={form.cashPaid}
+                    onChange={(e) => setF("cashPaid", e.target.value)}
+                    placeholder="0"
                   />
                 </label>
                 <label>
-                  Top paid
-                  <input inputMode="decimal" value={form.topPaid} onChange={(e) => setF("topPaid", e.target.value)} />
-                </label>
-                <label>
-                  Bill paid
+                  Bank paid
                   <input
                     inputMode="decimal"
-                    value={form.billPaid}
-                    onChange={(e) => setF("billPaid", e.target.value)}
+                    value={form.bankPaid}
+                    onChange={(e) => setF("bankPaid", e.target.value)}
+                    placeholder="0"
                   />
                 </label>
                 <label>
                   Pay date
-                  <DateField value={form.billPayDate} onChange={(v) => setF("billPayDate", v)} />
+                  <DateField value={form.payDate} onChange={(v) => setF("payDate", v)} />
                 </label>
                 <label className="span3">
                   Note
                   <input value={form.note} onChange={(e) => setF("note", e.target.value)} />
                 </label>
-                <label className="span3">
-                  A/c tra
-                  <input value={form.accountNote} onChange={(e) => setF("accountNote", e.target.value)} />
-                </label>
+              </div>
+              <div className="buys-calc-hint">
+                Total = Amount + GST · Cash amount = Total − Bill amt · Balance = Total − Cash paid − Bank paid
               </div>
               <div className="buys-entry-actions">
                 <button type="button" className="btn primary sm" disabled={saving} onClick={() => void onSave()}>
@@ -440,78 +788,94 @@ export default function BuysView() {
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th className="l">From name</th>
-                  <th>Bill no</th>
+                  <th className="l">Buyer</th>
+                  <th className="l">From</th>
+                  <th>Bill</th>
                   <th className="num">CFT</th>
                   <th className="num">Rate</th>
                   <th className="num">Amount</th>
+                  <th className="num">GST</th>
+                  <th className="num">Total</th>
                   <th className="num">Bill amt</th>
-                  <th className="num">Top amt</th>
-                  <th className="l">Description</th>
-                  <th className="num">Top paid</th>
-                  <th>Pay date</th>
-                  <th className="num">Bill paid</th>
-                  <th className="l">My a/c</th>
+                  <th className="num">Cash amt</th>
+                  <th className="num">Cash paid</th>
+                  <th className="num">Bank paid</th>
+                  <th className="num">Bal</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {filteredBuys.length === 0 ? (
                   <tr>
-                    <td colSpan={14}>
+                    <td colSpan={15}>
                       <div className="buys-empty">
-                        No rows yet.
+                        No buys yet.
                         <button type="button" className="btn primary sm" onClick={startNew}>
-                          + Add row
+                          + Buy
                         </button>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((p) => (
-                    <tr key={p.id} className={editId === p.id ? "on" : undefined} onDoubleClick={() => startEdit(p)}>
-                      <td className="mono">{p.date || "—"}</td>
-                      <td className="l name">{p.fromName || "—"}</td>
-                      <td className="mono">{p.billNo || "—"}</td>
-                      <td className="num">{vol(p.cft)}</td>
-                      <td className="num">{money(p.rate)}</td>
-                      <td className="num">{money(p.amount)}</td>
-                      <td className="num">{money(p.billAmount)}</td>
-                      <td className="num">{money(p.topAmount)}</td>
-                      <td className="l note">{p.note || "—"}</td>
-                      <td className="num paid">{money(p.topPaid)}</td>
-                      <td className="mono">{p.billPayDate || "—"}</td>
-                      <td className="num paid">{money(p.billPaid)}</td>
-                      <td className="l note">{p.accountNote || "—"}</td>
-                      <td className="acts">
-                        <button type="button" className="buys-link" onClick={() => startEdit(p)}>
-                          Edit
-                        </button>
-                        <button type="button" className="buys-link danger" onClick={() => void onDelete(p)}>
-                          Del
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  filteredBuys.map((raw) => {
+                    const p = normalizePurchase(raw);
+                    const tot = totalPurchase(p);
+                    const bal = rowBalance(p);
+                    return (
+                      <tr
+                        key={p.id}
+                        className={editId === p.id ? "on" : undefined}
+                        onDoubleClick={() => startEdit(p)}
+                      >
+                        <td className="mono">{p.date || "—"}</td>
+                        <td className="l name">{p.buyerName || "—"}</td>
+                        <td className="l">{p.fromName || "—"}</td>
+                        <td className="mono">{p.billNo || "—"}</td>
+                        <td className="num">{vol(p.cft)}</td>
+                        <td className="num">{money(p.rate)}</td>
+                        <td className="num">{money(p.amount)}</td>
+                        <td className="num">{money(p.gst)}</td>
+                        <td className="num">{money(tot)}</td>
+                        <td className="num">{money(p.billAmount)}</td>
+                        <td className="num">{money(cashAmount(p))}</td>
+                        <td className="num paid">{money(p.cashPaid)}</td>
+                        <td className="num paid">{money(p.bankPaid)}</td>
+                        <td
+                          className="num"
+                          style={{ color: Math.abs(bal) <= 0.5 ? "var(--green)" : "#c43028", fontWeight: 700 }}
+                        >
+                          {Math.abs(bal) <= 0.5 ? "—" : inr(Math.abs(bal))}
+                        </td>
+                        <td className="acts">
+                          <button type="button" className="buys-link" onClick={() => startEdit(p)}>
+                            Edit
+                          </button>
+                          <button type="button" className="buys-link danger" onClick={() => void onDelete(p)}>
+                            Del
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
-              {filtered.length > 0 && (
+              {filteredBuys.length > 0 && (
                 <tfoot>
                   <tr>
-                    <td colSpan={3} className="l">
-                      {filtered.length} row{filtered.length === 1 ? "" : "s"}
+                    <td colSpan={4} className="l">
+                      {totals.count} buy{totals.count === 1 ? "" : "s"}
                     </td>
                     <td className="num">{vol(totals.cft)}</td>
                     <td />
                     <td className="num">{money(totals.amount)}</td>
+                    <td className="num">{money(totals.gst)}</td>
+                    <td className="num">{money(totals.total)}</td>
                     <td className="num">{money(totals.billAmount)}</td>
-                    <td className="num">{money(totals.topAmount)}</td>
-                    <td />
-                    <td className="num paid" colSpan={2}>
-                      Paid {money(totals.paid)}
-                    </td>
-                    <td className={`num bal-${balTone}`} colSpan={2}>
-                      {balAbs <= 0.5 ? "Settled" : "₹ " + inr(balAbs)}
+                    <td className="num">{money(totals.cashAmount)}</td>
+                    <td className="num paid">{money(totals.cashPaid)}</td>
+                    <td className="num paid">{money(totals.bankPaid)}</td>
+                    <td className={`num bal-${balTone}`}>
+                      {balAbs <= 0.5 ? "Settled" : "₹" + inr(balAbs)}
                     </td>
                     <td />
                   </tr>

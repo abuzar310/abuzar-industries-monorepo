@@ -49,16 +49,23 @@ export async function editSupplierDialog(existing?: Supplier): Promise<Supplier 
   return saveSupplier({ id: existing?.id, ...res, name: res.name });
 }
 
-/** Unofficial Buys: same suppliers store, buyer wording. */
+/** Unofficial Buys: agent / buyer (has from-accounts underneath). */
 export async function editBuyerDialog(existing?: Supplier): Promise<Supplier | null> {
   const fields: DialogField[] = [
-    { name: "name", label: "Buyer name", value: existing?.name, placeholder: "Who you bought from", required: true },
+    {
+      name: "name",
+      label: "Buyer / agent name",
+      value: existing?.name,
+      placeholder: "e.g. Dhannaram Bhai",
+      required: true,
+    },
     { name: "phone", label: "Phone", type: "tel", inputMode: "numeric", value: existing?.phone, placeholder: "10-digit mobile" },
     { name: "address", label: "Address", value: existing?.address, placeholder: "Optional" },
-    { name: "notes", label: "Notes", type: "textarea", value: existing?.notes, placeholder: "Anything to remember" },
+    { name: "notes", label: "Notes", type: "textarea", value: existing?.notes, placeholder: "Agent notes" },
   ];
   const res = await formDialog({
-    title: existing ? "Edit buyer" : "Add buyer",
+    title: existing ? "Edit buyer / agent" : "Add buyer / agent",
+    message: "Buyer is the agent. From-accounts (yards / parties) are added on each buy row.",
     fields,
     submitLabel: existing ? "Save" : "Add buyer",
   });

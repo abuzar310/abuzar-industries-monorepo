@@ -2524,6 +2524,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   font-family:var(--mono); font-size:14.5px; min-height:44px; background:#fff;
 }
 .buys-entry-actions{display:flex; flex-wrap:wrap; gap:10px; margin-top:16px}
+.buys-calc-hint{margin-top:12px; font-size:12px; color:var(--ink-faint); font-family:var(--mono); line-height:1.4}
 .buys-empty{display:flex; flex-direction:column; align-items:center; gap:14px; padding:56px 20px; color:var(--ink-faint); font-size:15px}
 .buys-buyer-list{list-style:none; margin:0; padding:0}
 .buys-buyer-list li{display:flex; align-items:center; gap:14px; padding:18px 22px; border-bottom:1px solid var(--line)}
