@@ -221,6 +221,8 @@ export interface Purchase {
   bankPaid: number;
   /** dd-mm-yy of payment (optional) */
   payDate: string;
+  /** dd-mm-yy — ping owner on/after this date (Buys reminder) */
+  remindAt?: string;
   /** @deprecated legacy — migrated into cashPaid */
   topAmount?: number;
   topPaid?: number;
@@ -261,7 +263,8 @@ export interface Tab {
   label: string;
   href: string;
   icon?: string;
-  badge?: boolean;
+  /** true = Daybook unseen; "buys" = due purchase reminders */
+  badge?: boolean | "buys";
   owner?: boolean;
 }
 

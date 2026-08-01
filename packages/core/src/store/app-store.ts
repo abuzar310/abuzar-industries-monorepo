@@ -19,6 +19,8 @@ export interface AppState {
   brandMode: BrandMode;
   /** count of unseen owner notifications */
   unseen: number;
+  /** Buys register reminders that are due today or overdue */
+  buysDue: number;
   /** unofficial owner panic: blank money/rates app-wide (cloud meta — syncs all devices) */
   cloakMoney: boolean;
 }
@@ -32,6 +34,7 @@ let state: AppState = {
   user: null,
   brandMode: "demo",
   unseen: 0,
+  buysDue: 0,
   cloakMoney: false,
 };
 
@@ -57,6 +60,7 @@ export const setSearch = (searchTerm: string) => set({ searchTerm });
 export const setUser = (user: LocalUser | null) => set({ user });
 export const setBrandMode = (brandMode: BrandMode) => set({ brandMode });
 export const setUnseen = (unseen: number) => set({ unseen });
+export const setBuysDue = (buysDue: number) => set({ buysDue });
 export const setCloakMoney = (cloakMoney: boolean) => set({ cloakMoney });
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;

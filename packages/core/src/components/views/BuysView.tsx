@@ -5,22 +5,26 @@ import { allRec, delRec } from "@/lib/data";
 import { inr, qty, todayStr } from "@/lib/calc";
 import { editBuyerDialog } from "@/lib/customer-form";
 import {
+  addDaysStr,
   addFromAccount,
   allPurchases,
   buyerDashboards,
   cashAmount,
   deletePurchase,
+  dueReminders,
   fromAccountsOf,
+  isRemindDue,
   lineAmount,
   normalizePurchase,
   paidTotal,
   purchaseTotals,
   rowBalance,
   savePurchase,
+  setPurchaseReminder,
   totalPurchase,
 } from "@/lib/purchases";
 import { useApp } from "@/store/useApp";
-import { bumpData, toast } from "@/store/app-store";
+import { bumpData, setBuysDue, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import DateField from "@/components/editor/DateField";
 import type { Purchase, Supplier } from "@/lib/types";
@@ -41,6 +45,7 @@ const emptyBuyForm = () => ({
   cashPaid: "",
   bankPaid: "",
   payDate: "",
+  remindIn: "",
 });
 
 const emptyPayForm = () => ({
@@ -131,12 +136,15 @@ export default function BuysView() {
   const [showPayForm, setShowPayForm] = useState(false);
   const [editPayId, setEditPayId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [openBuyerId, setOpenBuyerId] = useState<string | null>(null);
+  const [remindOnly, setRemindOnly] = useState(false);
 
   const load = useCallback(() => {
     Promise.all([allRec<Supplier>("suppliers"), allPurchases()]).then(([bs, ps]) => {
       bs.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       setBuyers(bs);
       setRows(ps);
+      setBuysDue(dueReminders(ps).length);
     });
   }, []);
 
@@ -159,13 +167,14 @@ export default function BuysView() {
     return buys.filter((p) => {
       if (buyerFilter && p.supplierId !== buyerFilter) return false;
       if (unpaidOnly && Math.abs(rowBalance(p)) <= 0.5) return false;
+      if (remindOnly && !isRemindDue(p.remindAt)) return false;
       if (!needle) return true;
       return [p.buyerName, p.fromName, p.billNo, p.note, p.date]
         .join(" ")
         .toLowerCase()
         .includes(needle);
     });
-  }, [buys, buyerFilter, unpaidOnly, q]);
+  }, [buys, buyerFilter, unpaidOnly, remindOnly, q]);
 
   const filteredPays = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -241,6 +250,7 @@ export default function BuysView() {
       cashPaid: p.cashPaid ? String(p.cashPaid) : "",
       bankPaid: p.bankPaid ? String(p.bankPaid) : "",
       payDate: p.payDate || "",
+      remindIn: "",
     });
     setShowForm(true);
     setSeg("ledger");
@@ -309,6 +319,11 @@ export default function BuysView() {
     setSaving(true);
     try {
       await addFromAccount(buyer.id, form.fromName);
+      const remindDays = form.remindIn === "" ? null : Number(form.remindIn);
+      const remindAt =
+        remindDays == null || !Number.isFinite(remindDays)
+          ? undefined
+          : addDaysStr(form.date || todayStr(), remindDays);
       await savePurchase({
         id: editId || undefined,
         kind: "buy",
@@ -326,6 +341,7 @@ export default function BuysView() {
         cashPaid: form.cashPaid,
         bankPaid: form.bankPaid,
         payDate: form.payDate,
+        ...(remindAt !== undefined ? { remindAt } : {}),
       });
       toast(editId ? "Updated" : "Saved");
       closeForm();
@@ -336,6 +352,16 @@ export default function BuysView() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function onRemind(p: Purchase, days: string) {
+    if (days === "") return;
+    const next =
+      days === "clear" ? "" : addDaysStr(todayStr(), Number(days) || 0);
+    await setPurchaseReminder(p.id, next);
+    bumpData();
+    load();
+    toast(next ? "Reminder " + next : "Reminder cleared");
   }
 
   async function onSavePay() {
@@ -479,10 +505,16 @@ export default function BuysView() {
               ))}
             </select>
             {seg === "ledger" && (
-              <label className="buys-check">
-                <input type="checkbox" checked={unpaidOnly} onChange={(e) => setUnpaidOnly(e.target.checked)} />
-                Unpaid
-              </label>
+              <>
+                <label className="buys-check">
+                  <input type="checkbox" checked={unpaidOnly} onChange={(e) => setUnpaidOnly(e.target.checked)} />
+                  Unpaid
+                </label>
+                <label className="buys-check">
+                  <input type="checkbox" checked={remindOnly} onChange={(e) => setRemindOnly(e.target.checked)} />
+                  Reminders
+                </label>
+              </>
             )}
             <input
               className="buys-search"
@@ -525,138 +557,129 @@ export default function BuysView() {
             </div>
           </div>
         ) : (
-          <div className="buys-dash">
-            {dash.map(({ buyer: b, totals: t, froms }) => {
-              const due = Math.abs(t.balance) <= 0.5;
-              return (
-                <article key={b.id} className="buys-dash-card">
-                  <header className="buys-dash-head">
+          <div className="buys-card buys-ov">
+            <div className="buys-ov-head">
+              <span>Party</span>
+              <span className="num">Total</span>
+              <span className="num">Cash</span>
+              <span className="num">Bank</span>
+              <span className="num">Balance</span>
+            </div>
+            <ul className="buys-ov-list">
+              {dash.map(({ buyer: b, totals: t, froms }) => {
+                const open = openBuyerId === b.id;
+                const settled = Math.abs(t.balance) <= 0.5;
+                return (
+                  <li key={b.id} className={"buys-ov-item" + (open ? " open" : "")}>
                     <button
                       type="button"
-                      className="buys-dash-who"
-                      onClick={() => {
-                        setBuyerFilter(b.id);
-                        setSeg("ledger");
-                      }}
+                      className="buys-ov-row"
+                      onClick={() => setOpenBuyerId(open ? null : b.id)}
+                      aria-expanded={open}
                     >
-                      <strong>{b.name}</strong>
-                      <span>
-                        {t.count} buy{t.count === 1 ? "" : "s"}
-                        {t.cft ? ` · ${vol(t.cft)} cft` : ""}
-                        {froms.length ? ` · ${froms.length} from` : ""}
+                      <span className="buys-ov-name">
+                        <strong>{b.name}</strong>
+                        <em>
+                          {t.count} buy{t.count === 1 ? "" : "s"}
+                          {froms.length ? ` · ${froms.length} from` : ""}
+                        </em>
+                      </span>
+                      <span className="num" data-label="Total">
+                        ₹{money(t.total)}
+                      </span>
+                      <span className="num" data-label="Cash">
+                        ₹{money(t.cashAmount)}
+                      </span>
+                      <span className="num" data-label="Bank">
+                        ₹{money(t.billAmount)}
+                      </span>
+                      <span className={"num bal " + (settled ? "ok" : "due")} data-label="Balance">
+                        {settled ? "Settled" : "₹" + inr(Math.abs(t.balance))}
+                        <i className="buys-ov-chev" aria-hidden>
+                          {open ? "▾" : "›"}
+                        </i>
                       </span>
                     </button>
-                    <div className={`buys-dash-due ${due ? "ok" : "due"}`}>
-                      <em>{due ? "Settled" : "To pay"}</em>
-                      <b>{due ? "—" : "₹" + inr(Math.abs(t.balance))}</b>
-                    </div>
-                  </header>
 
-                  <div className="buys-dash-metrics">
-                    <div>
-                      <em>Total</em>
-                      <b>₹{money(t.total)}</b>
-                    </div>
-                    <div>
-                      <em>Bill</em>
-                      <b>₹{money(t.billAmount)}</b>
-                      <span>bank side</span>
-                    </div>
-                    <div>
-                      <em>Cash</em>
-                      <b>₹{money(t.cashAmount)}</b>
-                      <span>cash side</span>
-                    </div>
-                    <div>
-                      <em>Paid</em>
-                      <b className="paid">₹{money(t.paid)}</b>
-                      <span>
-                        cash {money(t.cashPaid)} · bank {money(t.bankPaid)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {froms.length > 0 && (
-                    <ul className="buys-dash-froms">
-                      {froms.map((f) => {
-                        const ft = f.totals;
-                        const fDue = Math.abs(ft.balance) <= 0.5;
-                        const idle = ft.count === 0 && ft.paid === 0;
-                        return (
-                          <li key={f.name} className={idle ? "idle" : undefined}>
-                            <button
-                              type="button"
-                              className="buys-dash-from-main"
-                              onClick={() => {
-                                setBuyerFilter(b.id);
-                                setQ(f.name.startsWith("(") ? "" : f.name);
-                                setSeg("ledger");
-                              }}
-                            >
-                              <strong>{f.name}</strong>
-                              {idle ? (
-                                <span>No buys yet</span>
-                              ) : (
-                                <span>
-                                  {ft.count} buy{ft.count === 1 ? "" : "s"}
-                                  {ft.cft ? ` · ${vol(ft.cft)} cft` : ""}
-                                </span>
-                              )}
-                            </button>
-                            {!idle && (
-                              <div className="buys-dash-from-nums">
-                                <span>
-                                  <em>Bill</em> ₹{money(ft.billAmount)}
-                                </span>
-                                <span>
-                                  <em>Cash</em> ₹{money(ft.cashAmount)}
-                                </span>
-                                <span className="paid">
-                                  <em>Paid</em> ₹{money(ft.paid)}
-                                </span>
-                                <span className={fDue ? "ok" : "due"}>
-                                  <em>{fDue ? "Ok" : "Due"}</em>{" "}
-                                  {fDue ? "—" : "₹" + inr(Math.abs(ft.balance))}
-                                </span>
-                              </div>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-
-                  <footer className="buys-dash-foot">
-                    <button
-                      type="button"
-                      className="buys-link"
-                      onClick={() => {
-                        setBuyerFilter(b.id);
-                        setSeg("ledger");
-                      }}
-                    >
-                      Register
-                    </button>
-                    <button
-                      type="button"
-                      className="buys-link"
-                      onClick={() => {
-                        setBuyerFilter(b.id);
-                        setSeg("payments");
-                      }}
-                    >
-                      Payments
-                    </button>
-                    <button type="button" className="buys-link" onClick={() => void editBuyer(b)}>
-                      Edit
-                    </button>
-                    <button type="button" className="buys-link danger" onClick={() => void removeBuyer(b)}>
-                      Del
-                    </button>
-                  </footer>
-                </article>
-              );
-            })}
+                    {open && (
+                      <div className="buys-ov-detail">
+                        <div className="buys-ov-paidline">
+                          Paid ₹{money(t.paid)}
+                          <span>
+                            cash {money(t.cashPaid)} · bank {money(t.bankPaid)}
+                          </span>
+                        </div>
+                        {froms.length === 0 ? (
+                          <p className="buys-ov-empty">No from-accounts yet.</p>
+                        ) : (
+                          <ul className="buys-ov-froms">
+                            {froms.map((f) => {
+                              const ft = f.totals;
+                              const idle = ft.count === 0 && ft.paid === 0;
+                              const fOk = Math.abs(ft.balance) <= 0.5;
+                              return (
+                                <li key={f.name} className={idle ? "idle" : undefined}>
+                                  <div>
+                                    <strong>{f.name}</strong>
+                                    <em>
+                                      {idle
+                                        ? "No buys yet"
+                                        : `${ft.count} buy${ft.count === 1 ? "" : "s"}${ft.cft ? ` · ${vol(ft.cft)} cft` : ""}`}
+                                    </em>
+                                  </div>
+                                  {!idle && (
+                                    <div className="buys-ov-from-nums">
+                                      <span>
+                                        Cash ₹{money(ft.cashAmount)}
+                                      </span>
+                                      <span>
+                                        Bank ₹{money(ft.billAmount)}
+                                      </span>
+                                      <span className="paid">Paid ₹{money(ft.paid)}</span>
+                                      <span className={fOk ? "ok" : "due"}>
+                                        {fOk ? "Settled" : "₹" + inr(Math.abs(ft.balance))}
+                                      </span>
+                                    </div>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                        <div className="buys-ov-acts">
+                          <button
+                            type="button"
+                            className="buys-link"
+                            onClick={() => {
+                              setBuyerFilter(b.id);
+                              setSeg("ledger");
+                            }}
+                          >
+                            Register
+                          </button>
+                          <button
+                            type="button"
+                            className="buys-link"
+                            onClick={() => {
+                              setBuyerFilter(b.id);
+                              setSeg("payments");
+                            }}
+                          >
+                            Payments
+                          </button>
+                          <button type="button" className="buys-link mute" onClick={() => void editBuyer(b)}>
+                            Rename
+                          </button>
+                          <button type="button" className="buys-link mute" onClick={() => void removeBuyer(b)}>
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )
       ) : seg === "payments" ? (
@@ -676,62 +699,70 @@ export default function BuysView() {
                   Close
                 </button>
               </div>
-              <div className="buys-entry-grid">
-                <label>
-                  Date
-                  <DateField value={payForm.date} onChange={(v) => setPF("date", v)} />
-                </label>
-                <label className="span2">
-                  Buyer / agent
-                  <select value={payForm.supplierId} onChange={(e) => setPF("supplierId", e.target.value)}>
-                    <option value="">Select buyer…</option>
-                    {buyers.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <FromAccountField
-                  buyerId={payForm.supplierId}
-                  options={payFromOpts}
-                  value={payForm.fromName}
-                  onChange={(v) => setPF("fromName", v)}
-                  onSave={() => void savePayFromAccount()}
-                />
-                <label>
-                  Cash ₹
-                  <input
-                    inputMode="decimal"
-                    value={payForm.cashPaid}
-                    onChange={(e) => setPF("cashPaid", e.target.value)}
-                    placeholder="0"
+              <div className="buys-entry-sec">
+                <h4>Who</h4>
+                <div className="buys-entry-grid g3">
+                  <label>
+                    Date
+                    <DateField value={payForm.date} onChange={(v) => setPF("date", v)} />
+                  </label>
+                  <label className="span2">
+                    Buyer / agent
+                    <select value={payForm.supplierId} onChange={(e) => setPF("supplierId", e.target.value)}>
+                      <option value="">Select buyer…</option>
+                      {buyers.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <FromAccountField
+                    buyerId={payForm.supplierId}
+                    options={payFromOpts}
+                    value={payForm.fromName}
+                    onChange={(v) => setPF("fromName", v)}
+                    onSave={() => void savePayFromAccount()}
                   />
-                </label>
-                <label>
-                  Bank transfer ₹
-                  <input
-                    inputMode="decimal"
-                    value={payForm.bankPaid}
-                    onChange={(e) => setPF("bankPaid", e.target.value)}
-                    placeholder="0"
-                  />
-                </label>
-                <label className="span2">
-                  Total
-                  <input
-                    readOnly
-                    value={
-                      (+payForm.cashPaid || 0) + (+payForm.bankPaid || 0)
-                        ? inr((+payForm.cashPaid || 0) + (+payForm.bankPaid || 0))
-                        : ""
-                    }
-                  />
-                </label>
-                <label className="span3">
-                  Note
-                  <input value={payForm.note} onChange={(e) => setPF("note", e.target.value)} />
-                </label>
+                </div>
+              </div>
+              <div className="buys-entry-sec">
+                <h4>Paid</h4>
+                <div className="buys-entry-grid g3">
+                  <label>
+                    Cash ₹
+                    <input
+                      inputMode="decimal"
+                      value={payForm.cashPaid}
+                      onChange={(e) => setPF("cashPaid", e.target.value)}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label>
+                    Bank ₹
+                    <input
+                      inputMode="decimal"
+                      value={payForm.bankPaid}
+                      onChange={(e) => setPF("bankPaid", e.target.value)}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label>
+                    Total
+                    <input
+                      readOnly
+                      value={
+                        (+payForm.cashPaid || 0) + (+payForm.bankPaid || 0)
+                          ? inr((+payForm.cashPaid || 0) + (+payForm.bankPaid || 0))
+                          : ""
+                      }
+                    />
+                  </label>
+                  <label className="span3">
+                    Note
+                    <input value={payForm.note} onChange={(e) => setPF("note", e.target.value)} />
+                  </label>
+                </div>
               </div>
               <div className="buys-entry-actions">
                 <button type="button" className="btn primary sm" disabled={saving} onClick={() => void onSavePay()}>
@@ -802,100 +833,125 @@ export default function BuysView() {
                   Close
                 </button>
               </div>
-              <div className="buys-entry-grid">
-                <label>
-                  Date
-                  <DateField value={form.date} onChange={(v) => setF("date", v)} />
-                </label>
-                <label className="span2">
-                  Buyer / agent
-                  <select value={form.supplierId} onChange={(e) => setF("supplierId", e.target.value)}>
-                    <option value="">Select buyer…</option>
-                    {buyers.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <FromAccountField
-                  buyerId={form.supplierId}
-                  options={fromOpts}
-                  value={form.fromName}
-                  onChange={(v) => setF("fromName", v)}
-                  onSave={() => void saveFromAccount()}
-                />
-                <label>
-                  Bill no
-                  <input value={form.billNo} onChange={(e) => setF("billNo", e.target.value)} />
-                </label>
-                <label>
-                  CFT
-                  <input inputMode="decimal" value={form.cft} onChange={(e) => setF("cft", e.target.value)} />
-                </label>
-                <label>
-                  Rate
-                  <input inputMode="decimal" value={form.rate} onChange={(e) => setF("rate", e.target.value)} />
-                </label>
-                <label>
-                  Amount
-                  <input inputMode="decimal" value={form.amount} onChange={(e) => setF("amount", e.target.value)} />
-                </label>
-                <label>
-                  GST (optional)
-                  <input
-                    inputMode="decimal"
-                    value={form.gst}
-                    onChange={(e) => setF("gst", e.target.value)}
-                    placeholder="Leave empty"
+              <div className="buys-entry-sec">
+                <h4>Who</h4>
+                <div className="buys-entry-grid g3">
+                  <label>
+                    Date
+                    <DateField value={form.date} onChange={(v) => setF("date", v)} />
+                  </label>
+                  <label className="span2">
+                    Buyer / agent
+                    <select value={form.supplierId} onChange={(e) => setF("supplierId", e.target.value)}>
+                      <option value="">Select buyer…</option>
+                      {buyers.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <FromAccountField
+                    buyerId={form.supplierId}
+                    options={fromOpts}
+                    value={form.fromName}
+                    onChange={(v) => setF("fromName", v)}
+                    onSave={() => void saveFromAccount()}
                   />
-                </label>
-                <label>
-                  Total purchase
-                  <input readOnly value={liveTotal.total ? inr(liveTotal.total) : ""} />
-                </label>
-                <label>
-                  Bill amt
-                  <input
-                    inputMode="decimal"
-                    value={form.billAmount}
-                    onChange={(e) => setF("billAmount", e.target.value)}
-                    placeholder="Leave empty"
-                  />
-                </label>
-                <label>
-                  Cash amount
-                  <input readOnly value={liveTotal.cash ? inr(liveTotal.cash) : liveTotal.total ? inr(0) : ""} />
-                </label>
-                <label>
-                  Cash paid
-                  <input
-                    inputMode="decimal"
-                    value={form.cashPaid}
-                    onChange={(e) => setF("cashPaid", e.target.value)}
-                    placeholder="0"
-                  />
-                </label>
-                <label>
-                  Bank paid
-                  <input
-                    inputMode="decimal"
-                    value={form.bankPaid}
-                    onChange={(e) => setF("bankPaid", e.target.value)}
-                    placeholder="0"
-                  />
-                </label>
-                <label>
-                  Pay date
-                  <DateField value={form.payDate} onChange={(v) => setF("payDate", v)} />
-                </label>
-                <label className="span3">
-                  Note
-                  <input value={form.note} onChange={(e) => setF("note", e.target.value)} />
-                </label>
+                  <label>
+                    Bill no
+                    <input value={form.billNo} onChange={(e) => setF("billNo", e.target.value)} />
+                  </label>
+                </div>
               </div>
-              <div className="buys-calc-hint">
-                Total = Amount + GST · Cash amount = Total − Bill amt · Balance = Total − Cash paid − Bank paid
+              <div className="buys-entry-sec">
+                <h4>Timber</h4>
+                <div className="buys-entry-grid g4">
+                  <label>
+                    CFT
+                    <input inputMode="decimal" value={form.cft} onChange={(e) => setF("cft", e.target.value)} />
+                  </label>
+                  <label>
+                    Rate
+                    <input inputMode="decimal" value={form.rate} onChange={(e) => setF("rate", e.target.value)} />
+                  </label>
+                  <label>
+                    Amount
+                    <input inputMode="decimal" value={form.amount} onChange={(e) => setF("amount", e.target.value)} />
+                  </label>
+                  <label>
+                    GST
+                    <input
+                      inputMode="decimal"
+                      value={form.gst}
+                      onChange={(e) => setF("gst", e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="buys-entry-sec">
+                <h4>Split</h4>
+                <div className="buys-entry-grid g3">
+                  <label>
+                    Total
+                    <input readOnly value={liveTotal.total ? inr(liveTotal.total) : ""} />
+                  </label>
+                  <label>
+                    Bank / bill
+                    <input
+                      inputMode="decimal"
+                      value={form.billAmount}
+                      onChange={(e) => setF("billAmount", e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </label>
+                  <label>
+                    Cash side
+                    <input readOnly value={liveTotal.cash ? inr(liveTotal.cash) : liveTotal.total ? inr(0) : ""} />
+                  </label>
+                </div>
+              </div>
+              <div className="buys-entry-sec">
+                <h4>Paid · remind</h4>
+                <div className="buys-entry-grid g4">
+                  <label>
+                    Cash paid
+                    <input
+                      inputMode="decimal"
+                      value={form.cashPaid}
+                      onChange={(e) => setF("cashPaid", e.target.value)}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label>
+                    Bank paid
+                    <input
+                      inputMode="decimal"
+                      value={form.bankPaid}
+                      onChange={(e) => setF("bankPaid", e.target.value)}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label>
+                    Pay date
+                    <DateField value={form.payDate} onChange={(v) => setF("payDate", v)} />
+                  </label>
+                  <label>
+                    Remind
+                    <select value={form.remindIn} onChange={(e) => setF("remindIn", e.target.value)}>
+                      <option value="">Off</option>
+                      <option value="0">Today</option>
+                      <option value="7">In 7 days</option>
+                      <option value="15">In 15 days</option>
+                      <option value="30">In 30 days</option>
+                    </select>
+                  </label>
+                  <label className="span4">
+                    Note
+                    <input value={form.note} onChange={(e) => setF("note", e.target.value)} />
+                  </label>
+                </div>
               </div>
               <div className="buys-entry-actions">
                 <button type="button" className="btn primary sm" disabled={saving} onClick={() => void onSave()}>
@@ -925,16 +981,25 @@ export default function BuysView() {
                   const tot = totalPurchase(p);
                   const bal = rowBalance(p);
                   const paid = paidTotal(p);
+                  const remindDue = isRemindDue(p.remindAt);
                   return (
                     <li
                       key={p.id}
-                      className={"buys-reg-row" + (editId === p.id ? " on" : "")}
+                      className={
+                        "buys-reg-row" +
+                        (editId === p.id ? " on" : "") +
+                        (remindDue ? " remind" : "") +
+                        (p.remindAt && !remindDue ? " remind-soon" : "")
+                      }
                       onDoubleClick={() => startEdit(p)}
                     >
                       <div className="buys-reg-main">
                         <div className="buys-reg-who">
                           <span className="buys-reg-date">{p.date || "—"}</span>
-                          <strong>{p.buyerName || "—"}</strong>
+                          <strong>
+                            {remindDue ? <i className="buys-remind-dot" aria-hidden /> : null}
+                            {p.buyerName || "—"}
+                          </strong>
                           <span className="buys-reg-from">{p.fromName || "No from-account"}</span>
                           {p.billNo ? <span className="buys-reg-bill">Bill {p.billNo}</span> : null}
                         </div>
@@ -959,7 +1024,7 @@ export default function BuysView() {
                         </div>
                         <div>
                           <em>Split</em>
-                          <b>Bill ₹{money(p.billAmount)}</b>
+                          <b>Bank ₹{money(p.billAmount)}</b>
                           <span>Cash ₹{money(cashAmount(p))}</span>
                         </div>
                         <div>
@@ -971,6 +1036,23 @@ export default function BuysView() {
                         </div>
                       </div>
                       <div className="buys-reg-acts">
+                        <label className="buys-remind-pick">
+                          <span className={remindDue ? "due" : undefined}>
+                            {p.remindAt ? (remindDue ? "Due " : "On ") + p.remindAt : "Remind"}
+                          </span>
+                          <select
+                            aria-label="Set reminder"
+                            value=""
+                            onChange={(e) => void onRemind(p, e.target.value)}
+                          >
+                            <option value="">Set…</option>
+                            <option value="0">Today</option>
+                            <option value="7">In 7 days</option>
+                            <option value="15">In 15 days</option>
+                            <option value="30">In 30 days</option>
+                            {p.remindAt ? <option value="clear">Clear</option> : null}
+                          </select>
+                        </label>
                         <button type="button" className="buys-link" onClick={() => startEdit(p)}>
                           Edit
                         </button>

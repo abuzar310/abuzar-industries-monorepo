@@ -11,7 +11,8 @@ import { computeDoc, inr, nowIso } from "./calc";
 import { allExpenses, allSessions, spendCategoryOf } from "./expenses";
 import { getFeatures } from "./features";
 import { USERS } from "./local-auth";
-import { getState, setUnseen } from "@/store/app-store";
+import { getState, setBuysDue, setUnseen } from "@/store/app-store";
+import { allPurchases, dueReminders } from "./purchases";
 import type { Doc } from "./types";
 
 let lastSeen = ""; // badge: owner opened the daybook
@@ -68,12 +69,16 @@ interface Ev {
 export async function checkOwnerNotifications() {
   const me = getState().user;
   if (me?.role !== "owner") return;
-  const [list, sessions] = await Promise.all([allExpenses(), allSessions()]);
+  const [list, sessions, purchases] = await Promise.all([allExpenses(), allSessions(), allPurchases()]);
 
   // --- unseen badge (independent of notifications) ---
   const unseenE = list.filter((e) => e.enteredBy !== me.id && (!lastSeen || (e.createdAt || "") > lastSeen)).length;
   const unseenS = sessions.filter((s) => s.by !== me.id && (!lastSeen || (s.closedAt || "") > lastSeen)).length;
   setUnseen(unseenE + unseenS);
+
+  // --- Buys reminders due (red badge on Buys tab) ---
+  const dueBuys = dueReminders(purchases);
+  setBuysDue(dueBuys.length);
 
   // --- notifications: everything newer than lastNotifiedAt, by someone else ---
   const events: Ev[] = [];

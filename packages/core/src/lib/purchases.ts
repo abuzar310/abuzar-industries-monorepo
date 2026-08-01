@@ -1,5 +1,5 @@
 import { allRec, delRec, getRec, put } from "./data";
-import { dateSortKey, nowIso, todayStr, uid } from "./calc";
+import { dateSortKey, nowIso, pad, todayStr, uid } from "./calc";
 import type { Purchase, Supplier } from "./types";
 
 const r2 = (n: number) => Math.round((n || 0) * 100) / 100;
@@ -51,8 +51,40 @@ export function normalizePurchase(raw: Purchase): Purchase {
     cashPaid,
     bankPaid,
     payDate: raw.payDate || raw.billPayDate || "",
+    remindAt: (raw.remindAt || "").trim(),
     note: raw.note || "",
   };
+}
+
+/** Add N calendar days to a dd-mm-yy (defaults today). */
+export function addDaysStr(display: string, days: number): string {
+  const key = dateSortKey(display || todayStr()) || dateSortKey(todayStr());
+  const [y, m, d] = key.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return pad(dt.getDate()) + "-" + pad(dt.getMonth() + 1) + "-" + String(dt.getFullYear()).slice(2);
+}
+
+export function isRemindDue(remindAt?: string): boolean {
+  const a = dateSortKey((remindAt || "").trim());
+  const t = dateSortKey(todayStr());
+  return !!a && !!t && a <= t;
+}
+
+export function dueReminders(rows: Purchase[]): Purchase[] {
+  return rows
+    .map(normalizePurchase)
+    .filter((p) => (p.kind || "buy") === "buy" && isRemindDue(p.remindAt));
+}
+
+export async function setPurchaseReminder(id: string, remindAt: string): Promise<Purchase | null> {
+  const existing = await getRec<Purchase>("purchases", id);
+  if (!existing) return null;
+  const p = normalizePurchase(existing);
+  p.remindAt = (remindAt || "").trim();
+  p.updatedAt = nowIso();
+  await put("purchases", p);
+  return p;
 }
 
 export type PurchaseTotals = {
@@ -139,6 +171,7 @@ export type PurchaseFields = {
   cashPaid?: number | string;
   bankPaid?: number | string;
   payDate?: string;
+  remindAt?: string;
 };
 
 function numOrEmpty(v: number | string | undefined): number {
@@ -182,6 +215,7 @@ export async function savePurchase(fields: PurchaseFields): Promise<Purchase> {
       cashPaid: 0,
       bankPaid: 0,
       payDate: "",
+      remindAt: "",
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
@@ -201,6 +235,7 @@ export async function savePurchase(fields: PurchaseFields): Promise<Purchase> {
   p.cashPaid = r2(numOrEmpty(fields.cashPaid));
   p.bankPaid = r2(numOrEmpty(fields.bankPaid));
   p.payDate = (fields.payDate || "").trim();
+  if (fields.remindAt !== undefined) p.remindAt = (fields.remindAt || "").trim();
   // clear legacy so normalize prefers new fields
   p.topPaid = 0;
   p.billPaid = 0;
