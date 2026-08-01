@@ -234,9 +234,9 @@ export default function BuysView() {
           <h1 className="buys-h1">Buys</h1>
           <p className="buys-sub">Timber in · purchase register</p>
         </div>
-        <div className={`buys-bal buys-bal-${balTone}`}>
+        <div className={`buys-bal buys-bal-${balTone}`} title={balTone === "due" ? "Still unpaid" : balTone === "adv" ? "Advance / overpaid" : "All clear"}>
           <span>Balance</span>
-          <b>{balAbs <= 0.5 ? "Settled" : "₹ " + inr(balAbs)}</b>
+          <b>{balAbs <= 0.5 ? "Settled" : "₹" + inr(balAbs)}</b>
         </div>
       </div>
 
