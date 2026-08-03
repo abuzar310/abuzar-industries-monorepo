@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { allRec } from "@/lib/data";
 import { dateSortKey, inr } from "@/lib/calc";
 import {
+  inBooks,
   inDaybook,
   isInflow,
   openingCarry,
@@ -119,8 +120,11 @@ export default function BooksView() {
     return p.mm === month && p.yy === year;
   };
 
-  // ── raw data slices ──────────────────────────────────────────────────────
-  const monthExp = useMemo(() => expenses.filter((e) => inMonth(e.date)), [expenses, month, year]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ── monthly income & expenses (from the daybook — every money event) ──────
+  const monthExp = useMemo(
+    () => expenses.filter((e) => inMonth(e.date) && inBooks(e)),
+    [expenses, month, year], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const income = useMemo(() => {
     const sales = monthExp.filter((e) => e.type === "sale" && !e.charge);

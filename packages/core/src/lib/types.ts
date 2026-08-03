@@ -317,6 +317,8 @@ export interface Expense {
   rcptId?: string;
   /** on a custId entry: true = a DUE added (debit, they owe more); false/absent = a payment received. */
   charge?: boolean;
+  /** Internal cash move (Paid to owner / Paid to manager): hits Daybook cash, never Books. */
+  skipBooks?: boolean;
   /** set once the entry is archived into a closed session; falsy = current open session */
   sessionId?: string;
   /** Accounts tab: when this payment was physically collected from the account holder. */

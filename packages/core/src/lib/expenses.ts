@@ -2,9 +2,17 @@ import { allRec, delRec, put } from "./data";
 import { nowIso, splitHandover, todayStr, uid } from "./calc";
 import type { DaybookSession, EntryType, Expense, PayMode } from "./types";
 
+export type SpendCategory = {
+  id: string;
+  label: string;
+  type: EntryType;
+  /** Daybook cash only — never income/spend in Books */
+  skipBooks?: boolean;
+};
+
 /** Prebuilt money-out categories — Daybook, Receipts Paid out, and Books all share these.
  *  Food/Salary use native types; the rest store as `custom` with `label` = category name. */
-export const SPEND_CATEGORIES: { id: string; label: string; type: EntryType }[] = [
+export const SPEND_CATEGORIES: SpendCategory[] = [
   { id: "food", label: "Food", type: "food" },
   { id: "salary", label: "Salary", type: "salary" },
   { id: "carpenter", label: "Carpenter commission", type: "custom" },
@@ -15,17 +23,37 @@ export const SPEND_CATEGORIES: { id: string; label: string; type: EntryType }[] 
   { id: "pigmy", label: "Pignee", type: "custom" },
   { id: "shop", label: "Shop expenses", type: "custom" },
   { id: "unload", label: "Unloading charges", type: "custom" },
+  /** Manager hands cash to owner — cuts Daybook, hidden from Books */
+  { id: "paid-owner", label: "Paid to owner", type: "custom", skipBooks: true },
   { id: "other", label: "Other", type: "custom" },
 ];
 
+/** Money-in label: owner (or anyone) tops up manager cash — Daybook only, not Books. */
+export const PAID_TO_MANAGER_LABEL = "Paid to manager";
+export const PAID_TO_OWNER_LABEL = "Paid to owner";
+
 const SPEND_LABELS = new Set(SPEND_CATEGORIES.map((c) => c.label));
+
+/** True when the row should appear in Books (income / spends / month ledger). */
+export function inBooks(e: Expense): boolean {
+  if (e.charge) return false;
+  if (e.skipBooks) return false;
+  const lab = (e.label || "").trim();
+  if (lab === PAID_TO_OWNER_LABEL || lab === PAID_TO_MANAGER_LABEL) return false;
+  return true;
+}
 
 /**
  * Books / reports category bucket. Only the prebuilt SPEND_CATEGORIES.
  * Legacy Additional + freeform Custom labels all roll into Other — notes stay on the row.
  */
 export function spendCategoryOf(e: Expense): string {
-  if (e.type === "sale") return e.charge ? "Due" : "Sale";
+  if (e.type === "sale") {
+    if (e.charge) return "Due";
+    const lab = (e.label || "").trim();
+    if (lab === PAID_TO_MANAGER_LABEL) return PAID_TO_MANAGER_LABEL;
+    return "Sale";
+  }
   if (e.type === "food") return "Food";
   if (e.type === "salary") return "Salary";
   if (e.type === "custom") {
@@ -127,6 +155,8 @@ export async function addExpense(fields: {
   /** transfer counter-account (journal voucher's TO-bank) */
   account2?: string;
   toOwner?: boolean;
+  /** Daybook-only internal move — omitted from Books */
+  skipBooks?: boolean;
   enteredBy: string;
   date?: string;
   sourceId?: string;
@@ -137,11 +167,16 @@ export async function addExpense(fields: {
 }): Promise<Expense> {
   const mode = fields.charge ? "" : isInflow(fields.type) ? fields.mode || "cash" : "";
   const rounds = Math.max(0, Math.floor(+(fields.rounds || 0) || 0));
+  const label = (fields.label || "").trim();
+  const skipBooks =
+    !!fields.skipBooks ||
+    label === PAID_TO_OWNER_LABEL ||
+    label === PAID_TO_MANAGER_LABEL;
   const e: Expense = {
     id: "EXP-" + uid(),
     date: fields.date || todayStr(),
     type: fields.type,
-    label: fields.label || "",
+    label: label || "",
     mode,
     amount: r2(fields.amount),
     note: fields.note || "",
@@ -155,6 +190,7 @@ export async function addExpense(fields: {
     // outflows (mode "") can also be owner-paid — e.g. the owner hands a worker money
     // from his own pocket; inDaybook() then keeps it out of the manager's cash book.
     toOwner: mode === "cash" || mode === "" ? !!fields.toOwner : false,
+    skipBooks: skipBooks || undefined,
     enteredBy: fields.enteredBy,
     sourceId: fields.sourceId,
     custId: fields.custId,
