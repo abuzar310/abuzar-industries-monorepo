@@ -4,13 +4,23 @@
 // class is structurally impossible.
 import { clone, prefSet, rpcCreateDoc } from "./data";
 import { blankDoc } from "./doc";
+import { getFeatures } from "./features";
+import { defaultWoodSection } from "./woods";
 import type { Customer, Doc, Section } from "./types";
+
+/** Official apps: new docs start as Imported Teak Wood (never bare "Teak"). */
+function applyOfficialDefaultWood(d: Doc, seed?: Partial<Doc>) {
+  if (getFeatures().simpleQuote) return;
+  if (seed?.sections?.length) return;
+  d.sections = [defaultWoodSection()];
+}
 
 /** Create + persist a blank quotation, returning it. Caller navigates to /editor/<id>. */
 export async function createQuotation(seed?: Partial<Doc>): Promise<Doc> {
   const d = blankDoc("");
   if (seed) Object.assign(d, seed);
   d.kind = "quotation";
+  applyOfficialDefaultWood(d, seed);
   // server assigns id + number ("<fy>-NNN", strictly monotonic over all rows ever)
   const doc = await rpcCreateDoc({ ...d, id: "", number: "" });
   prefSet("lastOpen", { store: "quotations", id: doc.id });
@@ -26,6 +36,7 @@ export async function createInvoice(seed?: Partial<Doc>): Promise<Doc> {
   d.amountPaid = 0;
   d.tradeType = seed?.tradeType === "buy" ? "buy" : "sell";
   if (seed) Object.assign(d, seed, { kind: "invoice", tradeType: d.tradeType });
+  applyOfficialDefaultWood(d, seed);
   // server assigns the UID; a provided seed.number is honoured, else it fills the
   // lowest free display serial for this trade type
   const doc = await rpcCreateDoc({ ...d, id: "", number: seed?.number ? String(seed.number).trim() : "" });

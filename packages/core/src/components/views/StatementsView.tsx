@@ -107,14 +107,14 @@ function buildQuoteLedger(r: QuoteStatements): StmtLedgerRow[] {
 }
 
 export default function StatementsView() {
-  const { ready, dataVersion, brandMode } = useApp();
+  const { ready, dataVersion, brandMode, cloakMoney } = useApp();
   const brand = brandFor(brandMode);
   const router = useRouter();
   const flash = useFocusFlash(); // dashboard card → highlight the exact figure it meant
   const printRef = useRef<HTMLDivElement>(null);
-  const [quotes, setQuotes] = useState<Doc[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [custs, setCusts] = useState<Customer[]>([]);
+  const [quotesRaw, setQuotes] = useState<Doc[]>([]);
+  const [expensesRaw, setExpenses] = useState<Expense[]>([]);
+  const [custsRaw, setCusts] = useState<Customer[]>([]);
   const [q, setQ] = useState("");
   const [month, setMonth] = useState("");
   const [year, setYear] = useState("");
@@ -130,6 +130,10 @@ export default function StatementsView() {
   useEffect(() => {
     if (ready) load();
   }, [ready, dataVersion, load]);
+
+  const quotes = cloakMoney ? [] : quotesRaw;
+  const expenses = cloakMoney ? [] : expensesRaw;
+  const custs = cloakMoney ? [] : custsRaw;
 
   const { quotes: rows } = quoteLedger(quotes, expenses);
   const years = [...new Set(rows.map((r) => parts(r.date).yy).filter(Boolean))].sort((a, b) => b.localeCompare(a));

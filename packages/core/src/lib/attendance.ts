@@ -30,16 +30,27 @@ export interface Worker {
   updatedAt: string;
 }
 
+const isoOf = (d: Date) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+
 /** The wage in force on a given day (yyyy-mm-dd). */
 export function rateOn(w: Worker, iso: string): number {
   const hist = w.rateHist;
   if (!hist?.length) return +w.rate || 0;
-  let r = +hist[0].rate || 0; // before the first recorded change → earliest known rate
+  // Walk history; days before the first entry use that entry's rate (baseline
+  // should be seeded at 1970-01-01 with the pre-hike wage — see saveWorker).
+  let r = +hist[0].rate || 0;
   for (const h of hist) {
     if (h.from <= iso) r = +h.rate || 0;
     else break;
   }
   return r;
+}
+
+/** Day before yyyy-mm-dd (local calendar). */
+function isoBefore(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, (m || 1) - 1, (d || 1) - 1);
+  return isoOf(dt);
 }
 
 /** Σ present × the rate in force that day — the ONLY correct way to total wages. */
@@ -80,7 +91,7 @@ export async function saveWorker(fields: {
   const prev = fields.id ? await getRec<Worker>("workers", fields.id) : undefined;
   const opening = fields.opening === undefined ? prev?.opening || 0 : r2(Math.max(0, +fields.opening || 0));
   // rate change → apply from Monday of that week so the full week uses the new wage;
-  // earlier weeks keep whatever rate was in force then.
+  // earlier weeks keep whatever rate was in force then (baseline + week entry).
   let rateHist = prev?.rateHist;
   if (prev && r2(+prev.rate || 0) !== rate) {
     const day = fields.rateFrom || now.slice(0, 10);
@@ -90,17 +101,41 @@ export async function saveWorker(fields: {
     const sun = new Date(mon);
     sun.setDate(sun.getDate() + 6);
     const weekEnd = isoOf(sun);
-    const hist = [...(prev.rateHist?.length ? prev.rateHist : [{ from: "1970-01-01", rate: +prev.rate || 0 }])]
-      // drop any mid-week entries in this same week (legacy day-scoped hikes)
-      .filter((h) => h.from === "1970-01-01" || h.from < eff || h.from > weekEnd);
+    // Rate in force the day before this week — never invent "current" for the past.
+    const priorRate = prev.rateHist?.length
+      ? rateOn(prev, isoBefore(eff))
+      : r2(+prev.rate || 0);
+    let hist = [...(prev.rateHist?.length ? prev.rateHist : [])]
+      // drop any entries inside this same week (re-edit / legacy day-scoped hikes)
+      .filter((h) => h.from < eff || h.from > weekEnd);
+    if (!hist.some((h) => h.from < eff)) {
+      hist.unshift({ from: "1970-01-01", rate: priorRate });
+    }
     const at = hist.findIndex((h) => h.from === eff);
     if (at >= 0) hist[at] = { from: eff, rate };
     else hist.push({ from: eff, rate });
     rateHist = hist.sort((a, b) => a.from.localeCompare(b.from));
   }
   const w: Worker = prev
-    ? { ...prev, name, rate, rateHist, opening, updatedAt: now }
-    : { id: "WKR-" + uid(), name, rate, opening, active: true, createdAt: now, updatedAt: now };
+    ? {
+        ...prev,
+        name,
+        rate,
+        opening,
+        updatedAt: now,
+        // never wipe an existing history with `undefined` on a no-op rate save
+        rateHist: rateHist ?? prev.rateHist,
+      }
+    : {
+        id: "WKR-" + uid(),
+        name,
+        rate,
+        rateHist: [{ from: "1970-01-01", rate }],
+        opening,
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      };
   await put("workers", w);
   return w;
 }
@@ -139,8 +174,6 @@ export async function markAttendance(workerId: string, iso: string, present: num
 
 // ---- week math (pure) ----
 
-const isoOf = (d: Date) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
-
 /** Monday of the week containing `d` (local time, midnight). */
 export function weekStart(d: Date): Date {
   const out = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -167,6 +200,30 @@ export const fmtWeekLabel = (days: string[]) => dmy(days[0]) + " — " + dmy(day
 
 export const prevWeek = (start: Date) => { const d = new Date(start); d.setDate(d.getDate() - 7); return d; };
 export const nextWeek = (start: Date) => { const d = new Date(start); d.setDate(d.getDate() + 7); return d; };
+
+/** Week Mondays to pick when a salary hike starts (register week ± range). */
+export function rateFromWeekOptions(
+  registerMonday: Date,
+  opts?: { back?: number; forward?: number },
+): { value: string; label: string }[] {
+  const back = opts?.back ?? 16;
+  const forward = opts?.forward ?? 2;
+  const anchor = weekStart(registerMonday);
+  const todayMon = isoOf(weekStart(new Date()));
+  const screenMon = isoOf(anchor);
+  const out: { value: string; label: string }[] = [];
+  for (let i = -back; i <= forward; i++) {
+    const mon = new Date(anchor);
+    mon.setDate(mon.getDate() + i * 7);
+    const days = weekDays(mon);
+    const value = days[0];
+    let tag = "";
+    if (value === screenMon) tag = " · on screen";
+    else if (value === todayMon) tag = " · this week";
+    out.push({ value, label: fmtWeekLabel(days) + tag });
+  }
+  return out;
+}
 
 // ---- payments (daybook is the single source of truth) ----
 // Two separate pots per worker, told apart by the expense sourceId prefix:

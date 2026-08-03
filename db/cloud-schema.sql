@@ -40,7 +40,9 @@ declare
     -- attendance: workers (name + daily rate) and one row per worker per day
     'workers', 'attendance',
     -- owner audit trail (login / logout / create / delete)
-    'activity'
+    'activity',
+    -- unofficial Buys: timber-in purchase ledger rows (from-name / bill / cft)
+    'purchases'
   ];
 begin
   foreach sch in array array['official', 'unofficial'] loop

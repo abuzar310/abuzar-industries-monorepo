@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/store/useApp";
 import { setSearch, toast } from "@/store/app-store";
 import { brandFor } from "@/lib/brand";
+import { cloakAvailable, toggleCloak } from "@/lib/cloak";
 import { isInvoiceId } from "@/lib/doc";
 import { changePassword, lockApp } from "@/lib/local-auth";
 import { formDialog } from "@/store/dialog-store";
@@ -27,13 +28,15 @@ const SYNC_LABEL = { on: "Synced", off: "Offline", queue: "Saving…", local: "L
 
 export default function TopNav({ tabs }: { tabs: Tab[] }) {
   const TABS = tabs;
-  const { syncState, searchTerm, user, brandMode, unseen } = useApp();
+  const { syncState, searchTerm, user, brandMode, unseen, buysDue } = useApp();
   const path = usePathname();
   const router = useRouter();
   const isOwner = user?.role === "owner";
   const brand = brandFor(brandMode);
 
   const [userMenu, setUserMenu] = useState(false);
+  /** mobile: 5 rapid taps on brand toggles money cloak (owner / unofficial only) */
+  const brandTaps = useRef<{ n: number; t: number }>({ n: 0, t: 0 });
   useEffect(() => {
     if (!userMenu) return;
     const close = () => setUserMenu(false);
@@ -43,22 +46,53 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
 
   function onSearch(value: string) {
     setSearch(value);
-    if (!/^\/(quotations|invoices|customers|suppliers)/.test(path)) router.push("/quotations");
+    if (!/^\/(quotations|invoices|customers|suppliers|buys)/.test(path)) router.push("/quotations");
+  }
+
+  function onBrandPointer(e: MouseEvent) {
+    if (!cloakAvailable() || user?.role !== "owner") return;
+    // Shortcut (Mac Option / Windows Alt + click once) — same as 5 taps
+    if (e.altKey) {
+      e.preventDefault();
+      brandTaps.current = { n: 0, t: 0 };
+      void toggleCloak();
+      return;
+    }
+    // Same on Mac web + phone: click/tap the brand name 5× quickly
+    // (looks like impatient lag tapping — no labeled button)
+    const now = Date.now();
+    if (now - brandTaps.current.t > 1600) brandTaps.current = { n: 0, t: now };
+    brandTaps.current.n += 1;
+    brandTaps.current.t = now;
+    if (brandTaps.current.n >= 5) {
+      brandTaps.current = { n: 0, t: 0 };
+      void toggleCloak();
+    }
   }
 
   return (
     <div className="topnav">
       <div className="topnav-in">
-        <div className="nav-brand">{brand.name}</div>
+        <div
+          className="nav-brand"
+          onClick={onBrandPointer}
+          onContextMenu={(e) => {
+            // block “Inspect” long-press menu from looking special on the brand
+            if (cloakAvailable() && user?.role === "owner") e.preventDefault();
+          }}
+        >
+          {brand.name}
+        </div>
         <div className="tabs">
           {TABS.filter((t) => !t.owner || isOwner).map((t) => {
             const active = isActive(t.href, path);
             const cls = "tab" + (active ? " active" : "");
+            const badgeN = t.badge === "buys" ? buysDue : t.badge ? unseen : 0;
             return (
               <Link key={t.href} href={t.href} className={cls}>
                 <TabIcon icon={t.icon} size={16} />
                 {t.label}
-                {t.badge && unseen > 0 && <span className="tab-badge">{unseen}</span>}
+                {badgeN > 0 && <span className="tab-badge">{badgeN}</span>}
               </Link>
             );
           })}

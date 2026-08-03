@@ -1,12 +1,25 @@
 import type { Doc, Row, Section } from "./types";
+import { isCloaked } from "./cloak";
 
 // ---- tiny formatting helpers (identical to legacy) ----
 
-export const inr = (n: number) =>
-  (isFinite(n) ? n : 0).toLocaleString("en-IN", {
+export const inr = (n: number) => {
+  // panic cloak: look like empty books (₹0.00), not blank/broken UI
+  if (isCloaked()) {
+    return (0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return (isFinite(n) ? n : 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+};
+
+/** Counts / CFT / qty on screen — 0 when cloaked so dashboards look empty. */
+export const qty = (n: number, digits = 0) => {
+  if (isCloaked()) return digits > 0 ? (0).toFixed(digits) : "0";
+  const x = isFinite(n) ? n : 0;
+  return digits > 0 ? x.toFixed(digits) : String(Math.round(x));
+};
 
 /** Cubic feet for one line: (L ft × W in × T in × Pcs) ÷ 144 — ROUNDED to 2 decimals.
  *  Round-first billing: the CFT figure printed on the line is exactly what's billed,

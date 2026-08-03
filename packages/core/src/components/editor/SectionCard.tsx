@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cftOf, directOf, inr, pcsOf, rftOf } from "@/lib/calc";
 import { WOOD_TYPES } from "@/lib/woods";
+import { useApp } from "@/store/useApp";
 import type { Section } from "@/lib/types";
 
 type CellKey = "l" | "w" | "t" | "pcs" | "cft";
@@ -32,6 +33,7 @@ const DIM: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 const MODE_LABEL: Record<Mode, string> = { cft: "By size", direct: "Total CFT", cbm: "Total CBM", rft: "Running ft", pcs: "Per price" };
 
 export default function SectionCard({ sec, si, cft, modes, selRows, reorderable, onName, onRate, onSetMode, onCell, onAmt, onSelRow, onSelAll, onDragStartSec, onDropSec, onAddRow, onDelRow, onDelSec }: Props) {
+  const { cloakMoney } = useApp();
   const mode: Mode =
     sec.calcMode === "rft"
       ? "rft"
@@ -217,11 +219,20 @@ export default function SectionCard({ sec, si, cft, modes, selRows, reorderable,
               <b>{pcsCft.toFixed(2)}</b>
             </span>
           )}
-          <span className="sc">
+          <span className="sc print-money">
             <i>Rate ₹/{unit}</i>
-            <input type="number" inputMode="decimal" value={sec.rate} aria-label="Rate" onChange={(e) => onRate(si, e.target.value)} />
+            <input
+              type="number"
+              inputMode="decimal"
+              value={cloakMoney ? "0" : sec.rate}
+              readOnly={cloakMoney}
+              aria-label="Rate"
+              onChange={(e) => {
+                if (!cloakMoney) onRate(si, e.target.value);
+              }}
+            />
           </span>
-          <span className="sc amt">
+          <span className="sc amt print-money">
             <i>Total Price</i>
             <span className="amt-edit no-print">
               ₹{" "}
@@ -230,9 +241,12 @@ export default function SectionCard({ sec, si, cft, modes, selRows, reorderable,
                 inputMode="decimal"
                 aria-label="Total price"
                 title="Type to set a custom total; clear to use quantity × rate"
-                value={sec.amtOverride ?? ""}
+                value={cloakMoney ? "0" : (sec.amtOverride ?? "")}
                 placeholder={inr(baseAmt)}
-                onChange={(e) => onAmt(si, e.target.value)}
+                readOnly={cloakMoney}
+                onChange={(e) => {
+                  if (!cloakMoney) onAmt(si, e.target.value);
+                }}
               />
             </span>
             {/* solid value for print (the input's placeholder prints too faint) */}

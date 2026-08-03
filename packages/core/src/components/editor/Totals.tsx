@@ -1,5 +1,6 @@
 "use client";
 import { inr, rupeesInWords } from "@/lib/calc";
+import { useApp } from "@/store/useApp";
 import type { PartyStatement } from "@/lib/payments";
 import type { Doc } from "@/lib/types";
 
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, payLines, onGst, onGstMode }: Props) {
+  const { cloakMoney } = useApp();
   const isInv = doc.kind === "invoice";
   const r2 = (n: number) => Math.round(n * 100) / 100;
   const finalPrice = !isInv && (doc.finalPrice || 0) > 0 ? r2(doc.finalPrice!) : 0;
@@ -85,7 +87,15 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
             <button type="button" className="gst-toggle" title="Switch % / flat ₹" onClick={() => onGstMode(flat ? "percent" : "flat")}>
               {flat ? "₹ flat" : "%"}
             </button>
-            <input type="number" inputMode="decimal" value={doc.gst} onChange={(e) => onGst(e.target.value)} />
+            <input
+              type="number"
+              inputMode="decimal"
+              value={cloakMoney ? "0" : doc.gst}
+              readOnly={cloakMoney}
+              onChange={(e) => {
+                if (!cloakMoney) onGst(e.target.value);
+              }}
+            />
             {flat ? "" : "%"}
           </span>
           <span className="val">{inr(gstAmt)}</span>

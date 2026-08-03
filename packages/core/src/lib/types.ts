@@ -71,6 +71,8 @@ export interface Doc {
   finalPrice?: number;
   /** print the agreed final price on the sheet (default OFF — clean quote format). */
   showFinalOnPrint?: boolean;
+  /** print sizes/quantities only — hide rates, prices, and bill totals (default OFF). */
+  hidePricesOnPrint?: boolean;
   quotationId: string;
   paymentStatus: string;
   amountPaid: number;
@@ -87,6 +89,18 @@ export interface Doc {
   /** selling invoice: consignee "Ship To" address + transport vehicle number (shown on the invoice). */
   shipTo?: string;
   vehicleNo?: string;
+  /** customer / bill-to PIN (6 digits) — required for e-way bill JSON. */
+  custPincode?: string;
+  /** ship-to PIN when different from bill-to (defaults to custPincode). */
+  shipToPincode?: string;
+  /** transporter GSTIN / TRANSIN (optional on Part A). */
+  transporterId?: string;
+  /** approx. distance in km (portal may recalculate). */
+  transDistance?: number;
+  /** e-way bill number pasted back after NIC portal generate. */
+  ewbNo?: string;
+  /** e-way bill date from portal (dd-mm-yy display). */
+  ewbDate?: string;
   /** which brand bank to print on this invoice (index into brand.banks) — picker not printed */
   bankIdx?: number;
   /** App A (daybook): cash / UPI split accepted against this quotation. */
@@ -134,6 +148,8 @@ export interface Customer {
   notes: string;
   /** GSTIN — used when the customer is treated as a debtor in the Ledger. */
   gstin?: string;
+  /** 6-digit PIN for e-way / shipping. */
+  pincode?: string;
   /** opening balance — money they owed before using the app (positive = they owe us). */
   opening?: number;
   createdAt: string;
@@ -141,9 +157,11 @@ export interface Customer {
   synced?: boolean;
 }
 
-/** Purchase-side party — same shape as Customer, stored separately so sales customers
- *  never appear in the purchase supplier picker (and vice versa). */
-export type Supplier = Customer;
+/** Purchase-side party (Buys agent / buyer). Stored separately from sales customers. */
+export interface Supplier extends Customer {
+  /** From-accounts under this agent (e.g. Dhannaram → several timber yards). */
+  fromAccounts?: string[];
+}
 
 export interface Stock {
   key: string;
@@ -168,7 +186,52 @@ export type StoreName =
   | "payHolders"
   | "workers"
   | "attendance"
-  | "activity";
+  | "activity"
+  | "purchases";
+
+/**
+ * Unofficial Buys entry.
+ * - kind "buy": timber-in purchase row (agent + from-account)
+ * - kind "pay": payment register row (cash / bank against agent + from)
+ */
+export interface Purchase {
+  id: string;
+  kind?: "buy" | "pay";
+  /** dd-mm-yy */
+  date: string;
+  /** Agent / buyer (suppliers store) — e.g. Dhannaram */
+  supplierId: string;
+  /** Denormalized agent name */
+  buyerName?: string;
+  /** From-account under the agent (yard / party name) */
+  fromName: string;
+  billNo: string;
+  cft: number;
+  rate: number;
+  /** line = cft × rate (or override) */
+  amount: number;
+  /** optional GST ₹ — user typed, may be empty */
+  gst: number;
+  /** optional bill / credit portion — leave empty if none */
+  billAmount: number;
+  note: string;
+  /** money paid in cash */
+  cashPaid: number;
+  /** money paid by bank transfer */
+  bankPaid: number;
+  /** dd-mm-yy of payment (optional) */
+  payDate: string;
+  /** dd-mm-yy — ping owner on/after this date (Buys reminder) */
+  remindAt?: string;
+  /** @deprecated legacy — migrated into cashPaid */
+  topAmount?: number;
+  topPaid?: number;
+  billPaid?: number;
+  billPayDate?: string;
+  accountNote?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /** Owner audit trail — login/logout/create/update/delete (unofficial Logs tab). */
 export interface Activity {
@@ -200,7 +263,8 @@ export interface Tab {
   label: string;
   href: string;
   icon?: string;
-  badge?: boolean;
+  /** true = Daybook unseen; "buys" = due purchase reminders */
+  badge?: boolean | "buys";
   owner?: boolean;
 }
 

@@ -21,6 +21,8 @@ export async function saveSupplier(fields: {
   s.gstin = (fields.gstin || "").trim().toUpperCase();
   s.notes = (fields.notes || "").trim();
   s.opening = 0;
+  // keep from-accounts list (Buys agents) across edits
+  if (!s.fromAccounts) s.fromAccounts = [];
   s.updatedAt = nowIso();
   await put("suppliers", s);
   return s;

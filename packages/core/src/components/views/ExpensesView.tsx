@@ -15,10 +15,10 @@ import type { DaybookSession, Doc, Expense, PayMode } from "@/lib/types";
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id;
 
 export default function ExpensesView() {
-  const { dataVersion, user } = useApp();
+  const { dataVersion, user, cloakMoney } = useApp();
   const isOwner = user?.role === "owner"; // Owner: reviews + can delete entries; Manager: enters only, cannot delete
-  const [all, setAll] = useState<Expense[]>([]);
-  const [sessions, setSessions] = useState<DaybookSession[]>([]);
+  const [allRaw, setAll] = useState<Expense[]>([]);
+  const [sessionsRaw, setSessions] = useState<DaybookSession[]>([]);
   const [quotes, setQuotes] = useState<Doc[]>([]); // for the customer name + phone on each statement
   const [openSes, setOpenSes] = useState<string | null>(null);
   const [notif, setNotif] = useState(""); // "" until client checks; then default/granted/denied
@@ -45,6 +45,8 @@ export default function ExpensesView() {
     upiAccounts().then(setUpiAccts);
     allRec<Doc>("quotations").then(setQuotes);
   }, []);
+  const all = cloakMoney ? [] : allRaw;
+  const sessions = cloakMoney ? [] : sessionsRaw;
   // quote id → { name, phone } so each statement can show the customer + their phone
   const partyBySource = new Map(quotes.map((q) => [q.id, { name: q.customerName || "", phone: q.phone || "" }]));
   // cash daybook (current open session) = non-UPI entries not yet archived

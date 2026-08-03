@@ -1,6 +1,7 @@
 "use client";
 // Side effects shared by the lock gate and the boot path.
 import { bootData, isBooted } from "@/lib/data";
+import { hydrateCloak } from "@/lib/cloak";
 import { loadBrand } from "@/lib/brand";
 import { checkOwnerNotifications, loadNotifyState, requestNotifyPermission } from "@/lib/notify";
 import { bumpData, getState, toast, type BrandMode } from "./app-store";
@@ -25,6 +26,7 @@ export async function afterUnlock() {
     }
   }
   loadNotifyState();
+  hydrateCloak(); // re-apply device-local money cloak after unlock
   if (u?.role === "owner") {
     requestNotifyPermission();
     checkOwnerNotifications();

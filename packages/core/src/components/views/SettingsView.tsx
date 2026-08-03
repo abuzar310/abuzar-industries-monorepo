@@ -10,6 +10,7 @@ import { getFeatures } from "@/lib/features";
 import { inr } from "@/lib/calc";
 import { migrateAccountReceiptsToQuotes } from "@/lib/receipts";
 import { autoPostEnabled, setAutoPost } from "@/lib/ledger-autopost";
+import { getBusinessPincode, isValidPincode, setBusinessPincode } from "@/lib/ewaybill";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 
@@ -18,8 +19,10 @@ export default function SettingsView() {
   const [autoPost, setAutoPostUI] = useState(false);
   const [trash, setTrash] = useState<Doc[]>([]);
   const [archive, setArchive] = useState<Doc[]>([]);
+  const [bizPin, setBizPin] = useState("");
   const ledgerOn = getFeatures().ledger;
   const receiptsApp = getFeatures().acceptPayment;
+  const ewayOn = getFeatures().invoices && !getFeatures().simpleQuote;
 
   const loadTrash = () => {
     trashedDocs().then(setTrash);
@@ -27,8 +30,9 @@ export default function SettingsView() {
   };
   useEffect(() => {
     autoPostEnabled().then(setAutoPostUI);
+    if (ewayOn) getBusinessPincode().then(setBizPin);
     loadTrash();
-  }, []);
+  }, [ewayOn]);
 
   async function onRestore(d: Doc) {
     await restoreDoc(docStore(d), d.id);
@@ -110,6 +114,36 @@ export default function SettingsView() {
           every device shows the same data within seconds. Nothing is stored on this device.
         </p>
       </div>
+
+      {ewayOn && (
+        <div className="setbox">
+          <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>E-way bill · business PIN</div>
+          <p className="note">
+            From-place PIN used in the NIC bulk JSON (ewaybillgst.gov.in). Default is Chitradurga 577501.
+          </p>
+          <div className="rowbtns" style={{ alignItems: "center" }}>
+            <input
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="6 digits"
+              value={bizPin}
+              onChange={(e) => setBizPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              style={{ width: 120, padding: "8px 10px", border: "1px solid var(--line-2)", borderRadius: 8 }}
+            />
+            <button
+              className="btn primary sm"
+              type="button"
+              onClick={async () => {
+                if (!isValidPincode(bizPin)) return toast("Enter a valid 6-digit PIN");
+                await setBusinessPincode(bizPin);
+                toast("Business PIN saved ✓");
+              }}
+            >
+              Save PIN
+            </button>
+          </div>
+        </div>
+      )}
 
       {ledgerOn && (
         <div className="setbox">

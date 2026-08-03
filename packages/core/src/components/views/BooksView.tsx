@@ -51,7 +51,7 @@ const TABS: { key: BookTab; label: string; desc: string }[] = [
 ];
 
 export default function BooksView() {
-  const { ready, dataVersion, brandMode } = useApp();
+  const { ready, dataVersion, brandMode, cloakMoney } = useApp();
   const now = new Date();
   const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, "0"));
   const [year, setYear] = useState(String(now.getFullYear()).slice(2));
@@ -59,14 +59,22 @@ export default function BooksView() {
   const [pdfBusy, setPdfBusy] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [quotes, setQuotes] = useState<Doc[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [collections, setCollections] = useState<AccountCollection[]>([]);
-  const [holders, setHolders] = useState<PayHolder[]>([]);
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [marks, setMarks] = useState<AttendanceMark[]>([]);
-  const [carry, setCarry] = useState(0);
+  const [expensesRaw, setExpenses] = useState<Expense[]>([]);
+  const [quotesRaw, setQuotes] = useState<Doc[]>([]);
+  const [customersRaw, setCustomers] = useState<Customer[]>([]);
+  const [collectionsRaw, setCollections] = useState<AccountCollection[]>([]);
+  const [holdersRaw, setHolders] = useState<PayHolder[]>([]);
+  const [workersRaw, setWorkers] = useState<Worker[]>([]);
+  const [marksRaw, setMarks] = useState<AttendanceMark[]>([]);
+  const [carryRaw, setCarry] = useState(0);
+  const expenses = cloakMoney ? [] : expensesRaw;
+  const quotes = cloakMoney ? [] : quotesRaw;
+  const customers = cloakMoney ? [] : customersRaw;
+  const collections = cloakMoney ? [] : collectionsRaw;
+  const holders = cloakMoney ? [] : holdersRaw;
+  const workers = cloakMoney ? [] : workersRaw;
+  const marks = cloakMoney ? [] : marksRaw;
+  const carry = cloakMoney ? 0 : carryRaw;
   /** Month ledger filters */
   const [ledCat, setLedCat] = useState("all");
   const [ledFrom, setLedFrom] = useState("");

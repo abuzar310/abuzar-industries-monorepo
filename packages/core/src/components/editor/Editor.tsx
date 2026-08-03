@@ -20,6 +20,7 @@ import { postInvoice } from "@/lib/ledger-autopost";
 import { balanceReminderMessage, reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
 import { generatePdf, printOrSavePdf } from "@/lib/pdf";
 import { promoteTempTab, setTempDoc } from "@/lib/editor-tabs";
+import { OFFICIAL_DEFAULT_WOOD } from "@/lib/woods";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { BoxRect, Customer, Doc, Expense, Row } from "@/lib/types";
@@ -34,6 +35,8 @@ import InvoicePrintA from "./InvoicePrintA";
 import CustomerPicker from "./CustomerPicker";
 import GstinField from "./GstinField";
 import DateField from "./DateField";
+import EwayBillPanel from "./EwayBillPanel";
+import { extractPincode } from "@/lib/ewaybill";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 const NO_SEL: Set<number> = new Set(); // stable empty selection for non-active boxes
@@ -87,6 +90,7 @@ export default function Editor({
   const secRef = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<{ si: number; ri: number; k: string } | null>(null);
   const [editingNo, setEditingNo] = useState(false);
+  const [ewayAutoRun, setEwayAutoRun] = useState(false);
   const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
   const [expenses, setExpenses] = useState<Expense[]>([]); // this quote's recorded payments (for the mini statements)
   const [customers, setCustomers] = useState<Customer[]>([]); // for the searchable customer picker (avoid duplicates)
@@ -121,7 +125,7 @@ export default function Editor({
   const totalPcs = isRent
     ? 0
     : doc.sections.reduce((s, sec) => s + sec.rows.reduce((p, r) => p + (Math.round(+r.pcs) || 0), 0), 0);
-  const { brandMode, user } = useApp();
+  const { brandMode, user, cloakMoney } = useApp();
   const brand = brandFor(brandMode);
   const invBank = brand.banks?.[doc.bankIdx ?? 0] || brand.bank; // chosen bank for this invoice
 
@@ -237,6 +241,7 @@ export default function Editor({
       gstMode: cur.gstMode,
       finalPrice: cur.finalPrice,
       showFinalOnPrint: cur.showFinalOnPrint,
+      hidePricesOnPrint: cur.hidePricesOnPrint,
       freeLayout: cur.freeLayout,
       billBox: cur.billBox,
       status,
@@ -310,6 +315,7 @@ export default function Editor({
       d.sitePhone = c.sitePhone || "";
       d.address = c.address || "";
       d.custGstin = c.gstin || "";
+      d.custPincode = c.pincode || extractPincode(c.address) || d.custPincode || "";
     });
   const onName = (si: number, v: string) =>
     update((d) => {
@@ -422,7 +428,11 @@ export default function Editor({
       if (feat.simpleQuote) {
         d.sections.push({ name: "White Teak", rate: WOOD_PRICES["white teak"], rows: [{ l: "", w: "", t: "", pcs: "" }] });
       } else {
-        d.sections.push({ name: "Imported Teak Wood", rate: 4000, rows: [{ l: "", w: "", t: "", pcs: "" }] });
+        d.sections.push({
+          name: OFFICIAL_DEFAULT_WOOD,
+          rate: WOOD_PRICES["imported teak wood"] || 4000,
+          rows: [{ l: "", w: "", t: "", pcs: "" }],
+        });
       }
     });
 
@@ -430,6 +440,7 @@ export default function Editor({
   const onBox = (si: number, r: BoxRect) => update((d) => (d.sections[si].box = r));
   const onBillBox = (r: BoxRect) => update((d) => (d.billBox = r));
   const toggleFree = () => update((d) => (d.freeLayout = !d.freeLayout));
+  const toggleHidePrices = () => update((d) => (d.hidePricesOnPrint = !d.hidePricesOnPrint));
 
   // ---- arrow-key grid navigation (identical behaviour to legacy) ----
   function findDim(si: number, ri: number, k: string) {
@@ -806,6 +817,23 @@ export default function Editor({
   const showLink = isInv && !!doc.quotationId;
   const freeMode = feat.simpleQuote && !!doc.freeLayout;
 
+  // panic cloak: open quote must not show customer/lines — look like nothing is open
+  if (cloakMoney && feat.simpleQuote) {
+    return (
+      <div className="view active" id="v-editor">
+        <div className="doctool">
+          <span className="lab">New</span>
+          <button className="btn sm" onClick={onNewQuote}>
+            + Quotation
+          </button>
+        </div>
+        <div className="empty" style={{ padding: 48, textAlign: "center" }}>
+          No quotation open.
+        </div>
+      </div>
+    );
+  }
+
   // one wood box (shared by the auto-layout and the free-arrange canvas)
   const renderCard = (si: number) => {
     const sec = doc.sections[si];
@@ -996,7 +1024,12 @@ export default function Editor({
       {/* printable sheet */}
       <div
         id="sheet"
-        className={(isInv ? "inv" : feat.simpleQuote ? "sq" : "") + (freeMode ? " free" : "") + (isInv && !isBuy && !isRent ? " p3a" : "")}
+        className={
+          (isInv ? "inv" : feat.simpleQuote ? "sq" : "") +
+          (freeMode ? " free" : "") +
+          (isInv && !isBuy && !isRent ? " p3a" : "") +
+          (!isInv && (doc.hidePricesOnPrint || cloakMoney) ? " hide-prices" : "")
+        }
         ref={sheetRef}
       >
         {isInv && !isBuy && (
@@ -1175,12 +1208,30 @@ export default function Editor({
                   value={doc.custGstin || ""}
                   onChange={(v) => setField("custGstin", v)}
                   onUseName={(name) => update((d) => (d.customerName = name))}
-                  onUseAddress={(addr) => update((d) => (d.address = addr))}
+                  onUseAddress={(addr) =>
+                    update((d) => {
+                      d.address = addr;
+                      const pin = extractPincode(addr);
+                      if (pin && !d.custPincode) d.custPincode = pin;
+                    })
+                  }
                 />
                 {!isBuy && !isRent && (
                   <div className="f">
                     <label>Ship To (address)</label>
                     <input placeholder="—" value={doc.shipTo || ""} onChange={(e) => setField("shipTo", e.target.value)} />
+                  </div>
+                )}
+                {isInv && !isBuy && !isRent && (
+                  <div className="f">
+                    <label>PIN code</label>
+                    <input
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="6 digits"
+                      value={doc.custPincode || ""}
+                      onChange={(e) => setField("custPincode", e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    />
                   </div>
                 )}
                 <div className="f" style={{ gridColumn: "1 / -1" }}>
@@ -1359,6 +1410,28 @@ export default function Editor({
         <button className="btn go" onClick={onPrint} disabled={temporary} title={temporary ? "Save as new quotation first" : undefined}>
           Print
         </button>
+        {feat.invoices && !feat.simpleQuote && isInv && !isBuy && !isRent && (
+          <button
+            type="button"
+            className="btn primary"
+            title="Save invoice, download NIC JSON, open e-way portal"
+            onClick={() => {
+              document.getElementById("eway-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              setEwayAutoRun(true);
+            }}
+          >
+            E-way
+          </button>
+        )}
+        {!isInv && (
+          <button
+            className={"btn" + (doc.hidePricesOnPrint ? " primary" : "")}
+            onClick={toggleHidePrices}
+            title="When on, Print / PDF omit rates, prices, and bill totals — sizes and quantities only"
+          >
+            {doc.hidePricesOnPrint ? "✓ Hide prices" : "Hide prices"}
+          </button>
+        )}
         {feat.simpleQuote && (
           <button className={"btn" + (freeMode ? " primary" : "")} onClick={toggleFree} title="Drag & resize the boxes freely on the A4 page">
             {freeMode ? "✓ Free arrange" : "Free arrange"}
@@ -1435,6 +1508,21 @@ export default function Editor({
           by={user?.id || "unknown"}
           setAggregates={setPayAggregates}
           reload={loadExpenses}
+        />
+      )}
+
+      {/* official sell invoice: e-way via NIC bulk JSON (only free path without GSP Client ID) */}
+      {feat.invoices && !feat.simpleQuote && isInv && !isBuy && !isRent && (
+        <EwayBillPanel
+          doc={doc}
+          onChange={(patch) =>
+            update((d) => {
+              Object.assign(d, patch);
+            })
+          }
+          onPersist={() => saveNow()}
+          autoRun={ewayAutoRun}
+          onAutoRunDone={() => setEwayAutoRun(false)}
         />
       )}
 

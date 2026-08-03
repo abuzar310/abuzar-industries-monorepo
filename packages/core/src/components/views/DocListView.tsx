@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
-import { computeDoc, dateSortKey, inr } from "@/lib/calc";
+import { computeDoc, dateSortKey, inr, qty } from "@/lib/calc";
 import { createInvoice, createQuotation } from "@/lib/create";
 import { seriesOf } from "@/lib/invoice-id";
 import { trashDoc } from "@/lib/trash";
@@ -80,7 +80,7 @@ function applySearch(arr: Doc[], q: string) {
 }
 
 export default function DocListView({ store, title, sub, statusCol, empty, showNew }: Props) {
-  const { dataVersion, searchTerm, user, brandMode } = useApp();
+  const { dataVersion, searchTerm, user, brandMode, cloakMoney } = useApp();
   // manager can delete quotations too (soft-delete → Recycle bin; owner controls restore/purge);
   // invoices stay owner-only
   const canDelete = user?.role === "owner" || store === "quotations";
@@ -125,9 +125,11 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
   }, [store, dataVersion]);
 
   const filtered = useMemo(() => {
+    // panic cloak: not a single quotation/invoice row — looks like a fresh empty app
+    if (cloakMoney) return [];
     const base = isInv && trade !== "all" ? docs.filter((d) => seriesOf(d) === trade) : docs;
     return applySearch(base, q || searchTerm);
-  }, [docs, q, searchTerm, isInv, trade]);
+  }, [docs, q, searchTerm, isInv, trade, cloakMoney]);
   // report follows the active search, so what you export is what you see
   const report = useMemo(() => (canReport ? monthlyReport(filtered) : null), [canReport, filtered]);
   const reportRef = useRef<HTMLDivElement>(null);
@@ -259,7 +261,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
         {q && (
           <button className="s-clear" onClick={() => setQ("")} aria-label="Clear search">×</button>
         )}
-        <span className="s-count">{filtered.length}</span>
+        <span className="s-count">{qty(filtered.length)}</span>
       </div>
 
       {canDelete && sel.size > 0 && (
@@ -402,7 +404,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
           </div>
 
           <div className="rep-summary cols3">
-            <div><b>{report.total.count}</b><span>Quotations</span></div>
+            <div><b>{qty(report.total.count)}</b><span>Quotations</span></div>
             <div><b>₹{inr(report.total.billed)}</b><span>Billed amount</span></div>
             <div><b>₹{inr(report.total.paid)}</b><span>Received</span></div>
           </div>

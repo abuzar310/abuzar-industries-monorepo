@@ -1,5 +1,6 @@
 import { activeBrand } from "./brand";
 import { cftOf, computeDoc, inr } from "./calc";
+import { isCloaked } from "./cloak";
 import { generatePdfFile } from "./pdf";
 import type { Doc } from "./types";
 
@@ -24,25 +25,33 @@ export function quoteMessage(doc: Doc): string {
   // per-section quantity from the SAME math the sheet uses (secCft handles every entry
   // mode — by-size, direct CFT, CBM, per-piece, running feet — not just L×W×T rows)
   const unitOf = (m?: string) => (m === "cbm" ? "CBM" : m === "rft" ? "RFT" : m === "pcs" ? "pc" : "CFT");
+  const hideMoney = isCloaked() || (doc.kind !== "invoice" && !!doc.hidePricesOnPrint);
   const lines = doc.rented
-    ? `• ${doc.rentDesc || "Rent"}: ₹${inr(doc.rentAmount || 0)}`
+    ? hideMoney
+      ? `• ${doc.rentDesc || "Rent"}`
+      : `• ${doc.rentDesc || "Rent"}: ₹${inr(doc.rentAmount || 0)}`
     : doc.sections
         .map((s, i) => {
           const qty = t.secCft[i] ?? s.rows.reduce((c, r) => c + cftOf(r), 0);
           const u = unitOf(s.calcMode);
-          return `• ${s.name}: ${qty.toFixed(2)} ${u} @ ₹${s.rate}/${u}`;
+          return hideMoney
+            ? `• ${s.name}: ${qty.toFixed(2)} ${u}`
+            : `• ${s.name}: ${qty.toFixed(2)} ${u} @ ₹${s.rate}/${u}`;
         })
         .join("\n");
   const kind = doc.kind === "invoice" ? "Invoice" : "Quotation";
   const sign = [b.name, [b.phone, b.web].filter(Boolean).join(" · ")].filter(Boolean).join("\n");
-  return `${greet(doc.customerName)}
-Please find your ${kind.toLowerCase()} ${doc.number} from ${b.name}.
-
-${lines}
+  const moneyBlock = hideMoney
+    ? ""
+    : `
 
 Sub-total: ₹${inr(t.sub)}
 GST (${doc.gst}%): ₹${inr(t.gstAmt)}
-Grand Total: ₹${inr(t.grand)}
+Grand Total: ₹${inr(t.grand)}`;
+  return `${greet(doc.customerName)}
+Please find your ${kind.toLowerCase()} ${doc.number} from ${b.name}.
+
+${lines}${moneyBlock}
 
 Thank you for your business,
 ${sign}${reviewFooter()}`;
@@ -68,6 +77,12 @@ export function balanceReminderMessage(opts: {
   const who = (name || "").trim() || "Customer";
   // reminders go out under the real business name — never the "Cut Size" app title
   const from = activeBrand().name.toLowerCase().includes("abuzar") ? activeBrand().name : "ABUZAR TIMBERS, CHITRADURGA";
+  if (isCloaked()) {
+    return `Hello ${who},
+This is an automated payment reminder from ${from}.
+Please contact us regarding${ref ? " " + ref : " your account"}.
+Thank you.`;
+  }
   return `Hello ${who},
 This is an automated payment reminder from ${from}.
 Your balance pending${ref ? " for " + ref : ""} is ₹${inr(balance)} (from a total of ₹${inr(total)}).

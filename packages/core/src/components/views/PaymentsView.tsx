@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
-import { inr } from "@/lib/calc";
+import { inr, qty } from "@/lib/calc";
 import { partyLedger, type Party, type PartyStatement } from "@/lib/payments";
 import { unwindReceiptPieces } from "@/lib/receipts";
 import { useFocusFlash } from "@/lib/use-focus-flash";
@@ -133,7 +133,7 @@ function buildBankLedger(p: Party, expenses: Expense[], customers: Customer[]): 
 }
 
 export default function PaymentsView() {
-  const { ready, dataVersion } = useApp();
+  const { ready, dataVersion, cloakMoney } = useApp();
   const router = useRouter();
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -153,15 +153,21 @@ export default function PaymentsView() {
   }, [ready, dataVersion, load]);
 
   const flash = useFocusFlash();
-  const { parties, totalBilled, totalPaid, totalPending } = partyLedger(quotes, expenses, customers);
+  // panic cloak: no party rows / balances at all
+  const { parties, totalBilled, totalPaid, totalPending } = partyLedger(
+    cloakMoney ? [] : quotes,
+    cloakMoney ? [] : expenses,
+    cloakMoney ? [] : customers,
+  );
   const dueCount = parties.filter((p) => p.balance > 0.5).length;
   const term = q.trim().toLowerCase();
   const shown = parties
     .filter((p) => p.balance > 0.5)
     .filter((p) => (term ? p.name.toLowerCase().includes(term) || p.phone.includes(term) : true));
 
-  const balClass = (b: number) => (b < -0.5 ? "adv" : b <= 0.5 ? "ok" : "due");
-  const balText = (b: number) => (b < -0.5 ? "₹" + inr(-b) : b <= 0.5 ? "Settled" : "₹" + inr(b));
+  const balClass = (b: number) => (cloakMoney || b <= 0.5 ? "ok" : b < -0.5 ? "adv" : "due");
+  const balText = (b: number) =>
+    cloakMoney || b <= 0.5 ? "Settled" : b < -0.5 ? "₹" + inr(-b) : "₹" + inr(b);
 
   return (
     <div className="ledger-page">
@@ -175,7 +181,7 @@ export default function PaymentsView() {
           <div className="party-stat-label">Total Pending</div>
           <div className="party-stat-value due">₹ {inr(totalPending)}</div>
           <div className="party-stat-sub">
-            {dueCount} {dueCount === 1 ? "party still owes" : "parties still owe"}
+            {qty(dueCount)} {dueCount === 1 ? "party still owes" : "parties still owe"}
           </div>
         </div>
         <div className={"party-card" + flash("received")}>
@@ -186,7 +192,9 @@ export default function PaymentsView() {
         <div className={"party-card" + flash("billed")}>
           <div className="party-stat-label">Billed</div>
           <div className="party-stat-value">₹ {inr(totalBilled)}</div>
-          <div className="party-stat-sub">{parties.length} {parties.length === 1 ? "customer" : "customers"}</div>
+          <div className="party-stat-sub">
+            {qty(parties.length)} {parties.length === 1 ? "customer" : "customers"}
+          </div>
         </div>
       </div>
 
@@ -309,7 +317,7 @@ function PartyCard({
             {p.phone && <small>{p.phone}</small>}
           </div>
           <div className="lch-meta">
-            Paid ₹{inr(p.paid)} of ₹{inr(p.billed)} · {p.quoteCount} {p.quoteCount === 1 ? "quote" : "quotes"}
+            Paid ₹{inr(p.paid)} of ₹{inr(p.billed)} · {qty(p.quoteCount)} {p.quoteCount === 1 ? "quote" : "quotes"}
           </div>
         </div>
         <div className={"lch-bal " + bc}>

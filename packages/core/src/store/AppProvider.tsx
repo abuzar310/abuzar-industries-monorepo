@@ -7,6 +7,7 @@ import { setBrandMode, setReady, setSyncState, setUser, toast as toastMsg, type 
 import { setDefaultBrand } from "./session";
 import { initPwa } from "@/lib/pwa";
 import { loadBrand } from "@/lib/brand";
+import { hydrateCloak } from "@/lib/cloak";
 import { loadLocalUser } from "@/lib/local-auth";
 import { checkOwnerNotifications, loadNotifyState } from "@/lib/notify";
 import TopNav from "@/components/TopNav";
@@ -37,6 +38,7 @@ export default function AppProvider({
     initPwa();
     bindUnloadGuard(); // warn before closing a tab with unsent writes
     setBrandMode(defaultBrand); // lock screen shows the right brand pre-login; loadBrand refines after
+    hydrateCloak(); // money cloak from cloud meta (unofficial)
 
     // Delta-poll: fold other devices' changes into the cache. On a 401 the
     // session expired — drop everything so the LockGate reappears.
@@ -44,6 +46,7 @@ export default function AppProvider({
       if (document.hidden) return;
       try {
         await pullChanges();
+        hydrateCloak(); // pick up cloakMoney toggled on phone/PC
         await checkOwnerNotifications();
       } catch (e) {
         // ONLY a real session expiry logs out — a timeout / flaky network must
@@ -68,6 +71,7 @@ export default function AppProvider({
       if (user) {
         await bootData();
         await loadBrand(defaultBrand);
+        hydrateCloak(); // meta is loaded with bootstrap
         loadNotifyState();
         await checkOwnerNotifications();
       }
