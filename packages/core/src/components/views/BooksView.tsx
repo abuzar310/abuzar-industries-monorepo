@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
-import { inDaybook, isInflow, openingCarry, spendCategoryOf, spendCatKey, spendDetailOf, SPEND_CATEGORIES } from "@/lib/expenses";
+import { inBooks, inDaybook, isInflow, openingCarry, spendCategoryOf, spendCatKey, spendDetailOf, SPEND_CATEGORIES } from "@/lib/expenses";
 import { partyLedger, quoteBill } from "@/lib/payments";
 import { acctLedger, listCollections, listHolders, type AccountCollection, type PayHolder } from "@/lib/accounts";
 import { listAttendance, listWorkers, workerAccount, type AttendanceMark, type Worker } from "@/lib/attendance";
@@ -98,7 +98,10 @@ export default function BooksView() {
   };
 
   // ── monthly income & expenses (from the daybook — every money event) ──────
-  const monthExp = useMemo(() => expenses.filter((e) => inMonth(e.date)), [expenses, month, year]); // eslint-disable-line react-hooks/exhaustive-deps
+  const monthExp = useMemo(
+    () => expenses.filter((e) => inMonth(e.date) && inBooks(e)),
+    [expenses, month, year], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const income = useMemo(() => {
     const sales = monthExp.filter((e) => e.type === "sale" && !e.charge);
