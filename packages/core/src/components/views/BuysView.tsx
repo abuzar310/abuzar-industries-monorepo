@@ -22,6 +22,7 @@ import {
   savePurchase,
   setPurchaseReminder,
   totalPurchase,
+  type PurchaseTotals,
 } from "@/lib/purchases";
 import { useApp } from "@/store/useApp";
 import { bumpData, setBuysDue, toast } from "@/store/app-store";
@@ -60,6 +61,14 @@ const emptyPayForm = () => ({
 const money = (n: number) => (n ? inr(n) : "—");
 const vol = (n: number) => (n ? qty(n, 2) : "—");
 
+const r2 = (n: number) => Math.round((n || 0) * 100) / 100;
+/** Cash side outstanding = cash portion of the deal − cash paid. */
+const cashBal = (t: PurchaseTotals) => r2((t.cashAmount || 0) - (t.cashPaid || 0));
+/** Invoice side outstanding = bill amount − bank paid. */
+const invBal = (t: PurchaseTotals) => r2((t.billAmount || 0) - (t.bankPaid || 0));
+const balToneOf = (n: number) => (Math.abs(n) <= 0.5 ? "ok" : n > 0 ? "due" : "adv");
+const balText = (n: number) => (Math.abs(n) <= 0.5 ? "Settled" : "₹" + inr(Math.abs(n)));
+
 /** Real <select> + optional custom input — datalist is unreliable in the app shell. */
 function FromAccountField({
   buyerId,
@@ -91,7 +100,7 @@ function FromAccountField({
             else onChange(v);
           }}
         >
-          <option value="">{buyerId ? "Select from-account…" : "Pick buyer first"}</option>
+          <option value="">{buyerId ? "Select from-account…" : "Pick supplier first"}</option>
           {options.map((n) => (
             <option key={n} value={n}>
               {n}
@@ -286,30 +295,30 @@ export default function BuysView() {
 
   async function saveFromAccount() {
     if (!form.supplierId || !form.fromName.trim()) {
-      toast("Pick buyer and type a from name");
+      toast("Pick supplier and type a from name");
       return;
     }
     await addFromAccount(form.supplierId, form.fromName);
     bumpData();
     load();
-    toast("From account saved under buyer");
+    toast("From account saved under supplier");
   }
 
   async function savePayFromAccount() {
     if (!payForm.supplierId || !payForm.fromName.trim()) {
-      toast("Pick buyer and type a from name");
+      toast("Pick supplier and type a from name");
       return;
     }
     await addFromAccount(payForm.supplierId, payForm.fromName);
     bumpData();
     load();
-    toast("From account saved under buyer");
+    toast("From account saved under supplier");
   }
 
   async function onSave() {
     const buyer = buyers.find((b) => b.id === form.supplierId);
     if (!buyer) {
-      toast("Pick a buyer / agent");
+      toast("Pick a supplier");
       return;
     }
     if (!form.fromName.trim()) {
@@ -409,7 +418,7 @@ export default function BuysView() {
   async function onSavePay() {
     const buyer = buyers.find((b) => b.id === payForm.supplierId);
     if (!buyer) {
-      toast("Pick a buyer / agent");
+      toast("Pick a supplier");
       return;
     }
     if (!payForm.fromName.trim()) {
@@ -452,8 +461,8 @@ export default function BuysView() {
 
   async function onDelete(p: Purchase) {
     const ok = await confirmDialog({
-      title: p.kind === "pay" ? "Delete this payment?" : "Delete this buy?",
-      message: `${p.buyerName || "Buyer"} · ${p.fromName || "—"} · ₹${inr(p.kind === "pay" ? paidTotal(p) : totalPurchase(p))}`,
+      title: p.kind === "pay" ? "Delete this payment?" : "Delete this purchase?",
+      message: `${p.buyerName || "Supplier"} · ${p.fromName || "—"} · ₹${inr(p.kind === "pay" ? paidTotal(p) : totalPurchase(p))}`,
       confirmLabel: "Delete",
       danger: true,
     });
@@ -477,7 +486,7 @@ export default function BuysView() {
     setBuyerFilter(b.id);
     setForm((f) => ({ ...f, supplierId: b.id }));
     setPayForm((f) => ({ ...f, supplierId: b.id }));
-    toast("Buyer " + b.name + " added");
+    toast("Supplier " + b.name + " added");
   }
 
   async function editBuyer(s: Supplier) {
@@ -485,7 +494,7 @@ export default function BuysView() {
     if (!next) return;
     bumpData();
     load();
-    toast("Buyer updated");
+    toast("Supplier updated");
   }
 
   async function removeBuyer(s: Supplier) {
@@ -494,8 +503,8 @@ export default function BuysView() {
       title: "Delete " + s.name + "?",
       message:
         n > 0
-          ? `${n} row${n === 1 ? "" : "s"} stay on the sheet; only this buyer is removed.`
-          : "Only this buyer / agent is removed.",
+          ? `${n} row${n === 1 ? "" : "s"} stay on the sheet; only this supplier is removed.`
+          : "Only this supplier is removed.",
       confirmLabel: "Delete",
       danger: true,
     });
@@ -504,7 +513,7 @@ export default function BuysView() {
     if (buyerFilter === s.id) setBuyerFilter("");
     bumpData();
     load();
-    toast("Buyer removed");
+    toast("Supplier removed");
   }
 
   const balAbs = Math.abs(totals.balance);
@@ -514,12 +523,18 @@ export default function BuysView() {
     <div className="buys-page">
       <div className="buys-top">
         <div>
-          <h1 className="buys-h1">Buys</h1>
-          <p className="buys-sub">Timber in · agent buyers & from-accounts</p>
+          <h1 className="buys-h1">Suppliers</h1>
+          <p className="buys-sub">Timber in · suppliers & from-accounts</p>
         </div>
-        <div className={`buys-bal buys-bal-${balTone}`}>
-          <span>Balance</span>
-          <b>{balAbs <= 0.5 ? "Settled" : "₹" + inr(balAbs)}</b>
+        <div className="buys-bal-row">
+          <div className={`buys-bal buys-bal-${balToneOf(cashBal(totals))}`}>
+            <span>Cash balance</span>
+            <b>{balText(cashBal(totals))}</b>
+          </div>
+          <div className={`buys-bal buys-bal-${balToneOf(invBal(totals))}`}>
+            <span>Invoice balance</span>
+            <b>{balText(invBal(totals))}</b>
+          </div>
         </div>
       </div>
 
@@ -532,14 +547,14 @@ export default function BuysView() {
             Payments
           </button>
           <button type="button" className={seg === "buyers" ? "on" : ""} onClick={() => setSeg("buyers")}>
-            Buyers
+            Suppliers
           </button>
         </div>
 
         {(seg === "ledger" || seg === "payments") && (
           <>
-            <select value={buyerFilter} onChange={(e) => setBuyerFilter(e.target.value)} aria-label="Filter buyer">
-              <option value="">All buyers</option>
+            <select value={buyerFilter} onChange={(e) => setBuyerFilter(e.target.value)} aria-label="Filter supplier">
+              <option value="">All suppliers</option>
               {buyers.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -567,11 +582,11 @@ export default function BuysView() {
               aria-label="Search"
             />
             <button type="button" className="btn sm" onClick={addBuyer}>
-              + Buyer
+              + Supplier
             </button>
             {seg === "ledger" ? (
               <button type="button" className="btn primary sm" onClick={startNew}>
-                + Buy
+                + Purchase
               </button>
             ) : (
               <button type="button" className="btn primary sm" onClick={startNewPay}>
@@ -583,7 +598,7 @@ export default function BuysView() {
 
         {seg === "buyers" && (
           <button type="button" className="btn primary sm" onClick={addBuyer} style={{ marginLeft: "auto" }}>
-            + Buyer
+            + Supplier
           </button>
         )}
       </div>
@@ -592,9 +607,9 @@ export default function BuysView() {
         buyers.length === 0 ? (
           <div className="buys-card">
             <div className="buys-empty">
-              No buyers / agents yet.
+              No suppliers yet.
               <button type="button" className="btn primary sm" onClick={addBuyer}>
-                + Add buyer
+                + Add supplier
               </button>
             </div>
           </div>
@@ -603,8 +618,8 @@ export default function BuysView() {
             <div className="buys-ov-head">
               <span>Party</span>
               <span className="num">Total</span>
-              <span className="num">Cash</span>
-              <span className="num">Bank</span>
+              <span className="num">Cash bal.</span>
+              <span className="num">Invoice bal.</span>
               <span className="num">Balance</span>
             </div>
             <ul className="buys-ov-list">
@@ -622,18 +637,18 @@ export default function BuysView() {
                       <span className="buys-ov-name">
                         <strong>{b.name}</strong>
                         <em>
-                          {t.count} buy{t.count === 1 ? "" : "s"}
+                          {t.count} purchase{t.count === 1 ? "" : "s"}
                           {froms.length ? ` · ${froms.length} from` : ""}
                         </em>
                       </span>
                       <span className="num" data-label="Total">
                         ₹{money(t.total)}
                       </span>
-                      <span className="num" data-label="Cash">
-                        ₹{money(t.cashAmount)}
+                      <span className={"num bal " + (settled ? "ok" : "due")} data-label="Cash bal.">
+                        {settled ? "Settled" : balText(cashBal(t))}
                       </span>
-                      <span className="num" data-label="Bank">
-                        ₹{money(t.billAmount)}
+                      <span className={"num bal " + (settled ? "ok" : "due")} data-label="Invoice bal.">
+                        {settled ? "Settled" : balText(invBal(t))}
                       </span>
                       <span className={"num bal " + (settled ? "ok" : "due")} data-label="Balance">
                         {settled ? "Settled" : "₹" + inr(Math.abs(t.balance))}
@@ -646,9 +661,14 @@ export default function BuysView() {
                     {open && (
                       <div className="buys-ov-detail">
                         <div className="buys-ov-paidline">
-                          Paid ₹{money(t.paid)}
-                          <span>
-                            cash {money(t.cashPaid)} · bank {money(t.bankPaid)}
+                          <span className={"bal " + balToneOf(cashBal(t))}>
+                            Cash bal: {balText(cashBal(t))}
+                          </span>
+                          <span className={"bal " + balToneOf(invBal(t))}>
+                            Invoice bal: {balText(invBal(t))}
+                          </span>
+                          <span className="paid">
+                            Paid ₹{money(t.paid)} (cash {money(t.cashPaid)} · bank {money(t.bankPaid)})
                           </span>
                         </div>
                         {froms.length === 0 ? (
@@ -665,17 +685,17 @@ export default function BuysView() {
                                     <strong>{f.name}</strong>
                                     <em>
                                       {idle
-                                        ? "No buys yet"
-                                        : `${ft.count} buy${ft.count === 1 ? "" : "s"}${ft.cft ? ` · ${vol(ft.cft)} cft` : ""}`}
+                                        ? "No purchases yet"
+                                        : `${ft.count} purchase${ft.count === 1 ? "" : "s"}${ft.cft ? ` · ${vol(ft.cft)} cft` : ""}`}
                                     </em>
                                   </div>
                                   {!idle && (
                                     <div className="buys-ov-from-nums">
-                                      <span>
-                                        Cash ₹{money(ft.cashAmount)}
+                                      <span className={"bal " + balToneOf(cashBal(ft))}>
+                                        Cash bal: {balText(cashBal(ft))}
                                       </span>
-                                      <span>
-                                        Bank ₹{money(ft.billAmount)}
+                                      <span className={"bal " + balToneOf(invBal(ft))}>
+                                        Invoice bal: {balText(invBal(ft))}
                                       </span>
                                       <span className="paid">Paid ₹{money(ft.paid)}</span>
                                       <span className={fOk ? "ok" : "due"}>
@@ -749,9 +769,9 @@ export default function BuysView() {
                     <DateField value={payForm.date} onChange={(v) => setPF("date", v)} />
                   </label>
                   <label className="span2">
-                    Buyer / agent
+                    Supplier
                     <select value={payForm.supplierId} onChange={(e) => setPF("supplierId", e.target.value)}>
-                      <option value="">Select buyer…</option>
+                      <option value="">Select supplier…</option>
                       {buyers.map((b) => (
                         <option key={b.id} value={b.id}>
                           {b.name}
@@ -819,7 +839,7 @@ export default function BuysView() {
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th className="l">Buyer</th>
+                  <th className="l">Supplier</th>
                   <th className="l">From</th>
                   <th className="num">Cash</th>
                   <th className="num">Bank</th>
@@ -870,7 +890,7 @@ export default function BuysView() {
           {showForm && (
             <div className="buys-entry">
               <div className="buys-entry-head">
-                <span>{editId ? "Edit buy" : "New buy"}</span>
+                <span>{editId ? "Edit purchase" : "New purchase"}</span>
                 <button type="button" className="buys-link" onClick={closeForm}>
                   Close
                 </button>
@@ -883,9 +903,9 @@ export default function BuysView() {
                     <DateField value={form.date} onChange={(v) => setF("date", v)} />
                   </label>
                   <label className="span2">
-                    Buyer / agent
+                    Supplier
                     <select value={form.supplierId} onChange={(e) => setF("supplierId", e.target.value)}>
-                      <option value="">Select buyer…</option>
+                      <option value="">Select supplier…</option>
                       {buyers.map((b) => (
                         <option key={b.id} value={b.id}>
                           {b.name}
@@ -1026,7 +1046,7 @@ export default function BuysView() {
                 </button>
                 {buyers.length === 0 && (
                   <button type="button" className="btn sm" onClick={addBuyer}>
-                    + Buyer first
+                    + Supplier first
                   </button>
                 )}
               </div>
@@ -1035,9 +1055,9 @@ export default function BuysView() {
 
           {filteredBuys.length === 0 ? (
             <div className="buys-empty">
-              No buys yet.
+              No purchases yet.
               <button type="button" className="btn primary sm" onClick={startNew}>
-                + Buy
+                + Purchase
               </button>
             </div>
           ) : (
@@ -1134,7 +1154,7 @@ export default function BuysView() {
               </ul>
               <div className="buys-reg-foot">
                 <span>
-                  {totals.count} buy{totals.count === 1 ? "" : "s"} · {vol(totals.cft)} cft
+                  {totals.count} purchase{totals.count === 1 ? "" : "s"} · {vol(totals.cft)} cft
                 </span>
                 <span>Total ₹{money(totals.total)}</span>
                 <span className="paid">Paid ₹{money(totals.paid)}</span>
