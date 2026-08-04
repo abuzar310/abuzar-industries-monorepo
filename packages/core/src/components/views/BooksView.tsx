@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { inBooks, inDaybook, isInflow, openingCarry, spendCategoryOf, spendCatKey, spendDetailOf, SPEND_CATEGORIES } from "@/lib/expenses";
@@ -9,6 +9,8 @@ import { listAttendance, listWorkers, workerAccount, type AttendanceMark, type W
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense } from "@/lib/types";
+import { generatePdf } from "@/lib/pdf";
+import { toast } from "@/store/app-store";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
@@ -35,6 +37,9 @@ export default function BooksView() {
   const now = new Date();
   const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, "0"));
   const [year, setYear] = useState(String(now.getFullYear()).slice(2));
+  // which book to show — a visible chooser at the top instead of one long scroll
+  const [view, setView] = useState<"pnl" | "ledger" | "cash" | "bank" | "balance" | "assets">("pnl");
+  const pageRef = useRef<HTMLDivElement>(null);
 
   const [expensesRaw, setExpenses] = useState<Expense[]>([]);
   const [quotesRaw, setQuotes] = useState<Doc[]>([]);
@@ -209,6 +214,55 @@ export default function BooksView() {
   const ledNet = r2(ledIn - ledOut);
   const ledFiltered = ledCat !== "all" || !!ledFrom || !!ledTo;
 
+  // ── cash book: the manager's open cash, every event chronologically ─────────
+  // Same rule as the Daybook / snapshot cash-in-hand: only real cash movements
+  // in the manager's hand (inDaybook excludes UPI / to-owner / dues charges) and
+  // never the closed-session rows. Seeded with the opening carry, so the closing
+  // balance ties exactly to Assets & Liabilities "Cash in hand".
+  const cashRows = useMemo(() => {
+    const rows = expenses
+      .filter((e) => !e.sessionId && inDaybook(e))
+      .map((e) => {
+        const inflow = isInflow(e.type);
+        const cat = inflow
+          ? (e.custId ? "Received" : e.party ? "Received from " + e.party : "Cash sale")
+          : spendCategoryOf(e);
+        const detailBits = inflow
+          ? [e.label && !e.custId ? e.label : "", e.note, "by " + userName(e.enteredBy)].filter(Boolean)
+          : [spendDetailOf(e), "by " + userName(e.enteredBy)].filter(Boolean);
+        return {
+          id: e.id,
+          date: e.date,
+          at: e.createdAt || "",
+          particulars: cat,
+          detail: detailBits.join(" · "),
+          debit: inflow ? 0 : +e.amount || 0, // cash out
+          credit: inflow ? +e.amount || 0 : 0, // cash in
+          balance: 0,
+        };
+      })
+      .sort((a, b) => {
+        const d = sortKey(a.date).localeCompare(sortKey(b.date));
+        if (d !== 0) return d;
+        return (a.at || "").localeCompare(b.at || "");
+      });
+    let bal = r2(carry);
+    for (const row of rows) {
+      bal = r2(bal + row.credit - row.debit);
+      row.balance = bal;
+    }
+    return rows;
+  }, [expenses, carry]);
+  const cashIn = r2(cashRows.reduce((s, r) => s + r.credit, 0));
+  const cashOut = r2(cashRows.reduce((s, r) => s + r.debit, 0));
+  const cashClose = r2(carry + cashIn - cashOut); // ties to snapshot.cashInHand
+
+  // ── bank book: UPI accounts (no bank-account model exists — UPI IS the bank) ──
+  const bankLedger = useMemo(
+    () => acctLedger(expenses, collections, quotes, customers),
+    [expenses, collections, quotes, customers],
+  );
+
   // ── assets & liabilities snapshot (as of today) ────────────────────────────
   const snapshot = useMemo(() => {
     // cash in hand — the manager's open cash book (same rule as the Daybook)
@@ -265,14 +319,64 @@ export default function BooksView() {
     setLedTo("");
   };
 
+  // Save the CURRENT section as a PDF that looks like the on-screen cards (not a
+  // separate table). Card-aware pagination keeps cards/rows whole across pages.
+  const savePdf = useCallback(() => {
+    const el = pageRef.current;
+    if (!el) return;
+    const label =
+      view === "pnl" ? "Income & Expense · " + monthLabel
+      : view === "ledger" ? "Month ledger · " + monthLabel
+      : view === "cash" ? "Cash book"
+      : view === "bank" ? "Bank book"
+      : view === "balance" ? "Balance sheet"
+      : "Assets & Liabilities";
+    const stamp = new Date().toISOString().slice(0, 10);
+    generatePdf(el, "books-" + view + "-" + stamp, {
+      pageBreak: ".party-card,.bank-row,.books-row,.books-total",
+      width: 1120,
+      title: "Books — " + label,
+    })
+      .then(() => toast("PDF downloaded ✓"))
+      .catch(() => toast("Could not create the PDF"));
+  }, [view, monthLabel]);
+
   return (
-    <div className="ledger-page">
-      <div className="sectitle">
+    <div className="ledger-page" ref={pageRef}>
+      <div className="sectitle no-print">
         Books <small>— monthly income &amp; expense · assets &amp; liabilities</small>
       </div>
 
-      {/* month picker */}
-      <div className="stmt-filters" style={{ marginTop: 14 }}>
+      {/* which book to show — a visible chooser (this was one long scroll before) */}
+      <div className="db-seg no-print" style={{ marginTop: 14 }}>
+        <button className={"seg-btn" + (view === "pnl" ? " on" : "")} type="button" onClick={() => setView("pnl")}>
+          Income &amp; Expense
+        </button>
+        <button className={"seg-btn" + (view === "ledger" ? " on" : "")} type="button" onClick={() => setView("ledger")}>
+          Month ledger
+        </button>
+        <button className={"seg-btn" + (view === "cash" ? " on" : "")} type="button" onClick={() => setView("cash")}>
+          Cash book
+        </button>
+        <button className={"seg-btn" + (view === "bank" ? " on" : "")} type="button" onClick={() => setView("bank")}>
+          Bank book
+        </button>
+        <button className={"seg-btn" + (view === "balance" ? " on" : "")} type="button" onClick={() => setView("balance")}>
+          Balance sheet
+        </button>
+        <button className={"seg-btn" + (view === "assets" ? " on" : "")} type="button" onClick={() => setView("assets")}>
+          Assets &amp; Liabilities
+        </button>
+      </div>
+
+      {/* Save the on-screen section as a website-quality PDF (direct download) */}
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+        <button className="btn sm" type="button" onClick={savePdf}>Save PDF</button>
+      </div>
+
+      {/* month picker — drives Income & Expense and the Month ledger */}
+      {(view === "pnl" || view === "ledger") && (
+      <div className="stmt-filters no-print" style={{ marginTop: 14 }}>
         <button className="btn sm" type="button" onClick={() => step(-1)} aria-label="Previous month">‹</button>
         <select className="paysel" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
           {MONTHS.map(([v, l]) => (
@@ -286,7 +390,10 @@ export default function BooksView() {
         </select>
         <button className="btn sm" type="button" onClick={() => step(1)} aria-label="Next month">›</button>
       </div>
+      )}
 
+      {view === "pnl" && (
+      <>
       {/* monthly P&L cards */}
       <div className="party-grid">
         <div className="party-card">
@@ -337,8 +444,11 @@ export default function BooksView() {
           <div className="books-row books-total"><span>Total expenses</span><b className="due">₹{inr(spends.total)}</b></div>
         </div>
       </div>
+      </>
+      )}
 
       {/* every money event of the month — bank-format with running net */}
+      {view === "ledger" && (
       <div className="panel-card" style={{ marginTop: 18 }}>
         <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <span>Month ledger · {monthRows.length} {monthRows.length === 1 ? "entry" : "entries"}</span>
@@ -347,7 +457,7 @@ export default function BooksView() {
           </span>
         </div>
         <div
-          className="books-led-filters"
+          className="books-led-filters no-print"
           style={{
             display: "flex",
             flexWrap: "wrap",
@@ -438,7 +548,170 @@ export default function BooksView() {
           </div>
         )}
       </div>
+      )}
 
+      {/* cash book — the manager's open cash, running balance from opening carry */}
+      {view === "cash" && (
+      <div className="panel-card" style={{ marginTop: 18 }}>
+        <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <span>Cash book · cash in hand</span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
+            closing ₹{inr(cashClose)}
+          </span>
+        </div>
+        <div className="bank-ledger" style={{ margin: "0 12px 12px" }}>
+          <div className="bank-hdr">
+            <span>Date</span>
+            <span>Particulars</span>
+            <span className="bank-amt">Out ₹</span>
+            <span className="bank-amt">In ₹</span>
+            <span className="bank-amt">Balance</span>
+          </div>
+          <div className="bank-row">
+            <span className="bank-date"></span>
+            <span className="bank-parts">
+              Opening balance
+              <small>carried forward</small>
+            </span>
+            <span className="bank-amt"></span>
+            <span className="bank-amt"></span>
+            <span className={"bank-amt bal" + (carry < -0.005 ? " dr" : " cr")}>
+              ₹{inr(Math.abs(carry))}
+              <span className={"bal-tag " + (carry < -0.005 ? "dr" : "cr")}>{carry < -0.005 ? "Dr" : "Cr"}</span>
+            </span>
+          </div>
+          {cashRows.map((row) => {
+            const balDr = row.balance < -0.005;
+            const lineDr = row.debit > 0.005;
+            return (
+              <div className="bank-row" key={row.id}>
+                <span className="bank-date">{row.date}</span>
+                <span className="bank-parts">
+                  {row.particulars}
+                  {row.detail && <small>{row.detail}</small>}
+                </span>
+                <span className={"bank-amt" + (lineDr ? " dr" : "")}>
+                  {lineDr ? "₹" + inr(row.debit) : ""}
+                  {lineDr ? <span className="bal-tag dr">Dr</span> : null}
+                </span>
+                <span className={"bank-amt" + (row.credit > 0.005 ? " cr" : "")}>
+                  {row.credit > 0.005 ? "₹" + inr(row.credit) : ""}
+                  {row.credit > 0.005 ? <span className="bal-tag cr">Cr</span> : null}
+                </span>
+                <span className={"bank-amt bal" + (balDr ? " dr" : " cr")}>
+                  ₹{inr(Math.abs(row.balance))}
+                  <span className={"bal-tag " + (balDr ? "dr" : "cr")}>{balDr ? "Dr" : "Cr"}</span>
+                </span>
+              </div>
+            );
+          })}
+          <div className="bank-row bank-total">
+            <span className="bank-date"></span>
+            <span className="bank-parts">Closing balance</span>
+            <span className="bank-amt dr">₹{inr(cashOut)}</span>
+            <span className="bank-amt cr">₹{inr(cashIn)}</span>
+            <span className={"bank-amt bal" + (cashClose < -0.005 ? " dr" : " cr")}>
+              ₹{inr(Math.abs(cashClose))}
+              <span className={"bal-tag " + (cashClose < -0.005 ? "dr" : "cr")}>{cashClose < -0.005 ? "Dr" : "Cr"}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* bank book — the UPI accounts (same data as the Accounts tab) */}
+      {view === "bank" && (
+      <div className="panel-card" style={{ marginTop: 18 }}>
+        <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <span>Bank book · UPI accounts</span>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
+            on hand ₹{inr(bankLedger.totalBalance)}
+          </span>
+        </div>
+        <div className="bank-ledger" style={{ margin: "0 12px 12px" }}>
+          <div className="bank-hdr">
+            <span></span>
+            <span>Account</span>
+            <span className="bank-amt">Received ₹</span>
+            <span className="bank-amt">Handed ₹</span>
+            <span className="bank-amt">Balance</span>
+          </div>
+          {bankLedger.accounts.map((a) => {
+            const balDr = a.balance < -0.005;
+            return (
+              <div className="bank-row" key={a.name || "unnamed"}>
+                <span className="bank-date"></span>
+                <span className="bank-parts">
+                  {a.name || "—"}
+                  <small>
+                    {a.lines.length} {a.lines.length === 1 ? "entry" : "entries"}
+                    {a.ownerReceived > 0.5 ? " · owner ₹" + inr(a.ownerReceived) + " (not on hand)" : ""}
+                  </small>
+                </span>
+                <span className="bank-amt cr">₹{inr(a.received)}</span>
+                <span className="bank-amt dr">₹{inr(a.collected)}</span>
+                <span className={"bank-amt bal" + (balDr ? " dr" : " cr")}>
+                  ₹{inr(Math.abs(a.balance))}
+                  <span className={"bal-tag " + (balDr ? "dr" : "cr")}>{balDr ? "Dr" : "Cr"}</span>
+                </span>
+              </div>
+            );
+          })}
+          <div className="bank-row bank-total">
+            <span className="bank-date"></span>
+            <span className="bank-parts">Total UPI on hand</span>
+            <span className="bank-amt cr">₹{inr(bankLedger.totalReceived)}</span>
+            <span className="bank-amt dr">₹{inr(bankLedger.totalCollected)}</span>
+            <span className={"bank-amt bal" + (bankLedger.totalBalance < -0.005 ? " dr" : " cr")}>
+              ₹{inr(Math.abs(bankLedger.totalBalance))}
+              <span className={"bal-tag " + (bankLedger.totalBalance < -0.005 ? "dr" : "cr")}>
+                {bankLedger.totalBalance < -0.005 ? "Dr" : "Cr"}
+              </span>
+            </span>
+          </div>
+        </div>
+        {bankLedger.accounts.length === 0 && (
+          <div className="stmt-sub" style={{ padding: "10px 16px", opacity: 0.7 }}>
+            No UPI accounts yet — add them on the Accounts tab.
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* balance sheet — formal two-sided view; both totals tie */}
+      {view === "balance" && (
+      <>
+      <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
+        Balance sheet <small>— as of today · both sides tie</small>
+      </div>
+      <div className="books-grid">
+        <div className="party-card">
+          <div className="party-stat-label" style={{ marginBottom: 10 }}>Liabilities &amp; Capital</div>
+          <div className="books-row"><span>Unpaid wages <small>· Attendance</small></span><b className="due">₹{inr(snapshot.unpaidWages)}</b></div>
+          <div className="books-row"><span>Customer advances <small>· Balances</small></span><b className="due">₹{inr(snapshot.custAdvances)}</b></div>
+          <div className="books-row">
+            <span>Owner&rsquo;s capital <small>· balancing figure</small></span>
+            <b className={snapshot.position >= 0 ? "ok" : "due"}>{snapshot.position < 0 ? "−" : ""}₹{inr(Math.abs(snapshot.position))}</b>
+          </div>
+          <div className="books-row books-total"><span>Total</span><b>₹{inr(snapshot.assets)}</b></div>
+        </div>
+        <div className="party-card">
+          <div className="party-stat-label" style={{ marginBottom: 10 }}>Assets</div>
+          <div className="books-row"><span>Cash in hand <small>· Daybook</small></span><b>₹{inr(snapshot.cashInHand)}</b></div>
+          <div className="books-row"><span>UPI with holders <small>· Accounts</small></span><b>₹{inr(snapshot.upiWithHolders)}</b></div>
+          <div className="books-row"><span>Customer dues <small>· Balances</small></span><b>₹{inr(snapshot.receivables)}</b></div>
+          <div className="books-row"><span>Worker advances <small>· Attendance</small></span><b>₹{inr(snapshot.workerAdvances)}</b></div>
+          <div className="books-row books-total"><span>Total</span><b>₹{inr(snapshot.assets)}</b></div>
+        </div>
+      </div>
+      <div className="stmt-sub" style={{ padding: "10px 2px", opacity: 0.7, fontSize: 12 }}>
+        Owner&rsquo;s capital is the balancing figure (the net position) — the unofficial books keep no separate capital account.
+      </div>
+      </>
+      )}
+
+      {view === "assets" && (
+      <>
       {/* assets & liabilities — live snapshot */}
       <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
         Assets &amp; Liabilities <small>— as of today, from every tab</small>
@@ -463,6 +736,8 @@ export default function BooksView() {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
