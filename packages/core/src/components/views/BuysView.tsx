@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, delRec } from "@/lib/data";
 import { inr, qty, todayStr } from "@/lib/calc";
@@ -27,6 +27,7 @@ import {
 import { useApp } from "@/store/useApp";
 import { bumpData, setBuysDue, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
+import { generatePdf } from "@/lib/pdf";
 import DateField from "@/components/editor/DateField";
 import type { Purchase, Supplier } from "@/lib/types";
 
@@ -68,6 +69,9 @@ const cashBal = (t: PurchaseTotals) => r2((t.cashAmount || 0) - (t.cashPaid || 0
 const invBal = (t: PurchaseTotals) => r2((t.billAmount || 0) - (t.bankPaid || 0));
 const balToneOf = (n: number) => (Math.abs(n) <= 0.5 ? "ok" : n > 0 ? "due" : "adv");
 const balText = (n: number) => (Math.abs(n) <= 0.5 ? "Settled" : "₹" + inr(Math.abs(n)));
+/** Plain-language state for the headline KPI cards — reads at a glance for
+ *  non-accountant users: positive = we still owe, negative = we're in credit. */
+const balWord = (n: number) => (Math.abs(n) <= 0.5 ? "All settled" : n > 0 ? "You owe" : "In advance");
 
 /** Real <select> + optional custom input — datalist is unreliable in the app shell. */
 function FromAccountField({
@@ -132,12 +136,14 @@ function FromAccountField({
 export default function BuysView() {
   const { ready, dataVersion, cloakMoney, user } = useApp();
   const router = useRouter();
-  const [seg, setSeg] = useState<Seg>("ledger");
+  const [seg, setSeg] = useState<Seg>("buyers");
   const [buyersRaw, setBuyers] = useState<Supplier[]>([]);
   const [rowsRaw, setRows] = useState<Purchase[]>([]);
   const [buyerFilter, setBuyerFilter] = useState("");
   const [unpaidOnly, setUnpaidOnly] = useState(false);
   const [q, setQ] = useState("");
+  // supplier-name search, shown on the Suppliers home screen (separate from the register `q`)
+  const [buyerQ, setBuyerQ] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyBuyForm);
@@ -147,6 +153,7 @@ export default function BuysView() {
   const [saving, setSaving] = useState(false);
   const [openBuyerId, setOpenBuyerId] = useState<string | null>(null);
   const [remindOnly, setRemindOnly] = useState(false);
+  const pageRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
     Promise.all([allRec<Supplier>("suppliers"), allPurchases()]).then(([bs, ps]) => {
@@ -205,6 +212,23 @@ export default function BuysView() {
   const payFromOpts = useMemo(() => fromAccountsOf(payBuyer, rows), [payBuyer, rows]);
 
   const dash = useMemo(() => buyerDashboards(buyers, rows), [buyers, rows]);
+
+  // Business-wide dashboard figures — the whole book, never narrowed by the register
+  // filters, so the three headline cards stay a stable "what do I owe" overview.
+  const allTotals = useMemo(() => purchaseTotals(rows), [rows]);
+  const kpiCash = cashBal(allTotals);
+  const kpiInv = invBal(allTotals);
+  const kpiTotal = r2(kpiCash + kpiInv);
+
+  // Suppliers home: filter by typed name, then float the biggest dues to the top
+  // (settled suppliers sink to the bottom) so "who do I owe" reads at a glance.
+  const shownDash = useMemo(() => {
+    const needle = buyerQ.trim().toLowerCase();
+    const list = needle
+      ? dash.filter((d) => (d.buyer.name || "").toLowerCase().includes(needle))
+      : dash.slice();
+    return list.sort((a, b) => Math.abs(b.totals.balance) - Math.abs(a.totals.balance));
+  }, [dash, buyerQ]);
 
   const liveTotal = useMemo(() => {
     const amount = form.amount !== "" ? +form.amount || 0 : lineAmount(+form.cft || 0, +form.rate || 0);
@@ -519,35 +543,79 @@ export default function BuysView() {
   const balAbs = Math.abs(totals.balance);
   const balTone = balAbs <= 0.5 ? "ok" : totals.balance > 0 ? "due" : "adv";
 
+  function exportFullRegister() {
+    const el = pageRef.current;
+    if (!el) return;
+    toast("Preparing PDF…");
+    generatePdf(el, "suppliers-" + todayStr(), {
+      pageBreak: ".buys-reg-row,.buys-grid tbody tr,.buys-ov-item,.buys-card",
+      width: 1080,
+      title: "Suppliers",
+    })
+      .then(() => toast("PDF downloaded ✓"))
+      .catch(() => toast("Could not create the PDF"));
+  }
+
+  function exportSupplierDetail(b: Supplier) {
+    toast("Preparing PDF…");
+    setSeg("buyers");
+    setOpenBuyerId(b.id);
+    // let the card expand, then capture just that supplier card
+    setTimeout(() => {
+      const el = document.getElementById("buys-ov-" + b.id);
+      if (!el) {
+        toast("Could not create the PDF");
+        return;
+      }
+      generatePdf(
+        el,
+        "supplier-" + (b.name || "detail").replace(/[^a-z0-9]+/gi, "-") + "-" + todayStr(),
+        { pageBreak: ".buys-ov-paidline,.buys-ov-froms li", width: 1080, title: b.name },
+      )
+        .then(() => toast("PDF downloaded ✓"))
+        .catch(() => toast("Could not create the PDF"));
+    }, 120);
+  }
+
   return (
-    <div className="buys-page">
+    <div className="buys-page" ref={pageRef}>
       <div className="buys-top">
         <div>
           <h1 className="buys-h1">Suppliers</h1>
           <p className="buys-sub">Timber in · suppliers & from-accounts</p>
         </div>
-        <div className="buys-bal-row">
-          <div className={`buys-bal buys-bal-${balToneOf(cashBal(totals))}`}>
-            <span>Cash balance</span>
-            <b>{balText(cashBal(totals))}</b>
-          </div>
-          <div className={`buys-bal buys-bal-${balToneOf(invBal(totals))}`}>
-            <span>Invoice balance</span>
-            <b>{balText(invBal(totals))}</b>
-          </div>
+      </div>
+
+      {/* Headline dashboard — whole-book figures (never narrowed by the register
+          filters) so "what do I owe" stays a stable, at-a-glance overview. */}
+      <div className="buys-kpis">
+        <div className={`buys-kpi head buys-bal-${balToneOf(kpiTotal)}`}>
+          <span className="buys-kpi-label">Total balance</span>
+          <b className="buys-kpi-val">{balText(kpiTotal)}</b>
+          <span className="buys-kpi-word">{balWord(kpiTotal)}</span>
+        </div>
+        <div className={`buys-kpi buys-bal-${balToneOf(kpiCash)}`}>
+          <span className="buys-kpi-label">Cash</span>
+          <b className="buys-kpi-val">{balText(kpiCash)}</b>
+          <span className="buys-kpi-word">{balWord(kpiCash)}</span>
+        </div>
+        <div className={`buys-kpi buys-bal-${balToneOf(kpiInv)}`}>
+          <span className="buys-kpi-label">Invoices</span>
+          <b className="buys-kpi-val">{balText(kpiInv)}</b>
+          <span className="buys-kpi-word">{balWord(kpiInv)}</span>
         </div>
       </div>
 
-      <div className="buys-bar">
+      <div className="buys-bar no-print">
         <div className="rep-seg">
+          <button type="button" className={seg === "buyers" ? "on" : ""} onClick={() => setSeg("buyers")}>
+            Suppliers
+          </button>
           <button type="button" className={seg === "ledger" ? "on" : ""} onClick={() => setSeg("ledger")}>
             Register
           </button>
           <button type="button" className={seg === "payments" ? "on" : ""} onClick={() => setSeg("payments")}>
             Payments
-          </button>
-          <button type="button" className={seg === "buyers" ? "on" : ""} onClick={() => setSeg("buyers")}>
-            Suppliers
           </button>
         </div>
 
@@ -593,13 +661,28 @@ export default function BuysView() {
                 + Payment
               </button>
             )}
+            {(seg === "ledger" || seg === "payments") && (
+              <button type="button" className="btn sm" onClick={exportFullRegister}>
+                Save PDF
+              </button>
+            )}
           </>
         )}
 
         {seg === "buyers" && (
-          <button type="button" className="btn primary sm" onClick={addBuyer} style={{ marginLeft: "auto" }}>
-            + Supplier
-          </button>
+          <>
+            <input
+              className="buys-search"
+              type="search"
+              value={buyerQ}
+              onChange={(e) => setBuyerQ(e.target.value)}
+              placeholder="Search supplier…"
+              aria-label="Search supplier"
+            />
+            <button type="button" className="btn primary sm" onClick={addBuyer}>
+              + Supplier
+            </button>
+          </>
         )}
       </div>
 
@@ -616,18 +699,18 @@ export default function BuysView() {
         ) : (
           <div className="buys-card buys-ov">
             <div className="buys-ov-head">
-              <span>Party</span>
-              <span className="num">Total</span>
-              <span className="num">Cash bal.</span>
-              <span className="num">Invoice bal.</span>
+              <span>Supplier</span>
               <span className="num">Balance</span>
             </div>
+            {shownDash.length === 0 ? (
+              <p className="buys-ov-empty pad">No supplier matches “{buyerQ.trim()}”.</p>
+            ) : (
             <ul className="buys-ov-list">
-              {dash.map(({ buyer: b, totals: t, froms }) => {
+              {shownDash.map(({ buyer: b, totals: t, froms }) => {
                 const open = openBuyerId === b.id;
                 const settled = Math.abs(t.balance) <= 0.5;
                 return (
-                  <li key={b.id} className={"buys-ov-item" + (open ? " open" : "")}>
+                  <li key={b.id} id={"buys-ov-" + b.id} className={"buys-ov-item" + (open ? " open" : "")}>
                     <button
                       type="button"
                       className="buys-ov-row"
@@ -641,16 +724,7 @@ export default function BuysView() {
                           {froms.length ? ` · ${froms.length} from` : ""}
                         </em>
                       </span>
-                      <span className="num" data-label="Total">
-                        ₹{money(t.total)}
-                      </span>
-                      <span className={"num bal " + (settled ? "ok" : "due")} data-label="Cash bal.">
-                        {settled ? "Settled" : balText(cashBal(t))}
-                      </span>
-                      <span className={"num bal " + (settled ? "ok" : "due")} data-label="Invoice bal.">
-                        {settled ? "Settled" : balText(invBal(t))}
-                      </span>
-                      <span className={"num bal " + (settled ? "ok" : "due")} data-label="Balance">
+                      <span className={"num bal " + balToneOf(t.balance)} data-label="Balance">
                         {settled ? "Settled" : "₹" + inr(Math.abs(t.balance))}
                         <i className="buys-ov-chev" aria-hidden>
                           {open ? "▾" : "›"}
@@ -708,7 +782,7 @@ export default function BuysView() {
                             })}
                           </ul>
                         )}
-                        <div className="buys-ov-acts">
+                        <div className="buys-ov-acts no-print">
                           <button
                             type="button"
                             className="buys-link"
@@ -729,6 +803,13 @@ export default function BuysView() {
                           >
                             Payments
                           </button>
+                          <button
+                            type="button"
+                            className="buys-link"
+                            onClick={() => exportSupplierDetail(b)}
+                          >
+                            Save PDF
+                          </button>
                           <button type="button" className="buys-link mute" onClick={() => void editBuyer(b)}>
                             Rename
                           </button>
@@ -742,6 +823,7 @@ export default function BuysView() {
                 );
               })}
             </ul>
+            )}
           </div>
         )
       ) : seg === "payments" ? (
@@ -845,7 +927,7 @@ export default function BuysView() {
                   <th className="num">Bank</th>
                   <th className="num">Total</th>
                   <th className="l">Note</th>
-                  <th />
+                  <th className="no-print" />
                 </tr>
               </thead>
               <tbody>
@@ -870,7 +952,7 @@ export default function BuysView() {
                       <td className="num paid">{money(p.bankPaid)}</td>
                       <td className="num paid">{money(paidTotal(p))}</td>
                       <td className="l note">{p.note || "—"}</td>
-                      <td className="acts">
+                      <td className="acts no-print">
                         <button type="button" className="buys-link" onClick={() => startEditPay(p)}>
                           Edit
                         </button>
@@ -1122,7 +1204,7 @@ export default function BuysView() {
                           </span>
                         </div>
                       </div>
-                      <div className="buys-reg-acts">
+                      <div className="buys-reg-acts no-print">
                         <label className="buys-remind-pick">
                           <span className={remindDue ? "due" : undefined}>
                             {p.remindAt ? (remindDue ? "Due " : "On ") + p.remindAt : "Remind"}
@@ -1166,6 +1248,7 @@ export default function BuysView() {
           )}
         </div>
       )}
+
     </div>
   );
 }

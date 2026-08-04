@@ -4,8 +4,21 @@
 // Loaded dynamically so it stays out of the server bundle.
 import { toast } from "@/store/app-store";
 
-export async function generatePdf(sheet: HTMLElement, fileBase: string) {
-  const pdf = await renderPdf(sheet);
+/** Optional capture tuning. Without these, generatePdf behaves exactly as before
+ *  (blind fixed-height A4 slicing) — so invoices/quotes and the report sheets are
+ *  unchanged. Pass `pageBreak` to slice pages only BETWEEN whole cards/rows so the
+ *  premium card UI never gets cut mid-card. */
+export interface PdfOpts {
+  /** CSS selector for the atomic blocks (cards, table rows) that must not be split across a page break. */
+  pageBreak?: string;
+  /** Force the capture width in px — pins responsive grids to their desktop columns. */
+  width?: number;
+  /** A dated header prepended to the PDF (e.g. the report title / supplier name). */
+  title?: string;
+}
+
+export async function generatePdf(sheet: HTMLElement, fileBase: string, opts?: PdfOpts) {
+  const pdf = await renderPdf(sheet, opts);
   pdf.save((fileBase || "document") + ".pdf");
 }
 
@@ -57,13 +70,13 @@ export async function printOrSavePdf(
 
 /** The document as a shareable File — used to attach the PDF straight into WhatsApp
  *  via the system share sheet (navigator.share), instead of download-then-attach. */
-export async function generatePdfFile(sheet: HTMLElement, fileBase: string): Promise<File> {
-  const pdf = await renderPdf(sheet);
+export async function generatePdfFile(sheet: HTMLElement, fileBase: string, opts?: PdfOpts): Promise<File> {
+  const pdf = await renderPdf(sheet, opts);
   const blob = pdf.output("blob");
   return new File([blob], (fileBase || "document") + ".pdf", { type: "application/pdf" });
 }
 
-async function renderPdf(sheet: HTMLElement) {
+async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
   const [{ jsPDF }, h2c] = await Promise.all([import("jspdf"), import("html2canvas")]);
   const html2canvas = h2c.default;
 
@@ -97,11 +110,26 @@ async function renderPdf(sheet: HTMLElement) {
     freeze(s, s.options[s.selectedIndex]?.text || "");
   });
 
-  const width = Math.max(sheet.scrollWidth, 880);
+  const width = opts?.width || Math.max(sheet.scrollWidth, 880);
   clone.style.width = width + "px";
   clone.style.background = "#FAF6EF";
   // print-only nodes (.cd-print) are display:none on screen — the clone must lay out
   clone.style.display = "block";
+  // Dated header so the PDF carries a title/branding (the on-screen topnav is never captured).
+  if (opts?.title) {
+    const brand = document.createElement("div");
+    brand.style.cssText = "padding:0 0 12px;margin:0 0 16px;border-bottom:2px solid var(--line-2)";
+    const bt = document.createElement("div");
+    bt.textContent = opts.title;
+    bt.style.cssText = "font-family:var(--serif);font-size:24px;font-weight:600;color:var(--ink);letter-spacing:-.015em";
+    const bs = document.createElement("div");
+    bs.textContent =
+      "as of " + new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    bs.style.cssText = "font-family:var(--mono);font-size:12px;color:var(--ink-faint);margin-top:3px";
+    brand.appendChild(bt);
+    brand.appendChild(bs);
+    clone.insertBefore(brand, clone.firstChild);
+  }
   // off-screen but fully laid out so html2canvas can measure & render it
   const holder = document.createElement("div");
   holder.style.cssText = "position:fixed;left:-10000px;top:0;width:" + width + "px;background:#FAF6EF";
@@ -137,16 +165,58 @@ async function renderPdf(sheet: HTMLElement) {
     const pageH = 297;
     const imgH = (canvas.height * pageW) / canvas.width; // full image height in mm
 
-    // Place the single tall image once per page, shifting it up by one page each time.
-    let heightLeft = imgH;
-    let position = 0;
-    pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
-    heightLeft -= pageH;
-    while (heightLeft > 0.5) {
-      position -= pageH;
-      pdf.addPage();
+    // Card-aware pagination: slice ONLY between whole cards/rows so nothing is cut
+    // mid-card. html2canvas ignores CSS break-inside, so we compute the safe cut
+    // lines ourselves from the laid-out clone. Falls back to blind slicing when no
+    // page-break selector is given (invoices, quotes, the report sheets).
+    const pagePx = canvas.width * (pageH / pageW); // one A4 page in canvas pixels
+    let cuts: number[] = [];
+    if (opts?.pageBreak) {
+      const cr = clone.getBoundingClientRect();
+      const ratio = cr.height > 0 ? canvas.height / cr.height : 1;
+      cuts = Array.from(clone.querySelectorAll(opts.pageBreak))
+        .map((u) => (u.getBoundingClientRect().bottom - cr.top) * ratio)
+        .filter((y) => y > 0.5 && y < canvas.height - 0.5)
+        .sort((a, b) => a - b);
+    }
+
+    if (cuts.length) {
+      // variable-fill pages, each ending on a card/row boundary
+      const pageCanvas = document.createElement("canvas");
+      const pctx = pageCanvas.getContext("2d")!;
+      let start = 0;
+      let first = true;
+      let guard = 0;
+      while (start < canvas.height - 0.5 && guard++ < 500) {
+        const limit = start + pagePx;
+        let cut = 0;
+        for (const y of cuts) if (y > start + 1 && y <= limit) cut = y;
+        if (cut <= start) cut = Math.min(canvas.height, limit); // a single block taller than a page
+        const sliceH = Math.max(1, Math.round(cut - start));
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceH;
+        pctx.fillStyle = "#FAF6EF";
+        pctx.fillRect(0, 0, canvas.width, sliceH);
+        pctx.drawImage(canvas, 0, Math.round(start), canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        const pageImg = pageCanvas.toDataURL("image/jpeg", 0.92);
+        const hmm = (sliceH * pageW) / canvas.width;
+        if (!first) pdf.addPage();
+        pdf.addImage(pageImg, "JPEG", 0, 0, pageW, hmm);
+        start = cut;
+        first = false;
+      }
+    } else {
+      // Place the single tall image once per page, shifting it up by one page each time.
+      let heightLeft = imgH;
+      let position = 0;
       pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
       heightLeft -= pageH;
+      while (heightLeft > 0.5) {
+        position -= pageH;
+        pdf.addPage();
+        pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
+        heightLeft -= pageH;
+      }
     }
     return pdf;
   } finally {
