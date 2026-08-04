@@ -158,11 +158,11 @@ export default function BuysView() {
   }, []);
 
   useEffect(() => {
-    if (user && user.role !== "owner") router.replace("/");
+    if (user && user.role !== "owner" && user.role !== "manager") router.replace("/");
   }, [user, router]);
 
   useEffect(() => {
-    if (ready && user?.role === "owner") load();
+    if (ready && (user?.role === "owner" || user?.role === "manager")) load();
   }, [ready, dataVersion, load, user?.role]);
 
   const buyers = cloakMoney ? [] : buyersRaw;
