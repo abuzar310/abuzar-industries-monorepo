@@ -11,11 +11,17 @@ import { toast } from "@/store/app-store";
 export interface PdfOpts {
   /** CSS selector for the atomic blocks (cards, table rows) that must not be split across a page break. */
   pageBreak?: string;
-  /** Force the capture width in px — pins responsive grids to their desktop columns. */
+  /** Force the capture width in px — pins responsive grids to their desktop columns.
+   *  Card/dashboard captures are capped (~700px) so type stays readable on A4. */
   width?: number;
   /** A dated header prepended to the PDF (e.g. the report title / supplier name). */
   title?: string;
 }
+
+/** Card/dashboard captures wider than this make body text too small on A4. */
+const CARD_CAPTURE_MAX = 700;
+/** Absorb trailing padding stubs smaller than this (canvas px) instead of emitting a blank page. */
+const TRAILING_STUB_PX = 48;
 
 export async function generatePdf(sheet: HTMLElement, fileBase: string, opts?: PdfOpts) {
   const pdf = await renderPdf(sheet, opts);
@@ -110,22 +116,33 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     freeze(s, s.options[s.selectedIndex]?.text || "");
   });
 
-  const width = opts?.width || Math.max(sheet.scrollWidth, 880);
+  // Card/dashboard captures: keep width modest so body text lands ~11–13pt on A4.
+  // Invoice/quote sheets (no pageBreak) keep the wider natural layout.
+  let width = opts?.width || Math.max(sheet.scrollWidth, 880);
+  if (opts?.pageBreak) width = Math.min(width, CARD_CAPTURE_MAX);
+
   clone.style.width = width + "px";
   clone.style.background = "#FAF6EF";
   // print-only nodes (.cd-print) are display:none on screen — the clone must lay out
   clone.style.display = "block";
+  // Card UI: bump base type so numbers/names stay readable after the A4 downscale.
+  if (opts?.pageBreak) {
+    clone.style.fontSize = "18px";
+    clone.style.lineHeight = "1.45";
+  }
   // Dated header so the PDF carries a title/branding (the on-screen topnav is never captured).
+  // Hex colours only — html2canvas does not reliably resolve CSS variables.
   if (opts?.title) {
     const brand = document.createElement("div");
-    brand.style.cssText = "padding:0 0 12px;margin:0 0 16px;border-bottom:2px solid var(--line-2)";
+    brand.style.cssText = "padding:0 0 14px;margin:0 0 18px;border-bottom:2px solid #e2d6c2";
     const bt = document.createElement("div");
     bt.textContent = opts.title;
-    bt.style.cssText = "font-family:var(--serif);font-size:24px;font-weight:600;color:var(--ink);letter-spacing:-.015em";
+    bt.style.cssText =
+      "font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#2a2118;letter-spacing:-.015em";
     const bs = document.createElement("div");
     bs.textContent =
       "as of " + new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-    bs.style.cssText = "font-family:var(--mono);font-size:12px;color:var(--ink-faint);margin-top:3px";
+    bs.style.cssText = "font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;color:#8a7a66;margin-top:4px";
     brand.appendChild(bt);
     brand.appendChild(bs);
     clone.insertBefore(brand, clone.firstChild);
@@ -165,6 +182,12 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     const pageH = 297;
     const imgH = (canvas.height * pageW) / canvas.width; // full image height in mm
 
+    // Short captures (one supplier card, a thin books tab) — one page, no trailing blank.
+    if (imgH <= pageH + 0.8) {
+      pdf.addImage(img, "JPEG", 0, 0, pageW, imgH);
+      return pdf;
+    }
+
     // Card-aware pagination: slice ONLY between whole cards/rows so nothing is cut
     // mid-card. html2canvas ignores CSS break-inside, so we compute the safe cut
     // lines ourselves from the laid-out clone. Falls back to blind slicing when no
@@ -191,8 +214,18 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
         const limit = start + pagePx;
         let cut = 0;
         for (const y of cuts) if (y > start + 1 && y <= limit) cut = y;
-        if (cut <= start) cut = Math.min(canvas.height, limit); // a single block taller than a page
+        // Content still fits on this page → take everything (avoids empty page 2).
+        if (canvas.height <= limit + 0.5) {
+          cut = canvas.height;
+        } else if (cut <= start) {
+          cut = Math.min(canvas.height, limit); // a single block taller than a page
+        } else if (canvas.height - cut < TRAILING_STUB_PX) {
+          // leftover is just padding under the last card — absorb it
+          cut = canvas.height;
+        }
         const sliceH = Math.max(1, Math.round(cut - start));
+        // Skip near-empty trailing slices (blank page guard)
+        if (sliceH < TRAILING_STUB_PX && start > 0) break;
         pageCanvas.width = canvas.width;
         pageCanvas.height = sliceH;
         pctx.fillStyle = "#FAF6EF";

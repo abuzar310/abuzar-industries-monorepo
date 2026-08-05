@@ -2684,21 +2684,42 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .buys-ov-detail{padding-left:16px; padding-right:16px}
 }
 @media(max-width:900px){
-  .buys-page{margin-left:0; margin-right:0; width:auto}
+  .buys-page{margin-left:0; margin-right:0; width:auto; overflow-x:hidden}
   .buys-h1{font-size:26px}
-  .buys-kpi-val{font-size:22px}
+  .buys-kpi-val{font-size:22px; overflow-wrap:anywhere}
   .buys-kpi.head .buys-kpi-val{font-size:28px}
   .buys-grid th,.buys-grid td{padding:14px 12px}
   .buys-entry-grid.g3,.buys-entry-grid.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
   .buys-entry-grid label.span2,.buys-entry-grid label.span3{grid-column:span 2}
+  .buys-bar .rep-seg{flex:1 1 100%; display:flex}
+  .buys-bar .rep-seg button{flex:1; padding:10px 8px; font-size:12px}
 }
 @media(max-width:720px){
-  .buys-kpis{grid-template-columns:1fr 1fr}
+  .buys-kpis{grid-template-columns:1fr 1fr; gap:10px}
   .buys-kpi.head{grid-column:1 / -1}
+  .buys-kpi{padding:14px 14px; min-width:0}
+  .buys-search{flex:1 1 100%; min-width:0}
+  .buys-bar select{min-width:0; flex:1 1 140px}
+  .buys-ov-name strong{overflow-wrap:anywhere; font-size:15px}
+  .buys-ov-row .num{font-size:15px; white-space:nowrap}
+  .buys-ov-paidline{flex-direction:column; align-items:flex-start; gap:6px}
+  .buys-ov-from-nums{grid-template-columns:1fr; text-align:left; gap:4px 8px}
+  .buys-ov-acts{gap:12px 14px}
 }
 @media(max-width:520px){
-  .buys-top{flex-direction:column; align-items:flex-start}
-  .buys-kpis{grid-template-columns:1fr; padding:0}
+  .buys-top{flex-direction:column; align-items:flex-start; padding:0 4px; margin-bottom:12px}
+  .buys-h1{font-size:24px}
+  .buys-sub{font-size:13px}
+  .buys-kpis{grid-template-columns:1fr; gap:8px; padding:0 4px; margin-bottom:14px}
+  .buys-kpi{padding:12px 14px}
+  .buys-kpi-label{font-size:10px}
+  .buys-kpi-val{font-size:24px}
+  .buys-kpi.head .buys-kpi-val{font-size:28px}
+  .buys-kpi-word{font-size:11px}
+  .buys-bar{padding:0 4px; gap:8px}
+  .buys-card{border-radius:12px}
+  .buys-ov-row{padding:14px 12px}
+  .buys-ov-detail{padding:0 12px 14px}
   .buys-entry-grid.g3,.buys-entry-grid.g4{grid-template-columns:1fr}
   .buys-entry-grid label.span2,.buys-entry-grid label.span3,.buys-entry-grid label.span4{grid-column:auto}
 }
