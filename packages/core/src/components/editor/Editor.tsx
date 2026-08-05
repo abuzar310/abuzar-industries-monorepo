@@ -37,6 +37,7 @@ import GstinField from "./GstinField";
 import DateField from "./DateField";
 import EwayBillPanel from "./EwayBillPanel";
 import ReviewQR from "@/components/ReviewQR";
+import { showReviewQr } from "@/store/review-qr-store";
 import { extractPincode } from "@/lib/ewaybill";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
@@ -1446,6 +1447,16 @@ export default function Editor({
         {feat.simpleQuote && (
           <button className={"btn" + (freeMode ? " primary" : "")} onClick={toggleFree} title="Drag & resize the boxes freely on the A4 page">
             {freeMode ? "✓ Free arrange" : "Free arrange"}
+          </button>
+        )}
+        {!isInv && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => showReviewQr()}
+            title="Show the Google review QR for the customer to scan"
+          >
+            Review
           </button>
         )}
         {feat.invoices && !isInv && (

@@ -14,6 +14,7 @@ import TopNav from "@/components/TopNav";
 import Toast from "@/components/Toast";
 import LockGate from "@/components/LockGate";
 import DialogHost from "@/components/DialogHost";
+import ReviewQrOverlay from "@/components/ReviewQrOverlay";
 
 export default function AppProvider({
   children,
@@ -105,6 +106,7 @@ export default function AppProvider({
       <Toast />
       <LockGate />
       <DialogHost />
+      <ReviewQrOverlay />
     </>
   );
 }
