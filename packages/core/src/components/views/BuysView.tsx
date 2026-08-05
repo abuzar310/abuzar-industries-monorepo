@@ -549,7 +549,7 @@ export default function BuysView() {
     toast("Preparing PDF…");
     generatePdf(el, "suppliers-" + todayStr(), {
       pageBreak: ".buys-reg-row,.buys-grid tbody tr,.buys-ov-item,.buys-card",
-      width: 700,
+      width: 1080,
       title: "Suppliers",
     })
       .then(() => toast("PDF downloaded ✓"))
@@ -570,8 +570,7 @@ export default function BuysView() {
       generatePdf(
         el,
         "supplier-" + (b.name || "detail").replace(/[^a-z0-9]+/gi, "-") + "-" + todayStr(),
-        // One card = usually one page; break only between from-account rows if it grows tall.
-        { pageBreak: ".buys-ov-froms li", width: 680, title: b.name },
+        { pageBreak: ".buys-ov-paidline,.buys-ov-froms li", width: 1080, title: b.name },
       )
         .then(() => toast("PDF downloaded ✓"))
         .catch(() => toast("Could not create the PDF"));

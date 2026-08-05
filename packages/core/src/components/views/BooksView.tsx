@@ -334,7 +334,7 @@ export default function BooksView() {
     const stamp = new Date().toISOString().slice(0, 10);
     generatePdf(el, "books-" + view + "-" + stamp, {
       pageBreak: ".party-card,.bank-row,.books-row,.books-total",
-      width: 700,
+      width: 1120,
       title: "Books — " + label,
     })
       .then(() => toast("PDF downloaded ✓"))
