@@ -52,8 +52,9 @@ export const REAL_BRAND: Brand = {
   bank: HDFC_BANK,
   banks: [HDFC_BANK, AXIS_BANK],
   terms: INVOICE_TERMS,
-  // Google Maps listing (CID link) — opens the business page with the Reviews tab
-  reviewUrl: "https://maps.google.com/?cid=11136242296025670152",
+  // Verified Google place URL — opens the business panel with Write a review
+  reviewUrl:
+    "https://www.google.com/maps/place/ABUZAR+INDUSTRIES/@14.2304243,76.3906535,17z/data=!4m8!3m7!1s0x3bba75de8a42ad97:0x9a8be15dab4a6208!8m2!3d14.2304243!4d76.3906535!9m1!1b1!16s%2Fg%2F11g3zdmpmp!5m2!1e4!1e2",
 };
 
 export const DEMO_BRAND: Brand = {

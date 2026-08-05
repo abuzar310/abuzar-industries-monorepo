@@ -147,6 +147,8 @@ function storeLabel(store: string): string {
     payHolders: "pay holder",
     pay_holders: "pay holder",
     purchases: "purchase buy",
+    websiteQuotations: "website quotation",
+    website_quotations: "website quotation",
   };
   return m[store] || store;
 }

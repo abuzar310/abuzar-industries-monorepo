@@ -13,6 +13,7 @@ export const TABS: Tab[] = [
   { label: "Accounts", href: "/accounts" },
   { label: "Quotation", href: "/editor" },
   { label: "Quotations", href: "/quotations" },
+  { label: "Website Quotations", href: "/website-quotations", badge: "website" },
   { label: "Customers", href: "/customers" },
   { label: "Suppliers", href: "/buys", owner: true, badge: "buys" },
   { label: "Contacts", href: "/contacts", owner: true, icon: "customers" },

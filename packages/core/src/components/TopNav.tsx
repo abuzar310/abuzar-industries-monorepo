@@ -28,7 +28,7 @@ const SYNC_LABEL = { on: "Synced", off: "Offline", queue: "Saving…", local: "L
 
 export default function TopNav({ tabs }: { tabs: Tab[] }) {
   const TABS = tabs;
-  const { syncState, searchTerm, user, brandMode, unseen, buysDue } = useApp();
+  const { syncState, searchTerm, user, brandMode, unseen, buysDue, websitePending } = useApp();
   const path = usePathname();
   const router = useRouter();
   const isOwner = user?.role === "owner";
@@ -87,7 +87,8 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
           {TABS.filter((t) => !t.owner || isOwner).map((t) => {
             const active = isActive(t.href, path);
             const cls = "tab" + (active ? " active" : "");
-            const badgeN = t.badge === "buys" ? buysDue : t.badge ? unseen : 0;
+            const badgeN =
+              t.badge === "buys" ? buysDue : t.badge === "website" ? websitePending : t.badge ? unseen : 0;
             return (
               <Link key={t.href} href={t.href} className={cls}>
                 <TabIcon icon={t.icon} size={16} />

@@ -187,7 +187,34 @@ export type StoreName =
   | "workers"
   | "attendance"
   | "activity"
-  | "purchases";
+  | "purchases"
+  | "websiteQuotations";
+
+/** Landing-site timber quote submission — isolated until Import to Quotation. */
+export interface WebsiteQuoteRow {
+  l: number;
+  w: number;
+  t: number;
+  pcs: number;
+  cft: number;
+}
+
+export interface WebsiteQuotation {
+  id: string;
+  source: "website";
+  status: "Pending" | "Imported";
+  customerName: string;
+  phone: string;
+  woodType: string;
+  rows: WebsiteQuoteRow[];
+  totalCft: number;
+  estimate: number;
+  /** set after Import to Quotation */
+  importedQuotationId?: string;
+  importedNumber?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /**
  * Unofficial Buys entry.
@@ -263,8 +290,8 @@ export interface Tab {
   label: string;
   href: string;
   icon?: string;
-  /** true = Daybook unseen; "buys" = due purchase reminders */
-  badge?: boolean | "buys";
+  /** true = Daybook unseen; "buys" = due purchase reminders; "website" = pending site quotes */
+  badge?: boolean | "buys" | "website";
   owner?: boolean;
 }
 

@@ -2689,4 +2689,47 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .buys-entry-grid label.span2,.buys-entry-grid label.span3,.buys-entry-grid label.span4{grid-column:auto}
 }
 
+/* ---- Website Quotations inbox ---- */
+.wq-page{margin:0 0 40px}
+.wq-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:18px}
+.wq-title{margin:0; font-family:var(--serif); font-size:28px; letter-spacing:-.02em; color:var(--ink)}
+.wq-sub{margin:6px 0 0; color:var(--ink-soft); font-size:13.5px; max-width:420px; line-height:1.4}
+.wq-kpis{display:flex; gap:10px}
+.wq-kpi{min-width:88px; padding:10px 14px; background:var(--paper); border:1px solid var(--line); border-radius:12px}
+.wq-kpi span{display:block; font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); font-weight:700}
+.wq-kpi strong{display:block; margin-top:4px; font-family:var(--serif); font-size:24px; color:var(--ink)}
+.wq-toolbar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px}
+.wq-search{flex:1 1 180px; min-width:160px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; font:inherit; background:var(--paper)}
+.wq-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px}
+.wq-card{background:var(--paper); border:1px solid var(--line); border-radius:14px; overflow:hidden}
+.wq-card.imported{opacity:.85}
+.wq-card-main{display:block; width:100%; text-align:left; padding:14px 16px; border:0; background:transparent; cursor:pointer; font:inherit; color:inherit}
+.wq-card-main:hover{background:rgba(0,0,0,.02)}
+.wq-card-top{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.wq-card-top strong{font-size:16px}
+.wq-status{font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:3px 8px; border-radius:999px}
+.wq-status.pend{background:rgba(180,120,40,.12); color:#9a6a18}
+.wq-status.done{background:rgba(40,120,70,.1); color:#2a6b42}
+.wq-card-meta{display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:8px; font-size:12.5px; color:var(--ink-soft)}
+.wq-detail{padding:0 16px 16px; border-top:1px solid var(--line)}
+.wq-table{width:100%; border-collapse:collapse; margin:12px 0; font-size:13px}
+.wq-table th,.wq-table td{padding:6px 8px; border-bottom:1px solid var(--line); text-align:left}
+.wq-table th{font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-faint)}
+.wq-actions{display:flex; flex-wrap:wrap; gap:8px}
+
+/* Review QR on printable sheets */
+.review-qr{display:inline-flex; flex-direction:column; align-items:center; gap:4px; text-decoration:none; color:var(--ink-soft)}
+.review-qr img{display:block; width:auto; height:auto; image-rendering:pixelated}
+.review-qr-label{font-size:9px; letter-spacing:.04em; text-transform:uppercase; font-weight:700}
+.qc-review-qr{position:absolute; left:10px; bottom:10px; z-index:2}
+.sq-review-qr{display:flex; justify-content:flex-start; margin-top:10px; padding-left:4px}
+.inv-thanks-row{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:8px}
+.inv-thanks-row .inv-thanks{margin:0; flex:1}
+
+@media(max-width:720px){
+  .wq-head{flex-direction:column; align-items:flex-start}
+  .wq-title{font-size:24px}
+  .wq-card-meta{gap:6px 10px}
+}
+
 /* unofficial owner panic cloak — money/counts render as 0 via inr()/qty() (data stays in cloud) */

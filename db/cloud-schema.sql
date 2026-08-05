@@ -42,7 +42,9 @@ declare
     -- owner audit trail (login / logout / create / delete)
     'activity',
     -- unofficial Buys: timber-in purchase ledger rows (from-name / bill / cft)
-    'purchases'
+    'purchases',
+    -- landing-site quote submissions (isolated until Import to Quotation)
+    'website_quotations'
   ];
 begin
   foreach sch in array array['official', 'unofficial'] loop

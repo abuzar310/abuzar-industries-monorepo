@@ -21,6 +21,8 @@ export interface AppState {
   unseen: number;
   /** Buys register reminders that are due today or overdue */
   buysDue: number;
+  /** Pending website quotation submissions (landing → app) */
+  websitePending: number;
   /** unofficial owner panic: blank money/rates app-wide (cloud meta — syncs all devices) */
   cloakMoney: boolean;
 }
@@ -35,6 +37,7 @@ let state: AppState = {
   brandMode: "demo",
   unseen: 0,
   buysDue: 0,
+  websitePending: 0,
   cloakMoney: false,
 };
 
@@ -61,6 +64,7 @@ export const setUser = (user: LocalUser | null) => set({ user });
 export const setBrandMode = (brandMode: BrandMode) => set({ brandMode });
 export const setUnseen = (unseen: number) => set({ unseen });
 export const setBuysDue = (buysDue: number) => set({ buysDue });
+export const setWebsitePending = (websitePending: number) => set({ websitePending });
 export const setCloakMoney = (cloakMoney: boolean) => set({ cloakMoney });
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;

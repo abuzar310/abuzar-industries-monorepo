@@ -23,13 +23,14 @@ export const STORE_TABLE: Record<string, string> = {
   attendance: "attendance",
   activity: "activity",
   purchases: "purchases",
+  websiteQuotations: "website_quotations",
 };
 
 /** Tables synced to clients (documents once — not once per doc store). */
 export const SYNC_TABLES = [
   "documents", "customers", "suppliers", "stock", "expenses", "sessions",
   "ledgers", "vouchers", "collections", "pay_holders", "workers", "attendance",
-  "activity", "purchases",
+  "activity", "purchases", "website_quotations",
 ] as const;
 
 /** Physical table → the store name clients know it by. */
@@ -48,6 +49,7 @@ export const TABLE_STORE: Record<string, string> = {
   attendance: "attendance",
   activity: "activity",
   purchases: "purchases",
+  website_quotations: "websiteQuotations",
 };
 
 let _pool: Pool | null = null;

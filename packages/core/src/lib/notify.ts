@@ -11,9 +11,9 @@ import { computeDoc, inr, nowIso } from "./calc";
 import { allExpenses, allSessions, spendCategoryOf } from "./expenses";
 import { getFeatures } from "./features";
 import { USERS } from "./local-auth";
-import { getState, setBuysDue, setUnseen } from "@/store/app-store";
+import { getState, setBuysDue, setUnseen, setWebsitePending } from "@/store/app-store";
 import { allPurchases, dueReminders } from "./purchases";
-import type { Doc } from "./types";
+import type { Doc, WebsiteQuotation } from "./types";
 
 let lastSeen = ""; // badge: owner opened the daybook
 let lastNotifiedAt = ""; // notifications: never re-alert on anything older than this
@@ -65,8 +65,16 @@ interface Ev {
   tag: string;
 }
 
+/** Badge count for Website Quotations — any signed-in user (tab is not owner-only). */
+export async function refreshWebsitePending() {
+  const siteQuotes = await allRec<WebsiteQuotation>("websiteQuotations");
+  setWebsitePending(siteQuotes.filter((w) => w.status === "Pending").length);
+}
+
 /** Refresh the unseen badge and fire a notification for each new item by someone else. */
 export async function checkOwnerNotifications() {
+  await refreshWebsitePending();
+
   const me = getState().user;
   if (me?.role !== "owner") return;
   const [list, sessions, purchases] = await Promise.all([allExpenses(), allSessions(), allPurchases()]);
@@ -79,6 +87,9 @@ export async function checkOwnerNotifications() {
   // --- Buys reminders due (red badge on Buys tab) ---
   const dueBuys = dueReminders(purchases);
   setBuysDue(dueBuys.length);
+
+  const siteQuotes = await allRec<WebsiteQuotation>("websiteQuotations");
+  const pendingSite = siteQuotes.filter((w) => w.status === "Pending");
 
   // --- notifications: everything newer than lastNotifiedAt, by someone else ---
   const events: Ev[] = [];
@@ -99,6 +110,16 @@ export async function checkOwnerNotifications() {
       if ((q.createdAt || "") > lastNotifiedAt && q.status === "Created") {
         events.push({ at: q.createdAt || "", title: "New quotation", body: `${q.number} · ${q.customerName || "—"} · ₹${inr(computeDoc(q).grand)}`, tag: q.id });
       }
+    }
+  }
+  for (const w of pendingSite) {
+    if ((w.createdAt || "") > lastNotifiedAt) {
+      events.push({
+        at: w.createdAt || "",
+        title: "Website quotation",
+        body: `${w.customerName || "—"} · ${w.totalCft.toFixed(2)} CFT · est. ₹${inr(w.estimate)}`,
+        tag: w.id,
+      });
     }
   }
 
