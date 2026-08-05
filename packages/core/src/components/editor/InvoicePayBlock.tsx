@@ -9,6 +9,7 @@ import { statementsForQuote, type PartyStatement } from "@/lib/payments";
 import { advanceBalance, applyAdvancesToInvoice, CASH_DAY_LIMIT, cashTakenFromCustomerOn, getBankAccounts } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import { bumpData, toast } from "@/store/app-store";
+import { showReviewQr } from "@/store/review-qr-store";
 import type { Doc, Expense } from "@/lib/types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -80,6 +81,7 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
     reload();
     bumpData();
     toast("₹" + inr(r.applied) + " advance applied to this invoice ✓");
+    showReviewQr();
   }
 
   async function addLine() {
@@ -113,6 +115,7 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
     reload();
     bumpData();
     toast("₹" + inr(a) + " received · " + (via === "cash" ? "Cash" : bank.trim()) + " · " + dateStr);
+    showReviewQr();
   }
 
   async function delLine(l: PartyStatement) {

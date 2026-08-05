@@ -17,6 +17,7 @@ import { applyCustomerReceipt, unwindReceiptPieces } from "@/lib/receipts";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
+import { showReviewQr } from "@/store/review-qr-store";
 import { confirmDialog } from "@/store/dialog-store";
 import AccountPicker from "@/components/AccountPicker";
 import CustomerPicker from "@/components/editor/CustomerPicker";
@@ -296,11 +297,13 @@ export default function ReceiptsView() {
       resetForm();
       load();
       bumpData();
-      return toast(
+      toast(
         "₹" + inr(a) + " received from " + who +
           (catLab ? " · " + catLab : "") +
           (paidMgr ? " — Daybook only (not in Books)" : useToOwner ? " — Owner" : " — Daybook"),
       );
+      showReviewQr();
+      return;
     }
 
     // ---- Paid out: category spend (party/name logged; not a customer ledger link) ----
@@ -463,6 +466,7 @@ export default function ReceiptsView() {
               ? " · to owner"
               : " · to account");
     toast(msg);
+    showReviewQr();
   }
 
   async function remove(entry: Entry) {
