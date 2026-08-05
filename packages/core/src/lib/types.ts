@@ -199,14 +199,24 @@ export interface WebsiteQuoteRow {
   cft: number;
 }
 
+export interface WebsiteQuoteSection {
+  woodType: string;
+  rate?: number;
+  rows: WebsiteQuoteRow[];
+  totalCft: number;
+}
+
 export interface WebsiteQuotation {
   id: string;
   source: "website";
   status: "Pending" | "Imported";
   customerName: string;
   phone: string;
+  /** Display label — single wood, or "Teak · White Teak" for multi-wood calculator */
   woodType: string;
   rows: WebsiteQuoteRow[];
+  /** Multi-wood payload from /calculator (optional on older rows) */
+  sections?: WebsiteQuoteSection[];
   totalCft: number;
   estimate: number;
   /** set after Import to Quotation */

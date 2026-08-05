@@ -65,22 +65,36 @@ export default function WebsiteQuotationsView() {
     if (busyId) return;
     setBusyId(w.id);
     try {
+      const secs =
+        w.sections && w.sections.length
+          ? w.sections.map((s) => ({
+              name: s.woodType || "Teak Wood",
+              rate: s.rate && s.rate > 0 ? String(s.rate) : "",
+              calcMode: "cft" as const,
+              rows: (s.rows || []).map((r) => ({
+                l: String(r.l),
+                w: String(r.w),
+                t: String(r.t),
+                pcs: String(r.pcs),
+              })),
+            }))
+          : [
+              {
+                name: w.woodType || "Teak Wood",
+                rate: "",
+                calcMode: "cft" as const,
+                rows: (w.rows || []).map((r) => ({
+                  l: String(r.l),
+                  w: String(r.w),
+                  t: String(r.t),
+                  pcs: String(r.pcs),
+                })),
+              },
+            ];
       const doc = await createQuotation({
         customerName: w.customerName || "",
         phone: w.phone || "",
-        sections: [
-          {
-            name: w.woodType || "Teak Wood",
-            rate: "",
-            calcMode: "cft",
-            rows: (w.rows || []).map((r) => ({
-              l: String(r.l),
-              w: String(r.w),
-              t: String(r.t),
-              pcs: String(r.pcs),
-            })),
-          },
-        ],
+        sections: secs,
         notes: "From website · " + w.id,
         status: "Draft",
       });
@@ -212,30 +226,67 @@ export default function WebsiteQuotationsView() {
 
                 {open && (
                   <div className="wq-detail">
-                    <table className="wq-table">
-                      <thead>
-                        <tr>
-                          <th>#</th>
-                          <th>L (ft)</th>
-                          <th>W (in)</th>
-                          <th>T (in)</th>
-                          <th>Pcs</th>
-                          <th>CFT</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(w.rows || []).map((r, i) => (
-                          <tr key={i}>
-                            <td>{i + 1}</td>
-                            <td>{r.l}</td>
-                            <td>{r.w}</td>
-                            <td>{r.t}</td>
-                            <td>{r.pcs}</td>
-                            <td>{qty(r.cft, 2)}</td>
+                    {w.sections && w.sections.length > 1 ? (
+                      w.sections.map((sec, si) => (
+                        <div key={si} className="wq-sec">
+                          <div className="wq-sec-title">
+                            {sec.woodType}
+                            {sec.rate ? ` · ₹${inr(sec.rate)}/CFT` : ""}
+                            {" · "}
+                            {qty(sec.totalCft, 2)} CFT
+                          </div>
+                          <table className="wq-table">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>L (ft)</th>
+                                <th>W (in)</th>
+                                <th>T (in)</th>
+                                <th>Pcs</th>
+                                <th>CFT</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(sec.rows || []).map((r, i) => (
+                                <tr key={i}>
+                                  <td>{i + 1}</td>
+                                  <td>{r.l}</td>
+                                  <td>{r.w}</td>
+                                  <td>{r.t}</td>
+                                  <td>{r.pcs}</td>
+                                  <td>{qty(r.cft, 2)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))
+                    ) : (
+                      <table className="wq-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>L (ft)</th>
+                            <th>W (in)</th>
+                            <th>T (in)</th>
+                            <th>Pcs</th>
+                            <th>CFT</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {(w.rows || []).map((r, i) => (
+                            <tr key={i}>
+                              <td>{i + 1}</td>
+                              <td>{r.l}</td>
+                              <td>{r.w}</td>
+                              <td>{r.t}</td>
+                              <td>{r.pcs}</td>
+                              <td>{qty(r.cft, 2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                     <div className="wq-actions">
                       {w.status === "Pending" ? (
                         <button

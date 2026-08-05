@@ -2712,6 +2712,9 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .wq-status.done{background:rgba(40,120,70,.1); color:#2a6b42}
 .wq-card-meta{display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:8px; font-size:12.5px; color:var(--ink-soft)}
 .wq-detail{padding:0 16px 16px; border-top:1px solid var(--line)}
+.wq-sec{margin-top:10px}
+.wq-sec+.wq-sec{margin-top:16px; padding-top:12px; border-top:1px dashed var(--line)}
+.wq-sec-title{font-size:13px; font-weight:700; color:var(--ink); margin:4px 0 0}
 .wq-table{width:100%; border-collapse:collapse; margin:12px 0; font-size:13px}
 .wq-table th,.wq-table td{padding:6px 8px; border-bottom:1px solid var(--line); text-align:left}
 .wq-table th{font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-faint)}
