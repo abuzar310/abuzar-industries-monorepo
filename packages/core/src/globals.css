@@ -2725,3 +2725,42 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 }
 
 /* unofficial owner panic cloak — money/counts render as 0 via inr()/qty() (data stays in cloud) */
+
+/* Review QR on printable sheets */
+.review-qr{display:inline-flex; flex-direction:column; align-items:center; gap:4px; text-decoration:none; color:var(--ink-soft)}
+.review-qr img{display:block; width:auto; height:auto; image-rendering:pixelated}
+.review-qr-label{font-size:9px; letter-spacing:.04em; text-transform:uppercase; font-weight:700}
+.qc-review-qr{position:absolute; left:10px; bottom:10px; z-index:2}
+.sq-review-qr{display:flex; justify-content:flex-start; margin-top:10px; padding-left:4px}
+.inv-thanks-row{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:8px}
+.inv-thanks-row .inv-thanks{margin:0; flex:1}
+
+/* Full-screen review flyer (payment accepted / Review button) */
+.review-qr-overlay{
+  position:fixed; inset:0; z-index:9000;
+  background:rgba(26,20,16,.55);
+  display:flex; align-items:center; justify-content:center;
+  padding:16px; box-sizing:border-box;
+  backdrop-filter:blur(2px);
+}
+.review-qr-panel{
+  position:relative;
+  max-width:min(420px, 100%);
+  max-height:min(92vh, 780px);
+  background:var(--paper, #faf6ef);
+  border-radius:16px;
+  box-shadow:0 18px 50px rgba(0,0,0,.28);
+  padding:14px 14px 16px;
+  display:flex; flex-direction:column; align-items:center; gap:12px;
+}
+.review-qr-img{
+  display:block; width:100%; height:auto; max-height:min(78vh, 680px);
+  object-fit:contain; border-radius:8px;
+}
+.review-qr-close{
+  position:absolute; top:6px; right:10px;
+  border:0; background:transparent; color:var(--ink-soft);
+  font-size:28px; line-height:1; cursor:pointer; padding:4px 8px;
+}
+.review-qr-close:hover{color:var(--ink)}
+.review-qr-done{min-width:120px}

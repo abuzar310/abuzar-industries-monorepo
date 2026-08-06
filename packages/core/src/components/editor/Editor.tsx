@@ -36,6 +36,8 @@ import CustomerPicker from "./CustomerPicker";
 import GstinField from "./GstinField";
 import DateField from "./DateField";
 import EwayBillPanel from "./EwayBillPanel";
+import ReviewQR from "@/components/ReviewQR";
+import { showReviewQr } from "@/store/review-qr-store";
 import { extractPincode } from "@/lib/ewaybill";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
@@ -1313,6 +1315,11 @@ export default function Editor({
             );
           })()}
         </div>
+        {feat.simpleQuote && !isInv && !freeMode && (
+          <div className="sq-review-qr">
+            <ReviewQR size={72} />
+          </div>
+        )}
           </>
         )}
         {!isRent && (
@@ -1369,7 +1376,12 @@ export default function Editor({
                 <div className="sign-role">{isBuy ? "Authorised Signature" : "Proprietor · Authorised Signature"}</div>
               </div>
             </div>
-            {!isBuy && <div className="inv-thanks">Thank you for your business 🙏</div>}
+            {!isBuy && (
+              <div className="inv-thanks-row">
+                <div className="inv-thanks">Thank you for your business 🙏</div>
+                <ReviewQR size={64} />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1435,6 +1447,16 @@ export default function Editor({
         {feat.simpleQuote && (
           <button className={"btn" + (freeMode ? " primary" : "")} onClick={toggleFree} title="Drag & resize the boxes freely on the A4 page">
             {freeMode ? "✓ Free arrange" : "Free arrange"}
+          </button>
+        )}
+        {!isInv && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => showReviewQr()}
+            title="Show the Google review QR for the customer to scan"
+          >
+            Review
           </button>
         )}
         {feat.invoices && !isInv && (

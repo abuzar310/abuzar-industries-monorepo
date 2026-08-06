@@ -7,6 +7,7 @@ import { statementsForQuote, type PartyStatement } from "@/lib/payments";
 import { USERS } from "@/lib/local-auth";
 import AccountPicker from "@/components/AccountPicker";
 import { bumpData, toast } from "@/store/app-store";
+import { showReviewQr } from "@/store/review-qr-store";
 import type { Doc, Expense } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
@@ -117,6 +118,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
               ? acctLbl + " (Accounts)"
               : " · cash → Daybook"),
     );
+    showReviewQr();
   }
 
   async function delLine(l: PartyStatement) {
