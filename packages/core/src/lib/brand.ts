@@ -28,6 +28,11 @@ export interface Brand {
   terms?: string[];
   /** Google review page — appended to WhatsApp messages ("rate us") when set */
   reviewUrl?: string;
+  /**
+   * Yard / flyer / sheet QR destination — Abuzar review funnel.
+   * `?go=1` skips the star gate → thank-you + copy → ~8s → Google Maps.
+   */
+  reviewFunnelUrl?: string;
 }
 
 const HDFC_BANK: BankInfo = { name: "HDFC Bank, Chitradurga", acName: "ABUZAR INDUSTRIES", ac: "50200006429458", ifsc: "HDFC0002566" };
@@ -55,6 +60,7 @@ export const REAL_BRAND: Brand = {
   // Verified Google place URL — opens the business panel with Write a review
   reviewUrl:
     "https://www.google.com/maps/place/ABUZAR+INDUSTRIES/@14.2304243,76.3906535,17z/data=!4m8!3m7!1s0x3bba75de8a42ad97:0x9a8be15dab4a6208!8m2!3d14.2304243!4d76.3906535!9m1!1b1!16s%2Fg%2F11g3zdmpmp!5m2!1e4!1e2",
+  reviewFunnelUrl: "https://abuzar-review.vercel.app/?go=1",
 };
 
 export const DEMO_BRAND: Brand = {
@@ -68,6 +74,8 @@ export const DEMO_BRAND: Brand = {
   goods: "",
   bank: { name: "—", ac: "—", ifsc: "—" },
   terms: INVOICE_TERMS,
+  // Same yard funnel — flyer QR must work on unofficial/demo brand too
+  reviewFunnelUrl: "https://abuzar-review.vercel.app/?go=1",
 };
 
 export const brandFor = (mode: BrandMode): Brand => (mode === "real" ? REAL_BRAND : DEMO_BRAND);
