@@ -157,11 +157,11 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     const a4h = (width * 297) / 210;
     if (clone.scrollHeight > a4h + 4) clone.classList.add("inv-tight");
   }
-  // quote: lock to one A4 with the .a4fill layout — rows stay a fixed 1.7cm (never taller)
-  // (same as the browser print — see #sheet.sq.a4fill in globals.css)
+  // quote: lock to one A4 with the .a4fill layout — rows stay compact (see #sheet.sq.a4fill).
+  // Use ~272mm worth of height (not full 297) so float rounding + QR/footer never tip a
+  // one-page capture into a blank second PDF page.
   if (clone.classList.contains("sq")) {
-    const a4h = (width * 297) / 210;
-    // fits one page → lock its height; taller than a page → leave it for the multi-page slicer
+    const a4h = (width * 272) / 210;
     if (clone.scrollHeight <= a4h + 4) {
       clone.classList.add("a4fill");
       clone.style.height = a4h + "px";
@@ -240,11 +240,13 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
       }
     } else {
       // Place the single tall image once per page, shifting it up by one page each time.
+      // Ignore a trailing stub (< ~2mm) — that was producing an empty page 2 on quotes/PDFs.
+      const STUB_MM = 2;
       let heightLeft = imgH;
       let position = 0;
       pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
       heightLeft -= pageH;
-      while (heightLeft > 0.5) {
+      while (heightLeft > STUB_MM) {
         position -= pageH;
         pdf.addPage();
         pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
