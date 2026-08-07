@@ -2737,8 +2737,9 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .inv-thanks-row .inv-thanks{margin:0; flex:1}
 
 @media print{
-  /* Prefer one page for a4fill quotes — never clip content with overflow:hidden */
+  /* Prefer one page for a4fill quotes — 272mm matches PDF lock; never overflow:hidden (clips) */
   #sheet.sq.a4fill{
+    max-height:272mm;
     break-after:avoid-page;
     page-break-after:avoid;
   }
