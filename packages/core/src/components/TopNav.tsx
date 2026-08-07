@@ -8,6 +8,7 @@ import { brandFor } from "@/lib/brand";
 import { cloakAvailable, toggleCloak } from "@/lib/cloak";
 import { isInvoiceId } from "@/lib/doc";
 import { changePassword, lockApp } from "@/lib/local-auth";
+import { canToggleCloak } from "@/lib/staff-role";
 import { formDialog } from "@/store/dialog-store";
 import { TabIcon } from "@/components/Icons";
 import type { Tab } from "@/lib/types";
@@ -32,10 +33,12 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
   const path = usePathname();
   const router = useRouter();
   const isOwner = user?.role === "owner";
+  /** Owner + Manager (CloakCapableStaff) — same core hide gesture */
+  const mayCloak = cloakAvailable() && canToggleCloak(user?.role);
   const brand = brandFor(brandMode);
 
   const [userMenu, setUserMenu] = useState(false);
-  /** mobile: 5 rapid taps on brand toggles money cloak (owner / unofficial only) */
+  /** mobile: 5 rapid taps on brand toggles money cloak (owner/manager · unofficial) */
   const brandTaps = useRef<{ n: number; t: number }>({ n: 0, t: 0 });
   useEffect(() => {
     if (!userMenu) return;
@@ -50,7 +53,7 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
   }
 
   function onBrandPointer(e: MouseEvent) {
-    if (!cloakAvailable() || user?.role !== "owner") return;
+    if (!mayCloak) return;
     // Shortcut (Mac Option / Windows Alt + click once) — same as 5 taps
     if (e.altKey) {
       e.preventDefault();
@@ -78,7 +81,7 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
           onClick={onBrandPointer}
           onContextMenu={(e) => {
             // block “Inspect” long-press menu from looking special on the brand
-            if (cloakAvailable() && user?.role === "owner") e.preventDefault();
+            if (mayCloak) e.preventDefault();
           }}
         >
           {brand.name}

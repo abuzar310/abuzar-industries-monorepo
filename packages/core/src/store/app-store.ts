@@ -21,7 +21,7 @@ export interface AppState {
   unseen: number;
   /** Buys register reminders that are due today or overdue */
   buysDue: number;
-  /** unofficial owner panic: blank money/rates app-wide (cloud meta — syncs all devices) */
+  /** unofficial panic cloak (owner/manager): blank money/rates app-wide (cloud meta — syncs all devices) */
   cloakMoney: boolean;
 }
 
