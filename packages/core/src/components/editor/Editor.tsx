@@ -1382,10 +1382,7 @@ export default function Editor({
               </div>
             </div>
             {!isBuy && (
-              <div className="inv-thanks-row">
-                <div className="inv-thanks">Thank you for your business 🙏</div>
-                <ReviewQR size={64} />
-              </div>
+              <div className="inv-thanks">Thank you for your business 🙏</div>
             )}
           </div>
         )}
