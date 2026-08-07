@@ -425,7 +425,7 @@ body{
 /* Row height is COMPACT (--sqrow ≈ 0.72cm → ~30 rows/column) ONLY when printing / exporting (the
    a4fill & a4multi print modes, the @page render, and the free-arrange WYSIWYG canvas). The plain
    EDITING screen gets natural, tap-comfortable rows so data entry never looks collapsed. */
-#sheet.sq{--sqrow:0.72cm}
+#sheet.sq{--sqrow:0.72cm; position:relative}
 #sheet.sq.a4fill #sections .row.cf,
 #sheet.sq.a4multi #sections .row.cf{height:var(--sqrow)}
 #sheet.sq:not(.a4fill):not(.a4multi) #sections .row.cf .dim{padding:9px 2px}
@@ -2731,9 +2731,27 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .review-qr img{display:block; width:auto; height:auto; image-rendering:pixelated}
 .review-qr-label{font-size:9px; letter-spacing:.04em; text-transform:uppercase; font-weight:700}
 .qc-review-qr{position:absolute; left:10px; bottom:10px; z-index:2}
-.sq-review-qr{display:flex; justify-content:flex-start; margin-top:10px; padding-left:4px}
+/* Absolute so the QR never adds document flow height (was causing blank print page 2) */
+.sq-review-qr{position:absolute; left:10px; bottom:8px; z-index:2; margin:0; padding:0; pointer-events:auto}
 .inv-thanks-row{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:8px}
 .inv-thanks-row .inv-thanks{margin:0; flex:1}
+
+@media print{
+  /* clip a4fill quotes to one page — tiny overflow previously created an empty page 2 */
+  #sheet.sq.a4fill{
+    overflow:hidden !important;
+    break-after:avoid-page;
+    page-break-after:avoid;
+  }
+  .sq-review-qr .review-qr img{width:48px !important; height:48px !important}
+  .sq-review-qr .review-qr-label{font-size:7px}
+  .qc-review-qr .review-qr img{width:48px !important; height:48px !important}
+  .qc-review-qr .review-qr-label{font-size:7px}
+  /* keep invoice thank-you QR compact so the foot doesn't tip past page 1 */
+  .inv-thanks-row .review-qr img{width:52px !important; height:52px !important}
+  .inv-thanks-row .review-qr-label{font-size:7px}
+  .review-qr-overlay{display:none !important}
+}
 
 /* Full-screen review flyer (payment accepted / Review button) */
 .review-qr-overlay{

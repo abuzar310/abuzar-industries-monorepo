@@ -774,14 +774,18 @@ export default function Editor({
         }
         return; // keep width + min-height for print; unfit() restores them afterwards
       }
-      // quote: compact ~0.85cm rows (~26 per column, like the legacy print). Try to fit on ONE page —
-      // thin a touch (to no less than 0.7cm) if it's a hair over; when even 0.7cm can't hold it, flow
-      // onto the next page (a4multi) at the normal 0.85cm rows. Never balloon the rows.
+      // quote: compact ~0.72cm rows. Fit ONE page when possible.
+      // Leave ~14px slack under the locked height — browsers add @page margin chrome and
+      // will otherwise spill 1–2mm onto a blank page 2 (same lesson as invoice 272mm vs 285mm).
+      const printH = Math.max(120, pageH - 14);
       sheet.classList.add("a4fill");
-      sheet.style.height = pageH - 10 + "px";
+      sheet.style.height = printH + "px";
+      sheet.style.maxHeight = printH + "px";
+      sheet.style.overflow = "hidden";
       const sections = sheet.querySelector("#sections") as HTMLElement | null;
       const overflows = () =>
-        (!!sections && sections.scrollWidth > sections.clientWidth + 2) || sheet.scrollHeight > pageH + 2;
+        (!!sections && sections.scrollWidth > sections.clientWidth + 2) ||
+        sheet.scrollHeight > printH + 2;
       let rowCm = 0.72;
       sheet.style.setProperty("--sqrow", rowCm + "cm");
       while (rowCm > 0.7 && overflows()) {
@@ -793,6 +797,8 @@ export default function Editor({
         sheet.classList.remove("a4fill");
         sheet.classList.add("a4multi");
         sheet.style.height = "";
+        sheet.style.maxHeight = "";
+        sheet.style.overflow = "";
         sheet.style.setProperty("--sqrow", "0.72cm");
       }
     };
@@ -800,6 +806,8 @@ export default function Editor({
       sheet.style.width = "";
       sheet.style.height = "";
       sheet.style.minHeight = "";
+      sheet.style.maxHeight = "";
+      sheet.style.overflow = "";
       sheet.style.zoom = "1";
       sheet.style.removeProperty("--sqrow");
       sheet.classList.remove("inv-tight");
