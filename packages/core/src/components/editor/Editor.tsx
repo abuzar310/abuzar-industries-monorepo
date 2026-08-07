@@ -1454,11 +1454,11 @@ export default function Editor({
             {freeMode ? "✓ Free arrange" : "Free arrange"}
           </button>
         )}
-        {!isInv && (
+        {!isBuy && (
           <button
             type="button"
             className="btn"
-            onClick={() => showReviewQr()}
+            onClick={() => showReviewQr({ force: true })}
             title="Show the Google review QR for the customer to scan"
           >
             Review
