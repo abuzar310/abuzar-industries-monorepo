@@ -2753,32 +2753,38 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .review-qr-overlay{display:none !important}
 }
 
-/* Full-screen review flyer (payment accepted / Review button) */
+/* Full-screen review flyer — exact /review-qr.png (QR → funnel ?go=1) */
 .review-qr-overlay{
   position:fixed; inset:0; z-index:9000;
-  background:rgba(26,20,16,.55);
+  background:rgba(26,20,16,.58);
   display:flex; align-items:center; justify-content:center;
-  padding:16px; box-sizing:border-box;
+  padding:12px; box-sizing:border-box;
   backdrop-filter:blur(2px);
 }
-.review-qr-panel{
+.review-qr-panel--flyer{
   position:relative;
   max-width:min(420px, 100%);
-  max-height:min(92vh, 780px);
-  background:var(--paper, #faf6ef);
-  border-radius:16px;
-  box-shadow:0 18px 50px rgba(0,0,0,.28);
-  padding:14px 14px 16px;
-  display:flex; flex-direction:column; align-items:center; gap:12px;
+  max-height:min(94vh, 820px);
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:0 22px 60px rgba(0,0,0,.32);
+  padding:0;
+  display:block;
+  overflow:hidden;
 }
-.review-qr-img{
-  display:block; width:100%; height:auto; max-height:min(78vh, 680px);
-  object-fit:contain; border-radius:8px;
+.review-qr-flyer{
+  display:block;
+  width:100%;
+  height:auto;
+  max-height:min(94vh, 820px);
+  object-fit:contain;
+  background:#f4efe6;
 }
 .review-qr-close{
-  position:absolute; top:6px; right:10px;
-  border:0; background:transparent; color:var(--ink-soft);
-  font-size:28px; line-height:1; cursor:pointer; padding:4px 8px;
+  position:absolute; top:6px; right:10px; z-index:2;
+  border:0; background:rgba(244,239,230,.85); color:#6a4a38;
+  font-size:28px; line-height:1; cursor:pointer; padding:2px 10px;
+  border-radius:999px;
 }
-.review-qr-close:hover{color:var(--ink)}
-.review-qr-done{min-width:120px}
+.review-qr-close:hover{color:#3d2418}
