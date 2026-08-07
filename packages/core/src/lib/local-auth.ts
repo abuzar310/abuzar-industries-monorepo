@@ -11,6 +11,9 @@ export const USERS: LocalUser[] = [
 ];
 
 export const isOwner = () => getState().user?.role === "owner";
+export const isManager = () => getState().user?.role === "manager";
+/** Owner or manager — same CloakCapableStaff hide access (see staff-role.ts). */
+export { canToggleCloak } from "./staff-role";
 
 /** Change the signed-in user's own password (server-side, hashed). */
 export const changePassword = (_id: string, pw: string) => apiChangePassword(pw.trim());
