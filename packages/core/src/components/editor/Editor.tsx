@@ -1382,10 +1382,7 @@ export default function Editor({
               </div>
             </div>
             {!isBuy && (
-              <div className="inv-thanks-row">
-                <div className="inv-thanks">Thank you for your business 🙏</div>
-                <ReviewQR size={64} />
-              </div>
+              <div className="inv-thanks">Thank you for your business 🙏</div>
             )}
           </div>
         )}
@@ -1454,11 +1451,11 @@ export default function Editor({
             {freeMode ? "✓ Free arrange" : "Free arrange"}
           </button>
         )}
-        {!isInv && (
+        {!isBuy && (
           <button
             type="button"
             className="btn"
-            onClick={() => showReviewQr()}
+            onClick={() => showReviewQr({ force: true })}
             title="Show the Google review QR for the customer to scan"
           >
             Review
