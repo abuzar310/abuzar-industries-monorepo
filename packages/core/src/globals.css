@@ -2737,9 +2737,8 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .inv-thanks-row .inv-thanks{margin:0; flex:1}
 
 @media print{
-  /* clip a4fill quotes to one page — tiny overflow previously created an empty page 2 */
+  /* Prefer one page for a4fill quotes — never clip content with overflow:hidden */
   #sheet.sq.a4fill{
-    overflow:hidden !important;
     break-after:avoid-page;
     page-break-after:avoid;
   }

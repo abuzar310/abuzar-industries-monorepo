@@ -165,8 +165,6 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     if (clone.scrollHeight <= a4h + 4) {
       clone.classList.add("a4fill");
       clone.style.height = a4h + "px";
-      clone.style.maxHeight = a4h + "px";
-      clone.style.overflow = "hidden";
     }
   }
 

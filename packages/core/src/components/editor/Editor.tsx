@@ -777,11 +777,11 @@ export default function Editor({
       // quote: compact ~0.72cm rows. Fit ONE page when possible.
       // Leave ~14px slack under the locked height — browsers add @page margin chrome and
       // will otherwise spill 1–2mm onto a blank page 2 (same lesson as invoice 272mm vs 285mm).
+      // Slack under the locked height so @page margins don't tip a full sheet onto a blank page 2.
+      // No overflow:hidden — that would clip the bill / last rows / QR.
       const printH = Math.max(120, pageH - 14);
       sheet.classList.add("a4fill");
       sheet.style.height = printH + "px";
-      sheet.style.maxHeight = printH + "px";
-      sheet.style.overflow = "hidden";
       const sections = sheet.querySelector("#sections") as HTMLElement | null;
       const overflows = () =>
         (!!sections && sections.scrollWidth > sections.clientWidth + 2) ||
@@ -797,8 +797,6 @@ export default function Editor({
         sheet.classList.remove("a4fill");
         sheet.classList.add("a4multi");
         sheet.style.height = "";
-        sheet.style.maxHeight = "";
-        sheet.style.overflow = "";
         sheet.style.setProperty("--sqrow", "0.72cm");
       }
     };
@@ -806,8 +804,6 @@ export default function Editor({
       sheet.style.width = "";
       sheet.style.height = "";
       sheet.style.minHeight = "";
-      sheet.style.maxHeight = "";
-      sheet.style.overflow = "";
       sheet.style.zoom = "1";
       sheet.style.removeProperty("--sqrow");
       sheet.classList.remove("inv-tight");
