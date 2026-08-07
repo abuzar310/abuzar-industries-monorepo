@@ -36,7 +36,6 @@ import CustomerPicker from "./CustomerPicker";
 import GstinField from "./GstinField";
 import DateField from "./DateField";
 import EwayBillPanel from "./EwayBillPanel";
-import ReviewQR from "@/components/ReviewQR";
 import { showReviewQr } from "@/store/review-qr-store";
 import { extractPincode } from "@/lib/ewaybill";
 
@@ -1320,11 +1319,6 @@ export default function Editor({
             );
           })()}
         </div>
-        {feat.simpleQuote && !isInv && !freeMode && (
-          <div className="sq-review-qr">
-            <ReviewQR size={72} />
-          </div>
-        )}
           </>
         )}
         {!isRent && (

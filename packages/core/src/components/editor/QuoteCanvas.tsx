@@ -2,8 +2,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Rnd } from "react-rnd";
 import type { BoxRect, Doc } from "@/lib/types";
-import ReviewQR from "@/components/ReviewQR";
-
 // The A4 PRINTABLE area (210×297mm minus the 6mm @page margins = 198×285mm) at 96dpi, in logical px.
 // The canvas is always this size; on screen it's scaled to fit the editor width (react-rnd's `scale`
 // prop keeps drag/resize in sync), and it prints 1:1 inside the page margins (748px ≈ 198mm).
@@ -157,9 +155,6 @@ export default function QuoteCanvas({
           );
         })()}
 
-        <div className="qc-review-qr">
-          <ReviewQR size={72} />
-        </div>
       </div>
     </div>
   );
