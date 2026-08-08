@@ -1087,11 +1087,9 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .inv3a .i3-mast img{height:106px; width:auto; margin:-9px 0}
 .inv3a .i3-nm{font-family:var(--disp); font-size:42px; font-weight:800; letter-spacing:.17em;
   font-stretch:expanded; line-height:1; color:var(--i3-maroon); text-transform:uppercase; white-space:nowrap}
-.inv3a .i3-tg{font-family:var(--disp); font-size:11.5px; letter-spacing:.42em; color:var(--i3-gold);
-  text-transform:uppercase; margin-top:5px; font-weight:700}
-.inv3a .i3-ad{font-size:10.5px; color:var(--i3-soft); margin-top:5px; line-height:1.55}
-.inv3a .i3-gs{font-family:var(--mono); font-size:11px; font-weight:700; margin-top:2px}
 .inv3a .i3-dbl{height:6px; border-top:3px solid var(--i3-maroon); border-bottom:1.5px solid var(--i3-gold); margin:0 var(--i3-pad)}
+/* seller GSTIN — slim line under the rule, not part of the logo/name stack */
+.inv3a .i3-gs{font-family:var(--mono); font-size:11px; font-weight:700; margin:6px var(--i3-pad) 0; color:var(--i3-ink)}
 .inv3a .i3-chips{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; padding:10px var(--i3-pad) 0}
 .inv3a .i3-chip{background:var(--i3-bone); border:1px solid var(--i3-hair); padding:5px 9px; border-radius:7px}
 .inv3a .i3-chip span{display:block; font-size:8.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--i3-soft)}
@@ -1158,40 +1156,45 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .inv3a .i3-terms ol{padding-left:14px}
 .inv3a .i3-terms li{font-size:10px; color:var(--i3-soft); line-height:1.6}
 .inv3a .i3-signs{display:flex; justify-content:space-between; align-items:flex-end; padding:22px var(--i3-pad) 14px; gap:24px}
-/* density tier 1 (2 boxes OR 10+ rows): everything tightens so one page still fits */
-.inv3a.i3-c1 .i3-kindtop{padding:2px 0 0}
-.inv3a.i3-c1 .i3-mast{padding:4px var(--i3-pad) 6px; gap:12px}
-.inv3a.i3-c1 .i3-mast img{height:94px; margin:-12px 0}
-.inv3a.i3-c1 .i3-nm{font-size:36px; letter-spacing:.16em}
-.inv3a.i3-c1 .i3-tg{margin-top:3px; font-size:10.5px}
-.inv3a.i3-c1 .i3-ad{font-size:10px; margin-top:3px}
-.inv3a.i3-c1 .i3-chip{padding:4px 8px}
-.inv3a.i3-c1 .i3-pbox{padding:5px 10px}
-.inv3a.i3-c1 .i3-pnm{font-size:15px}
-.inv3a.i3-c1 .i3-boxes{margin-top:8px}
-.inv3a.i3-c1 .i3-box + .i3-box{margin-top:6px}
-.inv3a.i3-c1 .i3-bhead{padding:3.5px 10px; font-size:12px}
-.inv3a.i3-c1 .i3-btbl thead th{padding:3px 8px}
-.inv3a.i3-c1 .i3-btbl tbody td{height:15px; padding:2.5px 8px; font-size:12px}
-.inv3a.i3-c1 .i3-bfoot{padding:4px 10px}
-.inv3a.i3-c1 .i3-bfoot b{font-size:13px}
-.inv3a.i3-c1 .i3-btbl tfoot td{padding:4px 10px}
-.inv3a.i3-c1 .i3-btbl tfoot b{font-size:13px}
-.inv3a.i3-c1 .i3-totrow{margin-top:8px}
-.inv3a.i3-c1 .i3-trow{padding:3.5px 12px}
-.inv3a.i3-c1 .i3-grand{padding:8px 12px}
-.inv3a.i3-c1 .i3-grand .v{font-size:18px}
+/* ── density sacrifice order (letterhead NEVER shrinks) ─────────────────────
+   c1 → Amount in Words + totals / Grand Total (first)
+   c2 → wood Rate·CFT·Total Price footers, then line columns
+   c3 → signature block (+ light chip/party squeeze if still tight) */
+/* tier 1 — Amount in Words + Taxable / GST / Grand Total */
+.inv3a.i3-c1 .i3-totrow{margin-top:6px; gap:12px}
+.inv3a.i3-c1 .i3-words{padding-top:2px; font-size:10.5px; line-height:1.45}
+.inv3a.i3-c1 .i3-words b{font-size:11px; margin-top:1px}
+.inv3a.i3-c1 .i3-tots{width:300px; flex:0 0 300px}
+.inv3a.i3-c1 .i3-trow{padding:2.5px 10px; font-size:11px}
+.inv3a.i3-c1 .i3-grand{padding:6px 10px}
+.inv3a.i3-c1 .i3-grand .l{font-size:10.5px; letter-spacing:.22em}
+.inv3a.i3-c1 .i3-grand .v{font-size:16px}
 .inv3a.i3-c1 .i3-tear{margin-top:8px}
-.inv3a.i3-c1 .i3-office{gap:14px; padding-top:6px}
-.inv3a.i3-c1 .i3-terms li{font-size:9.5px; line-height:1.5}
-.inv3a.i3-c1 .i3-signs{padding:12px var(--i3-pad) 10px}
-/* density tier 2 (3+ boxes OR 16+ rows): tightest, still readable */
-.inv3a.i3-c2 .i3-mast img{height:78px; margin:-10px 0}
-.inv3a.i3-c2 .i3-nm{font-size:30px}
-.inv3a.i3-c2 .i3-btbl thead th{padding:2.5px 8px; font-size:8.5px}
-.inv3a.i3-c2 .i3-btbl tbody td{height:12px; padding:1.5px 8px; font-size:11px}
+/* tier 2 — Rate ₹/CFT · Total CFT · Total Price first, then table columns */
+.inv3a.i3-c2 .i3-bfoot{padding:3px 8px; gap:12px}
+.inv3a.i3-c2 .i3-bfoot span{font-size:7.5px}
+.inv3a.i3-c2 .i3-bfoot b{font-size:12px}
+.inv3a.i3-c2 .i3-bfoot .tp b{font-size:13px}
+.inv3a.i3-c2 .i3-btbl tfoot td{padding:3px 8px}
+.inv3a.i3-c2 .i3-btbl tfoot .fl{font-size:7.5px}
+.inv3a.i3-c2 .i3-btbl tfoot b{font-size:12px}
+.inv3a.i3-c2 .i3-btbl tfoot .ft-tail b{font-size:13px}
+.inv3a.i3-c2 .i3-boxes{margin-top:6px}
+.inv3a.i3-c2 .i3-box + .i3-box{margin-top:5px}
+.inv3a.i3-c2 .i3-bhead{padding:3px 8px; font-size:11.5px}
+.inv3a.i3-c2 .i3-btbl thead th{padding:2.5px 6px; font-size:8.5px}
+.inv3a.i3-c2 .i3-btbl tbody td{height:13px; padding:1.5px 6px; font-size:11px}
 .inv3a.i3-c2 .i3-sl{font-size:10px}
-.inv3a.i3-c2 .i3-chip b{font-size:11px}
+/* tier 3 — signatures last */
+.inv3a.i3-c3 .i3-signs{padding:8px var(--i3-pad) 6px; gap:16px}
+.inv3a.i3-c3 .i3-sig .for{margin-bottom:14px; font-size:12px}
+.inv3a.i3-c3 .i3-sig .line{padding-top:3px; font-size:8px}
+.inv3a.i3-c3 .i3-chip{padding:3px 7px}
+.inv3a.i3-c3 .i3-chip b{font-size:11px}
+.inv3a.i3-c3 .i3-pbox{padding:4px 8px}
+.inv3a.i3-c3 .i3-pnm{font-size:14px}
+.inv3a.i3-c3 .i3-office{gap:12px; padding-top:4px}
+.inv3a.i3-c3 .i3-terms li{font-size:9px; line-height:1.45}
 .inv3a .i3-sig{width:220px; text-align:center}
 .inv3a .i3-sig .for{font-family:var(--disp); font-size:13px; font-weight:700; margin-bottom:28px; color:var(--i3-maroon)}
 .inv3a .i3-sig .line{border-top:1.5px solid var(--i3-maroon); padding-top:4px; font-size:8.5px;
@@ -1203,7 +1206,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   body{background:#fff; background-image:none}
   .wrap{padding:0; max-width:none}
   .topnav,#toast{display:none !important}
-  .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint,.mode-btn,.mode-seg,.no-print{display:none !important}
+  .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint,.mode-btn,.mode-seg,.editor-tabs,.no-print{display:none !important}
   .print-only{display:block !important}
   /* line-selection highlight is a screen-only editing aid — never print it */
   .row.selrow{background:transparent !important}

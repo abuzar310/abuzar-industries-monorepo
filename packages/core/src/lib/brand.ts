@@ -26,10 +26,10 @@ export interface Brand {
   banks?: BankInfo[];
   /** invoice terms & conditions lines */
   terms?: string[];
-  /** Google review page — appended to WhatsApp messages ("rate us") when set */
+  /** Google Maps review page — WhatsApp fallback if reviewFunnelUrl is unset */
   reviewUrl?: string;
   /**
-   * Yard / flyer / sheet QR destination — Abuzar review funnel.
+   * Yard / flyer QR + WhatsApp "rate us" link — Abuzar review funnel.
    * `?go=1` skips the star gate → thank-you + copy → ~8s → Google Maps.
    */
   reviewFunnelUrl?: string;

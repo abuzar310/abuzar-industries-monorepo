@@ -116,7 +116,7 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     freeze(s, s.options[s.selectedIndex]?.text || "");
   });
 
-  // Card/dashboard captures: keep width modest so body text lands ~11–13pt on A4.
+  // Card/dashboard captures: keep width modest so body text lands ~10–12pt on A4.
   // Invoice/quote sheets (no pageBreak) keep the wider natural layout.
   let width = opts?.width || Math.max(sheet.scrollWidth, 880);
   if (opts?.pageBreak) width = Math.min(width, CARD_CAPTURE_MAX);
@@ -125,24 +125,29 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
   clone.style.background = "#FAF6EF";
   // print-only nodes (.cd-print) are display:none on screen — the clone must lay out
   clone.style.display = "block";
-  // Card UI: bump base type so numbers/names stay readable after the A4 downscale.
+  // Card UI (Suppliers Register/Payments, Books…): medium type — large enough after A4
+  // downscale, not the oversized 18px bump. Also darken muted inks so labels on cream /
+  // brown washes (KPI cards, table headers) stay readable in the JPEG capture.
   if (opts?.pageBreak) {
-    clone.style.fontSize = "18px";
-    clone.style.lineHeight = "1.45";
+    clone.style.fontSize = "14px";
+    clone.style.lineHeight = "1.4";
+    clone.style.setProperty("--ink-faint", "#5c4e3c");
+    clone.style.setProperty("--ink-soft", "#3f3428");
   }
   // Dated header so the PDF carries a title/branding (the on-screen topnav is never captured).
   // Hex colours only — html2canvas does not reliably resolve CSS variables.
   if (opts?.title) {
     const brand = document.createElement("div");
-    brand.style.cssText = "padding:0 0 14px;margin:0 0 18px;border-bottom:2px solid #e2d6c2";
+    brand.style.cssText = "padding:0 0 12px;margin:0 0 14px;border-bottom:2px solid #e2d6c2";
     const bt = document.createElement("div");
     bt.textContent = opts.title;
     bt.style.cssText =
-      "font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#2a2118;letter-spacing:-.015em";
+      "font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:600;color:#2a2118;letter-spacing:-.015em";
     const bs = document.createElement("div");
     bs.textContent =
       "as of " + new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-    bs.style.cssText = "font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;color:#8a7a66;margin-top:4px";
+    bs.style.cssText =
+      "font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#5c4e3c;margin-top:4px";
     brand.appendChild(bt);
     brand.appendChild(bs);
     clone.insertBefore(brand, clone.firstChild);
@@ -176,7 +181,8 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
       logging: false,
       windowWidth: width,
     });
-    const img = canvas.toDataURL("image/jpeg", 0.92);
+    // Slightly higher quality on card PDFs so muted labels on brown washes stay sharp.
+    const img = canvas.toDataURL("image/jpeg", opts?.pageBreak ? 0.96 : 0.92);
     const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
     const pageW = 210;
     const pageH = 297;
