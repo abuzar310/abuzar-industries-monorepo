@@ -129,7 +129,7 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
   const halfAmt = Math.round(totals.gstAmt * 50) / 100;
   const igst = doc.gstKind === "igst";
   // density: more rows / boxes → tighter BODY type + spacing so ONE printed page fits.
-  // Letterhead (logo, name, tagline, address, GSTIN) stays full size — see globals.css.
+  // Letterhead is Tax Invoice + logo + name only (full size) — see globals.css.
   const boxes = (doc.sections || []).length;
   const minRows = minRowsFor(boxes);
   const rowsTotal = (doc.sections || []).reduce((s, sec) => {
@@ -142,17 +142,16 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
       {/* TAX INVOICE — centred on top */}
       <div className="i3-kindtop"><span>Tax Invoice</span></div>
 
-      {/* woodmark letterhead */}
+      {/* letterhead: logo + company name only */}
       <div className="i3-mast">
         {brand.logo && <img src="/logo.png" alt={brand.name} />}
         <div className="i3-id">
           <div className="i3-nm">{brand.name}</div>
-          <div className="i3-tg">Timber · Est. 1995</div>
-          <div className="i3-ad">{brand.addr}{brand.phone ? " · Ph " + brand.phone : ""}</div>
-          {brand.gstin && <div className="i3-gs">GSTIN {brand.gstin}</div>}
         </div>
       </div>
       <div className="i3-dbl" />
+      {/* seller GSTIN kept for the tax invoice, outside the brand block */}
+      {brand.gstin && <div className="i3-gs">GSTIN {brand.gstin}</div>}
 
       {/* ticket chips */}
       <div className="i3-chips">
