@@ -16,6 +16,8 @@ export interface PdfOpts {
   width?: number;
   /** A dated header prepended to the PDF (e.g. the report title / supplier name). */
   title?: string;
+  /** Printable inset on each A4 page in mm (0 = edge-to-edge, default). Suppliers PDFs use ~8. */
+  marginMm?: number;
 }
 
 /** Card/dashboard captures wider than this make body text too small on A4. */
@@ -186,11 +188,15 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
     const pageW = 210;
     const pageH = 297;
-    const imgH = (canvas.height * pageW) / canvas.width; // full image height in mm
+    // Optional printable inset (Suppliers PDFs). Default 0 keeps invoices/quotes edge-to-edge.
+    const margin = Math.max(0, Math.min(40, opts?.marginMm ?? 0));
+    const contentW = pageW - 2 * margin;
+    const contentH = pageH - 2 * margin;
+    const imgH = (canvas.height * contentW) / canvas.width; // full image height in mm
 
     // Short captures (one supplier card, a thin books tab) — one page, no trailing blank.
-    if (imgH <= pageH + 0.8) {
-      pdf.addImage(img, "JPEG", 0, 0, pageW, imgH);
+    if (imgH <= contentH + 0.8) {
+      pdf.addImage(img, "JPEG", margin, margin, contentW, imgH);
       return pdf;
     }
 
@@ -198,19 +204,37 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     // mid-card. html2canvas ignores CSS break-inside, so we compute the safe cut
     // lines ourselves from the laid-out clone. Falls back to blind slicing when no
     // page-break selector is given (invoices, quotes, the report sheets).
-    const pagePx = canvas.width * (pageH / pageW); // one A4 page in canvas pixels
-    let cuts: number[] = [];
+    // Usable page height accounts for margin so cards don’t get clipped by the inset.
+    // Keep a 2mm safety so the last line of a packed row isn’t clipped by rounding.
+    const pagePx = Math.max(1, Math.floor(canvas.width * ((contentH - 2) / contentW)));
+    type BreakUnit = { top: number; bottom: number };
+    let units: BreakUnit[] = [];
     if (opts?.pageBreak) {
       const cr = clone.getBoundingClientRect();
       const ratio = cr.height > 0 ? canvas.height / cr.height : 1;
-      cuts = Array.from(clone.querySelectorAll(opts.pageBreak))
-        .map((u) => (u.getBoundingClientRect().bottom - cr.top) * ratio)
-        .filter((y) => y > 0.5 && y < canvas.height - 0.5)
-        .sort((a, b) => a - b);
+      units = Array.from(clone.querySelectorAll(opts.pageBreak))
+        .map((u) => {
+          const r = u.getBoundingClientRect();
+          return {
+            top: Math.round((r.top - cr.top) * ratio),
+            bottom: Math.round((r.bottom - cr.top) * ratio),
+          };
+        })
+        .filter((u) => u.bottom > u.top + 1 && u.bottom < canvas.height)
+        .sort((a, b) => a.top - b.top || a.bottom - b.bottom);
+      // Drop outer wrappers that strictly contain other units (e.g. .buys-card around rows)
+      units = units.filter(
+        (u, i) =>
+          !units.some(
+            (o, j) =>
+              j !== i && o.top >= u.top && o.bottom <= u.bottom && (o.top > u.top || o.bottom < u.bottom),
+          ),
+      );
     }
 
-    if (cuts.length) {
-      // variable-fill pages, each ending on a card/row boundary
+    if (units.length) {
+      // Pack whole units per page. Never start a unit unless it finishes on this page
+      // (unless the unit itself is taller than one page — then hard-slice).
       const pageCanvas = document.createElement("canvas");
       const pctx = pageCanvas.getContext("2d")!;
       let start = 0;
@@ -218,45 +242,68 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
       let guard = 0;
       while (start < canvas.height - 0.5 && guard++ < 500) {
         const limit = start + pagePx;
-        let cut = 0;
-        for (const y of cuts) if (y > start + 1 && y <= limit) cut = y;
-        // Content still fits on this page → take everything (avoids empty page 2).
+        let cut = start;
+
         if (canvas.height <= limit + 0.5) {
           cut = canvas.height;
-        } else if (cut <= start) {
-          cut = Math.min(canvas.height, limit); // a single block taller than a page
-        } else if (canvas.height - cut < TRAILING_STUB_PX) {
-          // leftover is just padding under the last card — absorb it
-          cut = canvas.height;
+        } else {
+          // Include every whole unit that starts at/after `start` and ends by `limit`.
+          for (const u of units) {
+            if (u.bottom <= start + 1) continue;
+            // Continuation of a unit taller than one page (started earlier via hard-slice)
+            if (u.top < start - 1) {
+              cut = u.bottom <= limit ? u.bottom : limit;
+              break;
+            }
+            if (u.bottom <= limit) {
+              cut = u.bottom;
+              continue;
+            }
+            // This unit does not fit. Keep prior units; push it to the next page.
+            if (cut > start) break;
+            // Nothing packed yet and unit taller than the page → unavoidable hard-slice.
+            cut = limit;
+            break;
+          }
+          if (cut <= start) cut = Math.min(canvas.height, limit);
+          // No further break units → absorb footer/padding on this page if it fits
+          else if (!units.some((u) => u.bottom > cut + 1) && canvas.height <= limit + TRAILING_STUB_PX) {
+            cut = canvas.height;
+          } else if (canvas.height - cut < TRAILING_STUB_PX) {
+            cut = canvas.height;
+          }
         }
-        const sliceH = Math.max(1, Math.round(cut - start));
+
+        const startPx = Math.round(start);
+        const cutPx = Math.min(canvas.height, Math.max(startPx + 1, Math.round(cut)));
+        const sliceH = cutPx - startPx;
         // Skip near-empty trailing slices (blank page guard)
-        if (sliceH < TRAILING_STUB_PX && start > 0) break;
+        if (sliceH < TRAILING_STUB_PX && startPx > 0) break;
         pageCanvas.width = canvas.width;
         pageCanvas.height = sliceH;
         pctx.fillStyle = "#FAF6EF";
         pctx.fillRect(0, 0, canvas.width, sliceH);
-        pctx.drawImage(canvas, 0, Math.round(start), canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        pctx.drawImage(canvas, 0, startPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
         const pageImg = pageCanvas.toDataURL("image/jpeg", 0.92);
-        const hmm = (sliceH * pageW) / canvas.width;
+        const hmm = Math.min((sliceH * contentW) / canvas.width, contentH);
         if (!first) pdf.addPage();
-        pdf.addImage(pageImg, "JPEG", 0, 0, pageW, hmm);
-        start = cut;
+        pdf.addImage(pageImg, "JPEG", margin, margin, contentW, hmm);
+        start = cutPx;
         first = false;
       }
     } else {
-      // Place the single tall image once per page, shifting it up by one page each time.
+      // Place the single tall image once per page, shifting it up by one content area each time.
       // Ignore a trailing stub (< ~2mm) — that was producing an empty page 2 on quotes/PDFs.
       const STUB_MM = 2;
       let heightLeft = imgH;
-      let position = 0;
-      pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
-      heightLeft -= pageH;
+      let position = margin;
+      pdf.addImage(img, "JPEG", margin, position, contentW, imgH);
+      heightLeft -= contentH;
       while (heightLeft > STUB_MM) {
-        position -= pageH;
+        position -= contentH;
         pdf.addPage();
-        pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
-        heightLeft -= pageH;
+        pdf.addImage(img, "JPEG", margin, position, contentW, imgH);
+        heightLeft -= contentH;
       }
     }
     return pdf;
