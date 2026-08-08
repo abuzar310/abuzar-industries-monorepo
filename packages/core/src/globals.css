@@ -1203,7 +1203,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   body{background:#fff; background-image:none}
   .wrap{padding:0; max-width:none}
   .topnav,#toast{display:none !important}
-  .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint,.mode-btn,.mode-seg,.no-print{display:none !important}
+  .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint,.mode-btn,.mode-seg,.editor-tabs,.no-print{display:none !important}
   .print-only{display:block !important}
   /* line-selection highlight is a screen-only editing aid — never print it */
   .row.selrow{background:transparent !important}
