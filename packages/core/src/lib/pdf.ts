@@ -16,6 +16,8 @@ export interface PdfOpts {
   width?: number;
   /** A dated header prepended to the PDF (e.g. the report title / supplier name). */
   title?: string;
+  /** Printable inset on each A4 page in mm (0 = edge-to-edge, default). Suppliers PDFs use ~8. */
+  marginMm?: number;
 }
 
 /** Card/dashboard captures wider than this make body text too small on A4. */
@@ -186,11 +188,15 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
     const pageW = 210;
     const pageH = 297;
-    const imgH = (canvas.height * pageW) / canvas.width; // full image height in mm
+    // Optional printable inset (Suppliers PDFs). Default 0 keeps invoices/quotes edge-to-edge.
+    const margin = Math.max(0, Math.min(40, opts?.marginMm ?? 0));
+    const contentW = pageW - 2 * margin;
+    const contentH = pageH - 2 * margin;
+    const imgH = (canvas.height * contentW) / canvas.width; // full image height in mm
 
     // Short captures (one supplier card, a thin books tab) — one page, no trailing blank.
-    if (imgH <= pageH + 0.8) {
-      pdf.addImage(img, "JPEG", 0, 0, pageW, imgH);
+    if (imgH <= contentH + 0.8) {
+      pdf.addImage(img, "JPEG", margin, margin, contentW, imgH);
       return pdf;
     }
 
@@ -198,7 +204,8 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     // mid-card. html2canvas ignores CSS break-inside, so we compute the safe cut
     // lines ourselves from the laid-out clone. Falls back to blind slicing when no
     // page-break selector is given (invoices, quotes, the report sheets).
-    const pagePx = canvas.width * (pageH / pageW); // one A4 page in canvas pixels
+    // Usable page height accounts for margin so cards don’t get clipped by the inset.
+    const pagePx = canvas.width * (contentH / contentW); // one content area in canvas pixels
     let cuts: number[] = [];
     if (opts?.pageBreak) {
       const cr = clone.getBoundingClientRect();
@@ -238,25 +245,25 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
         pctx.fillRect(0, 0, canvas.width, sliceH);
         pctx.drawImage(canvas, 0, Math.round(start), canvas.width, sliceH, 0, 0, canvas.width, sliceH);
         const pageImg = pageCanvas.toDataURL("image/jpeg", 0.92);
-        const hmm = (sliceH * pageW) / canvas.width;
+        const hmm = (sliceH * contentW) / canvas.width;
         if (!first) pdf.addPage();
-        pdf.addImage(pageImg, "JPEG", 0, 0, pageW, hmm);
+        pdf.addImage(pageImg, "JPEG", margin, margin, contentW, hmm);
         start = cut;
         first = false;
       }
     } else {
-      // Place the single tall image once per page, shifting it up by one page each time.
+      // Place the single tall image once per page, shifting it up by one content area each time.
       // Ignore a trailing stub (< ~2mm) — that was producing an empty page 2 on quotes/PDFs.
       const STUB_MM = 2;
       let heightLeft = imgH;
-      let position = 0;
-      pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
-      heightLeft -= pageH;
+      let position = margin;
+      pdf.addImage(img, "JPEG", margin, position, contentW, imgH);
+      heightLeft -= contentH;
       while (heightLeft > STUB_MM) {
-        position -= pageH;
+        position -= contentH;
         pdf.addPage();
-        pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
-        heightLeft -= pageH;
+        pdf.addImage(img, "JPEG", margin, position, contentW, imgH);
+        heightLeft -= contentH;
       }
     }
     return pdf;
