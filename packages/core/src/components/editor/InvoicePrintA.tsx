@@ -128,15 +128,20 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
   const half = Math.round((+doc.gst || 0) * 50) / 100;
   const halfAmt = Math.round(totals.gstAmt * 50) / 100;
   const igst = doc.gstKind === "igst";
-  // density: more rows / boxes → tighter BODY type + spacing so ONE printed page fits.
-  // Letterhead is Tax Invoice + logo + name only (full size) — see globals.css.
+  // Density tiers (letterhead never shrinks — Tax Invoice + logo + name only):
+  //   i3-c1 → Amount in Words + totals / Grand Total (first sacrifice)
+  //   i3-c2 → wood Rate·CFT·Total Price footers, then line columns
+  //   i3-c3 → signature block
   const boxes = (doc.sections || []).length;
   const minRows = minRowsFor(boxes);
   const rowsTotal = (doc.sections || []).reduce((s, sec) => {
     const measurer = measurerOf(sec.calcMode);
     return s + Math.max((sec.rows || []).filter((r) => measurer(r) > 0).length, minRows);
   }, 0);
-  const dense = boxes >= 2 || rowsTotal >= 8 ? (rowsTotal >= 14 || boxes >= 3 ? " i3-c1 i3-c2" : " i3-c1") : "";
+  let dense = "";
+  if (boxes >= 2 || rowsTotal >= 8) dense += " i3-c1";
+  if (rowsTotal >= 14 || boxes >= 3) dense += " i3-c2";
+  if (rowsTotal >= 18 || boxes >= 4) dense += " i3-c3";
   return (
     <div className={"cd-print inv3a" + dense} ref={ref}>
       {/* TAX INVOICE — centred on top */}
