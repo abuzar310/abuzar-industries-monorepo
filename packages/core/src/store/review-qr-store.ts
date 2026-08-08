@@ -1,10 +1,11 @@
 // Imperative Review QR overlay — shown after a payment is recorded, or via the
 // "Review" button. Uses useSyncExternalStore (same pattern as dialogs).
-// Auto-triggers (payment / receipt) open at most once per browser tab session so
-// entering multiple amounts does not keep popping the flyer. Manual Review always opens.
+// Auto-triggers open at most once per document (quotation / invoice id) so a
+// second amount entry on the same quote does not re-pop the flyer. A different
+// quote still gets the flyer on its first payment. Manual Review always opens.
 import { useSyncExternalStore } from "react";
 
-const SESSION_KEY = "abuzar:reviewQrShown";
+const DOCS_KEY = "abuzar:reviewQrShownDocs";
 
 let open = false;
 const listeners = new Set<() => void>();
@@ -13,27 +14,51 @@ function emit() {
   listeners.forEach((l) => l());
 }
 
-function alreadyShownThisSession(): boolean {
+function readShownDocs(): Set<string> {
   try {
-    return sessionStorage.getItem(SESSION_KEY) === "1";
+    const raw = sessionStorage.getItem(DOCS_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr.filter((x): x is string => typeof x === "string" && !!x));
   } catch {
-    return false;
+    return new Set();
   }
 }
 
-function markShownThisSession() {
+function writeShownDocs(ids: Set<string>) {
   try {
-    sessionStorage.setItem(SESSION_KEY, "1");
+    sessionStorage.setItem(DOCS_KEY, JSON.stringify([...ids]));
   } catch {
     /* private mode / blocked storage — ignore */
   }
 }
 
-/** @param opts.force — open even if already shown this session (toolbar Review button) */
-export function showReviewQr(opts?: { force?: boolean }) {
-  if (!opts?.force && alreadyShownThisSession()) return;
+function alreadyShownForDoc(docId: string): boolean {
+  return readShownDocs().has(docId);
+}
+
+function markShownForDoc(docId: string) {
+  const ids = readShownDocs();
+  ids.add(docId);
+  writeShownDocs(ids);
+}
+
+/**
+ * @param opts.force — open even if already shown for this doc (toolbar Review)
+ * @param opts.docId — quotation/invoice id; required for auto-show (once per doc)
+ */
+export function showReviewQr(opts?: { force?: boolean; docId?: string }) {
+  if (opts?.force) {
+    open = true;
+    emit();
+    return;
+  }
+  const id = (opts?.docId || "").trim();
+  if (!id) return;
+  if (alreadyShownForDoc(id)) return;
+  markShownForDoc(id);
   open = true;
-  markShownThisSession();
   emit();
 }
 

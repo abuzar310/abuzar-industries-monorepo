@@ -75,13 +75,14 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
   // advance sitting on this customer's account — one tap clears it onto this invoice
   const advBal = advanceBalance(expenses, doc.customerId || "");
   async function applyAdv() {
+    const firstPay = (doc.payCash || 0) + (doc.payUpi || 0) <= 0.005;
     const r = await applyAdvancesToInvoice(doc);
     if (r.applied <= 0) return toast("Nothing to apply — the invoice may already be settled");
     setAggregates(r.payCash, r.payUpi);
     reload();
     bumpData();
     toast("₹" + inr(r.applied) + " advance applied to this invoice ✓");
-    showReviewQr();
+    if (firstPay) showReviewQr({ docId: doc.id });
   }
 
   async function addLine() {
@@ -97,6 +98,7 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
             " already taken on " + dateStr + "; take the rest by bank.",
         );
     }
+    const firstPay = (doc.payCash || 0) + (doc.payUpi || 0) <= 0.005;
     await addExpense({
       type: "sale",
       amount: a,
@@ -115,7 +117,7 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
     reload();
     bumpData();
     toast("₹" + inr(a) + " received · " + (via === "cash" ? "Cash" : bank.trim()) + " · " + dateStr);
-    showReviewQr();
+    if (firstPay) showReviewQr({ docId: doc.id });
   }
 
   async function delLine(l: PartyStatement) {

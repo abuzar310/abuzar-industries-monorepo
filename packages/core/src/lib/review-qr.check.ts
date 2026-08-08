@@ -1,4 +1,4 @@
-// Checks for review flyer QR + once-per-session store behavior.
+// Checks for review flyer QR + once-per-quotation store behavior.
 // Run: pnpm check:review-qr
 import QRCode from "qrcode";
 import assert from "node:assert/strict";
@@ -21,8 +21,8 @@ async function checkFlyerPngDecodesToFunnel() {
   console.log("ok  flyer PNG decodes to funnel ?go=1 (official + unofficial)");
 }
 
-async function checkSessionOnceLogic() {
-  const KEY = "abuzar:reviewQrShown";
+async function checkOncePerDocLogic() {
+  const KEY = "abuzar:reviewQrShownDocs";
   const mem = new Map<string, string>();
   const storage = {
     getItem: (k: string) => mem.get(k) ?? null,
@@ -30,23 +30,44 @@ async function checkSessionOnceLogic() {
       mem.set(k, v);
     },
   };
+  function read(): Set<string> {
+    const raw = storage.getItem(KEY);
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw) as string[]);
+  }
+  function mark(id: string) {
+    const s = read();
+    s.add(id);
+    storage.setItem(KEY, JSON.stringify([...s]));
+  }
   let open = false;
-  function show(opts?: { force?: boolean }) {
-    if (!opts?.force && storage.getItem(KEY) === "1") return;
+  function show(opts?: { force?: boolean; docId?: string }) {
+    if (opts?.force) {
+      open = true;
+      return;
+    }
+    const id = (opts?.docId || "").trim();
+    if (!id) return;
+    if (read().has(id)) return;
+    mark(id);
     open = true;
-    storage.setItem(KEY, "1");
   }
   function hide() {
     open = false;
   }
-  show();
-  assert.equal(open, true);
+  show({ docId: "q1" });
+  assert.equal(open, true, "first payment on quote opens");
   hide();
-  show();
-  assert.equal(open, false, "second auto show blocked");
+  open = false;
+  show({ docId: "q1" });
+  assert.equal(open, false, "second payment on same quote blocked");
+  show({ docId: "q2" });
+  assert.equal(open, true, "different quote still opens");
+  hide();
+  open = false;
   show({ force: true });
-  assert.equal(open, true, "force always opens");
-  console.log("ok  once-per-session + force behavior");
+  assert.equal(open, true, "Review button always opens");
+  console.log("ok  once-per-quotation + force behavior");
 }
 
 async function checkOverlayAndBrand() {
@@ -78,7 +99,7 @@ async function checkQrLibStillWorks() {
 
 async function main() {
   await checkFlyerPngDecodesToFunnel();
-  await checkSessionOnceLogic();
+  await checkOncePerDocLogic();
   await checkOverlayAndBrand();
   await checkQrLibStillWorks();
   console.log("review-qr.check: all passed");
