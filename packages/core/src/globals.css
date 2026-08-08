@@ -1158,13 +1158,9 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .inv3a .i3-terms ol{padding-left:14px}
 .inv3a .i3-terms li{font-size:10px; color:var(--i3-soft); line-height:1.6}
 .inv3a .i3-signs{display:flex; justify-content:space-between; align-items:flex-end; padding:22px var(--i3-pad) 14px; gap:24px}
-/* density tier 1 (2 boxes OR 10+ rows): everything tightens so one page still fits */
+/* density tier 1 (2 boxes OR ≥8 rows): tighten BODY only so one page still fits.
+   Letterhead stays fixed — logo, company name, tagline, address, GSTIN never shrink. */
 .inv3a.i3-c1 .i3-kindtop{padding:2px 0 0}
-.inv3a.i3-c1 .i3-mast{padding:4px var(--i3-pad) 6px; gap:12px}
-.inv3a.i3-c1 .i3-mast img{height:94px; margin:-12px 0}
-.inv3a.i3-c1 .i3-nm{font-size:36px; letter-spacing:.16em}
-.inv3a.i3-c1 .i3-tg{margin-top:3px; font-size:10.5px}
-.inv3a.i3-c1 .i3-ad{font-size:10px; margin-top:3px}
 .inv3a.i3-c1 .i3-chip{padding:4px 8px}
 .inv3a.i3-c1 .i3-pbox{padding:5px 10px}
 .inv3a.i3-c1 .i3-pnm{font-size:15px}
@@ -1185,9 +1181,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .inv3a.i3-c1 .i3-office{gap:14px; padding-top:6px}
 .inv3a.i3-c1 .i3-terms li{font-size:9.5px; line-height:1.5}
 .inv3a.i3-c1 .i3-signs{padding:12px var(--i3-pad) 10px}
-/* density tier 2 (3+ boxes OR 16+ rows): tightest, still readable */
-.inv3a.i3-c2 .i3-mast img{height:78px; margin:-10px 0}
-.inv3a.i3-c2 .i3-nm{font-size:30px}
+/* density tier 2 (3+ boxes OR ≥14 rows): tightest body; letterhead still untouched */
 .inv3a.i3-c2 .i3-btbl thead th{padding:2.5px 8px; font-size:8.5px}
 .inv3a.i3-c2 .i3-btbl tbody td{height:12px; padding:1.5px 8px; font-size:11px}
 .inv3a.i3-c2 .i3-sl{font-size:10px}

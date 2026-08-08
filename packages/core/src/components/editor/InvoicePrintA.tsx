@@ -128,7 +128,8 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
   const half = Math.round((+doc.gst || 0) * 50) / 100;
   const halfAmt = Math.round(totals.gstAmt * 50) / 100;
   const igst = doc.gstKind === "igst";
-  // density: more rows / boxes → tighter type + spacing so ONE printed page always fits
+  // density: more rows / boxes → tighter BODY type + spacing so ONE printed page fits.
+  // Letterhead (logo, name, tagline, address, GSTIN) stays full size — see globals.css.
   const boxes = (doc.sections || []).length;
   const minRows = minRowsFor(boxes);
   const rowsTotal = (doc.sections || []).reduce((s, sec) => {
