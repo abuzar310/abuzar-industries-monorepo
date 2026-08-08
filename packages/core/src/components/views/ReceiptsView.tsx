@@ -302,7 +302,7 @@ export default function ReceiptsView() {
           (catLab ? " · " + catLab : "") +
           (paidMgr ? " — Daybook only (not in Books)" : useToOwner ? " — Owner" : " — Daybook"),
       );
-      showReviewQr();
+      showReviewQr({ docId: "name:" + who });
       return;
     }
 
@@ -466,7 +466,9 @@ export default function ReceiptsView() {
               ? " · to owner"
               : " · to account");
     toast(msg);
-    showReviewQr();
+    showReviewQr({
+      docId: (applyTo === "quote" && quoteId) || applied[0]?.id || picked.id,
+    });
   }
 
   async function remove(entry: Entry) {

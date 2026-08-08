@@ -85,6 +85,8 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     // "to owner" = money that leaves the manager's daybook / collectable balance:
     // Cash → Owner, UPI → Owner, or any cash the owner records themselves.
     const toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
+    // Flyer only on the first amount entry for this quotation.
+    const firstPay = (doc.payCash || 0) + (doc.payUpi || 0) <= 0.005;
     await addExpense({
       type: "sale",
       amount: a,
@@ -118,7 +120,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
               ? acctLbl + " (Accounts)"
               : " · cash → Daybook"),
     );
-    showReviewQr();
+    if (firstPay) showReviewQr({ docId: doc.id });
   }
 
   async function delLine(l: PartyStatement) {
