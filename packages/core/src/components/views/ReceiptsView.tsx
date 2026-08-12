@@ -320,6 +320,48 @@ export default function ReceiptsView() {
 
     // ---- Paid out: category spend (party/name logged; not a customer ledger link) ----
     if (kind === "paid" && !editRcpt) {
+      // Owner float → Manager Daybook cash-in (counterpart of Paid to owner). Not a spend.
+      if (paidCat === "paid-manager") {
+        const party = paidParty.trim() || "Owner";
+        if (editId) {
+          const e = await getRec<Expense>("expenses", editId);
+          if (!e || e.type !== "sale" || (e.label || "").trim() !== PAID_TO_MANAGER_LABEL) return resetForm();
+          e.amount = a;
+          e.mode = "cash";
+          e.account = "";
+          e.toOwner = false;
+          e.label = PAID_TO_MANAGER_LABEL;
+          e.skipBooks = true;
+          e.party = party;
+          e.note = note.trim();
+          e.date = date ? toDmy(date) : e.date;
+          e.custId = undefined;
+          e.sourceId = undefined;
+          e.updatedAt = nowIso();
+          await put("expenses", e);
+          resetForm();
+          load();
+          bumpData();
+          return toast("Updated ✓");
+        }
+        await addExpense({
+          type: "sale",
+          amount: a,
+          mode: "cash",
+          label: PAID_TO_MANAGER_LABEL,
+          skipBooks: true,
+          toOwner: false,
+          party,
+          note: note.trim(),
+          date: date ? toDmy(date) : undefined,
+          enteredBy: user?.id || "unknown",
+        });
+        resetForm();
+        load();
+        bumpData();
+        return toast("₹" + inr(a) + " · Paid to manager — added to Daybook (not in Books)");
+      }
+
       const cat = SPEND_CATEGORIES.find((c) => c.id === paidCat) || SPEND_CATEGORIES[SPEND_CATEGORIES.length - 1];
       const by = paidBy ?? (isOwner ? "owner" : "manager");
       const party = paidParty.trim();
@@ -552,6 +594,20 @@ export default function ReceiptsView() {
         ? customers.find((c) => c.name.trim().toLowerCase() === (e.party || "").trim().toLowerCase())
         : null;
       setPaidCustId(fromQuote?.customerId || byName?.id || "");
+      return;
+    } else if (!entry.paid && isNameReceipt(e) && (e.label || "").trim() === PAID_TO_MANAGER_LABEL) {
+      // reopen on Paid out → Paid to manager (same place users create it)
+      setEditId(e.id);
+      setEditRcpt(null);
+      setKind("paid");
+      setPaidCat("paid-manager");
+      setPaidBy("owner");
+      setPaidParty(e.party || "Owner");
+      setAmt(String(e.amount));
+      setNote(e.note || "");
+      setDate(e.date ? fromDmy(e.date) : "");
+      setPicked(null);
+      setName("");
       return;
     } else if (!entry.paid && isNameReceipt(e)) {
       setEditId(e.id);
@@ -812,6 +868,11 @@ export default function ReceiptsView() {
                 if (v !== "minitruck") setPaidRounds("");
                 // Paid to owner always leaves the manager's Daybook cash
                 if (v === "paid-owner") setPaidBy("manager");
+                // Paid to manager = owner float into Daybook (cash-in)
+                if (v === "paid-manager") {
+                  setPaidBy("owner");
+                  if (!paidParty.trim()) setPaidParty("Owner");
+                }
               }}
             >
               {SPEND_CATEGORIES.map((c) => (
@@ -820,7 +881,13 @@ export default function ReceiptsView() {
                   {c.skipBooks ? " (not in Books)" : ""}
                 </option>
               ))}
+              <option value="paid-manager">Paid to manager (adds to Daybook)</option>
             </select>
+            {paidCat === "paid-manager" && (
+              <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
+                Owner cash goes into Manager Daybook balance — not in Books. Use Note for why / who.
+              </small>
+            )}
           </label>
         )}
 
@@ -971,7 +1038,13 @@ export default function ReceiptsView() {
                 <span>Name (optional)</span>
                 <input
                   type="text"
-                  placeholder={paidCat === "minitruck" ? "e.g. driver / vehicle" : "e.g. who / where"}
+                  placeholder={
+                    paidCat === "paid-manager"
+                      ? "e.g. Owner / Afsar"
+                      : paidCat === "minitruck"
+                        ? "e.g. driver / vehicle"
+                        : "e.g. who / where"
+                  }
                   value={paidParty}
                   onChange={(e) => setPaidParty(e.target.value)}
                 />
@@ -1057,7 +1130,15 @@ export default function ReceiptsView() {
           </div>
         )}
 
-        {kind === "paid" && (
+        {kind === "paid" && paidCat === "paid-manager" && (
+          <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--panel-soft, #f6f1ea)", borderRadius: 8 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>Owner cash → Manager Daybook</div>
+            <small style={{ color: "var(--ink-faint)", display: "block", marginTop: 4 }}>
+              Adds this amount to Daybook cash. Name + Note are saved on the entry.
+            </small>
+          </div>
+        )}
+        {kind === "paid" && paidCat !== "paid-manager" && (
           <div className="att-paidby" style={{ marginTop: 12 }}>
             <span className="att-paidby-lbl">Paid by</span>
             <div className="db-seg sm">
@@ -1097,7 +1178,9 @@ export default function ReceiptsView() {
           {editing
             ? "Save changes"
             : kind === "paid"
-              ? "Record paid out — " + (SPEND_CATEGORIES.find((c) => c.id === paidCat)?.label || "Other")
+              ? paidCat === "paid-manager"
+                ? "Record — Paid to manager (add to Daybook)"
+                : "Record paid out — " + (SPEND_CATEGORIES.find((c) => c.id === paidCat)?.label || "Other")
               : recvVia === "name"
                 ? "Record received from " + (recvName.trim() || "name")
                 : "Record receipt"}
