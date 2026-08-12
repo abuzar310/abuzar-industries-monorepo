@@ -34,6 +34,7 @@ import {
   SYNC_TABLES,
   STORE_TABLE,
   TABLE_STORE,
+  ensureChatTable,
   type AppSchema,
   type Row,
 } from "./db";
@@ -65,6 +66,15 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
   });
 
 const err = (status: number, message: string) => json({ error: message }, status);
+
+/** Never send the AI API key to any browser. */
+function clientMeta(meta: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...meta };
+  const key = typeof out.aiApiKey === "string" ? out.aiApiKey.trim() : "";
+  delete out.aiApiKey;
+  out.aiConfigured = !!key;
+  return out;
+}
 
 type AnyRec = Record<string, unknown>;
 
@@ -376,6 +386,7 @@ export function createDataApi(schema: AppSchema) {
     // ---------- everything below requires a session ----------
     const user = userFrom(req);
     if (!user) return err(401, "Not signed in");
+    await ensureChatTable(schema);
 
     if (a === "bootstrap" && method === "GET") {
       const out: AnyRec = {};
@@ -387,7 +398,7 @@ export function createDataApi(schema: AppSchema) {
           out[TABLE_STORE[table]] = rows.map((r) => r.data);
         }
       }
-      const meta = await metaGetAll(schema);
+      const meta = clientMeta(await metaGetAll(schema));
       const nowRow = await sql<{ now: string }>("select now()::text as now");
       return json({ user, stores: out, meta, now: nowRow[0].now });
     }
@@ -412,7 +423,7 @@ export function createDataApi(schema: AppSchema) {
           changes[TABLE_STORE[table]] = mapped;
         }
       }
-      const meta = await metaGetAll(schema); // small — send whole map every poll
+      const meta = clientMeta(await metaGetAll(schema)); // small — send whole map every poll (key stripped)
       const nowRow = await sql<{ now: string }>("select now()::text as now");
       return json({ changes, meta, now: nowRow[0].now });
     }
@@ -423,7 +434,7 @@ export function createDataApi(schema: AppSchema) {
       const id = decodeURIComponent(c || "");
       if (!id) return err(400, "Missing id");
       // never audit the audit trail itself
-      const auditStore = b !== "activity" && table !== "activity";
+      const auditStore = b !== "activity" && table !== "activity" && b !== "chat";
       if (method === "PUT") {
         const data = (await req.json().catch(() => null)) as AnyRec | null;
         if (!data || typeof data !== "object") return err(400, "Bad record");
@@ -507,8 +518,10 @@ export function createDataApi(schema: AppSchema) {
     }
 
     if (a === "meta" && b && method === "PUT") {
+      const mk = decodeURIComponent(b);
+      if (mk === "aiApiKey") return err(403, "Set the AI key in Settings");
       const body = (await req.json().catch(() => ({}))) as AnyRec;
-      await metaSet(schema, decodeURIComponent(b), body.v);
+      await metaSet(schema, mk, body.v);
       return json({ ok: true });
     }
 

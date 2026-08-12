@@ -29,7 +29,7 @@ const SYNC_LABEL = { on: "Synced", off: "Offline", queue: "Saving…", local: "L
 
 export default function TopNav({ tabs }: { tabs: Tab[] }) {
   const TABS = tabs;
-  const { syncState, searchTerm, user, brandMode, unseen, buysDue } = useApp();
+  const { syncState, searchTerm, user, brandMode, unseen, buysDue, chatUnseen } = useApp();
   const path = usePathname();
   const router = useRouter();
   const isOwner = user?.role === "owner";
@@ -90,10 +90,15 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
           {TABS.filter((t) => !t.owner || isOwner).map((t) => {
             const active = isActive(t.href, path);
             const cls = "tab" + (active ? " active" : "");
-            const badgeN = t.badge === "buys" ? buysDue : t.badge ? unseen : 0;
+            const badgeN = t.badge === "buys" ? buysDue : t.badge === "chat" ? chatUnseen : t.badge ? unseen : 0;
             return (
               <Link key={t.href} href={t.href} className={cls}>
-                <TabIcon icon={t.icon} size={16} />
+                {t.href === "/ai" || t.href === "/chat" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src="/icon.png" alt="" width={16} height={16} className="tab-favicon" />
+                ) : (
+                  <TabIcon icon={t.icon} size={16} />
+                )}
                 {t.label}
                 {badgeN > 0 && <span className="tab-badge">{badgeN}</span>}
               </Link>

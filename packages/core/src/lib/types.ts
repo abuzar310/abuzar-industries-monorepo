@@ -187,7 +187,8 @@ export type StoreName =
   | "workers"
   | "attendance"
   | "activity"
-  | "purchases";
+  | "purchases"
+  | "chat";
 
 /**
  * Unofficial Buys entry.
@@ -263,8 +264,8 @@ export interface Tab {
   label: string;
   href: string;
   icon?: string;
-  /** true = Daybook unseen; "buys" = due purchase reminders */
-  badge?: boolean | "buys";
+  /** true = Daybook unseen; "buys" = due purchase reminders; "chat" = unread staff messages */
+  badge?: boolean | "buys" | "chat";
   owner?: boolean;
 }
 
@@ -274,6 +275,16 @@ export interface LocalUser {
   id: string;
   name: string;
   role: Role;
+}
+
+/** One line in the owner-manager in-app chat (synced like other records). */
+export interface ChatMsg {
+  id: string;
+  fromId: string;
+  fromName: string;
+  fromRole: Role;
+  text: string;
+  createdAt: string;
 }
 
 // ---- daybook / expenses ----

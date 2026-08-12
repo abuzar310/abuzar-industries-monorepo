@@ -10,11 +10,14 @@ import { loadBrand } from "@/lib/brand";
 import { hydrateCloak } from "@/lib/cloak";
 import { loadLocalUser } from "@/lib/local-auth";
 import { checkOwnerNotifications, loadNotifyState } from "@/lib/notify";
+import { refreshChatUnseen } from "@/lib/staff-chat";
 import TopNav from "@/components/TopNav";
 import Toast from "@/components/Toast";
 import LockGate from "@/components/LockGate";
 import DialogHost from "@/components/DialogHost";
 import ReviewQrOverlay from "@/components/ReviewQrOverlay";
+import AiFab from "@/components/AiFab";
+import ChatFab from "@/components/ChatFab";
 
 export default function AppProvider({
   children,
@@ -49,6 +52,7 @@ export default function AppProvider({
         await pullChanges();
         hydrateCloak(); // pick up cloakMoney toggled on phone/PC
         await checkOwnerNotifications();
+        refreshChatUnseen();
       } catch (e) {
         // ONLY a real session expiry logs out — a timeout / flaky network must
         // never kick the user to the lock screen; the next poll simply retries.
@@ -75,6 +79,7 @@ export default function AppProvider({
         hydrateCloak(); // meta is loaded with bootstrap
         loadNotifyState();
         await checkOwnerNotifications();
+        refreshChatUnseen();
       }
       // No session → LockGate shows; unlock() + afterUnlock() run the same load.
       setReady(true);
@@ -107,6 +112,8 @@ export default function AppProvider({
       <LockGate />
       <DialogHost />
       <ReviewQrOverlay />
+      <ChatFab />
+      <AiFab />
     </>
   );
 }
