@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { allRec, delRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
-import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, inDaybook, isInflow, isUpi, PAID_TO_MANAGER_LABEL, requestHandover, spendCategoryOf, spendDetailOf, SPEND_CATEGORIES, upiAccounts } from "@/lib/expenses";
+import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, inDaybook, isInflow, isUpi, requestHandover, spendCategoryOf, spendDetailOf, SPEND_CATEGORIES, upiAccounts } from "@/lib/expenses";
 import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
 import { isIOS, isStandalone } from "@/lib/pwa";
 import { USERS } from "@/lib/local-auth";
@@ -26,8 +26,6 @@ export default function ExpensesView() {
   // inline quick-entry form state
   const [flow, setFlow] = useState<"in" | "out">("in");
   const [spendCat, setSpendCat] = useState(SPEND_CATEGORIES[0].id);
-  /** Money in: sale (books) vs paid-to-manager (daybook only) */
-  const [inKind, setInKind] = useState<"sale" | "paid-manager">("sale");
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<PayMode>("cash");
   const [note, setNote] = useState("");
@@ -107,17 +105,14 @@ export default function ExpensesView() {
       return toast("Enter an amount");
     }
     if (flow === "in") {
-      const paidMgr = inKind === "paid-manager";
-      const upiEntry = !paidMgr && mode === "upi";
+      const upiEntry = mode === "upi";
       if (upiEntry && !acct.trim()) return toast("Enter the UPI account (to whom)");
       await addExpense({
         type: "sale",
         amount: amt,
-        mode: paidMgr ? "cash" : mode,
+        mode,
         note,
-        account: paidMgr ? "" : acct,
-        label: paidMgr ? PAID_TO_MANAGER_LABEL : undefined,
-        skipBooks: paidMgr,
+        account: acct,
         enteredBy: user?.id || "unknown",
       });
       setAmount("");
@@ -126,13 +121,7 @@ export default function ExpensesView() {
       if (upiEntry && !upiAccts.includes(acct.trim())) setUpiAccts((a) => [...a, acct.trim()].sort());
       amountRef.current?.focus();
       bumpData();
-      return toast(
-        paidMgr
-          ? "Paid to manager · ₹" + inr(amt) + " (Daybook only)"
-          : upiEntry
-            ? "UPI entry added"
-            : "Entry added",
-      );
+      return toast(upiEntry ? "UPI entry added" : "Entry added");
     }
     const cat = SPEND_CATEGORIES.find((c) => c.id === spendCat) || SPEND_CATEGORIES[SPEND_CATEGORIES.length - 1];
     await addExpense({
@@ -372,44 +361,23 @@ export default function ExpensesView() {
           </label>
           {flow === "in" ? (
             <>
-              <label className="db-cat">
-                <span>Kind</span>
-                <select
-                  value={inKind}
-                  onChange={(ev) => {
-                    const v = ev.target.value as "sale" | "paid-manager";
-                    setInKind(v);
-                    if (v === "paid-manager") {
-                      setMode("cash");
-                      setAcct("");
-                    }
-                  }}
-                >
-                  <option value="sale">Sale / receipt</option>
-                  <option value="paid-manager">Paid to manager (not in Books)</option>
-                </select>
-              </label>
-              {inKind !== "paid-manager" && (
-                <>
-                  <div className="db-seg sm">
-                    <button type="button" className={"seg-btn" + (mode === "cash" ? " on" : "")} onClick={() => setMode("cash")}>Cash</button>
-                    <button type="button" className={"seg-btn" + (mode === "upi" ? " on" : "")} onClick={() => setMode("upi")}>UPI</button>
-                  </div>
-                  {mode === "upi" && (
-                    <div className="acct-field">
-                      <span style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 600 }}>UPI to which account?</span>
-                      <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
-                    </div>
-                  )}
-                  {mode === "cash" && (
-                    <div className="acct-field">
-                      <span style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 600 }}>
-                        Cash held by which account? <small style={{ fontWeight: 500 }}>(optional)</small>
-                      </span>
-                      <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
-                    </div>
-                  )}
-                </>
+              <div className="db-seg sm">
+                <button type="button" className={"seg-btn" + (mode === "cash" ? " on" : "")} onClick={() => setMode("cash")}>Cash</button>
+                <button type="button" className={"seg-btn" + (mode === "upi" ? " on" : "")} onClick={() => setMode("upi")}>UPI</button>
+              </div>
+              {mode === "upi" && (
+                <div className="acct-field">
+                  <span style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 600 }}>UPI to which account?</span>
+                  <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
+                </div>
+              )}
+              {mode === "cash" && (
+                <div className="acct-field">
+                  <span style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 600 }}>
+                    Cash held by which account? <small style={{ fontWeight: 500 }}>(optional)</small>
+                  </span>
+                  <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
+                </div>
               )}
             </>
           ) : (

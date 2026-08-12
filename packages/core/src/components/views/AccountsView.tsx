@@ -34,6 +34,7 @@ import {
   type PayHolder,
 } from "@/lib/accounts";
 import { brandFor } from "@/lib/brand";
+import { addExpense, PAID_TO_MANAGER_LABEL } from "@/lib/expenses";
 import { printOrSavePdf } from "@/lib/pdf";
 import { waLink } from "@/lib/whatsapp";
 import { USERS } from "@/lib/local-auth";
@@ -117,6 +118,8 @@ export default function AccountsView() {
   const [cAmt, setCAmt] = useState("");
   const [cDate, setCDate] = useState("");
   const [cNote, setCNote] = useState("");
+  /** Who receives the collected cash — Owner pocket vs Manager Daybook */
+  const [cBy, setCBy] = useState<"owner" | "manager">("owner");
 
   // move a payment to another account
   const [moveFor, setMoveFor] = useState<string | null>(null);
@@ -282,6 +285,7 @@ export default function AccountsView() {
     setCAmt(balance > 0 ? String(r2(balance)) : "");
     setCDate("");
     setCNote("");
+    setCBy("owner");
     if (opts.account) setCollapsedAccts((s) => { const n = new Set(s); n.delete(openKey); return n; });
   }
   function cancelCollect() {
@@ -290,29 +294,60 @@ export default function AccountsView() {
     setCAmt("");
     setCDate("");
     setCNote("");
+    setCBy("owner");
   }
   async function submitCollect(opts: { holderId?: string; account: string }, maxBal: number) {
     const a = Math.max(0, +cAmt || 0);
     if (a <= 0) return toast("Enter an amount");
     if (a > maxBal + 0.5) return toast("That's more than the balance (₹" + inr(maxBal) + ")");
+    const toManager = cBy === "manager";
+    const date = cDate ? toDmy(cDate) : undefined;
+    const note = cNote.trim();
+    let expenseId: string | undefined;
+    if (toManager) {
+      // Cash into Manager Daybook (skip Books) — same mechanics as Paid to manager
+      const exp = await addExpense({
+        type: "sale",
+        amount: a,
+        mode: "cash",
+        label: PAID_TO_MANAGER_LABEL,
+        skipBooks: true,
+        toOwner: false,
+        party: opts.account,
+        note: note || "Collected from " + opts.account,
+        date,
+        enteredBy: user?.id || "unknown",
+      });
+      expenseId = exp.id;
+    }
     const c = await addCollection({
       account: opts.account,
       holderId: opts.holderId,
       amount: a,
-      date: cDate ? toDmy(cDate) : undefined,
+      date,
       by: user?.id || "unknown",
-      note: cNote.trim(),
+      note,
+      toManager,
+      expenseId,
     });
     if (!c) return toast("Could not record");
     cancelCollect();
     load();
     bumpData();
-    toast("₹" + inr(a) + " collected ✓");
+    toast(
+      "₹" +
+        inr(a) +
+        " collected → " +
+        (toManager ? "Manager Daybook" : "Owner"),
+    );
   }
   async function delCollection(id: string) {
+    const col = collections.find((x) => x.id === id);
     const ok = await confirmDialog({
       title: "Delete this collection?",
-      message: "Removes this hand-over record — the amount goes back into the balance.",
+      message: col?.toManager
+        ? "Removes this hand-over and the linked Daybook entry — balance goes back."
+        : "Removes this hand-over record — the amount goes back into the balance.",
       confirmLabel: "Delete",
       danger: true,
     });
@@ -501,7 +536,16 @@ export default function AccountsView() {
             amount: l.amount,
           });
         else
-          rows.push({ date: l.date, at: l.at || "", kind: "collect", label: "Collected / handed over" + (l.note ? " · " + l.note : ""), amount: l.amount });
+          rows.push({
+            date: l.date,
+            at: l.at || "",
+            kind: "collect",
+            label:
+              "Collected → " +
+              (l.toManager ? "Manager Daybook" : "Owner") +
+              (l.note ? " · " + l.note : ""),
+            amount: l.amount,
+          });
       }
     }
     return rows;
@@ -510,7 +554,16 @@ export default function AccountsView() {
     const v = holderView(h);
     const rows = stmtRows(v.subs);
     for (const c of v.cols)
-      rows.push({ date: c.date, at: c.createdAt || "", kind: "collect", label: "Collected / handed over" + (c.note ? " · " + c.note : ""), amount: +c.amount || 0 });
+      rows.push({
+        date: c.date,
+        at: c.createdAt || "",
+        kind: "collect",
+        label:
+          "Collected → " +
+          (c.toManager ? "Manager Daybook" : "Owner") +
+          (c.note ? " · " + c.note : ""),
+        amount: +c.amount || 0,
+      });
     rows.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
     setPrintDoc({
       title: h.name,
@@ -577,7 +630,7 @@ export default function AccountsView() {
         rows.push({
           date: line.date,
           at: line.at,
-          particulars: "To Collection / handed over",
+          particulars: line.toManager ? "To Manager Daybook" : "To Owner",
           detail: line.note || "",
           debit: line.amount,
           credit: 0,
@@ -737,6 +790,19 @@ export default function AccountsView() {
 
         {!grouped && collecting && (
           <div className="panel-card" style={{ padding: 12, margin: "0 0 4px" }}>
+            <div className="db-seg sm" style={{ marginBottom: 10 }}>
+              <button type="button" className={"seg-btn" + (cBy === "owner" ? " on" : "")} onClick={() => setCBy("owner")}>
+                By Owner
+              </button>
+              <button type="button" className={"seg-btn" + (cBy === "manager" ? " on" : "")} onClick={() => setCBy("manager")}>
+                By Manager
+              </button>
+            </div>
+            <small style={{ display: "block", color: "var(--ink-faint)", marginBottom: 8 }}>
+              {cBy === "manager"
+                ? "Cash goes into Manager Daybook balance (not in Books)."
+                : "Cash to Owner — account balance drops, Daybook unchanged."}
+            </small>
             <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
               <label className="modal-field" style={{ flex: "1 1 120px", minWidth: 0 }}>
                 <span>Collect ₹ <small style={{ color: "var(--ink-faint)" }}>(bal ₹{inr(a.balance)})</small></span>
@@ -896,6 +962,19 @@ export default function AccountsView() {
 
             {collecting && (
               <div className="panel-card" style={{ padding: 12, margin: "0 0 8px" }}>
+                <div className="db-seg sm" style={{ marginBottom: 10 }}>
+                  <button type="button" className={"seg-btn" + (cBy === "owner" ? " on" : "")} onClick={() => setCBy("owner")}>
+                    By Owner
+                  </button>
+                  <button type="button" className={"seg-btn" + (cBy === "manager" ? " on" : "")} onClick={() => setCBy("manager")}>
+                    By Manager
+                  </button>
+                </div>
+                <small style={{ display: "block", color: "var(--ink-faint)", marginBottom: 8 }}>
+                  {cBy === "manager"
+                    ? "Cash goes into Manager Daybook balance (not in Books)."
+                    : "Cash to Owner — account balance drops, Daybook unchanged."}
+                </small>
                 <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
                   <label className="modal-field" style={{ flex: "1 1 120px", minWidth: 0 }}>
                     <span>Collect ₹ <small style={{ color: "var(--ink-faint)" }}>(bal ₹{inr(balance)})</small></span>
@@ -952,7 +1031,8 @@ export default function AccountsView() {
                             <div className="bank-row" key={c.id}>
                               <span className="bank-date">{c.date}</span>
                               <span className="bank-parts">
-                                Collected / handed over{c.note ? " · " + c.note : ""}
+                                Collected → {c.toManager ? "Manager Daybook" : "Owner"}
+                                {c.note ? " · " + c.note : ""}
                                 <small>{hhmm(c.createdAt) ? " · " + hhmm(c.createdAt) : ""} · by {userName(c.by)}</small>
                               </span>
                               <span className="bank-amt dr">₹{inr(c.amount)}</span>
