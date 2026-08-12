@@ -1,7 +1,7 @@
 // Server-only AI chat proxy. Key stays on the server (never to the browser).
 // Default: Google Gemini (AI Studio) via native generateContent API.
 import { readSessionToken, SESSION_COOKIE } from "@/server/auth";
-import type { AppSchema } from "@/server/db";
+import { metaGetAll, metaSet, type AppSchema } from "@/server/db";
 import { readAiDbSnapshot } from "@/lib/ai-db-read";
 
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
@@ -19,6 +19,33 @@ function sessionUser(req: Request) {
   const m = raw.match(new RegExp("(?:^|;\\s*)" + SESSION_COOKIE + "=([^;]+)"));
   const token = m?.[1] ? decodeURIComponent(m[1]) : undefined;
   return readSessionToken(token);
+}
+
+function trimHost(h: string) {
+  return h.trim().replace(/\/+$/, "");
+}
+
+function useGemini(host: string) {
+  const h = trimHost(host);
+  if (!h) return true;
+  return /googleapis\.com|generativelanguage|aistudio|gemini/i.test(h);
+}
+
+async function aiCreds(schema: AppSchema) {
+  const meta = await metaGetAll(schema);
+  const key = String(meta.aiApiKey || process.env.AI_API_KEY || process.env.GEMINI_API_KEY || "").trim();
+  const host = trimHost(String(meta.aiHost || process.env.AI_BASE_URL || ""));
+  const gemini = useGemini(host);
+  const envModel = (process.env.AI_MODEL || "").trim().replace(/^models\//, "");
+  let model: string;
+  if (gemini) {
+    model = envModel || DEFAULT_MODEL;
+  } else if (envModel && !/gemini/i.test(envModel)) {
+    model = envModel;
+  } else {
+    model = /freemodel/i.test(host) ? "FreeModel" : "gpt-4o-mini";
+  }
+  return { key, host, gemini, model };
 }
 
 function systemPrompt(appLabel: string, schema: AppSchema): string {
@@ -39,7 +66,7 @@ function systemPrompt(appLabel: string, schema: AppSchema): string {
 }
 
 function upstreamErrorMessage(data: unknown, status: number): string {
-  if (!data || typeof data !== "object") return "Gemini error " + status;
+  if (!data || typeof data !== "object") return "AI error " + status;
   const d = data as {
     error?: { message?: string; status?: string } | string;
     message?: string;
@@ -47,7 +74,7 @@ function upstreamErrorMessage(data: unknown, status: number): string {
   if (typeof d.error === "string" && d.error.trim()) return d.error;
   if (typeof d.error === "object" && d.error?.message) return d.error.message;
   if (typeof d.message === "string" && d.message.trim()) return d.message;
-  return "Gemini error " + status;
+  return "AI error " + status;
 }
 
 /** Map chat turns to Gemini contents (system goes in systemInstruction). */
@@ -70,14 +97,44 @@ function toGeminiContents(messages: AiChatMessage[]) {
   return contents;
 }
 
+/** GET/PUT /api/ai/config — owner sets key + host in Settings. Key never returned. */
+export async function handleAiConfig(req: Request, schema: AppSchema): Promise<Response> {
+  const user = sessionUser(req);
+  if (!user) return json({ error: "Sign in first" }, 401);
+
+  if (req.method === "GET") {
+    const c = await aiCreds(schema);
+    return json({ host: c.host, configured: !!c.key });
+  }
+
+  if (req.method !== "PUT") return json({ error: "Method not allowed" }, 405);
+  if (user.role !== "owner") return json({ error: "Owner only" }, 403);
+
+  let body: { host?: string; apiKey?: string };
+  try {
+    body = (await req.json()) as typeof body;
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  if (typeof body.host === "string") {
+    await metaSet(schema, "aiHost", trimHost(body.host).slice(0, 300));
+  }
+  if (typeof body.apiKey === "string" && body.apiKey.trim()) {
+    await metaSet(schema, "aiApiKey", body.apiKey.trim().slice(0, 500));
+  }
+
+  const c = await aiCreds(schema);
+  return json({ ok: true, host: c.host, configured: !!c.key });
+}
+
 /** POST /api/ai/chat — { messages, pathname?, docId?, cloak? }  Read-only DB snapshot; never writes. */
 export async function handleAiChat(req: Request, appLabel: string, schema: AppSchema): Promise<Response> {
   const user = sessionUser(req);
   if (!user) return json({ error: "Sign in first" }, 401);
 
-  const key = (process.env.AI_API_KEY || process.env.GEMINI_API_KEY || "").trim();
-  const model = (process.env.AI_MODEL || DEFAULT_MODEL).trim().replace(/^models\//, "");
-  if (!key) return json({ error: "AI_API_KEY is not configured on the server" }, 503);
+  const { key, host, gemini, model } = await aiCreds(schema);
+  if (!key) return json({ error: "Add the AI API key in Settings" }, 503);
 
   let body: {
     messages?: AiChatMessage[];
@@ -117,40 +174,61 @@ export async function handleAiChat(req: Request, appLabel: string, schema: AppSc
 
   const label = appLabel + (schema === "unofficial" ? " · Cut Size" : " · Official");
   const sys = systemPrompt(label, schema) + (snapshot ? "\n\n" + snapshot : "");
-  const contents = toGeminiContents(cleaned);
-  if (!contents) return json({ error: "Send at least one user message" }, 400);
-
-  const url =
-    "https://generativelanguage.googleapis.com/v1beta/models/" +
-    encodeURIComponent(model) +
-    ":generateContent?key=" +
-    encodeURIComponent(key);
+  const abort =
+    typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(60000) : undefined;
 
   try {
+    if (!gemini) {
+      const url = /\/chat\/completions$/i.test(host) ? host : host + "/chat/completions";
+      const upstream = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: sys }, ...cleaned],
+          max_tokens: 600,
+          temperature: 0.5,
+        }),
+        signal: abort,
+      });
+      const data = (await upstream.json().catch(() => null)) as {
+        choices?: { message?: { content?: string } }[];
+        error?: { message?: string } | string;
+        message?: string;
+      } | null;
+      if (!upstream.ok) {
+        return json({ error: upstreamErrorMessage(data, upstream.status).slice(0, 400) }, 502);
+      }
+      const text = (data?.choices?.[0]?.message?.content || "").trim();
+      if (!text) return json({ error: "Empty reply from the AI host" }, 502);
+      return json({ reply: text, model });
+    }
+
+    const contents = toGeminiContents(cleaned);
+    if (!contents) return json({ error: "Send at least one user message" }, 400);
+    const url =
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(model) +
+      ":generateContent?key=" +
+      encodeURIComponent(key);
     const upstream = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: sys }] },
         contents,
-        generationConfig: {
-          maxOutputTokens: 600,
-          temperature: 0.5,
-        },
+        generationConfig: { maxOutputTokens: 600, temperature: 0.5 },
       }),
-      signal: typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(60000) : undefined,
+      signal: abort,
     });
-
     const data = (await upstream.json().catch(() => null)) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
       error?: { message?: string } | string;
       message?: string;
     } | null;
-
     if (!upstream.ok) {
       return json({ error: upstreamErrorMessage(data, upstream.status).slice(0, 400) }, 502);
     }
-
     const parts = data?.candidates?.[0]?.content?.parts || [];
     const text = parts
       .map((p) => (typeof p?.text === "string" ? p.text : ""))

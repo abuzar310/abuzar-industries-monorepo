@@ -252,6 +252,7 @@ function settingsActions(): AiQuickAction[] {
   return [
     how("Restore deleted quote", "Settings → Recycle bin / Archive → restore the quotation. Don't recreate a duplicate."),
     how("Backup / import", "Settings → backup or import as offered — warn to be careful overwriting live data."),
+    how("Set AI API key", "Settings → AI assistant → paste Host provider URL (blank = Gemini) and API key → Save AI. Owner only. The key is never shown again."),
     how("Install app (PWA)", "Settings → install / Add to Home Screen if shown."),
     explain("What managers shouldn't touch", "Owner-only Settings: recycle, archive, migrations. Managers use day-to-day tabs only."),
   ];
