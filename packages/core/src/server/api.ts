@@ -34,6 +34,7 @@ import {
   SYNC_TABLES,
   STORE_TABLE,
   TABLE_STORE,
+  ensureChatTable,
   type AppSchema,
   type Row,
 } from "./db";
@@ -376,6 +377,7 @@ export function createDataApi(schema: AppSchema) {
     // ---------- everything below requires a session ----------
     const user = userFrom(req);
     if (!user) return err(401, "Not signed in");
+    await ensureChatTable(schema);
 
     if (a === "bootstrap" && method === "GET") {
       const out: AnyRec = {};
@@ -423,7 +425,7 @@ export function createDataApi(schema: AppSchema) {
       const id = decodeURIComponent(c || "");
       if (!id) return err(400, "Missing id");
       // never audit the audit trail itself
-      const auditStore = b !== "activity" && table !== "activity";
+      const auditStore = b !== "activity" && table !== "activity" && b !== "chat";
       if (method === "PUT") {
         const data = (await req.json().catch(() => null)) as AnyRec | null;
         if (!data || typeof data !== "object") return err(400, "Bad record");

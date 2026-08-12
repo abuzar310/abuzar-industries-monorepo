@@ -23,13 +23,14 @@ export const STORE_TABLE: Record<string, string> = {
   attendance: "attendance",
   activity: "activity",
   purchases: "purchases",
+  chat: "chat",
 };
 
 /** Tables synced to clients (documents once — not once per doc store). */
 export const SYNC_TABLES = [
   "documents", "customers", "suppliers", "stock", "expenses", "sessions",
   "ledgers", "vouchers", "collections", "pay_holders", "workers", "attendance",
-  "activity", "purchases",
+  "activity", "purchases", "chat",
 ] as const;
 
 /** Physical table → the store name clients know it by. */
@@ -48,6 +49,7 @@ export const TABLE_STORE: Record<string, string> = {
   attendance: "attendance",
   activity: "activity",
   purchases: "purchases",
+  chat: "chat",
 };
 
 let _pool: Pool | null = null;
@@ -80,6 +82,38 @@ const ident = (s: string) => {
 
 export const tableRef = (schema: AppSchema, table: string) =>
   `${ident(schema)}.${ident(table)}`;
+
+const chatReady = new Set<string>();
+const chatEnsuring = new Map<string, Promise<void>>();
+
+/** Create chat table if this database was set up before chat existed. SELECT/INSERT only after this. */
+export async function ensureChatTable(schema: AppSchema): Promise<void> {
+  if (chatReady.has(schema)) return;
+  let pending = chatEnsuring.get(schema);
+  if (!pending) {
+    pending = (async () => {
+      const t = tableRef(schema, "chat");
+      await q(`
+        create table if not exists ${t} (
+          id         text primary key,
+          data       jsonb not null,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now(),
+          deleted_at timestamptz
+        )`);
+      await q(`create index if not exists chat_updated_at_idx on ${t} (updated_at)`);
+      await q(
+        `create or replace trigger touch_updated_at before update on ${t}
+           for each row execute function public.touch_updated_at()`,
+      );
+      chatReady.add(schema);
+    })().finally(() => {
+      chatEnsuring.delete(schema);
+    });
+    chatEnsuring.set(schema, pending);
+  }
+  await pending;
+}
 
 export async function q<T = Row>(text: string, params: unknown[] = []): Promise<T[]> {
   const r = await pool().query(text, params);

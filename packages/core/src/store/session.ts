@@ -4,6 +4,7 @@ import { bootData, isBooted } from "@/lib/data";
 import { hydrateCloak } from "@/lib/cloak";
 import { loadBrand } from "@/lib/brand";
 import { checkOwnerNotifications, loadNotifyState, requestNotifyPermission } from "@/lib/notify";
+import { refreshChatUnseen } from "@/lib/staff-chat";
 import { bumpData, getState, toast, type BrandMode } from "./app-store";
 
 // The app's default brand (set once by AppProvider from the layout prop).
@@ -31,6 +32,7 @@ export async function afterUnlock() {
     requestNotifyPermission();
     checkOwnerNotifications();
   }
+  refreshChatUnseen();
   toast(`Welcome, ${u?.name ?? ""}`);
   bumpData();
 }
