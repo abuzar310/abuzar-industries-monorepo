@@ -539,6 +539,10 @@ export interface AccountCollection {
   date: string; // dd-mm-yy
   by: string; // enteredBy
   note?: string;
+  /** true = cash went to Manager Daybook (linked expenseId); false/absent = Owner pocket */
+  toManager?: boolean;
+  /** Daybook sale row created when toManager — deleted with this collection */
+  expenseId?: string;
   createdAt: string;
   updatedAt: string;
   synced?: boolean;
@@ -556,6 +560,8 @@ export async function addCollection(fields: {
   date?: string;
   by: string;
   note?: string;
+  toManager?: boolean;
+  expenseId?: string;
 }): Promise<AccountCollection | null> {
   const account = (fields.account || "").trim();
   const amount = r2(Math.max(0, +fields.amount || 0));
@@ -569,6 +575,8 @@ export async function addCollection(fields: {
     date: fields.date || todayStr(),
     by: fields.by,
     note: (fields.note || "").trim(),
+    toManager: fields.toManager || undefined,
+    expenseId: fields.expenseId || undefined,
     createdAt: now,
     updatedAt: now,
   };
@@ -589,6 +597,8 @@ export async function moveEntryAccount(id: string, toAccount: string): Promise<b
 }
 
 export async function deleteCollection(id: string): Promise<void> {
+  const c = await getRec<AccountCollection>("collections", id);
+  if (c?.expenseId) await delRec("expenses", c.expenseId);
   await delRec("collections", id);
 }
 
@@ -629,6 +639,8 @@ export interface AcctStmtLine {
   /** the customer this credit was booked to when it came from the Receipts tab (no quote). */
   custId?: string;
   toOwner?: boolean;
+  /** collect line: cash went to Manager Daybook */
+  toManager?: boolean;
   note?: string;
   /** legacy per-entry collect flag (money already handed over under the old system). */
   legacyCollected?: boolean;
@@ -704,7 +716,16 @@ export function acctLedger(
     if (!name) continue;
     const a = get(name);
     a.collected += +c.amount || 0;
-    a.lines.push({ id: c.id, kind: "collect", amount: +c.amount || 0, date: c.date, at: c.createdAt || "", by: c.by, note: c.note });
+    a.lines.push({
+      id: c.id,
+      kind: "collect",
+      amount: +c.amount || 0,
+      date: c.date,
+      at: c.createdAt || "",
+      by: c.by,
+      note: c.note,
+      toManager: !!c.toManager,
+    });
   }
 
   const accounts = [...map.values()]
