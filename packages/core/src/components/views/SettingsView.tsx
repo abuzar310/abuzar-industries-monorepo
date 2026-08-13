@@ -14,6 +14,16 @@ import { getBusinessPincode, isValidPincode, setBusinessPincode } from "@/lib/ew
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 
+const AI_STATUS_LABEL: Record<string, string> = {
+  missing: "No key",
+  saved: "Saved",
+  active: "Active",
+  invalid: "Invalid",
+  expired: "Expired",
+  rate_limited: "Rate limited",
+  unreachable: "Unreachable",
+};
+
 export default function SettingsView() {
   const router = useRouter();
   const [autoPost, setAutoPostUI] = useState(false);
@@ -24,6 +34,8 @@ export default function SettingsView() {
   const [aiKey, setAiKey] = useState("");
   const [aiConfigured, setAiConfigured] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
+  const [aiStatus, setAiStatus] = useState("");
+  const [aiStatusDetail, setAiStatusDetail] = useState("");
   const ledgerOn = getFeatures().ledger;
   const receiptsApp = getFeatures().acceptPayment;
   const ewayOn = getFeatures().invoices && !getFeatures().simpleQuote;
@@ -36,14 +48,34 @@ export default function SettingsView() {
     autoPostEnabled().then(setAutoPostUI);
     if (ewayOn) getBusinessPincode().then(setBizPin);
     loadTrash();
-    fetch("/api/ai/config", { credentials: "same-origin" })
-      .then((r) => r.json())
-      .then((d: { host?: string; configured?: boolean }) => {
-        setAiHost(typeof d.host === "string" ? d.host : "");
-        setAiConfigured(!!d.configured);
-      })
-      .catch(() => undefined);
+    void checkAi(false);
   }, [ewayOn]);
+
+  async function checkAi(toastIt: boolean) {
+    setAiBusy(true);
+    try {
+      const r = await fetch("/api/ai/config?check=1", { credentials: "same-origin" });
+      const d = (await r.json().catch(() => ({}))) as {
+        host?: string;
+        configured?: boolean;
+        status?: string;
+        detail?: string;
+        error?: string;
+      };
+      if (!r.ok) throw new Error(d.error || "Could not check key");
+      setAiConfigured(!!d.configured);
+      if (typeof d.host === "string") setAiHost(d.host);
+      setAiStatus(d.status || "");
+      setAiStatusDetail(d.detail || "");
+      if (toastIt) toast(d.detail || d.status || "Checked");
+    } catch (e) {
+      setAiStatus("unreachable");
+      setAiStatusDetail(e instanceof Error ? e.message : "Could not check");
+      if (toastIt) toast(e instanceof Error ? e.message : "Could not check");
+    } finally {
+      setAiBusy(false);
+    }
+  }
 
   async function saveAi() {
     if (aiBusy) return;
@@ -61,6 +93,9 @@ export default function SettingsView() {
       setAiConfigured(!!d.configured);
       if (typeof d.host === "string") setAiHost(d.host);
       toast(d.configured ? "AI key saved" : "Host saved — paste an API key too");
+      setAiBusy(false);
+      await checkAi(false);
+      return;
     } catch (e) {
       toast(e instanceof Error ? e.message : "Could not save");
     } finally {
@@ -168,9 +203,28 @@ export default function SettingsView() {
             autoComplete="new-password"
           />
         </label>
+        <p className="note" style={{ marginTop: 10 }}>
+          Key status:{" "}
+          <b
+            style={{
+              color:
+                aiStatus === "active"
+                  ? "#2f6b3a"
+                  : aiStatus === "invalid" || aiStatus === "expired" || aiStatus === "missing"
+                    ? "var(--danger, #b42318)"
+                    : "var(--ink, #2c1810)",
+            }}
+          >
+            {AI_STATUS_LABEL[aiStatus] || (aiBusy ? "Checking…" : "—")}
+          </b>
+          {aiStatusDetail ? " · " + aiStatusDetail : ""}
+        </p>
         <div className="rowbtns" style={{ marginTop: 12 }}>
           <button className="btn primary sm" type="button" disabled={aiBusy} onClick={() => void saveAi()}>
             Save AI
+          </button>
+          <button className="btn sm" type="button" disabled={aiBusy} onClick={() => void checkAi(true)}>
+            Check key
           </button>
         </div>
       </div>

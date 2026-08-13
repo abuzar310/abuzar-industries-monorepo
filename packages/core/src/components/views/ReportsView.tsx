@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { allRec } from "@/lib/data";
 import { inr, pad } from "@/lib/calc";
 import { docTrade } from "@/lib/trading";
@@ -7,6 +7,7 @@ import { brandFor } from "@/lib/brand";
 import { generatePdf } from "@/lib/pdf";
 import { toast } from "@/store/app-store";
 import { useApp } from "@/store/useApp";
+import { useBindPagePdf } from "@/lib/page-pdf";
 import type { Doc } from "@/lib/types";
 
 const num = (n: number) =>
@@ -65,6 +66,14 @@ export default function ReportsView() {
   // when the chosen window spans several months, break the report into one clean
   // section per month (each with its own subtotal); "One table" flattens it back
   const [monthly, setMonthly] = useState(true);
+
+  const savePdf = useCallback(async () => {
+    if (!printRef.current) return;
+    toast("Preparing PDF…");
+    await generatePdf(printRef.current, "report-" + fmtISO(from || "start") + "-to-" + fmtISO(to || "now"));
+    toast("Report PDF downloaded \u2713");
+  }, [from, to]);
+  useBindPagePdf(savePdf);
 
   useEffect(() => {
     let live = true;
@@ -312,11 +321,7 @@ export default function ReportsView() {
           </button>
           <button
             className="btn sm rep-print"
-            onClick={async () => {
-              toast("Preparing PDF…");
-              await generatePdf(printRef.current!, "report-" + fmtISO(from || "start") + "-to-" + fmtISO(to || "now"));
-              toast("Report PDF downloaded \u2713");
-            }}
+            onClick={() => void savePdf()}
           >
             Save PDF
           </button>

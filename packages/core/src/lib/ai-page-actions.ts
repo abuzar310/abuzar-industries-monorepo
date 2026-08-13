@@ -129,7 +129,6 @@ function quotationsListActions(): AiQuickAction[] {
     how("Find a customer's quotes", "Quotations → use search (name/phone/number) or TopNav search. Open the row to edit."),
     how("WhatsApp a quote PDF", "Quotations row → WhatsApp (or open quote → WhatsApp). PDF goes via share sheet on phone; wa.me is text-only."),
     draft("Remind unpaid quote", "WhatsApp reminder for unpaid quotation [Quote no] to [Name] for ₹[Balance]"),
-    how("Month report PDF", "Quotations → Download report PDF — groups by month with count, billed, paid."),
     how("New quotation from list", "Quotations → + New Quotation → editor."),
     how("Recycle bin quotes", "Multi-select rows → Recycle bin. Restore later from Settings."),
     draft("Follow up old draft", "WhatsApp to customer about an old draft quotation still pending approval — [Name] [Quote no]"),
@@ -138,7 +137,6 @@ function quotationsListActions(): AiQuickAction[] {
 
 /** Customers `/customers` */
 function customersActions(detailName?: string): AiQuickAction[] {
-  const name = detailName || "[Customer]";
   const base: AiQuickAction[] = [
     explain("What is Customers?", "customer directory with quote counts, paid, opening dues, outstanding — start new quotes and WhatsApp from cards; detail page has statement PDF"),
     how("Add a customer", "Customers → + Add customer → name, phone, carpenter/site → save."),
@@ -151,7 +149,13 @@ function customersActions(detailName?: string): AiQuickAction[] {
         ? undefined
         : "Draft a short WhatsApp follow-up for a timber customer enquiry. Use [Name]. 3–5 lines.",
     },
-    draft("Balance statement msg", `WhatsApp sharing outstanding for ${name} — leave ₹ blanks if unknown; ask them to check statement`),
+    {
+      id: "balance-statement-msg",
+      label: "Balance statement msg",
+      prompt: detailName
+        ? undefined
+        : "Draft a WhatsApp sharing outstanding for a timber customer. Use [Customer Name] and ₹[Amount]. 4–6 lines.",
+    },
     how("Sort by outstanding", "Customers → sort Outstanding first to chase dues."),
     how("Opening dues", "On customer detail/edit, opening dues add to Balances outstanding. Explain briefly when to use opening dues vs a Created quote."),
     draft("Ask carpenter site phone", "WhatsApp asking for carpenter name and site phone to save on the customer card"),
@@ -175,7 +179,6 @@ function suppliersActions(): AiQuickAction[] {
     how("Pay a supplier", "Suppliers → Payments → + Payment → amount, mode → apply to supplier dues."),
     draft("Payment note to supplier", "WhatsApp to supplier confirming payment sent — [Supplier] ₹[Amount] Cash/UPI/NEFT"),
     how("Due reminders", "Suppliers badge / unpaid filter — set or clear reminders on purchases due."),
-    how("Supplier PDF register", "Expand supplier → Save PDF of their purchase/payment register."),
     explain("Cash vs invoice outstanding", "Supplier KPIs split what you still owe as cash purchases vs invoice/credit purchases."),
     draft("Ask for bill/CFT", "WhatsApp asking supplier to send bill number and CFT for today's load"),
   ];
@@ -216,7 +219,6 @@ function booksActions(): AiQuickAction[] {
     draft("Month summary for owner", "Plain-language WhatsApp P&L style summary for the owner — [Month] with blanks for income, expense, net"),
     how("Balance sheet view", "Books → Balance sheet — receivables vs cash/UPI style snapshot for the period."),
     how("Biggest expense category", "Books → Income & Expense / ledger filters — find the largest expense category this month."),
-    how("Save PDF of a section", "Books → choose view → Save PDF."),
   ];
 }
 
@@ -280,7 +282,6 @@ function reportsActions(): AiQuickAction[] {
   return [
     explain("What is Reports?", "official app management reports over invoices/trading"),
     draft("Weekly sales note", "WhatsApp weekly sales summary for owner — leave blanks for totals"),
-    how("Export / print a report", "Reports → pick the report → print or download as the screen allows."),
   ];
 }
 

@@ -41,6 +41,7 @@ import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
+import { useBindPagePdf } from "@/lib/page-pdf";
 import CustomerPicker from "@/components/editor/CustomerPicker";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
@@ -298,6 +299,14 @@ export default function VouchersView() {
   const brand = brandFor(brandMode);
   const today = new Date();
   const genOn = `${pad2(today.getDate())}-${pad2(today.getMonth() + 1)}-${today.getFullYear()}`;
+
+  const savePdf = useCallback(async () => {
+    if (!printRef.current) return;
+    toast("Preparing PDF…");
+    await generatePdf(printRef.current, seg + "-vouchers-" + genOn);
+    toast("PDF downloaded ✓");
+  }, [seg, genOn]);
+  useBindPagePdf(savePdf);
 
   // ---- bank accounts ----
   async function addBank() {
@@ -701,11 +710,7 @@ export default function VouchersView() {
           </button>
           <button
             className="btn sm"
-            onClick={async () => {
-              toast("Preparing PDF…");
-              await generatePdf(printRef.current!, seg + "-vouchers-" + genOn);
-              toast("PDF downloaded ✓");
-            }}
+            onClick={() => void savePdf()}
           >
             Save PDF
           </button>

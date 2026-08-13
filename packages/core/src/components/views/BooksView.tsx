@@ -11,6 +11,7 @@ import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense } from "@/lib/types";
 import { generatePdf } from "@/lib/pdf";
 import { toast } from "@/store/app-store";
+import { useBindPagePdf } from "@/lib/page-pdf";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
@@ -340,6 +341,7 @@ export default function BooksView() {
       .then(() => toast("PDF downloaded ✓"))
       .catch(() => toast("Could not create the PDF"));
   }, [view, monthLabel]);
+  useBindPagePdf(savePdf);
 
   return (
     <div className="ledger-page" ref={pageRef}>

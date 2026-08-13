@@ -12,6 +12,7 @@ import { bankBook, cashBook, getBankAccounts, liveInvoices, type BookEntry } fro
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { toast } from "@/store/app-store";
+import { useBindPagePdf } from "@/lib/page-pdf";
 import type { Doc, Expense } from "@/lib/types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -122,6 +123,14 @@ export default function AccountBooksView() {
   const today = new Date();
   const genOn = `${pad2(today.getDate())}-${pad2(today.getMonth() + 1)}-${today.getFullYear()}`;
 
+  const savePdf = useCallback(async () => {
+    if (!printRef.current) return;
+    toast("Preparing PDF…");
+    await generatePdf(printRef.current, bookName.replace(/\s+/g, "-").toLowerCase() + "-" + genOn);
+    toast("PDF downloaded ✓");
+  }, [bookName, genOn]);
+  useBindPagePdf(savePdf);
+
   return (
     <div>
       <div className="cd-screen">
@@ -138,11 +147,7 @@ export default function AccountBooksView() {
           </button>
           <button
             className="btn sm"
-            onClick={async () => {
-              toast("Preparing PDF…");
-              await generatePdf(printRef.current!, bookName.replace(/\s+/g, "-").toLowerCase() + "-" + genOn);
-              toast("PDF downloaded ✓");
-            }}
+            onClick={() => void savePdf()}
           >
             Save PDF
           </button>

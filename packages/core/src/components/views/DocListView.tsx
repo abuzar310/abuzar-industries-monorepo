@@ -13,6 +13,7 @@ import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
+import { useBindPagePdf } from "@/lib/page-pdf";
 import type { Doc } from "@/lib/types";
 import { StatusBadge } from "./DocList";
 
@@ -149,6 +150,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       setPdfBusy(false);
     }
   }
+  useBindPagePdf(canReport ? downloadReport : undefined);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const pageN = Math.min(page, pages - 1);
   const view = filtered.slice(pageN * PAGE, pageN * PAGE + PAGE);

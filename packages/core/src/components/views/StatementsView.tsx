@@ -7,6 +7,7 @@ import { quoteLedger, type QuoteStatements } from "@/lib/payments";
 import { brandFor } from "@/lib/brand";
 import { printOrSavePdf } from "@/lib/pdf";
 import { toast } from "@/store/app-store";
+import { useBindPagePdf } from "@/lib/page-pdf";
 import { USERS } from "@/lib/local-auth";
 import { useFocusFlash } from "@/lib/use-focus-flash";
 import { useApp } from "@/store/useApp";
@@ -190,6 +191,12 @@ export default function StatementsView() {
   const p2 = (n: number) => String(n).padStart(2, "0");
   const genOn = `${p2(gToday.getDate())}-${p2(gToday.getMonth() + 1)}-${gToday.getFullYear()}`;
 
+  const savePdf = useCallback(async () => {
+    if (!printRef.current) return;
+    if ((await printOrSavePdf(printRef.current, "statements-" + genOn)) === "pdf") toast("Statement PDF downloaded \u2713");
+  }, [genOn]);
+  useBindPagePdf(savePdf);
+
   return (
     <div className="ledger-page">
       <div className="cd-screen">
@@ -198,9 +205,7 @@ export default function StatementsView() {
         <button
           className="btn sm"
           style={{ marginLeft: "auto" }}
-          onClick={async () => {
-            if ((await printOrSavePdf(printRef.current, "statements-" + genOn)) === "pdf") toast("Statement PDF downloaded \u2713");
-          }}
+          onClick={() => void savePdf()}
         >
           Print / Save PDF
         </button>

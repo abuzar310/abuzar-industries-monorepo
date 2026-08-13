@@ -19,6 +19,7 @@ import { statementsForQuote } from "@/lib/payments";
 import { postInvoice } from "@/lib/ledger-autopost";
 import { balanceReminderMessage, reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
 import { generatePdf, printOrSavePdf } from "@/lib/pdf";
+import { useBindPagePdf } from "@/lib/page-pdf";
 import { promoteTempTab, setTempDoc } from "@/lib/editor-tabs";
 import { OFFICIAL_DEFAULT_WOOD } from "@/lib/woods";
 import { bumpData, toast } from "@/store/app-store";
@@ -616,6 +617,7 @@ export default function Editor({
       toast("PDF error: " + ((e as Error)?.message || e));
     }
   }
+  useBindPagePdf(_active === false ? undefined : onPdf);
   async function onWaSend() {
     await saveNow();
     if (!printNode()) return;

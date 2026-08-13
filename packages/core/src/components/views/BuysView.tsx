@@ -28,6 +28,7 @@ import { useApp } from "@/store/useApp";
 import { bumpData, setBuysDue, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import { generatePdf } from "@/lib/pdf";
+import { useBindPagePdf } from "@/lib/page-pdf";
 import DateField from "@/components/editor/DateField";
 import type { Purchase, Supplier } from "@/lib/types";
 
@@ -557,6 +558,7 @@ export default function BuysView() {
       .then(() => toast("PDF downloaded ✓"))
       .catch(() => toast("Could not create the PDF"));
   }
+  useBindPagePdf(exportFullRegister);
 
   function exportSupplierDetail(b: Supplier) {
     toast("Preparing PDF…");

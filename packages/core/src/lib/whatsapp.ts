@@ -94,6 +94,37 @@ export function customerFollowupMessage(name: string): string {
   return `${greet(name)}\nThis is ${activeBrand().name}. Following up on your timber enquiry — please let us know if you would like to proceed. Thank you.${reviewFooter()}`;
 }
 
+/** Whole-account statement for the open customer card (real name + ₹, including settled). */
+export function customerStatementMessage(opts: {
+  name: string;
+  billed: number;
+  paid: number;
+  outstanding: number;
+}): string {
+  const who = (opts.name || "").trim() || "Customer";
+  const from = activeBrand().name.toLowerCase().includes("abuzar")
+    ? activeBrand().name
+    : "ABUZAR TIMBERS, CHITRADURGA";
+  if (isCloaked()) {
+    return `Hello ${who},
+Greetings from ${from}.
+Please review your account statement with us and contact the yard if you have any questions.
+Regards,
+${from}`;
+  }
+  const billed = inr(opts.billed);
+  const paid = inr(opts.paid);
+  const due = inr(opts.outstanding);
+  const settled = opts.outstanding <= 0.001;
+  return `Hello ${who},
+Greetings from ${from}.
+As per our books:
+Billed ₹${billed} · Received ₹${paid} · Outstanding ₹${due}.
+${settled ? "Your account is settled. Thank you." : "Kindly review and arrange payment at your earliest convenience."}
+Regards,
+${from}${reviewFooter()}`;
+}
+
 /**
  * Send the document on WhatsApp — the PDF must actually go with the message.
  * WhatsApp links (wa.me) are a platform dead end here: they can ONLY carry text,

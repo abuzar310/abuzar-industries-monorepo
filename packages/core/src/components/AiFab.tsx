@@ -12,6 +12,8 @@ import { customerFinancials } from "@/lib/customers";
 import { factsFromDoc, openWhatsApp, type AiQuickAction } from "@/lib/ai-doc-actions";
 import { resolveAiPageActions } from "@/lib/ai-page-actions";
 import { liveQuickActions, navIntentHref } from "@/lib/ai-live-context";
+import { runPagePdf, useHasPagePdf } from "@/lib/page-pdf";
+import { toast } from "@/store/app-store";
 import {
   aiChatKey,
   bindAiMemoryUser,
@@ -20,7 +22,7 @@ import {
   saveAiThread,
   type AiMemMsg,
 } from "@/lib/ai-chat-memory";
-import { balanceReminderMessage, customerFollowupMessage } from "@/lib/whatsapp";
+import { balanceReminderMessage, customerFollowupMessage, customerStatementMessage } from "@/lib/whatsapp";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
 type Msg = AiMemMsg;
@@ -111,13 +113,23 @@ export default function AiFab() {
     );
     const actions: AiQuickAction[] = [
       {
+        id: "cust-statement",
+        label: "Balance statement msg",
+        readyText: customerStatementMessage({
+          name: name || "Customer",
+          billed: fin.billed,
+          paid: fin.paid,
+          outstanding: fin.outstanding,
+        }),
+      },
+      {
         id: "cust-follow",
         label: "WhatsApp follow-up",
         readyText: customerFollowupMessage(name || "Customer"),
       },
     ];
     if (!isCloaked() && fin.outstanding > 0.001) {
-      actions.unshift({
+      actions.splice(1, 0, {
         id: "cust-remind",
         label: "Balance reminder",
         readyText: balanceReminderMessage({
@@ -137,6 +149,8 @@ export default function AiFab() {
     };
   }, [ready, custId, dataVersion]);
 
+  const hasPdf = useHasPagePdf();
+
   if (!ready || !user || onAiPage || onChatPage) return null;
 
   const actions: AiQuickAction[] = (() => {
@@ -145,11 +159,18 @@ export default function AiFab() {
       custId && custExtras.actions.length
         ? [
             ...custExtras.actions,
-            ...page.actions.filter((a) => a.id !== "cust-followup" && a.id !== "whatsapp-follow-up"),
+            ...page.actions.filter(
+              (a) =>
+                a.id !== "cust-followup" &&
+                a.id !== "whatsapp-follow-up" &&
+                a.id !== "balance-statement-msg",
+            ),
           ]
         : page.actions;
     const seen = new Set(live.map((a) => a.id));
-    return [...live, ...pageActs.filter((a) => !seen.has(a.id) && a.id !== "who-owes-the-most")];
+    const list = [...live, ...pageActs.filter((a) => !seen.has(a.id) && a.id !== "who-owes-the-most")];
+    if (!hasPdf) return list;
+    return [{ id: "run-save-pdf", label: "Save PDF", run: "pdf" as const }, ...list];
   })();
 
   const facts = doc ? factsFromDoc(doc) : null;
@@ -173,6 +194,21 @@ export default function AiFab() {
       setOpen(false);
       router.push(jump);
       return;
+    }
+    if (/save\s+pdf|download\s+(the\s+)?(report\s+)?pdf|download\s+report/i.test(t)) {
+      const ok = await runPagePdf();
+      if (ok) setOpen(false);
+      else toast("This tab has no Save PDF");
+      return;
+    }
+    if (custId) {
+      const instant = actions.find(
+        (a) => a.readyText && (a.label.toLowerCase() === t.toLowerCase() || a.id === "cust-statement" && /balance statement/i.test(t)),
+      );
+      if (instant?.readyText) {
+        runAction(instant);
+        return;
+      }
     }
     setErr("");
     const userLine = asUserLabel || t;
@@ -208,6 +244,13 @@ export default function AiFab() {
 
   function runAction(a: AiQuickAction) {
     if (busy) return;
+    if (a.run === "pdf") {
+      void runPagePdf().then((ok) => {
+        if (ok) setOpen(false);
+        else toast("This tab has no Save PDF");
+      });
+      return;
+    }
     if (a.href) {
       setOpen(false);
       router.push(a.href);

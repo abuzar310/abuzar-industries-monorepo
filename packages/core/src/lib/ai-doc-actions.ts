@@ -60,6 +60,8 @@ export type AiQuickAction = {
   prompt?: string;
   /** Navigate in-app (open a quote, tab, etc.) instead of chatting. */
   href?: string;
+  /** Run an in-app job (download the screen's PDF) instead of chatting. */
+  run?: "pdf";
 };
 
 function moneyLine(f: DocAiFacts): string {

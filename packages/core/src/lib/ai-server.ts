@@ -48,6 +48,37 @@ async function aiCreds(schema: AppSchema) {
   return { key, host, gemini, model };
 }
 
+export type AiKeyStatus = "missing" | "active" | "invalid" | "expired" | "rate_limited" | "unreachable";
+
+async function probeAi(c: { key: string; host: string; gemini: boolean }): Promise<{ status: AiKeyStatus; detail: string }> {
+  if (!c.key) return { status: "missing", detail: "No API key saved" };
+  try {
+    const abort =
+      typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(12000) : undefined;
+    const url = c.gemini
+      ? "https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(c.key) + "&pageSize=1"
+      : /\/models$/i.test(c.host)
+        ? c.host
+        : c.host + "/models";
+    const upstream = await fetch(url, {
+      method: "GET",
+      headers: c.gemini ? { "Content-Type": "application/json" } : { Authorization: "Bearer " + c.key },
+      signal: abort,
+    });
+    const raw = (await upstream.text().catch(() => "")).slice(0, 400);
+    const low = raw.toLowerCase();
+    if (upstream.ok) return { status: "active", detail: "Key is valid and working" };
+    if (upstream.status === 429) return { status: "rate_limited", detail: "Key reached a rate limit — try again later" };
+    if (/expir/i.test(low)) return { status: "expired", detail: "Key looks expired — paste a new one" };
+    if (upstream.status === 401 || upstream.status === 403 || /invalid|unauthorized|api[_ ]?key|unauthenticated/i.test(low)) {
+      return { status: "invalid", detail: "Key was rejected by the host" };
+    }
+    return { status: "invalid", detail: (raw || "Host returned " + upstream.status).slice(0, 180) };
+  } catch {
+    return { status: "unreachable", detail: "Could not reach the AI host" };
+  }
+}
+
 function systemPrompt(appLabel: string, schema: AppSchema): string {
   const unofficial = schema === "unofficial";
   return [
@@ -104,7 +135,16 @@ export async function handleAiConfig(req: Request, schema: AppSchema): Promise<R
 
   if (req.method === "GET") {
     const c = await aiCreds(schema);
-    return json({ host: c.host, configured: !!c.key });
+    const wantCheck = (() => {
+      try {
+        return new URL(req.url).searchParams.get("check") === "1";
+      } catch {
+        return false;
+      }
+    })();
+    if (!wantCheck) return json({ host: c.host, configured: !!c.key, status: c.key ? "saved" : "missing" });
+    const probe = await probeAi(c);
+    return json({ host: c.host, configured: !!c.key, status: probe.status, detail: probe.detail });
   }
 
   if (req.method !== "PUT") return json({ error: "Method not allowed" }, 405);

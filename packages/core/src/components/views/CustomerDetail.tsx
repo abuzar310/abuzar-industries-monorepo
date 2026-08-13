@@ -14,6 +14,7 @@ import { balanceReminderMessage, customerFollowupMessage, waLink } from "@/lib/w
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
+import { useBindPagePdf } from "@/lib/page-pdf";
 import type { Customer, Doc, Expense } from "@/lib/types";
 import DocList from "./DocList";
 
@@ -25,6 +26,15 @@ export default function CustomerDetail({ id }: { id: string }) {
   const [invs, setInvs] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const printRef = useRef<HTMLDivElement>(null);
+
+  const savePdf = useCallback(async () => {
+    if (!printRef.current) return;
+    const c = await getRec<Customer>("customers", id);
+    if ((await printOrSavePdf(printRef.current, ((c?.name || "customer") + "-statement"))) === "pdf") {
+      toast("Statement PDF downloaded \u2713");
+    }
+  }, [id]);
+  useBindPagePdf(savePdf);
 
   const load = useCallback(() => {
     Promise.all([
@@ -244,9 +254,7 @@ export default function CustomerDetail({ id }: { id: string }) {
               <button
                 className="btn sm"
                 style={{ marginLeft: "auto" }}
-                onClick={async () => {
-                  if ((await printOrSavePdf(printRef.current, (cust!.name || "customer") + "-statement")) === "pdf") toast("Statement PDF downloaded \u2713");
-                }}
+                onClick={() => void savePdf()}
               >
                 Print / Save PDF
               </button>

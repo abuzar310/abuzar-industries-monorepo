@@ -8,6 +8,7 @@ import { editSupplierDialog } from "@/lib/customer-form";
 import { seedSuppliersFromPurchases, upsertSupplierFromDoc } from "@/lib/suppliers";
 import { brandFor } from "@/lib/brand";
 import { printOrSavePdf } from "@/lib/pdf";
+import { useBindPagePdf } from "@/lib/page-pdf";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import CustomerPicker from "@/components/editor/CustomerPicker";
@@ -210,6 +211,7 @@ export default function PurchaseEntryView({ initialDoc, action }: Props) {
     if (!doc) return toast("Save first");
     if ((await printOrSavePdf(sheetRef.current, doc.number || doc.id)) === "pdf") toast("PDF downloaded \u2713");
   }
+  useBindPagePdf(onPrint);
 
   return (
     <div>

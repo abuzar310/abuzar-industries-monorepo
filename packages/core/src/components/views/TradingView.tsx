@@ -7,6 +7,7 @@ import { brandFor } from "@/lib/brand";
 import { printOrSavePdf } from "@/lib/pdf";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
+import { useBindPagePdf } from "@/lib/page-pdf";
 import type { Doc } from "@/lib/types";
 
 const num = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -224,6 +225,11 @@ export default function TradingView() {
   const gToday = new Date();
   const p2 = (n: number) => String(n).padStart(2, "0");
   const genOn = `${p2(gToday.getDate())}-${p2(gToday.getMonth() + 1)}-${gToday.getFullYear()}`;
+  const savePdf = useCallback(async () => {
+    if (!printRef.current) return;
+    if ((await printOrSavePdf(printRef.current, "trading-account-" + genOn)) === "pdf") toast("Trading A/C PDF downloaded \u2713");
+  }, [genOn]);
+  useBindPagePdf(savePdf);
   const gpLabel =
     gpMode === "percent" ? `Gross Profit (${num(cfg.gpPercent ?? 10)}% of sales)` : "Gross Profit (from closing stock)";
   // classic accountant wording: the period lives INSIDE the row labels
@@ -334,9 +340,7 @@ export default function TradingView() {
         </div>
         <button
           className="btn sm"
-          onClick={async () => {
-            if ((await printOrSavePdf(printRef.current, "trading-account-" + genOn)) === "pdf") toast("Trading A/C PDF downloaded \u2713");
-          }}
+          onClick={() => void savePdf()}
         >
           Print Trading A/C
         </button>
