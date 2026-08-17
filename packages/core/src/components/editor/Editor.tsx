@@ -33,6 +33,7 @@ import InvoicePayBlock from "./InvoicePayBlock";
 import { applyAdvancesToInvoice } from "@/lib/vouchers";
 import InvoicePrintA from "./InvoicePrintA";
 import CustomerPicker from "./CustomerPicker";
+import CarpenterPicker, { knownCarpenters, type CarpenterHit } from "./CarpenterPicker";
 import GstinField from "./GstinField";
 import DateField from "./DateField";
 import EwayBillPanel from "./EwayBillPanel";
@@ -95,6 +96,7 @@ export default function Editor({
   const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
   const [expenses, setExpenses] = useState<Expense[]>([]); // this quote's recorded payments (for the mini statements)
   const [customers, setCustomers] = useState<Customer[]>([]); // for the searchable customer picker (avoid duplicates)
+  const [quoteDocs, setQuoteDocs] = useState<Doc[]>([]); // carpenter name→phone directory (from past quotes too)
   // Excel-style line copy/paste (clipboard is GLOBAL — see lineClipboard — so it works across quotations)
   const [selBox, setSelBox] = useState<number | null>(null); // box whose lines are selected
   const [selRows, setSelRows] = useState<Set<number>>(() => new Set()); // selected row indices in selBox
@@ -143,10 +145,13 @@ export default function Editor({
     loadExpenses();
   }, [loadExpenses, doc.id]);
 
-  // load existing customers for the searchable name picker
+  // load existing customers + quotes for searchable name / carpenter phone pickers
   useEffect(() => {
     allRec<Customer>("customers").then(setCustomers);
+    allRec<Doc>("quotations").then(setQuoteDocs);
   }, []);
+
+  const carpenters = useMemo(() => knownCarpenters(customers, quoteDocs), [customers, quoteDocs]);
 
   // apply queued focus after a row is added / re-rendered
   useEffect(() => {
@@ -317,6 +322,18 @@ export default function Editor({
       d.address = c.address || "";
       d.custGstin = c.gstin || "";
       d.custPincode = c.pincode || extractPincode(c.address) || d.custPincode || "";
+    });
+  // carpenter: typing an exact known name (or picking from list) fills carpenter phone when available
+  const onCarpenterType = (v: string) =>
+    update((d) => {
+      d.site = v;
+      const hit = carpenters.find((c) => c.name.toLowerCase() === v.trim().toLowerCase());
+      if (hit?.phone) d.sitePhone = hit.phone;
+    });
+  const pickCarpenter = (c: CarpenterHit) =>
+    update((d) => {
+      d.site = c.name;
+      if (c.phone) d.sitePhone = c.phone;
     });
   const onName = (si: number, v: string) =>
     update((d) => {
@@ -925,7 +942,7 @@ export default function Editor({
         </div>
         <div className="f">
           <label>Carpenter</label>
-          <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
+          <CarpenterPicker value={doc.site} carpenters={carpenters} onType={onCarpenterType} onPick={pickCarpenter} />
         </div>
         <div className="f">
           <label>Carpenter phone</label>
@@ -1199,7 +1216,7 @@ export default function Editor({
               <>
                 <div className="f">
                   <label>Carpenter</label>
-                  <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
+                  <CarpenterPicker value={doc.site} carpenters={carpenters} onType={onCarpenterType} onPick={pickCarpenter} />
                 </div>
                 <div className="f">
                   <label>Carpenter phone</label>
