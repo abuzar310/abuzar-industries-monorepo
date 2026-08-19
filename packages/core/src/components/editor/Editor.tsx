@@ -23,7 +23,7 @@ import { promoteTempTab, setTempDoc } from "@/lib/editor-tabs";
 import { OFFICIAL_DEFAULT_WOOD } from "@/lib/woods";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
-import type { BoxRect, Customer, Doc, Expense, Row } from "@/lib/types";
+import type { BoxRect, Carpenter, Customer, Doc, Expense, Row } from "@/lib/types";
 import SectionCard from "./SectionCard";
 import Totals from "./Totals";
 import QuoteCanvas from "./QuoteCanvas";
@@ -97,6 +97,7 @@ export default function Editor({
   const [expenses, setExpenses] = useState<Expense[]>([]); // this quote's recorded payments (for the mini statements)
   const [customers, setCustomers] = useState<Customer[]>([]); // for the searchable customer picker (avoid duplicates)
   const [quoteDocs, setQuoteDocs] = useState<Doc[]>([]); // carpenter name→phone directory (from past quotes too)
+  const [carpenterDir, setCarpenterDir] = useState<Carpenter[]>([]); // standalone carpenter contacts
   // Excel-style line copy/paste (clipboard is GLOBAL — see lineClipboard — so it works across quotations)
   const [selBox, setSelBox] = useState<number | null>(null); // box whose lines are selected
   const [selRows, setSelRows] = useState<Set<number>>(() => new Set()); // selected row indices in selBox
@@ -145,13 +146,17 @@ export default function Editor({
     loadExpenses();
   }, [loadExpenses, doc.id]);
 
-  // load existing customers + quotes for searchable name / carpenter phone pickers
+  // load existing customers + quotes + carpenter directory for searchable pickers
   useEffect(() => {
     allRec<Customer>("customers").then(setCustomers);
     allRec<Doc>("quotations").then(setQuoteDocs);
+    allRec<Carpenter>("carpenters").then(setCarpenterDir);
   }, []);
 
-  const carpenters = useMemo(() => knownCarpenters(customers, quoteDocs), [customers, quoteDocs]);
+  const carpenters = useMemo(
+    () => knownCarpenters(customers, quoteDocs, carpenterDir),
+    [customers, quoteDocs, carpenterDir],
+  );
 
   // apply queued focus after a row is added / re-rendered
   useEffect(() => {

@@ -7,13 +7,16 @@ import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/crea
 import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
+import { deleteCarpenter, editCarpenterDialog, listCarpenters } from "@/lib/carpenters";
 import { customerFollowupMessage, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
-import type { Customer, Doc, Expense } from "@/lib/types";
+import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 
-function applySearch(list: Customer[], q: string) {
+type Mode = "customers" | "carpenters";
+
+function applyCustSearch(list: Customer[], q: string) {
   q = (q || "").trim().toLowerCase();
   if (!q) return list;
   return list.filter((c) =>
@@ -25,29 +28,49 @@ function applySearch(list: Customer[], q: string) {
   );
 }
 
+function applyCarpSearch(list: Carpenter[], q: string) {
+  q = (q || "").trim().toLowerCase();
+  if (!q) return list;
+  return list.filter((c) =>
+    [c.name, c.phone, c.village, c.city, c.notes].some((v) =>
+      String(v || "")
+        .toLowerCase()
+        .includes(q),
+    ),
+  );
+}
+
 export default function CustomersView() {
   const { dataVersion, searchTerm, cloakMoney } = useApp();
   const router = useRouter();
   const [list, setList] = useState<Customer[]>([]);
+  const [carpenters, setCarpenters] = useState<Carpenter[]>([]);
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [invs, setInvs] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [mode, setMode] = useState<Mode>(() => prefGet<Mode>("custPageMode", "customers"));
   /** list order — device preference: "az" alphabetical · "due" biggest outstanding first */
   const [sortBy, setSortBy] = useState<"az" | "due">(() => prefGet<"az" | "due">("custSort", "az"));
   const pickSort = (v: "az" | "due") => {
     setSortBy(v);
     prefSet("custSort", v);
   };
+  const pickMode = (v: Mode) => {
+    setMode(v);
+    prefSet("custPageMode", v);
+  };
 
   const load = useCallback(() => {
     Promise.all([
       allRec<Customer>("customers"),
+      listCarpenters(),
       allRec<Doc>("quotations"),
       allRec<Doc>("invoices"),
       allRec<Expense>("expenses"),
-    ]).then(([c, q, i, e]) => {
+    ]).then(([c, carp, q, i, e]) => {
       c.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       setList(c);
+      setCarpenters(carp);
       setQuotes(q);
       setInvs(i);
       setExpenses(e);
@@ -57,15 +80,48 @@ export default function CustomersView() {
     load();
   }, [load, dataVersion]);
 
-  async function add() {
+  async function addCustomer() {
     const c = await editCustomerDialog();
     if (c) {
       load();
       bumpData();
     }
   }
+  async function addCarpenter() {
+    const c = await editCarpenterDialog();
+    if (c) {
+      load();
+      bumpData();
+    }
+  }
+  async function editCarpenter(e: React.MouseEvent, c: Carpenter) {
+    e.stopPropagation();
+    const next = await editCarpenterDialog(c);
+    if (next) {
+      load();
+      bumpData();
+    }
+  }
+  async function removeCarpenter(e: React.MouseEvent, c: Carpenter) {
+    e.stopPropagation();
+    const ok = await confirmDialog({
+      title: "Delete " + c.name + "?",
+      message: "Removes this carpenter contact only.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    await deleteCarpenter(c.id);
+    load();
+    bumpData();
+  }
+  function waCarpenter(e: React.MouseEvent, c: Carpenter) {
+    e.stopPropagation();
+    if (!c.phone) return;
+    window.open(waLink(c.phone, "Hello " + (c.name || "")), "_blank");
+  }
+
   const invoiceMode = getFeatures().invoices;
-  // quote-only app (unofficial): a Created quotation is the sale, so it counts toward dues.
   const quotesAsBills = !invoiceMode;
   async function newDoc(e: React.MouseEvent, id: string) {
     e.stopPropagation();
@@ -87,39 +143,65 @@ export default function CustomersView() {
       danger: true,
     });
     if (!ok) return;
-    await delRec("customers", c.id); // soft delete — the row stays recoverable in the database
+    await delRec("customers", c.id);
     load();
   }
 
-  // financials once per customer, so the list can sort by outstanding
-  const entries = applySearch(cloakMoney ? [] : list, searchTerm).map((c) => ({
+  const entries = applyCustSearch(cloakMoney ? [] : list, searchTerm).map((c) => ({
     c,
     f: customerFinancials(c.id, quotes, invs, c.opening || 0, expenses, quotesAsBills),
   }));
   if (sortBy === "due") entries.sort((a, b) => b.f.outstanding - a.f.outstanding || (a.c.name || "").localeCompare(b.c.name || ""));
 
+  const carpList = applyCarpSearch(cloakMoney ? [] : carpenters, searchTerm);
+
   return (
     <div>
       <div className="sectitle">
-        Customers <small>— {list.length} contact{list.length === 1 ? "" : "s"}</small>
+        {mode === "customers" ? (
+          <>
+            Customers <small>— {list.length} contact{list.length === 1 ? "" : "s"}</small>
+          </>
+        ) : (
+          <>
+            Carpenters <small>— {carpenters.length} contact{carpenters.length === 1 ? "" : "s"}</small>
+          </>
+        )}
       </div>
-      <div className="rowbtns" style={{ alignItems: "center", gap: 10 }}>
-        <button className="btn primary sm" onClick={add}>
-          + Add customer
-        </button>
-        <div className="db-seg sm" style={{ marginLeft: "auto" }} role="group" aria-label="Sort customers">
-          <button className={"seg-btn" + (sortBy === "az" ? " on" : "")} type="button" onClick={() => pickSort("az")}>
-            A–Z
+      <div className="rowbtns" style={{ alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div className="db-seg sm" role="group" aria-label="Customers or carpenters">
+          <button className={"seg-btn" + (mode === "customers" ? " on" : "")} type="button" onClick={() => pickMode("customers")}>
+            Customers
           </button>
-          <button className={"seg-btn" + (sortBy === "due" ? " on" : "")} type="button" onClick={() => pickSort("due")}>
-            Outstanding first
+          <button className={"seg-btn" + (mode === "carpenters" ? " on" : "")} type="button" onClick={() => pickMode("carpenters")}>
+            Carpenters
           </button>
         </div>
+        {mode === "customers" ? (
+          <button className="btn primary sm" onClick={addCustomer}>
+            + Add customer
+          </button>
+        ) : (
+          <button className="btn primary sm" onClick={addCarpenter}>
+            + Add carpenter
+          </button>
+        )}
+        {mode === "customers" && (
+          <div className="db-seg sm" style={{ marginLeft: "auto" }} role="group" aria-label="Sort customers">
+            <button className={"seg-btn" + (sortBy === "az" ? " on" : "")} type="button" onClick={() => pickSort("az")}>
+              A–Z
+            </button>
+            <button className={"seg-btn" + (sortBy === "due" ? " on" : "")} type="button" onClick={() => pickSort("due")}>
+              Outstanding first
+            </button>
+          </div>
+        )}
       </div>
-      <div className="custgrid">
-        {entries.length ? (
-          entries.map(({ c, f }) => {
-            return (
+
+      {mode === "customers" ? (
+        <div className="custgrid">
+          {entries.length ? (
+            entries.map(({ c, f }) => (
               <div className="custcard" key={c.id} onClick={() => router.push("/customers/" + c.id)} style={{ cursor: "pointer" }}>
                 <h3>{c.name}</h3>
                 <div className="ph">{c.phone || "—"}</div>
@@ -135,7 +217,10 @@ export default function CustomersView() {
                   )}
                   <b>{f.quoteCount}</b> quote{f.quoteCount === 1 ? "" : "s"}
                   {invoiceMode && (
-                    <> · <b>{f.invoiceCount}</b> invoice{f.invoiceCount === 1 ? "" : "s"}</>
+                    <>
+                      {" "}
+                      · <b>{f.invoiceCount}</b> invoice{f.invoiceCount === 1 ? "" : "s"}
+                    </>
                   )}
                   {f.paid > 0 && (
                     <>
@@ -168,16 +253,55 @@ export default function CustomersView() {
                   </button>
                 </div>
               </div>
-            );
-          })
-        ) : (
-          <div className="empty">
-            <div className="empty-icon">👥</div>
-            <div className="empty-title">No customers yet</div>
-            <div className="empty-note">They&apos;re saved automatically when you make a quotation, or add one now.</div>
-          </div>
-        )}
-      </div>
+            ))
+          ) : (
+            <div className="empty">
+              <div className="empty-icon">👥</div>
+              <div className="empty-title">No customers yet</div>
+              <div className="empty-note">They&apos;re saved automatically when you make a quotation, or add one now.</div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="custgrid">
+          {carpList.length ? (
+            carpList.map((c) => (
+              <div className="custcard" key={c.id} style={{ cursor: "default" }}>
+                <h3>{c.name}</h3>
+                <div className="ph">{c.phone || "—"}</div>
+                <div className="meta2">
+                  {(c.village || c.city) && (
+                    <>
+                      {[c.village, c.city].filter(Boolean).join(", ")}
+                      <br />
+                    </>
+                  )}
+                  {c.notes && <>Note: {c.notes}</>}
+                </div>
+                <div className="links">
+                  <button className="btn sm" onClick={(e) => editCarpenter(e, c)}>
+                    Edit
+                  </button>
+                  {c.phone && (
+                    <button className="btn wa sm" onClick={(e) => waCarpenter(e, c)}>
+                      WhatsApp
+                    </button>
+                  )}
+                  <button className="btn warn sm" onClick={(e) => removeCarpenter(e, c)}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="empty">
+              <div className="empty-icon">🪚</div>
+              <div className="empty-title">No carpenters yet</div>
+              <div className="empty-note">Add a carpenter with name, phone, village, and city — no customer needed.</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
