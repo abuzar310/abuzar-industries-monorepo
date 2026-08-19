@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, delRec } from "@/lib/data";
-import { inr, qty, todayStr } from "@/lib/calc";
+import { dateSortKey, inr, qty, todayStr } from "@/lib/calc";
 import { editBuyerDialog } from "@/lib/customer-form";
 import {
   addDaysStr,
@@ -56,6 +56,7 @@ const emptyPayForm = () => ({
   date: todayStr(),
   supplierId: "",
   fromName: "",
+  purchaseId: "",
   cashPaid: "",
   bankPaid: "",
   note: "",
@@ -212,6 +213,36 @@ export default function BuysView() {
   const payBuyer = buyers.find((b) => b.id === payForm.supplierId);
   const payFromOpts = useMemo(() => fromAccountsOf(payBuyer, rows), [payBuyer, rows]);
 
+  /** Purchases for the selected supplier + from — invoice picker on Payments. */
+  const payInvoices = useMemo(() => {
+    const sid = payForm.supplierId;
+    const from = payForm.fromName.trim().toLowerCase();
+    if (!sid || !from) return [] as { buy: Purchase; due: number; tot: number }[];
+    return buys
+      .filter(
+        (b) =>
+          b.supplierId === sid && (b.fromName || "").trim().toLowerCase() === from,
+      )
+      .map((buy) => {
+        const s = settlementOf(buy, settlements);
+        return { buy, due: s.balance, tot: totalPurchase(buy) };
+      })
+      .sort(
+        (a, b) =>
+          (b.due > 0.5 ? 1 : 0) - (a.due > 0.5 ? 1 : 0) ||
+          (dateSortKey(b.buy.date) || "").localeCompare(dateSortKey(a.buy.date) || "") ||
+          (b.buy.createdAt || "").localeCompare(a.buy.createdAt || ""),
+      );
+  }, [buys, payForm.supplierId, payForm.fromName, settlements]);
+
+  // Keep invoice pick valid when supplier/from list changes
+  useEffect(() => {
+    if (!payForm.purchaseId) return;
+    if (!payInvoices.some((x) => x.buy.id === payForm.purchaseId)) {
+      setPayForm((f) => ({ ...f, purchaseId: "" }));
+    }
+  }, [payInvoices, payForm.purchaseId]);
+
   const dash = useMemo(() => buyerDashboards(buyers, rows), [buyers, rows]);
 
   // Business-wide dashboard figures — the whole book, never narrowed by the register
@@ -255,7 +286,11 @@ export default function BuysView() {
   function setPF<K extends keyof ReturnType<typeof emptyPayForm>>(k: K, v: string) {
     setPayForm((prev) => {
       const next = { ...prev, [k]: v };
-      if (k === "supplierId") next.fromName = "";
+      if (k === "supplierId") {
+        next.fromName = "";
+        next.purchaseId = "";
+      }
+      if (k === "fromName") next.purchaseId = "";
       return next;
     });
   }
@@ -310,6 +345,7 @@ export default function BuysView() {
       date: p.date || todayStr(),
       supplierId: p.supplierId || "",
       fromName: p.fromName || "",
+      purchaseId: p.purchaseId || "",
       cashPaid: p.cashPaid ? String(p.cashPaid) : "",
       bankPaid: p.bankPaid ? String(p.bankPaid) : "",
       note: p.note || "",
@@ -466,6 +502,7 @@ export default function BuysView() {
         supplierId: buyer.id,
         buyerName: buyer.name,
         fromName: payForm.fromName,
+        purchaseId: payForm.purchaseId || "",
         cashPaid: payForm.cashPaid,
         bankPaid: payForm.bankPaid,
         note: payForm.note,
@@ -872,6 +909,31 @@ export default function BuysView() {
                     onChange={(v) => setPF("fromName", v)}
                     onSave={() => void savePayFromAccount()}
                   />
+                  {payForm.supplierId && payForm.fromName.trim() ? (
+                    <label className="span3">
+                      Invoice
+                      <select
+                        value={payForm.purchaseId}
+                        onChange={(e) => setPF("purchaseId", e.target.value)}
+                      >
+                        <option value="">— Auto (oldest unpaid) —</option>
+                        {payInvoices.map(({ buy, due, tot }) => (
+                          <option key={buy.id} value={buy.id}>
+                            {(buy.date || "—") +
+                              (buy.billNo ? " · Bill " + buy.billNo : "") +
+                              " · ₹" +
+                              inr(tot) +
+                              (due <= 0.5 ? " · Settled" : " · due ₹" + inr(due))}
+                          </option>
+                        ))}
+                      </select>
+                      <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block", textTransform: "none", letterSpacing: 0, fontWeight: 500 }}>
+                        {payInvoices.length === 0
+                          ? "No purchases for this supplier + from yet."
+                          : "Pick which purchase this cash/bank pays. Auto = oldest unpaid first."}
+                      </small>
+                    </label>
+                  ) : null}
                 </div>
               </div>
               <div className="buys-entry-sec">
@@ -927,6 +989,7 @@ export default function BuysView() {
                   <th>Date</th>
                   <th className="l">Supplier</th>
                   <th className="l">From</th>
+                  <th className="l">Invoice</th>
                   <th className="num">Cash</th>
                   <th className="num">Bank</th>
                   <th className="num">Total</th>
@@ -937,7 +1000,7 @@ export default function BuysView() {
               <tbody>
                 {filteredPays.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={9}>
                       <div className="buys-empty">
                         No payments yet.
                         <button type="button" className="btn primary sm" onClick={startNewPay}>
@@ -947,11 +1010,17 @@ export default function BuysView() {
                     </td>
                   </tr>
                 ) : (
-                  filteredPays.map((p) => (
+                  filteredPays.map((p) => {
+                    const against = p.purchaseId ? buys.find((b) => b.id === p.purchaseId) : null;
+                    const invLbl = against
+                      ? (against.date || "—") + (against.billNo ? " · " + against.billNo : "")
+                      : "Auto";
+                    return (
                     <tr key={p.id} onDoubleClick={() => startEditPay(p)}>
                       <td className="mono">{p.date || "—"}</td>
                       <td className="l name">{p.buyerName || "—"}</td>
                       <td className="l">{p.fromName || "—"}</td>
+                      <td className="l mono">{invLbl}</td>
                       <td className="num paid">{money(p.cashPaid)}</td>
                       <td className="num paid">{money(p.bankPaid)}</td>
                       <td className="num paid">{money(paidTotal(p))}</td>
@@ -965,7 +1034,8 @@ export default function BuysView() {
                         </button>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -192,7 +192,20 @@ export type StoreName =
   | "attendance"
   | "activity"
   | "purchases"
+  | "carpenters"
   | "chat";
+
+/** Standalone carpenter contact (Cut Size) — not a customer / ledger party. */
+export interface Carpenter {
+  id: string;
+  name: string;
+  phone: string;
+  village?: string;
+  city?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
 
 /**
  * Unofficial Buys entry.
@@ -224,6 +237,11 @@ export interface Purchase {
   cashPaid: number;
   /** money paid by bank transfer */
   bankPaid: number;
+  /**
+   * On kind "pay": optional purchase (buy) this payment is against.
+   * Empty = apply FIFO across that supplier + from-account (legacy).
+   */
+  purchaseId?: string;
   /** dd-mm-yy of payment (optional) */
   payDate: string;
   /** dd-mm-yy — ping owner on/after this date (Buys reminder) */
