@@ -144,6 +144,10 @@ export interface Customer {
   site: string;
   /** Carpenter phone (optional). */
   sitePhone?: string;
+  /** Carpenter village (optional). */
+  siteVillage?: string;
+  /** Carpenter city (optional). */
+  siteCity?: string;
   address: string;
   notes: string;
   /** GSTIN — used when the customer is treated as a debtor in the Ledger. */
