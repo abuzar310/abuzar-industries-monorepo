@@ -128,7 +128,7 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
   const half = Math.round((+doc.gst || 0) * 50) / 100;
   const halfAmt = Math.round(totals.gstAmt * 50) / 100;
   const igst = doc.gstKind === "igst";
-  // Density tiers (letterhead never shrinks — Tax Invoice + logo + name only):
+  // Density tiers (letterhead never shrinks — Tax Invoice + logo + name + address):
   //   i3-c1 → Amount in Words + totals / Grand Total (first sacrifice)
   //   i3-c2 → wood Rate·CFT·Total Price footers, then line columns
   //   i3-c3 → signature block
@@ -147,11 +147,16 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
       {/* TAX INVOICE — centred on top */}
       <div className="i3-kindtop"><span>Tax Invoice</span></div>
 
-      {/* letterhead: logo + company name only */}
+      {/* letterhead: logo + company name; address kept as a slim line under the name */}
       <div className="i3-mast">
         {brand.logo && <img src="/logo.png" alt={brand.name} />}
         <div className="i3-id">
           <div className="i3-nm">{brand.name}</div>
+          {(brand.addr || brand.phone) && (
+            <div className="i3-ad">
+              {[brand.addr, brand.phone ? "Ph " + brand.phone : ""].filter(Boolean).join(" · ")}
+            </div>
+          )}
         </div>
       </div>
       <div className="i3-dbl" />
@@ -179,7 +184,7 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
         </div>
         <div className="i3-pbox">
           <div className="i3-lbl">Ship To</div>
-          <div className="i3-pnm">{doc.shipTo || "—"}</div>
+          <div className="i3-pnm">{doc.shipTo || doc.address || "—"}</div>
         </div>
       </div>
 
