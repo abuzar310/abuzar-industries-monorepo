@@ -206,7 +206,15 @@ export default function CustomerDetail({ id }: { id: string }) {
             <h3 style={{ fontSize: 26 }}>{cust.name}</h3>
             <div className="ph">{cust.phone || "—"}</div>
             <div className="meta2">
-              {cust.site && <>Carpenter: {cust.site}{cust.sitePhone ? " · " + cust.sitePhone : ""}<br /></>}
+              {cust.site && (
+                <>
+                  Carpenter: {cust.site}
+                  {cust.sitePhone ? " · " + cust.sitePhone : ""}
+                  {(cust.siteVillage || cust.siteCity) &&
+                    " · " + [cust.siteVillage, cust.siteCity].filter(Boolean).join(", ")}
+                  <br />
+                </>
+              )}
               {cust.address && <>{cust.address}<br /></>}
               {cust.notes && <>Note: {cust.notes}</>}
             </div>
