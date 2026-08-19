@@ -8,21 +8,23 @@ import {
   addDaysStr,
   addFromAccount,
   allPurchases,
+  buySettlements,
   buyerDashboards,
   cashAmount,
+  cashBalOf,
   deletePurchase,
   dueReminders,
   fromAccountsOf,
+  invBalOf,
   isRemindDue,
   lineAmount,
   normalizePurchase,
   paidTotal,
   purchaseTotals,
-  rowBalance,
   savePurchase,
   setPurchaseReminder,
+  settlementOf,
   totalPurchase,
-  type PurchaseTotals,
 } from "@/lib/purchases";
 import { useApp } from "@/store/useApp";
 import { bumpData, setBuysDue, toast } from "@/store/app-store";
@@ -63,10 +65,6 @@ const money = (n: number) => (n ? inr(n) : "—");
 const vol = (n: number) => (n ? qty(n, 2) : "—");
 
 const r2 = (n: number) => Math.round((n || 0) * 100) / 100;
-/** Cash side outstanding = cash portion of the deal − cash paid. */
-const cashBal = (t: PurchaseTotals) => r2((t.cashAmount || 0) - (t.cashPaid || 0));
-/** Invoice side outstanding = bill amount − bank paid. */
-const invBal = (t: PurchaseTotals) => r2((t.billAmount || 0) - (t.bankPaid || 0));
 const balToneOf = (n: number) => (Math.abs(n) <= 0.5 ? "ok" : n > 0 ? "due" : "adv");
 const balText = (n: number) => (Math.abs(n) <= 0.5 ? "Settled" : "₹" + inr(Math.abs(n)));
 /** Plain-language state for the headline KPI cards — reads at a glance for
@@ -178,11 +176,14 @@ export default function BuysView() {
   const buys = useMemo(() => rows.filter((r) => (r.kind || "buy") === "buy"), [rows]);
   const pays = useMemo(() => rows.filter((r) => r.kind === "pay"), [rows]);
 
+  // Payments-tab money applied FIFO onto each buy (same supplier + from-account)
+  const settlements = useMemo(() => buySettlements(rows), [rows]);
+
   const filteredBuys = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return buys.filter((p) => {
       if (buyerFilter && p.supplierId !== buyerFilter) return false;
-      if (unpaidOnly && Math.abs(rowBalance(p)) <= 0.5) return false;
+      if (unpaidOnly && Math.abs(settlementOf(p, settlements).balance) <= 0.5) return false;
       if (remindOnly && !isRemindDue(p.remindAt)) return false;
       if (!needle) return true;
       return [p.buyerName, p.fromName, p.billNo, p.note, p.date]
@@ -190,7 +191,7 @@ export default function BuysView() {
         .toLowerCase()
         .includes(needle);
     });
-  }, [buys, buyerFilter, unpaidOnly, remindOnly, q]);
+  }, [buys, buyerFilter, unpaidOnly, remindOnly, q, settlements]);
 
   const filteredPays = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -216,8 +217,8 @@ export default function BuysView() {
   // Business-wide dashboard figures — the whole book, never narrowed by the register
   // filters, so the three headline cards stay a stable "what do I owe" overview.
   const allTotals = useMemo(() => purchaseTotals(rows), [rows]);
-  const kpiCash = cashBal(allTotals);
-  const kpiInv = invBal(allTotals);
+  const kpiCash = cashBalOf(allTotals);
+  const kpiInv = invBalOf(allTotals);
   const kpiTotal = r2(kpiCash + kpiInv);
 
   // Suppliers home: filter by typed name, then float the biggest dues to the top
@@ -738,11 +739,11 @@ export default function BuysView() {
                     {open && (
                       <div className="buys-ov-detail">
                         <div className="buys-ov-paidline">
-                          <span className={"bal " + balToneOf(cashBal(t))}>
-                            Cash bal: {balText(cashBal(t))}
+                          <span className={"bal " + balToneOf(cashBalOf(t))}>
+                            Cash bal: {balText(cashBalOf(t))}
                           </span>
-                          <span className={"bal " + balToneOf(invBal(t))}>
-                            Invoice bal: {balText(invBal(t))}
+                          <span className={"bal " + balToneOf(invBalOf(t))}>
+                            Invoice bal: {balText(invBalOf(t))}
                           </span>
                           <span className="paid">
                             Paid ₹{money(t.paid)} (cash {money(t.cashPaid)} · bank {money(t.bankPaid)})
@@ -768,11 +769,11 @@ export default function BuysView() {
                                   </div>
                                   {!idle && (
                                     <div className="buys-ov-from-nums">
-                                      <span className={"bal " + balToneOf(cashBal(ft))}>
-                                        Cash bal: {balText(cashBal(ft))}
+                                      <span className={"bal " + balToneOf(cashBalOf(ft))}>
+                                        Cash bal: {balText(cashBalOf(ft))}
                                       </span>
-                                      <span className={"bal " + balToneOf(invBal(ft))}>
-                                        Invoice bal: {balText(invBal(ft))}
+                                      <span className={"bal " + balToneOf(invBalOf(ft))}>
+                                        Invoice bal: {balText(invBalOf(ft))}
                                       </span>
                                       <span className="paid">Paid ₹{money(ft.paid)}</span>
                                       <span className={fOk ? "ok" : "due"}>
@@ -1151,8 +1152,13 @@ export default function BuysView() {
                 {filteredBuys.map((raw) => {
                   const p = normalizePurchase(raw);
                   const tot = totalPurchase(p);
-                  const bal = rowBalance(p);
-                  const paid = paidTotal(p);
+                  const cashDeal = cashAmount(p);
+                  const invDeal = +p.billAmount || 0;
+                  const s = settlementOf(p, settlements);
+                  const bal = s.balance;
+                  const settled = Math.abs(bal) <= 0.5;
+                  const cashSettled = Math.abs(s.cashDue) <= 0.5;
+                  const invSettled = Math.abs(s.invDue) <= 0.5;
                   const remindDue = isRemindDue(p.remindAt);
                   return (
                     <li
@@ -1174,39 +1180,55 @@ export default function BuysView() {
                           </strong>
                           <span className="buys-reg-from">{p.fromName || "No from-account"}</span>
                           {p.billNo ? <span className="buys-reg-bill">Bill {p.billNo}</span> : null}
-                        </div>
-                        <div className={`buys-reg-bal ${Math.abs(bal) <= 0.5 ? "ok" : "due"}`}>
-                          <em>Balance</em>
-                          <b>{Math.abs(bal) <= 0.5 ? "Settled" : "₹" + inr(Math.abs(bal))}</b>
-                        </div>
-                      </div>
-                      <div className="buys-reg-metrics">
-                        <div>
-                          <em>CFT</em>
-                          <b>{vol(p.cft)}</b>
-                          <span>@ {money(p.rate)}</span>
-                        </div>
-                        <div>
-                          <em>Total</em>
-                          <b>₹{money(tot)}</b>
-                          <span>
-                            amt {money(p.amount)}
-                            {p.gst ? ` · gst ${money(p.gst)}` : ""}
+                          <span className="buys-reg-meta">
+                            {vol(p.cft)} cft
+                            {p.rate ? ` @ ${money(p.rate)}` : ""}
+                            {" · Total ₹"}
+                            {money(tot)}
+                            {p.gst ? ` (amt ${money(p.amount)} · gst ${money(p.gst)})` : ""}
                           </span>
                         </div>
-                        <div>
-                          <em>Split</em>
-                          <b>Bank ₹{money(p.billAmount)}</b>
-                          <span>Cash ₹{money(cashAmount(p))}</span>
-                        </div>
-                        <div>
-                          <em>Paid</em>
-                          <b className="paid">₹{money(paid)}</b>
-                          <span>
-                            cash {money(p.cashPaid)} · bank {money(p.bankPaid)}
-                          </span>
+                        <div className={`buys-reg-bal ${settled ? "ok" : "due"}`}>
+                          <em>Still owe</em>
+                          <b>{settled ? "Settled" : "₹" + inr(Math.abs(bal))}</b>
                         </div>
                       </div>
+
+                      <div className="buys-reg-sides">
+                        <div className={"buys-side" + (invSettled ? " ok" : "")}>
+                          <div className="buys-side-h">
+                            <em>Invoice · Bank</em>
+                            <b className={invSettled ? "ok" : "due"}>
+                              {invSettled ? "Settled" : "₹" + inr(s.invDue)}
+                            </b>
+                          </div>
+                          <div className="buys-side-lines">
+                            <span>
+                              Bill <b>₹{money(invDeal)}</b>
+                            </span>
+                            <span className="paid">
+                              Paid <b>₹{money(s.bankPaid)}</b>
+                            </span>
+                          </div>
+                        </div>
+                        <div className={"buys-side" + (cashSettled ? " ok" : "")}>
+                          <div className="buys-side-h">
+                            <em>Cash</em>
+                            <b className={cashSettled ? "ok" : "due"}>
+                              {cashSettled ? "Settled" : "₹" + inr(s.cashDue)}
+                            </b>
+                          </div>
+                          <div className="buys-side-lines">
+                            <span>
+                              Deal <b>₹{money(cashDeal)}</b>
+                            </span>
+                            <span className="paid">
+                              Paid <b>₹{money(s.cashPaid)}</b>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="buys-reg-acts no-print">
                         <label className="buys-remind-pick">
                           <span className={remindDue ? "due" : undefined}>

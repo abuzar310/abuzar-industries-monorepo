@@ -2525,6 +2525,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .buys-reg-who strong{font-size:18px; font-weight:600; color:var(--ink); line-height:1.2}
 .buys-reg-from{font-size:14px; color:var(--ink-soft)}
 .buys-reg-bill{font-family:var(--mono); font-size:12.5px; color:var(--ink-faint)}
+.buys-reg-meta{font-family:var(--mono); font-size:12.5px; color:var(--ink-faint); line-height:1.4}
 .buys-reg-bal{text-align:right; flex:0 0 auto}
 .buys-reg-bal em{
   display:block; font-style:normal; font-family:var(--disp); font-size:10px; font-weight:700;
@@ -2533,21 +2534,30 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .buys-reg-bal b{font-family:var(--mono); font-size:22px; font-weight:700; font-variant-numeric:tabular-nums}
 .buys-reg-bal.ok b{color:var(--green)}
 .buys-reg-bal.due b{color:#c43028}
-.buys-reg-metrics{
-  grid-column:1 / -1; display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
-  gap:14px 18px; padding-top:4px;
+/* Invoice vs Cash — two clear panes: deal · paid · still due */
+.buys-reg-sides{
+  grid-column:1 / -1; display:grid; grid-template-columns:1fr 1fr; gap:12px; padding-top:6px;
 }
-.buys-reg-metrics > div{display:flex; flex-direction:column; gap:3px; min-width:0}
-.buys-reg-metrics em{
-  font-style:normal; font-family:var(--disp); font-size:10px; font-weight:700;
-  letter-spacing:.07em; text-transform:uppercase; color:var(--ink-faint);
+.buys-side{
+  border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+  background:rgba(255,253,248,.85); display:flex; flex-direction:column; gap:8px;
 }
-.buys-reg-metrics b{
-  font-family:var(--mono); font-size:16px; font-weight:700; color:var(--ink);
-  font-variant-numeric:tabular-nums; line-height:1.25;
+.buys-side.ok{border-color:rgba(86,107,59,.28); background:rgba(86,107,59,.05)}
+.buys-side-h{display:flex; justify-content:space-between; align-items:baseline; gap:10px}
+.buys-side-h em{
+  font-style:normal; font-family:var(--disp); font-size:10.5px; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint);
 }
-.buys-reg-metrics b.paid{color:var(--green)}
-.buys-reg-metrics span{font-family:var(--mono); font-size:12px; color:var(--ink-faint); line-height:1.35}
+.buys-side-h b{font-family:var(--mono); font-size:18px; font-weight:700; font-variant-numeric:tabular-nums}
+.buys-side-h b.ok{color:var(--green)}
+.buys-side-h b.due{color:#c43028}
+.buys-side-lines{
+  display:flex; flex-wrap:wrap; gap:6px 16px;
+  font-family:var(--mono); font-size:12.5px; color:var(--ink-soft);
+}
+.buys-side-lines b{font-weight:700; color:var(--ink)}
+.buys-side-lines .paid{color:var(--green)}
+.buys-side-lines .paid b{color:var(--green)}
 .buys-reg-acts{grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding-top:2px}
 .buys-reg-foot{
   display:flex; flex-wrap:wrap; gap:10px 22px; align-items:center;
@@ -2558,10 +2568,11 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .buys-reg-foot .due{color:#c43028}
 .buys-reg-foot .ok{color:var(--green)}
 @media(max-width:720px){
-  .buys-reg-metrics{grid-template-columns:1fr 1fr}
+  .buys-reg-sides{grid-template-columns:1fr}
   .buys-reg-row{padding:18px 16px}
   .buys-reg-who strong{font-size:16px}
   .buys-reg-bal b{font-size:18px}
+  .buys-side-h b{font-size:16px}
 }
 .buys-link{
   border:0; background:none; padding:0; cursor:pointer;
