@@ -43,6 +43,8 @@ declare
     'activity',
     -- unofficial Buys: timber-in purchase ledger rows (from-name / bill / cft)
     'purchases',
+    -- standalone carpenter contacts (Cut Size; not tied to a customer)
+    'carpenters',
     -- owner <-> manager in-app chat
     'chat'
   ];

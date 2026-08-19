@@ -35,6 +35,7 @@ import {
   STORE_TABLE,
   TABLE_STORE,
   ensureChatTable,
+  ensureCarpentersTable,
   type AppSchema,
   type Row,
 } from "./db";
@@ -157,6 +158,7 @@ function storeLabel(store: string): string {
     payHolders: "pay holder",
     pay_holders: "pay holder",
     purchases: "purchase buy",
+    carpenters: "carpenter",
   };
   return m[store] || store;
 }
@@ -387,6 +389,7 @@ export function createDataApi(schema: AppSchema) {
     const user = userFrom(req);
     if (!user) return err(401, "Not signed in");
     await ensureChatTable(schema);
+    await ensureCarpentersTable(schema);
 
     if (a === "bootstrap" && method === "GET") {
       const out: AnyRec = {};

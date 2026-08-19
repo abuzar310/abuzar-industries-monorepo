@@ -1,23 +1,34 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { Customer, Doc } from "@/lib/types";
+import type { Carpenter, Customer, Doc } from "@/lib/types";
 
-export type CarpenterHit = { name: string; phone: string };
+export type CarpenterHit = { name: string; phone: string; village?: string; city?: string };
 
-/** Unique carpenter names + phones from customer cards (and optional quotations). */
-export function knownCarpenters(customers: Customer[], quotes: Doc[] = []): CarpenterHit[] {
+/** Unique carpenter names from standalone carpenters + customer cards (+ optional quotes). */
+export function knownCarpenters(
+  customers: Customer[],
+  quotes: Doc[] = [],
+  directory: Carpenter[] = [],
+): CarpenterHit[] {
   const map = new Map<string, CarpenterHit>();
-  const add = (name: string, phone: string) => {
+  const add = (name: string, phone: string, village = "", city = "") => {
     const n = (name || "").trim();
     if (!n) return;
     const key = n.toLowerCase();
     const p = (phone || "").trim();
+    const v = (village || "").trim();
+    const cityN = (city || "").trim();
     const cur = map.get(key);
-    if (!cur) map.set(key, { name: n, phone: p });
-    else if (!cur.phone && p) cur.phone = p;
+    if (!cur) map.set(key, { name: n, phone: p, village: v || undefined, city: cityN || undefined });
+    else {
+      if (!cur.phone && p) cur.phone = p;
+      if (!cur.village && v) cur.village = v;
+      if (!cur.city && cityN) cur.city = cityN;
+    }
   };
-  for (const c of customers) add(c.site || "", c.sitePhone || "");
+  for (const c of directory) add(c.name || "", c.phone || "", c.village || "", c.city || "");
+  for (const c of customers) add(c.site || "", c.sitePhone || "", c.siteVillage || "", c.siteCity || "");
   for (const d of quotes) {
     if (d.deletedAt || d.purgedAt) continue;
     add(d.site || "", d.sitePhone || "");
@@ -47,7 +58,11 @@ export default function CarpenterPicker({
   const filtered = useMemo(() => {
     if (!term) return carpenters;
     return carpenters.filter(
-      (c) => c.name.toLowerCase().includes(term) || (c.phone || "").includes(term),
+      (c) =>
+        c.name.toLowerCase().includes(term) ||
+        (c.phone || "").includes(term) ||
+        (c.village || "").toLowerCase().includes(term) ||
+        (c.city || "").toLowerCase().includes(term),
     );
   }, [carpenters, term]);
   const matches = maxResults > 0 ? filtered.slice(0, maxResults) : filtered;
@@ -88,6 +103,9 @@ export default function CarpenterPicker({
               >
                 <b>{c.name}</b>
                 {c.phone ? <small> · {c.phone}</small> : null}
+                {(c.village || c.city) && (
+                  <small> · {[c.village, c.city].filter(Boolean).join(", ")}</small>
+                )}
               </button>
             ))}
           </div>,

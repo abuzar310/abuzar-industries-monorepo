@@ -23,6 +23,7 @@ export const STORE_TABLE: Record<string, string> = {
   attendance: "attendance",
   activity: "activity",
   purchases: "purchases",
+  carpenters: "carpenters",
   chat: "chat",
 };
 
@@ -30,7 +31,7 @@ export const STORE_TABLE: Record<string, string> = {
 export const SYNC_TABLES = [
   "documents", "customers", "suppliers", "stock", "expenses", "sessions",
   "ledgers", "vouchers", "collections", "pay_holders", "workers", "attendance",
-  "activity", "purchases", "chat",
+  "activity", "purchases", "carpenters", "chat",
 ] as const;
 
 /** Physical table → the store name clients know it by. */
@@ -49,6 +50,7 @@ export const TABLE_STORE: Record<string, string> = {
   attendance: "attendance",
   activity: "activity",
   purchases: "purchases",
+  carpenters: "carpenters",
   chat: "chat",
 };
 
@@ -85,6 +87,25 @@ export const tableRef = (schema: AppSchema, table: string) =>
 
 const chatReady = new Set<string>();
 const chatEnsuring = new Map<string, Promise<void>>();
+const carpentersReady = new Set<string>();
+const carpentersEnsuring = new Map<string, Promise<void>>();
+
+async function ensureRecTable(schema: AppSchema, table: string): Promise<void> {
+  const t = tableRef(schema, table);
+  await q(`
+    create table if not exists ${t} (
+      id         text primary key,
+      data       jsonb not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      deleted_at timestamptz
+    )`);
+  await q(`create index if not exists ${table}_updated_at_idx on ${t} (updated_at)`);
+  await q(
+    `create or replace trigger touch_updated_at before update on ${t}
+       for each row execute function public.touch_updated_at()`,
+  );
+}
 
 /** Create chat table if this database was set up before chat existed. SELECT/INSERT only after this. */
 export async function ensureChatTable(schema: AppSchema): Promise<void> {
@@ -92,25 +113,28 @@ export async function ensureChatTable(schema: AppSchema): Promise<void> {
   let pending = chatEnsuring.get(schema);
   if (!pending) {
     pending = (async () => {
-      const t = tableRef(schema, "chat");
-      await q(`
-        create table if not exists ${t} (
-          id         text primary key,
-          data       jsonb not null,
-          created_at timestamptz not null default now(),
-          updated_at timestamptz not null default now(),
-          deleted_at timestamptz
-        )`);
-      await q(`create index if not exists chat_updated_at_idx on ${t} (updated_at)`);
-      await q(
-        `create or replace trigger touch_updated_at before update on ${t}
-           for each row execute function public.touch_updated_at()`,
-      );
+      await ensureRecTable(schema, "chat");
       chatReady.add(schema);
     })().finally(() => {
       chatEnsuring.delete(schema);
     });
     chatEnsuring.set(schema, pending);
+  }
+  await pending;
+}
+
+/** Standalone carpenter contacts (Cut Size) — create if DB predates this table. */
+export async function ensureCarpentersTable(schema: AppSchema): Promise<void> {
+  if (carpentersReady.has(schema)) return;
+  let pending = carpentersEnsuring.get(schema);
+  if (!pending) {
+    pending = (async () => {
+      await ensureRecTable(schema, "carpenters");
+      carpentersReady.add(schema);
+    })().finally(() => {
+      carpentersEnsuring.delete(schema);
+    });
+    carpentersEnsuring.set(schema, pending);
   }
   await pending;
 }
