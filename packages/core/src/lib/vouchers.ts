@@ -426,10 +426,10 @@ export async function recordAdvanceCashSplit(f: {
   return made;
 }
 
-/** A customer's unapplied advances, oldest first. */
+/** A customer's unapplied advances (account credit), oldest first — no quote/invoice link. */
 export const advancesOf = (expenses: Expense[], custId: string): Expense[] =>
   expenses
-    .filter((e) => e.type === "sale" && e.custId === custId && !e.charge)
+    .filter((e) => e.type === "sale" && e.custId === custId && !e.charge && !e.sourceId)
     .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
 
 /** ₹ still sitting as advance on the customer's account. */
@@ -490,6 +490,65 @@ export async function applyAdvancesToInvoice(
     inv.paidLogged = inv.amountPaid > 0;
     inv.updatedAt = nowIso();
     await put("invoices", inv);
+  }
+  return { applied, payCash, payUpi };
+}
+
+/**
+ * Same waterfall for Cut Size quotations: account advances → payments on this quote.
+ * Money conserved; caller updates payCash/payUpi via setAggregates (or pass persist).
+ */
+export async function applyAdvancesToQuote(
+  quote: Doc,
+  opts: { persist?: boolean } = {},
+): Promise<{ applied: number; payCash: number; payUpi: number }> {
+  const zero = { applied: 0, payCash: +(quote.payCash || 0), payUpi: +(quote.payUpi || 0) };
+  if (!quote.customerId || quote.kind !== "quotation" || quote.deletedAt || quote.purgedAt) return zero;
+  const expenses = await allRec<Expense>("expenses");
+  const adv = advancesOf(expenses, quote.customerId);
+  if (!adv.length) return zero;
+  const grand =
+    quote.finalPrice != null && quote.finalPrice > 0 ? +quote.finalPrice : computeDoc(quote).grand;
+  let payCash = zero.payCash;
+  let payUpi = zero.payUpi;
+  let due = r2(grand - r2(payCash + payUpi));
+  let applied = 0;
+  for (const a of adv) {
+    if (due <= 0.5) break;
+    const use = Math.min(due, r2(+a.amount || 0));
+    if (use <= 0) continue;
+    await addExpense({
+      type: "sale",
+      amount: use,
+      mode: a.mode === "upi" ? "upi" : "cash",
+      account: a.account || "",
+      toOwner: !!a.toOwner,
+      label: ["Advance applied", a.label].filter(Boolean).join(" · "),
+      note: (quote.customerName || "Walk-in") + " · " + quote.number,
+      sourceId: quote.id,
+      date: a.date,
+      enteredBy: a.enteredBy,
+    });
+    if (use >= (+a.amount || 0) - 0.005) {
+      await delRec("expenses", a.id);
+    } else {
+      const rest = { ...a, amount: r2((+a.amount || 0) - use), updatedAt: nowIso() };
+      await put("expenses", rest);
+    }
+    if (a.mode === "upi") payUpi = r2(payUpi + use);
+    else payCash = r2(payCash + use);
+    applied = r2(applied + use);
+    due = r2(due - use);
+  }
+  if (applied > 0 && opts.persist) {
+    quote.payCash = payCash;
+    quote.payUpi = payUpi;
+    quote.amountPaid = r2(payCash + payUpi);
+    quote.paymentStatus =
+      quote.amountPaid <= 0 ? "Pending" : quote.amountPaid + 0.001 >= grand ? "Paid" : "Partial";
+    quote.paidLogged = quote.amountPaid > 0;
+    quote.updatedAt = nowIso();
+    await put("quotations", quote);
   }
   return { applied, payCash, payUpi };
 }
