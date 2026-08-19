@@ -24,10 +24,101 @@ export function paidTotal(p: Pick<Purchase, "cashPaid" | "bankPaid" | "topPaid" 
   return r2(cash + bank);
 }
 
-/** Outstanding = total purchase − cash paid − bank paid. */
+/** Outstanding on the buy alone (ignores Payments-tab rows — prefer buySettlements). */
 export function rowBalance(p: Purchase): number {
   if ((p.kind || "buy") === "pay") return 0;
   return r2(totalPurchase(p) - paidTotal(p));
+}
+
+export type BuySettlement = {
+  /** Effective cash paid = on-buy cashPaid + FIFO share of Payments-tab cash. */
+  cashPaid: number;
+  /** Effective bank paid = on-buy bankPaid + FIFO share of Payments-tab bank. */
+  bankPaid: number;
+  /** Cash portion of the deal still owed. */
+  cashDue: number;
+  /** Bill / invoice portion still owed. */
+  invDue: number;
+  /** cashDue + invDue. */
+  balance: number;
+};
+
+const fromKey = (p: Purchase) =>
+  (p.supplierId || "") + "\0" + (p.fromName || "").trim().toLowerCase();
+
+const ascDate = (a: Purchase, b: Purchase) =>
+  (dateSortKey(a.date) || "").localeCompare(dateSortKey(b.date) || "") ||
+  (a.createdAt || "").localeCompare(b.createdAt || "");
+
+/**
+ * Per-buy cash/invoice outstanding after applying Payments-tab pays FIFO
+ * (same supplier + from-account). Matches the dashboard KPI story on each register row.
+ */
+export function buySettlements(rows: Purchase[]): Map<string, BuySettlement> {
+  const groups = new Map<string, { buys: Purchase[]; pays: Purchase[] }>();
+  for (const raw of rows) {
+    const p = normalizePurchase(raw);
+    const k = fromKey(p);
+    let g = groups.get(k);
+    if (!g) {
+      g = { buys: [], pays: [] };
+      groups.set(k, g);
+    }
+    if (p.kind === "pay") g.pays.push(p);
+    else g.buys.push(p);
+  }
+  const out = new Map<string, BuySettlement>();
+  for (const g of groups.values()) {
+    g.buys.sort(ascDate);
+    g.pays.sort(ascDate);
+    let poolCash = 0;
+    let poolBank = 0;
+    for (const pay of g.pays) {
+      poolCash += +pay.cashPaid || 0;
+      poolBank += +pay.bankPaid || 0;
+    }
+    poolCash = r2(poolCash);
+    poolBank = r2(poolBank);
+    for (const buy of g.buys) {
+      let cPaid = +buy.cashPaid || 0;
+      let bPaid = +buy.bankPaid || 0;
+      const cashNeed = Math.max(0, cashAmount(buy) - cPaid);
+      const bankNeed = Math.max(0, (+buy.billAmount || 0) - bPaid);
+      const takeCash = Math.min(cashNeed, poolCash);
+      const takeBank = Math.min(bankNeed, poolBank);
+      poolCash = r2(poolCash - takeCash);
+      poolBank = r2(poolBank - takeBank);
+      cPaid = r2(cPaid + takeCash);
+      bPaid = r2(bPaid + takeBank);
+      const cashDue = r2(Math.max(0, cashAmount(buy) - cPaid));
+      const invDue = r2(Math.max(0, (+buy.billAmount || 0) - bPaid));
+      out.set(buy.id, {
+        cashPaid: cPaid,
+        bankPaid: bPaid,
+        cashDue,
+        invDue,
+        balance: r2(cashDue + invDue),
+      });
+    }
+  }
+  return out;
+}
+
+/** Fallback settlement when a buy isn't in the map (shouldn't happen for buys). */
+export function settlementOf(p: Purchase, map?: Map<string, BuySettlement>): BuySettlement {
+  const hit = map?.get(p.id);
+  if (hit) return hit;
+  const cPaid = +p.cashPaid || 0;
+  const bPaid = +p.bankPaid || 0;
+  const cashDue = r2(Math.max(0, cashAmount(p) - cPaid));
+  const invDue = r2(Math.max(0, (+p.billAmount || 0) - bPaid));
+  return {
+    cashPaid: cPaid,
+    bankPaid: bPaid,
+    cashDue,
+    invDue,
+    balance: r2(cashDue + invDue),
+  };
 }
 
 /** Normalize legacy rows (top paid / bill paid → cash / bank). */
@@ -142,6 +233,15 @@ export function purchaseTotals(rows: Purchase[]): PurchaseTotals {
     balance,
     count,
   };
+}
+
+/** Cash side outstanding from a totals rollup (deal cash − all cash paid). */
+export function cashBalOf(t: PurchaseTotals): number {
+  return r2((t.cashAmount || 0) - (t.cashPaid || 0));
+}
+/** Invoice / bank side outstanding from a totals rollup. */
+export function invBalOf(t: PurchaseTotals): number {
+  return r2((t.billAmount || 0) - (t.bankPaid || 0));
 }
 
 export async function allPurchases(): Promise<Purchase[]> {
