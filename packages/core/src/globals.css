@@ -1103,7 +1103,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .inv3a .i3-pnm{font-family:var(--disp); font-size:17px; font-weight:700; letter-spacing:.02em; margin-top:2px}
 .inv3a .i3-ln{font-size:11px; color:var(--i3-soft); line-height:1.55; margin-top:2px}
 .inv3a .i3-ln.i3-mono{font-size:10.5px; color:var(--i3-ink)}
-/* the classic wood CFT boxes — full width, stacked; blank lines kept short so sparse invoices stay tight */
+/* the classic wood CFT boxes — HALF page wide, two per row (single box leaves the right half empty) */
 .inv3a .i3-boxes{margin:10px var(--i3-pad) 0}
 .inv3a .i3-box + .i3-box{margin-top:8px}
 .inv3a .i3-box{border:1px solid var(--i3-hair); border-radius:7px; overflow:hidden; background:#FFFDF8}
@@ -1125,27 +1125,26 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .inv3a .i3-sl{font-size:11px; color:var(--i3-soft)}
 .inv3a .i3-cft{font-weight:700}
 .inv3a .i3-dim{font-weight:600}
-/* Rate · Total · Price — three even columns so the footer never looks skewed */
-.inv3a .i3-bfoot{display:grid; grid-template-columns:1fr 1fr 1fr; align-items:end; gap:12px;
-  background:var(--i3-bone); border-top:1.5px solid var(--i3-hair); padding:6px 12px}
-.inv3a .i3-bfoot .mid{text-align:center}
-.inv3a .i3-bfoot .tp{text-align:right}
+.inv3a .i3-bfoot{display:flex; justify-content:space-between; align-items:center; gap:18px;
+  background:var(--i3-bone); border-top:1.5px solid var(--i3-hair); padding:5px 10px}
 /* footer inside the table (quantity-only boxes): totals align under their columns */
 .inv3a .i3-btbl tfoot td{background:var(--i3-bone); border-top:1.5px solid var(--i3-hair); padding:5px 10px}
 .inv3a .i3-btbl tfoot .fl{display:block; font-size:8.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--i3-soft)}
 .inv3a .i3-btbl tfoot b{font-family:var(--mono); font-size:14px; font-weight:700}
+/* one clean baseline: Rate (right-aligned, LEFT of Total CFT) · Total CFT · Total Price */
 .inv3a .i3-btbl tfoot td{vertical-align:bottom}
-.inv3a .i3-btbl tfoot .ft-rate{text-align:left; padding-right:16px}
+.inv3a .i3-btbl tfoot .ft-rate{text-align:right; padding-right:16px}
 .inv3a .i3-btbl tfoot .ft-tail{text-align:right; padding-right:14px}
 .inv3a .i3-btbl tfoot .ft-tail b{font-size:16px; color:var(--i3-maroon)}
 .inv3a .i3-bfoot span{display:block; font-size:8.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--i3-soft)}
 .inv3a .i3-bfoot b{font-family:var(--mono); font-size:14px; font-weight:700}
+.inv3a .i3-bfoot .tp{text-align:right; margin-left:auto}
 .inv3a .i3-bfoot .tp b{font-size:16px; color:var(--i3-maroon)}
-/* totals sit right; words fill the left — keep them vertically balanced with the box */
-.inv3a .i3-totrow{display:flex; gap:18px; align-items:stretch; margin:10px var(--i3-pad) 0}
-.inv3a .i3-words{flex:1; padding:8px 0 0; font-size:11.5px; color:var(--i3-soft); line-height:1.7}
+/* totals sit right; the words are ONE slim line under them (no empty box) */
+.inv3a .i3-totrow{display:flex; gap:18px; align-items:flex-start; margin:10px var(--i3-pad) 0}
+.inv3a .i3-words{flex:1; padding-top:4px; font-size:11.5px; color:var(--i3-soft); line-height:1.7}
 .inv3a .i3-words b{color:var(--i3-ink); display:block; margin-top:2px; font-size:12px}
-.inv3a .i3-tots{border:1px solid var(--i3-hair); border-radius:7px; overflow:hidden; width:340px; flex:0 0 340px; align-self:flex-start}
+.inv3a .i3-tots{border:1px solid var(--i3-hair); border-radius:7px; overflow:hidden; width:340px; flex:0 0 340px}
 .inv3a .i3-trow{display:flex; justify-content:space-between; padding:4.5px 12px; font-size:12px; border-bottom:1px solid var(--i3-hair)}
 .inv3a .i3-trow .v{font-family:var(--mono); font-weight:700}
 .inv3a .i3-grand{background:var(--i3-maroon2); color:var(--i3-bone); display:flex; justify-content:space-between;
@@ -1158,7 +1157,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .inv3a .i3-bank .i3-mono{font-size:10.5px; font-weight:700}
 .inv3a .i3-terms ol{padding-left:14px}
 .inv3a .i3-terms li{font-size:10px; color:var(--i3-soft); line-height:1.6}
-.inv3a .i3-signs{display:flex; justify-content:space-between; align-items:flex-end; padding:18px var(--i3-pad) 14px; gap:24px}
+.inv3a .i3-signs{display:flex; justify-content:space-between; align-items:flex-end; padding:22px var(--i3-pad) 14px; gap:24px}
 /* ── density sacrifice order (letterhead NEVER shrinks) ─────────────────────
    c1 → Amount in Words + totals / Grand Total (first)
    c2 → wood Rate·CFT·Total Price footers, then line columns
