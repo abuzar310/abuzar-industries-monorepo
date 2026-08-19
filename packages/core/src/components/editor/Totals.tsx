@@ -14,11 +14,13 @@ interface Props {
   totalPcs?: number;
   /** this quote's recorded payments — printed under the final price when the toggle is on */
   payLines?: PartyStatement[];
+  /** ₹ held as “Advance for next quote” from this quotation — always prints when set */
+  advanceAmt?: number;
   onGst: (v: string) => void;
   onGstMode: (m: "percent" | "flat") => void;
 }
 
-export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, payLines, onGst, onGstMode }: Props) {
+export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, payLines, advanceAmt, onGst, onGstMode }: Props) {
   const { cloakMoney } = useApp();
   const isInv = doc.kind === "invoice";
   const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -29,6 +31,7 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
   const discAmt = hasFinal ? r2(grand - finalPrice) : 0;
   const hasDiscount = hasFinal && Math.abs(discAmt) > 0.5;
   const screenOnly = hasFinal && !printFinal ? " no-print" : "";
+  const advance = !isInv && (advanceAmt || 0) > 0.5 ? r2(advanceAmt!) : 0;
   // the settlement block: every payment + received + balance/settled — printed with the final price
   const pays = printFinal && payLines ? [...payLines].reverse() : []; // oldest first on paper
   const received = r2(pays.reduce((s, l) => s + l.amount, 0));
@@ -120,6 +123,13 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
         <div className={"t-row" + (printFinal ? " grand final-print" : " final-screen") + screenOnly}>
           <span className="lab">Final price</span>
           <span className="val">₹ {inr(finalPrice)}</span>
+        </div>
+      )}
+      {/* advance taken on this quote for the next one — always on the printed sheet */}
+      {advance > 0 && (
+        <div className="t-row advance">
+          <span className="lab">Advance</span>
+          <span className="val">₹ {inr(advance)}</span>
         </div>
       )}
       </div>

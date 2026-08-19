@@ -905,6 +905,21 @@ export default function Editor({
   };
   // this quote's recorded payments — printed as the settlement block when the toggle is on
   const payLines = !isInv ? statementsForQuote(doc, expenses) : undefined;
+  // ₹ held as “Advance for next quote” from this quotation (not applied as payment here)
+  const advanceAmt = !isInv
+    ? Math.round(
+        expenses
+          .filter(
+            (e) =>
+              e.type === "sale" &&
+              e.refQuoteId === doc.id &&
+              !e.sourceId &&
+              !e.charge &&
+              !!e.custId,
+          )
+          .reduce((s, e) => s + (+e.amount || 0), 0) * 100,
+      ) / 100
+    : 0;
   // what's still pending on this quote (final price if agreed, else the computed total)
   const remBalance = !isInv
     ? Math.max(
@@ -925,6 +940,7 @@ export default function Editor({
       totalCbm={totalCbm}
       totalPcs={totalPcs}
       payLines={payLines}
+      advanceAmt={advanceAmt}
       onGst={(v) => setField("gst", v)}
       onGstMode={(m) => setField("gstMode", m)}
     />
@@ -1371,6 +1387,7 @@ export default function Editor({
             totalCbm={totalCbm}
             totalPcs={totalPcs}
             payLines={payLines}
+            advanceAmt={advanceAmt}
             onGst={(v) => setField("gst", v)}
             onGstMode={(m) => setField("gstMode", m)}
           />
