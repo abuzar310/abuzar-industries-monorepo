@@ -1,7 +1,7 @@
 "use client";
 // The PRINTED tax invoice (design "3A · Woodmark"): TAX INVOICE centred on top,
 // logo-led woody letterhead, ticket chips, party boxes, the app's classic wood
-// CFT boxes (short blank ruled pad), maroon grand-total band, words strip, signatures.
+// CFT boxes (min 6 ruled rows), maroon grand-total band, words strip, signatures.
 // Print & Save-PDF ONLY — the on-screen editor keeps its own sheet; this node is
 // display:none on screen (.cd-print) and becomes the page on print / PDF render.
 import { forwardRef } from "react";
@@ -22,9 +22,9 @@ const UNIT: Record<string, string> = { cbm: "CBM", rft: "RFT", pcs: "Pcs" };
 const unitOf = (m?: string) => UNIT[m || ""] || "CFT";
 const measurerOf = (m?: string) =>
   m === "rft" ? rftOf : m === "direct" || m === "cbm" ? directOf : m === "pcs" ? pcsOf : cftOf;
-/** Blank ruled lines under real rows — enough for a ledger look, not a sea of empty lines.
- *  Cap: at most one blank past content; empty box still gets a short pad for handwriting. */
-const minRowsFor = (boxes: number) => (boxes <= 1 ? 3 : 2);
+/** ruled lines per box: one box gets the full 6-line ledger; more boxes shrink so
+ *  everything still holds ONE printed page (2 boxes → 4 lines, 3 → 3, 4+ → no padding) */
+const minRowsFor = (boxes: number) => (boxes <= 1 ? 6 : boxes === 2 ? 4 : boxes === 3 ? 3 : 1);
 
 function WoodBox({ sec, measure, minRows }: { sec: Section; measure: number; minRows: number }) {
   const bySize = !sec.calcMode || sec.calcMode === "cft";
@@ -34,8 +34,7 @@ function WoodBox({ sec, measure, minRows }: { sec: Section; measure: number; min
   const amount = amountOf(sec, measure);
   const totalPcs = rows.reduce((s, r) => s + (+r.pcs || 0), 0);
   const hasPcs = totalPcs > 0; // direct/CBM boxes drop the Pcs column when nothing uses it
-  const n =
-    rows.length === 0 ? minRows : Math.max(rows.length, Math.min(minRows, rows.length + 1));
+  const n = Math.max(rows.length, minRows);
   const cell = (r: Row | undefined, v: (r: Row) => string) => (r ? v(r) : "\u00A0");
   return (
     <div className="i3-box">
@@ -51,12 +50,13 @@ function WoodBox({ sec, measure, minRows }: { sec: Section; measure: number; min
             <col style={{ width: "16%" }} /><col style={{ width: "15%" }} /><col style={{ width: "30%" }} />
           </colgroup>
         ) : (
-          /* quantity ledger: # · measure · (optional pcs) — no dead spacer columns */
+          /* just a quantity: ruled line runs out, the figure sits at ~65%, price column closes the right */
           <colgroup>
-            <col style={{ width: "10%" }} />
-            {hasPcs && <col style={{ width: "20%" }} />}
-            <col style={{ width: hasPcs ? "35%" : "45%" }} />
-            <col style={{ width: hasPcs ? "35%" : "45%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: hasPcs ? "31%" : "46%" }} />
+            {hasPcs && <col style={{ width: "15%" }} />}
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "29%" }} />
           </colgroup>
         )}
         <thead>
@@ -67,10 +67,7 @@ function WoodBox({ sec, measure, minRows }: { sec: Section; measure: number; min
             </tr>
           ) : (
             <tr>
-              <th className="c">#</th>
-              {hasPcs && <th className="c">Pcs</th>}
-              <th className="c">{unit}</th>
-              <th className="r">&nbsp;</th>
+              <th className="c">#</th><th>&nbsp;</th>{hasPcs && <th className="c">Pcs</th>}<th className="c">{unit}</th><th>&nbsp;</th>
             </tr>
           )}
         </thead>
@@ -89,6 +86,7 @@ function WoodBox({ sec, measure, minRows }: { sec: Section; measure: number; min
             ) : (
               <tr key={i}>
                 <td className="c i3-sl">{i + 1}</td>
+                <td>&nbsp;</td>
                 {hasPcs && <td className="c i3-dim">{cell(r, (x) => String(x.pcs || "\u00A0"))}</td>}
                 <td className="c i3-cft">{cell(r, (x) => inr(measurer(x)))}</td>
                 <td>&nbsp;</td>
@@ -97,10 +95,11 @@ function WoodBox({ sec, measure, minRows }: { sec: Section; measure: number; min
           })}
         </tbody>
         {!bySize && (
-          /* footer INSIDE the table: Rate · Total under measure col · Price at the edge */
+          /* footer INSIDE the table: Total CFT exactly under the CFT column, rate beside, price at the edge */
           <tfoot>
             <tr>
-              <td colSpan={hasPcs ? 2 : 1} className="ft-rate">
+              {/* Rate sits LEFT of Total CFT; Total CFT stays under its column; price closes the row */}
+              <td colSpan={hasPcs ? 3 : 2} className="ft-rate">
                 <span className="fl">Rate ₹/{unit}</span><b>{inr(+sec.rate || 0)}</b>
               </td>
               <td className="c"><span className="fl">Total {unit}</span><b>{inr(measure)}</b></td>
@@ -113,8 +112,8 @@ function WoodBox({ sec, measure, minRows }: { sec: Section; measure: number; min
       </table>
       {bySize && (
         <div className="i3-bfoot">
+          <div><span>Total {unit}</span><b>{inr(measure)}</b></div>
           <div><span>Rate ₹/{unit}</span><b>{inr(+sec.rate || 0)}</b></div>
-          <div className="mid"><span>Total {unit}</span><b>{inr(measure)}</b></div>
           <div className="tp"><span>Total Price</span><b>₹ {inr(amount)}</b></div>
         </div>
       )}
