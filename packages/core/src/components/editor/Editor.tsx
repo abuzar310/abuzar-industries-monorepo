@@ -610,6 +610,19 @@ export default function Editor({
     commit(next, true);
   }
 
+  /** Typed new name → create/link customer so advances can sit on their account. */
+  async function ensureCustomer(): Promise<string | null> {
+    const cur = clone(docRef.current);
+    const name = (cur.customerName || "").trim();
+    if (!name) return null;
+    if (cur.customerId) return cur.customerId;
+    const cust = await upsertCustomerFromDoc(cur);
+    if (!cust?.id) return null;
+    commit(cur, true); // writes customerId onto the quotation
+    allRec<Customer>("customers").then(setCustomers);
+    return cust.id;
+  }
+
   // ---- actions ----
   async function onSaveClick() {
     await saveNow();
@@ -1536,6 +1549,7 @@ export default function Editor({
           onClearAll={onClearPayments}
           reload={loadExpenses}
           highlightId={payFocus}
+          ensureCustomer={ensureCustomer}
         />
       )}
 

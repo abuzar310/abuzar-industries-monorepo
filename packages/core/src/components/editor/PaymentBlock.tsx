@@ -47,9 +47,14 @@ interface Props {
   reload: () => void;
   /** payment line to scroll to + flash on open (arriving from a Statements click) */
   highlightId?: string;
+  /**
+   * Ensure the typed customer name is a real customer record (creates if new).
+   * Returns customerId, or null if there's no name to use.
+   */
+  ensureCustomer: () => Promise<string | null>;
 }
 
-export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, isOwner, onFinalPrice, onShowFinalOnPrint, setAggregates, onClearAll, reload, highlightId }: Props) {
+export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, isOwner, onFinalPrice, onShowFinalOnPrint, setAggregates, onClearAll, reload, highlightId, ensureCustomer }: Props) {
   const [amt, setAmt] = useState("");
   const [mode, setMode] = useState<"cash" | "owner" | "upi" | "uowner">("cash");
   const [acct, setAcct] = useState("");
@@ -80,10 +85,21 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     return () => clearTimeout(t);
   }, [highlightId, hasLine]);
 
+  async function resolveCustId(): Promise<string | null> {
+    const id = await ensureCustomer();
+    if (!id) {
+      toast("Enter a customer name first — advance sits on their account");
+      return null;
+    }
+    return id;
+  }
+
   async function applyAdv() {
-    if (!doc.customerId) return toast("Pick a customer on this quotation first");
+    const custId = await resolveCustId();
+    if (!custId) return;
     const firstPay = (doc.payCash || 0) + (doc.payUpi || 0) <= 0.005;
-    const r = await applyAdvancesToQuote(doc);
+    // apply against a doc copy that has the resolved customerId (typed-new names)
+    const r = await applyAdvancesToQuote({ ...doc, customerId: custId });
     if (r.applied <= 0) return toast("Nothing to apply — this quote may already be settled");
     setAggregates(r.payCash, r.payUpi);
     reload();
@@ -104,16 +120,17 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
 
     // Advance for next quote — sits on the customer account; does NOT pay this quotation.
     if (forNext && !editId) {
-      if (!doc.customerId) return toast("Pick a customer on this quotation first — advance sits on their account");
+      const custId = await resolveCustId();
+      if (!custId) return;
       await addExpense({
         type: "sale",
         amount: a,
         mode: isUpiMode ? "upi" : "cash",
         account: mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "",
         toOwner,
-        custId: doc.customerId,
+        custId,
         refQuoteId: doc.id,
-        note: doc.customerName || "Walk-in",
+        note: (doc.customerName || "").trim() || "Walk-in",
         label: note.trim() || "Advance for next quote",
         date: payDate ? toDmy(payDate) : undefined,
         enteredBy: by,
