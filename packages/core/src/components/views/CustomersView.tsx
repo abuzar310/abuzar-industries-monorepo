@@ -16,7 +16,13 @@ import type { Customer, Doc, Expense } from "@/lib/types";
 function applySearch(list: Customer[], q: string) {
   q = (q || "").trim().toLowerCase();
   if (!q) return list;
-  return list.filter((c) => [c.name, c.phone, c.site].some((v) => String(v || "").toLowerCase().includes(q)));
+  return list.filter((c) =>
+    [c.name, c.phone, c.site, c.sitePhone, c.siteVillage, c.siteCity].some((v) =>
+      String(v || "")
+        .toLowerCase()
+        .includes(q),
+    ),
+  );
 }
 
 export default function CustomersView() {
@@ -118,7 +124,15 @@ export default function CustomersView() {
                 <h3>{c.name}</h3>
                 <div className="ph">{c.phone || "—"}</div>
                 <div className="meta2">
-                  {c.site && <>Carpenter: {c.site}{c.sitePhone ? " · " + c.sitePhone : ""}<br /></>}
+                  {c.site && (
+                    <>
+                      Carpenter: {c.site}
+                      {c.sitePhone ? " · " + c.sitePhone : ""}
+                      {(c.siteVillage || c.siteCity) &&
+                        " · " + [c.siteVillage, c.siteCity].filter(Boolean).join(", ")}
+                      <br />
+                    </>
+                  )}
                   <b>{f.quoteCount}</b> quote{f.quoteCount === 1 ? "" : "s"}
                   {invoiceMode && (
                     <> · <b>{f.invoiceCount}</b> invoice{f.invoiceCount === 1 ? "" : "s"}</>

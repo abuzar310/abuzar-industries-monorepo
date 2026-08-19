@@ -96,6 +96,8 @@ export async function saveCustomer(fields: {
   phone?: string;
   site?: string;
   sitePhone?: string;
+  siteVillage?: string;
+  siteCity?: string;
   address?: string;
   pincode?: string;
   gstin?: string;
@@ -109,6 +111,8 @@ export async function saveCustomer(fields: {
   cust.phone = (fields.phone || "").trim();
   cust.site = (fields.site || "").trim();
   cust.sitePhone = (fields.sitePhone || "").trim();
+  cust.siteVillage = (fields.siteVillage || "").trim();
+  cust.siteCity = (fields.siteCity || "").trim();
   cust.address = (fields.address || "").trim();
   cust.pincode = (fields.pincode || "").trim().replace(/\D/g, "").slice(0, 6);
   cust.gstin = (fields.gstin || "").trim().toUpperCase();
