@@ -144,6 +144,10 @@ export interface Customer {
   site: string;
   /** Carpenter phone (optional). */
   sitePhone?: string;
+  /** Carpenter village (optional). */
+  siteVillage?: string;
+  /** Carpenter city (optional). */
+  siteCity?: string;
   address: string;
   notes: string;
   /** GSTIN — used when the customer is treated as a debtor in the Ledger. */
@@ -188,7 +192,9 @@ export type StoreName =
   | "attendance"
   | "activity"
   | "purchases"
-  | "websiteQuotations";
+  | "websiteQuotations"
+  | "carpenters"
+  | "chat";
 
 /** Landing-site timber quote submission — isolated until Import to Quotation. */
 export interface WebsiteQuoteRow {
@@ -226,6 +232,18 @@ export interface WebsiteQuotation {
   updatedAt: string;
 }
 
+/** Standalone carpenter contact (Cut Size) — not a customer / ledger party. */
+export interface Carpenter {
+  id: string;
+  name: string;
+  phone: string;
+  village?: string;
+  city?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 /**
  * Unofficial Buys entry.
  * - kind "buy": timber-in purchase row (agent + from-account)
@@ -256,6 +274,11 @@ export interface Purchase {
   cashPaid: number;
   /** money paid by bank transfer */
   bankPaid: number;
+  /**
+   * On kind "pay": optional purchase (buy) this payment is against.
+   * Empty = apply FIFO across that supplier + from-account (legacy).
+   */
+  purchaseId?: string;
   /** dd-mm-yy of payment (optional) */
   payDate: string;
   /** dd-mm-yy — ping owner on/after this date (Buys reminder) */
@@ -300,8 +323,8 @@ export interface Tab {
   label: string;
   href: string;
   icon?: string;
-  /** true = Daybook unseen; "buys" = due purchase reminders; "website" = pending site quotes */
-  badge?: boolean | "buys" | "website";
+  /** true = Daybook unseen; "buys" = due reminders; "website" = pending site quotes; "chat" = unread */
+  badge?: boolean | "buys" | "website" | "chat";
   owner?: boolean;
 }
 
@@ -311,6 +334,16 @@ export interface LocalUser {
   id: string;
   name: string;
   role: Role;
+}
+
+/** One line in the owner-manager in-app chat (synced like other records). */
+export interface ChatMsg {
+  id: string;
+  fromId: string;
+  fromName: string;
+  fromRole: Role;
+  text: string;
+  createdAt: string;
 }
 
 // ---- daybook / expenses ----

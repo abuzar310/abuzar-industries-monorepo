@@ -24,10 +24,132 @@ export function paidTotal(p: Pick<Purchase, "cashPaid" | "bankPaid" | "topPaid" 
   return r2(cash + bank);
 }
 
-/** Outstanding = total purchase − cash paid − bank paid. */
+/** Outstanding on the buy alone (ignores Payments-tab rows — prefer buySettlements). */
 export function rowBalance(p: Purchase): number {
   if ((p.kind || "buy") === "pay") return 0;
   return r2(totalPurchase(p) - paidTotal(p));
+}
+
+export type BuySettlement = {
+  /** Effective cash paid = on-buy cashPaid + FIFO share of Payments-tab cash. */
+  cashPaid: number;
+  /** Effective bank paid = on-buy bankPaid + FIFO share of Payments-tab bank. */
+  bankPaid: number;
+  /** Cash portion of the deal still owed. */
+  cashDue: number;
+  /** Bill / invoice portion still owed. */
+  invDue: number;
+  /** cashDue + invDue. */
+  balance: number;
+};
+
+const fromKey = (p: Purchase) =>
+  (p.supplierId || "") + "\0" + (p.fromName || "").trim().toLowerCase();
+
+const ascDate = (a: Purchase, b: Purchase) =>
+  (dateSortKey(a.date) || "").localeCompare(dateSortKey(b.date) || "") ||
+  (a.createdAt || "").localeCompare(b.createdAt || "");
+
+/**
+ * Per-buy cash/invoice outstanding after applying Payments-tab pays.
+ * Pays with `purchaseId` hit that buy first; leftover + untargeted pays FIFO
+ * by date within the same supplier + from-account.
+ */
+export function buySettlements(rows: Purchase[]): Map<string, BuySettlement> {
+  const buys: Purchase[] = [];
+  const pays: Purchase[] = [];
+  for (const raw of rows) {
+    const p = normalizePurchase(raw);
+    if (p.kind === "pay") pays.push(p);
+    else buys.push(p);
+  }
+  buys.sort(ascDate);
+  pays.sort(ascDate);
+
+  const out = new Map<string, BuySettlement>();
+  for (const buy of buys) {
+    const cPaid = +buy.cashPaid || 0;
+    const bPaid = +buy.bankPaid || 0;
+    out.set(buy.id, {
+      cashPaid: cPaid,
+      bankPaid: bPaid,
+      cashDue: r2(Math.max(0, cashAmount(buy) - cPaid)),
+      invDue: r2(Math.max(0, (+buy.billAmount || 0) - bPaid)),
+      balance: 0,
+    });
+  }
+
+  const applyOnto = (s: BuySettlement, cash: number, bank: number) => {
+    const takeCash = Math.min(s.cashDue, Math.max(0, cash));
+    const takeBank = Math.min(s.invDue, Math.max(0, bank));
+    s.cashPaid = r2(s.cashPaid + takeCash);
+    s.bankPaid = r2(s.bankPaid + takeBank);
+    s.cashDue = r2(s.cashDue - takeCash);
+    s.invDue = r2(s.invDue - takeBank);
+    return { usedCash: takeCash, usedBank: takeBank };
+  };
+
+  // Spill pools per supplier+from for money not absorbed by a targeted invoice
+  const pools = new Map<string, { cash: number; bank: number }>();
+  const addPool = (k: string, cash: number, bank: number) => {
+    const cur = pools.get(k) || { cash: 0, bank: 0 };
+    cur.cash = r2(cur.cash + cash);
+    cur.bank = r2(cur.bank + bank);
+    pools.set(k, cur);
+  };
+
+  for (const pay of pays) {
+    const cash = +pay.cashPaid || 0;
+    const bank = +pay.bankPaid || 0;
+    const targetId = (pay.purchaseId || "").trim();
+    const k = fromKey(pay);
+    if (targetId && out.has(targetId)) {
+      const { usedCash, usedBank } = applyOnto(out.get(targetId)!, cash, bank);
+      addPool(k, cash - usedCash, bank - usedBank);
+    } else {
+      addPool(k, cash, bank);
+    }
+  }
+
+  // FIFO untargeted / spill onto buys in each from-account group
+  const byGroup = new Map<string, Purchase[]>();
+  for (const buy of buys) {
+    const k = fromKey(buy);
+    const list = byGroup.get(k) || [];
+    list.push(buy);
+    byGroup.set(k, list);
+  }
+  for (const [k, list] of byGroup) {
+    const pool = pools.get(k) || { cash: 0, bank: 0 };
+    for (const buy of list) {
+      const s = out.get(buy.id)!;
+      const { usedCash, usedBank } = applyOnto(s, pool.cash, pool.bank);
+      pool.cash = r2(pool.cash - usedCash);
+      pool.bank = r2(pool.bank - usedBank);
+    }
+  }
+
+  for (const s of out.values()) {
+    s.balance = r2(s.cashDue + s.invDue);
+  }
+  return out;
+}
+
+/** Fallback settlement when a buy isn't in the map (shouldn't happen for buys). */
+export function settlementOf(p: Purchase, map?: Map<string, BuySettlement>): BuySettlement {
+  const hit = map?.get(p.id);
+  if (hit) return hit;
+  const cPaid = +p.cashPaid || 0;
+  const bPaid = +p.bankPaid || 0;
+  const cashDue = r2(Math.max(0, cashAmount(p) - cPaid));
+  const invDue = r2(Math.max(0, (+p.billAmount || 0) - bPaid));
+  return {
+    cashPaid: cPaid,
+    bankPaid: bPaid,
+    cashDue,
+    invDue,
+    balance: r2(cashDue + invDue),
+  };
 }
 
 /** Normalize legacy rows (top paid / bill paid → cash / bank). */
@@ -50,6 +172,7 @@ export function normalizePurchase(raw: Purchase): Purchase {
     billAmount,
     cashPaid,
     bankPaid,
+    purchaseId: (raw.purchaseId || "").trim() || undefined,
     payDate: raw.payDate || raw.billPayDate || "",
     remindAt: (raw.remindAt || "").trim(),
     note: raw.note || "",
@@ -144,6 +267,15 @@ export function purchaseTotals(rows: Purchase[]): PurchaseTotals {
   };
 }
 
+/** Cash side outstanding from a totals rollup (deal cash − all cash paid). */
+export function cashBalOf(t: PurchaseTotals): number {
+  return r2((t.cashAmount || 0) - (t.cashPaid || 0));
+}
+/** Invoice / bank side outstanding from a totals rollup. */
+export function invBalOf(t: PurchaseTotals): number {
+  return r2((t.billAmount || 0) - (t.bankPaid || 0));
+}
+
 export async function allPurchases(): Promise<Purchase[]> {
   const arr = (await allRec<Purchase>("purchases")).map(normalizePurchase);
   arr.sort(
@@ -170,6 +302,8 @@ export type PurchaseFields = {
   note?: string;
   cashPaid?: number | string;
   bankPaid?: number | string;
+  /** kind "pay": buy id this payment is against (optional) */
+  purchaseId?: string;
   payDate?: string;
   remindAt?: string;
 };
@@ -214,6 +348,7 @@ export async function savePurchase(fields: PurchaseFields): Promise<Purchase> {
       note: "",
       cashPaid: 0,
       bankPaid: 0,
+      purchaseId: undefined,
       payDate: "",
       remindAt: "",
       createdAt: nowIso(),
@@ -234,6 +369,11 @@ export async function savePurchase(fields: PurchaseFields): Promise<Purchase> {
   p.note = (fields.note || "").trim();
   p.cashPaid = r2(numOrEmpty(fields.cashPaid));
   p.bankPaid = r2(numOrEmpty(fields.bankPaid));
+  if (kind === "pay") {
+    p.purchaseId = (fields.purchaseId !== undefined ? fields.purchaseId : p.purchaseId || "").trim() || undefined;
+  } else {
+    p.purchaseId = undefined;
+  }
   p.payDate = (fields.payDate || "").trim();
   if (fields.remindAt !== undefined) p.remindAt = (fields.remindAt || "").trim();
   // clear legacy so normalize prefers new fields

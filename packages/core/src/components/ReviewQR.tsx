@@ -9,14 +9,22 @@ export default function ReviewQR({
   url,
   label = "Rate us on Google",
   className = "",
+  darkColor = "#1a1410",
+  lightColor = "#ffffff",
+  asLink = true,
 }: {
   size?: number;
-  /** Override brand.reviewUrl (e.g. landing page). */
+  /** Override brand review URL (e.g. funnel deep-link). */
   url?: string;
   label?: string;
   className?: string;
+  darkColor?: string;
+  lightColor?: string;
+  asLink?: boolean;
 }) {
-  const href = (url || activeBrand().reviewUrl || "").trim();
+  const brand = activeBrand();
+  // Sheet QR prefers the review funnel; WhatsApp still uses reviewUrl separately.
+  const href = (url || brand.reviewFunnelUrl || brand.reviewUrl || "").trim();
   const [src, setSrc] = useState("");
 
   useEffect(() => {
@@ -28,7 +36,7 @@ export default function ReviewQR({
     QRCode.toDataURL(href, {
       width: size * 2,
       margin: 1,
-      color: { dark: "#1a1410", light: "#ffffff" },
+      color: { dark: darkColor, light: lightColor },
       errorCorrectionLevel: "M",
     })
       .then((data) => {
@@ -40,9 +48,23 @@ export default function ReviewQR({
     return () => {
       cancelled = true;
     };
-  }, [href, size]);
+  }, [href, size, darkColor, lightColor]);
 
   if (!href || !src) return null;
+
+  const img = (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt={label || "Google review QR"} width={size} height={size} />
+  );
+
+  if (!asLink) {
+    return (
+      <div className={"review-qr" + (className ? " " + className : "")} title={label || "Rate us on Google"}>
+        {img}
+        {label ? <span className="review-qr-label">{label}</span> : null}
+      </div>
+    );
+  }
 
   return (
     <a
@@ -50,11 +72,10 @@ export default function ReviewQR({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      title={label}
+      title={label || "Rate us on Google"}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={label} width={size} height={size} />
-      <span className="review-qr-label">{label}</span>
+      {img}
+      {label ? <span className="review-qr-label">{label}</span> : null}
     </a>
   );
 }

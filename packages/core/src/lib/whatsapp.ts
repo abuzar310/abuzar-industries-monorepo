@@ -13,10 +13,11 @@ export function waLink(phone: string, text: string): string {
 /** Neutral, professional greeting with the customer's name. */
 const greet = (name?: string) => `Dear ${(name || "").trim() || "Customer"},`;
 
-/** "Rate us on Google" footer — only for brands with a review page configured. */
+/** Review funnel footer — prefer flyer URL (?go=1 → thank-you → Google); fall back to Maps. */
 function reviewFooter(): string {
-  const url = activeBrand().reviewUrl;
-  return url ? `\n\nLoved our service? Please rate us on Google ⭐\n${url}` : "";
+  const b = activeBrand();
+  const url = (b.reviewFunnelUrl || b.reviewUrl || "").trim();
+  return url ? `\n\nLoved our service? Please rate us ⭐\n${url}` : "";
 }
 
 export function quoteMessage(doc: Doc): string {
@@ -61,7 +62,7 @@ export function reminderMessage(doc: Doc): string {
   const b = activeBrand();
   return `${greet(doc.customerName)}
 This is ${b.name}.
-Regarding your timber enquiry and quotation ${doc.number}, we wanted to follow up. Please let us know if you would like to proceed. Thank you.`;
+Regarding your timber enquiry and quotation ${doc.number}, we wanted to follow up. Please let us know if you would like to proceed. Thank you.${reviewFooter()}`;
 }
 
 /** Standard automated company reminder — just the balance from the total. No dates, no notes. */
@@ -86,11 +87,11 @@ Thank you.`;
   return `Hello ${who},
 This is an automated payment reminder from ${from}.
 Your balance pending${ref ? " for " + ref : ""} is ₹${inr(balance)} (from a total of ₹${inr(total)}).
-Thank you.`;
+Thank you.${reviewFooter()}`;
 }
 
 export function customerFollowupMessage(name: string): string {
-  return `${greet(name)}\nThis is ${activeBrand().name}. Following up on your timber enquiry — please let us know if you would like to proceed. Thank you.`;
+  return `${greet(name)}\nThis is ${activeBrand().name}. Following up on your timber enquiry — please let us know if you would like to proceed. Thank you.${reviewFooter()}`;
 }
 
 /**

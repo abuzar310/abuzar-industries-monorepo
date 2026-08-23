@@ -4,8 +4,29 @@
 // Loaded dynamically so it stays out of the server bundle.
 import { toast } from "@/store/app-store";
 
-export async function generatePdf(sheet: HTMLElement, fileBase: string) {
-  const pdf = await renderPdf(sheet);
+/** Optional capture tuning. Without these, generatePdf behaves exactly as before
+ *  (blind fixed-height A4 slicing) — so invoices/quotes and the report sheets are
+ *  unchanged. Pass `pageBreak` to slice pages only BETWEEN whole cards/rows so the
+ *  premium card UI never gets cut mid-card. */
+export interface PdfOpts {
+  /** CSS selector for the atomic blocks (cards, table rows) that must not be split across a page break. */
+  pageBreak?: string;
+  /** Force the capture width in px — pins responsive grids to their desktop columns.
+   *  Card/dashboard captures are capped (~700px) so type stays readable on A4. */
+  width?: number;
+  /** A dated header prepended to the PDF (e.g. the report title / supplier name). */
+  title?: string;
+  /** Printable inset on each A4 page in mm (0 = edge-to-edge, default). Suppliers PDFs use ~8. */
+  marginMm?: number;
+}
+
+/** Card/dashboard captures wider than this make body text too small on A4. */
+const CARD_CAPTURE_MAX = 700;
+/** Absorb trailing padding stubs smaller than this (canvas px) instead of emitting a blank page. */
+const TRAILING_STUB_PX = 48;
+
+export async function generatePdf(sheet: HTMLElement, fileBase: string, opts?: PdfOpts) {
+  const pdf = await renderPdf(sheet, opts);
   pdf.save((fileBase || "document") + ".pdf");
 }
 
@@ -57,13 +78,13 @@ export async function printOrSavePdf(
 
 /** The document as a shareable File — used to attach the PDF straight into WhatsApp
  *  via the system share sheet (navigator.share), instead of download-then-attach. */
-export async function generatePdfFile(sheet: HTMLElement, fileBase: string): Promise<File> {
-  const pdf = await renderPdf(sheet);
+export async function generatePdfFile(sheet: HTMLElement, fileBase: string, opts?: PdfOpts): Promise<File> {
+  const pdf = await renderPdf(sheet, opts);
   const blob = pdf.output("blob");
   return new File([blob], (fileBase || "document") + ".pdf", { type: "application/pdf" });
 }
 
-async function renderPdf(sheet: HTMLElement) {
+async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
   const [{ jsPDF }, h2c] = await Promise.all([import("jspdf"), import("html2canvas")]);
   const html2canvas = h2c.default;
 
@@ -97,11 +118,42 @@ async function renderPdf(sheet: HTMLElement) {
     freeze(s, s.options[s.selectedIndex]?.text || "");
   });
 
-  const width = Math.max(sheet.scrollWidth, 880);
+  // Card/dashboard captures: keep width modest so body text lands ~10–12pt on A4.
+  // Invoice/quote sheets (no pageBreak) keep the wider natural layout.
+  let width = opts?.width || Math.max(sheet.scrollWidth, 880);
+  if (opts?.pageBreak) width = Math.min(width, CARD_CAPTURE_MAX);
+
   clone.style.width = width + "px";
   clone.style.background = "#FAF6EF";
   // print-only nodes (.cd-print) are display:none on screen — the clone must lay out
   clone.style.display = "block";
+  // Card UI (Suppliers Register/Payments, Books…): medium type — large enough after A4
+  // downscale, not the oversized 18px bump. Also darken muted inks so labels on cream /
+  // brown washes (KPI cards, table headers) stay readable in the JPEG capture.
+  if (opts?.pageBreak) {
+    clone.style.fontSize = "14px";
+    clone.style.lineHeight = "1.4";
+    clone.style.setProperty("--ink-faint", "#5c4e3c");
+    clone.style.setProperty("--ink-soft", "#3f3428");
+  }
+  // Dated header so the PDF carries a title/branding (the on-screen topnav is never captured).
+  // Hex colours only — html2canvas does not reliably resolve CSS variables.
+  if (opts?.title) {
+    const brand = document.createElement("div");
+    brand.style.cssText = "padding:0 0 12px;margin:0 0 14px;border-bottom:2px solid #e2d6c2";
+    const bt = document.createElement("div");
+    bt.textContent = opts.title;
+    bt.style.cssText =
+      "font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:600;color:#2a2118;letter-spacing:-.015em";
+    const bs = document.createElement("div");
+    bs.textContent =
+      "as of " + new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    bs.style.cssText =
+      "font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#5c4e3c;margin-top:4px";
+    brand.appendChild(bt);
+    brand.appendChild(bs);
+    clone.insertBefore(brand, clone.firstChild);
+  }
   // off-screen but fully laid out so html2canvas can measure & render it
   const holder = document.createElement("div");
   holder.style.cssText = "position:fixed;left:-10000px;top:0;width:" + width + "px;background:#FAF6EF";
@@ -112,11 +164,11 @@ async function renderPdf(sheet: HTMLElement) {
     const a4h = (width * 297) / 210;
     if (clone.scrollHeight > a4h + 4) clone.classList.add("inv-tight");
   }
-  // quote: lock to one A4 with the .a4fill layout — rows stay a fixed 1.7cm (never taller)
-  // (same as the browser print — see #sheet.sq.a4fill in globals.css)
+  // quote: lock to one A4 with the .a4fill layout — rows stay compact (see #sheet.sq.a4fill).
+  // Use ~272mm worth of height (not full 297) so float rounding + QR/footer never tip a
+  // one-page capture into a blank second PDF page.
   if (clone.classList.contains("sq")) {
-    const a4h = (width * 297) / 210;
-    // fits one page → lock its height; taller than a page → leave it for the multi-page slicer
+    const a4h = (width * 272) / 210;
     if (clone.scrollHeight <= a4h + 4) {
       clone.classList.add("a4fill");
       clone.style.height = a4h + "px";
@@ -131,22 +183,128 @@ async function renderPdf(sheet: HTMLElement) {
       logging: false,
       windowWidth: width,
     });
-    const img = canvas.toDataURL("image/jpeg", 0.92);
+    // Slightly higher quality on card PDFs so muted labels on brown washes stay sharp.
+    const img = canvas.toDataURL("image/jpeg", opts?.pageBreak ? 0.96 : 0.92);
     const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
     const pageW = 210;
     const pageH = 297;
-    const imgH = (canvas.height * pageW) / canvas.width; // full image height in mm
+    // Optional printable inset (Suppliers PDFs). Default 0 keeps invoices/quotes edge-to-edge.
+    const margin = Math.max(0, Math.min(40, opts?.marginMm ?? 0));
+    const contentW = pageW - 2 * margin;
+    const contentH = pageH - 2 * margin;
+    const imgH = (canvas.height * contentW) / canvas.width; // full image height in mm
 
-    // Place the single tall image once per page, shifting it up by one page each time.
-    let heightLeft = imgH;
-    let position = 0;
-    pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
-    heightLeft -= pageH;
-    while (heightLeft > 0.5) {
-      position -= pageH;
-      pdf.addPage();
-      pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
-      heightLeft -= pageH;
+    // Short captures (one supplier card, a thin books tab) — one page, no trailing blank.
+    if (imgH <= contentH + 0.8) {
+      pdf.addImage(img, "JPEG", margin, margin, contentW, imgH);
+      return pdf;
+    }
+
+    // Card-aware pagination: slice ONLY between whole cards/rows so nothing is cut
+    // mid-card. html2canvas ignores CSS break-inside, so we compute the safe cut
+    // lines ourselves from the laid-out clone. Falls back to blind slicing when no
+    // page-break selector is given (invoices, quotes, the report sheets).
+    // Usable page height accounts for margin so cards don’t get clipped by the inset.
+    // Keep a 2mm safety so the last line of a packed row isn’t clipped by rounding.
+    const pagePx = Math.max(1, Math.floor(canvas.width * ((contentH - 2) / contentW)));
+    type BreakUnit = { top: number; bottom: number };
+    let units: BreakUnit[] = [];
+    if (opts?.pageBreak) {
+      const cr = clone.getBoundingClientRect();
+      const ratio = cr.height > 0 ? canvas.height / cr.height : 1;
+      units = Array.from(clone.querySelectorAll(opts.pageBreak))
+        .map((u) => {
+          const r = u.getBoundingClientRect();
+          return {
+            top: Math.round((r.top - cr.top) * ratio),
+            bottom: Math.round((r.bottom - cr.top) * ratio),
+          };
+        })
+        .filter((u) => u.bottom > u.top + 1 && u.bottom < canvas.height)
+        .sort((a, b) => a.top - b.top || a.bottom - b.bottom);
+      // Drop outer wrappers that strictly contain other units (e.g. .buys-card around rows)
+      units = units.filter(
+        (u, i) =>
+          !units.some(
+            (o, j) =>
+              j !== i && o.top >= u.top && o.bottom <= u.bottom && (o.top > u.top || o.bottom < u.bottom),
+          ),
+      );
+    }
+
+    if (units.length) {
+      // Pack whole units per page. Never start a unit unless it finishes on this page
+      // (unless the unit itself is taller than one page — then hard-slice).
+      const pageCanvas = document.createElement("canvas");
+      const pctx = pageCanvas.getContext("2d")!;
+      let start = 0;
+      let first = true;
+      let guard = 0;
+      while (start < canvas.height - 0.5 && guard++ < 500) {
+        const limit = start + pagePx;
+        let cut = start;
+
+        if (canvas.height <= limit + 0.5) {
+          cut = canvas.height;
+        } else {
+          // Include every whole unit that starts at/after `start` and ends by `limit`.
+          for (const u of units) {
+            if (u.bottom <= start + 1) continue;
+            // Continuation of a unit taller than one page (started earlier via hard-slice)
+            if (u.top < start - 1) {
+              cut = u.bottom <= limit ? u.bottom : limit;
+              break;
+            }
+            if (u.bottom <= limit) {
+              cut = u.bottom;
+              continue;
+            }
+            // This unit does not fit. Keep prior units; push it to the next page.
+            if (cut > start) break;
+            // Nothing packed yet and unit taller than the page → unavoidable hard-slice.
+            cut = limit;
+            break;
+          }
+          if (cut <= start) cut = Math.min(canvas.height, limit);
+          // No further break units → absorb footer/padding on this page if it fits
+          else if (!units.some((u) => u.bottom > cut + 1) && canvas.height <= limit + TRAILING_STUB_PX) {
+            cut = canvas.height;
+          } else if (canvas.height - cut < TRAILING_STUB_PX) {
+            cut = canvas.height;
+          }
+        }
+
+        const startPx = Math.round(start);
+        const cutPx = Math.min(canvas.height, Math.max(startPx + 1, Math.round(cut)));
+        const sliceH = cutPx - startPx;
+        // Skip near-empty trailing slices (blank page guard)
+        if (sliceH < TRAILING_STUB_PX && startPx > 0) break;
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceH;
+        pctx.fillStyle = "#FAF6EF";
+        pctx.fillRect(0, 0, canvas.width, sliceH);
+        pctx.drawImage(canvas, 0, startPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        const pageImg = pageCanvas.toDataURL("image/jpeg", 0.92);
+        const hmm = Math.min((sliceH * contentW) / canvas.width, contentH);
+        if (!first) pdf.addPage();
+        pdf.addImage(pageImg, "JPEG", margin, margin, contentW, hmm);
+        start = cutPx;
+        first = false;
+      }
+    } else {
+      // Place the single tall image once per page, shifting it up by one content area each time.
+      // Ignore a trailing stub (< ~2mm) — that was producing an empty page 2 on quotes/PDFs.
+      const STUB_MM = 2;
+      let heightLeft = imgH;
+      let position = margin;
+      pdf.addImage(img, "JPEG", margin, position, contentW, imgH);
+      heightLeft -= contentH;
+      while (heightLeft > STUB_MM) {
+        position -= contentH;
+        pdf.addPage();
+        pdf.addImage(img, "JPEG", margin, position, contentW, imgH);
+        heightLeft -= contentH;
+      }
     }
     return pdf;
   } finally {

@@ -44,7 +44,11 @@ declare
     -- unofficial Buys: timber-in purchase ledger rows (from-name / bill / cft)
     'purchases',
     -- landing-site quote submissions (isolated until Import to Quotation)
-    'website_quotations'
+    'website_quotations',
+    -- standalone carpenter contacts (Cut Size; not tied to a customer)
+    'carpenters',
+    -- owner <-> manager in-app chat
+    'chat'
   ];
 begin
   foreach sch in array array['official', 'unofficial'] loop

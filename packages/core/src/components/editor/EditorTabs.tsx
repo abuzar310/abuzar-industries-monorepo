@@ -70,7 +70,7 @@ export default function EditorTabs({ routeId }: { routeId: string }) {
 
   if (!tabs.length) {
     return (
-      <div className="editor-tabs">
+      <div className="editor-tabs no-print">
         <button type="button" className="etab-new" title="New comparison tab" onClick={onNewTemp}>
           +
         </button>
@@ -79,7 +79,7 @@ export default function EditorTabs({ routeId }: { routeId: string }) {
   }
 
   return (
-    <div className="editor-tabs">
+    <div className="editor-tabs no-print">
       {tabs.map((t) => (
         <div
           key={t.id}

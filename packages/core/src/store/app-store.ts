@@ -23,7 +23,9 @@ export interface AppState {
   buysDue: number;
   /** Pending website quotation submissions (landing → app) */
   websitePending: number;
-  /** unofficial owner panic: blank money/rates app-wide (cloud meta — syncs all devices) */
+  /** unread owner-manager chat messages */
+  chatUnseen: number;
+  /** unofficial panic cloak (owner/manager): blank money/rates app-wide (cloud meta — syncs all devices) */
   cloakMoney: boolean;
 }
 
@@ -38,6 +40,7 @@ let state: AppState = {
   unseen: 0,
   buysDue: 0,
   websitePending: 0,
+  chatUnseen: 0,
   cloakMoney: false,
 };
 
@@ -65,6 +68,7 @@ export const setBrandMode = (brandMode: BrandMode) => set({ brandMode });
 export const setUnseen = (unseen: number) => set({ unseen });
 export const setBuysDue = (buysDue: number) => set({ buysDue });
 export const setWebsitePending = (websitePending: number) => set({ websitePending });
+export const setChatUnseen = (chatUnseen: number) => set({ chatUnseen });
 export const setCloakMoney = (cloakMoney: boolean) => set({ cloakMoney });
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;

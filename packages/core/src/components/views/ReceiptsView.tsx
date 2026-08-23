@@ -77,6 +77,10 @@ export default function ReceiptsView() {
   const [note, setNote] = useState("");
   const [date, setDate] = useState("");
   const [openCust, setOpenCust] = useState<string | null>(null);
+  // Paid to manager is owner-only — drop stale selection if role isn't owner
+  useEffect(() => {
+    if (!isOwner && recvCat === "paid-manager") setRecvCat("");
+  }, [isOwner, recvCat]);
   /** whose cash the "Paid out" money left (null = default to the logged-in role) */
   const [paidBy, setPaidBy] = useState<"owner" | "manager" | null>(null);
   /** Paid out category — Food / Salary / Truck rent / … */
@@ -251,12 +255,15 @@ export default function ReceiptsView() {
       const isCash = !isUpiMode;
       const toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
       const paidMgr = recvCat === "paid-manager";
+      if (paidMgr && !isOwner) {
+        return toast("Paid to manager is owner-only (owner cash → Daybook)");
+      }
       const catLab = paidMgr
         ? PAID_TO_MANAGER_LABEL
         : recvCat
           ? SPEND_CATEGORIES.find((c) => c.id === recvCat)?.label || ""
           : "";
-      // Paid to manager must land in Daybook cash (not owner / UPI / named account)
+      // Paid to manager: owner float → Manager Daybook cash (not Books, not Owner pocket)
       const useMode = paidMgr ? "cash" : isUpiMode ? "upi" : "cash";
       const useToOwner = paidMgr ? false : toOwner;
       const useAcct = paidMgr ? "" : mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "";
@@ -298,16 +305,63 @@ export default function ReceiptsView() {
       load();
       bumpData();
       toast(
-        "₹" + inr(a) + " received from " + who +
-          (catLab ? " · " + catLab : "") +
-          (paidMgr ? " — Daybook only (not in Books)" : useToOwner ? " — Owner" : " — Daybook"),
+        "₹" +
+          inr(a) +
+          (paidMgr
+            ? " · Paid to manager — Owner cash → Daybook"
+            : " received from " +
+              who +
+              (catLab ? " · " + catLab : "") +
+              (useToOwner ? " — Owner" : " — Daybook")),
       );
-      showReviewQr();
+      if (!paidMgr) showReviewQr({ docId: "name:" + who });
       return;
     }
 
     // ---- Paid out: category spend (party/name logged; not a customer ledger link) ----
     if (kind === "paid" && !editRcpt) {
+      // Owner float → Manager Daybook cash-in (counterpart of Paid to owner). Not a spend.
+      if (paidCat === "paid-manager") {
+        const party = paidParty.trim() || "Owner";
+        if (editId) {
+          const e = await getRec<Expense>("expenses", editId);
+          if (!e || e.type !== "sale" || (e.label || "").trim() !== PAID_TO_MANAGER_LABEL) return resetForm();
+          e.amount = a;
+          e.mode = "cash";
+          e.account = "";
+          e.toOwner = false;
+          e.label = PAID_TO_MANAGER_LABEL;
+          e.skipBooks = true;
+          e.party = party;
+          e.note = note.trim();
+          e.date = date ? toDmy(date) : e.date;
+          e.custId = undefined;
+          e.sourceId = undefined;
+          e.updatedAt = nowIso();
+          await put("expenses", e);
+          resetForm();
+          load();
+          bumpData();
+          return toast("Updated ✓");
+        }
+        await addExpense({
+          type: "sale",
+          amount: a,
+          mode: "cash",
+          label: PAID_TO_MANAGER_LABEL,
+          skipBooks: true,
+          toOwner: false,
+          party,
+          note: note.trim(),
+          date: date ? toDmy(date) : undefined,
+          enteredBy: user?.id || "unknown",
+        });
+        resetForm();
+        load();
+        bumpData();
+        return toast("₹" + inr(a) + " · Paid to manager — added to Daybook (not in Books)");
+      }
+
       const cat = SPEND_CATEGORIES.find((c) => c.id === paidCat) || SPEND_CATEGORIES[SPEND_CATEGORIES.length - 1];
       const by = paidBy ?? (isOwner ? "owner" : "manager");
       const party = paidParty.trim();
@@ -466,7 +520,9 @@ export default function ReceiptsView() {
               ? " · to owner"
               : " · to account");
     toast(msg);
-    showReviewQr();
+    showReviewQr({
+      docId: (applyTo === "quote" && quoteId) || applied[0]?.id || picked.id,
+    });
   }
 
   async function remove(entry: Entry) {
@@ -538,6 +594,20 @@ export default function ReceiptsView() {
         ? customers.find((c) => c.name.trim().toLowerCase() === (e.party || "").trim().toLowerCase())
         : null;
       setPaidCustId(fromQuote?.customerId || byName?.id || "");
+      return;
+    } else if (!entry.paid && isNameReceipt(e) && (e.label || "").trim() === PAID_TO_MANAGER_LABEL) {
+      // reopen on Paid out → Paid to manager (same place users create it)
+      setEditId(e.id);
+      setEditRcpt(null);
+      setKind("paid");
+      setPaidCat("paid-manager");
+      setPaidBy("owner");
+      setPaidParty(e.party || "Owner");
+      setAmt(String(e.amount));
+      setNote(e.note || "");
+      setDate(e.date ? fromDmy(e.date) : "");
+      setPicked(null);
+      setName("");
       return;
     } else if (!entry.paid && isNameReceipt(e)) {
       setEditId(e.id);
@@ -762,11 +832,14 @@ export default function ReceiptsView() {
                       if (v === "paid-manager") {
                         setMode("cash");
                         setAcct("");
+                        if (!recvName.trim()) setRecvName("Owner");
                       }
                     }}
                   >
                     <option value="">— none —</option>
-                    <option value="paid-manager">Paid to manager (not in Books)</option>
+                    {isOwner && (
+                      <option value="paid-manager">Paid to manager (Owner cash → Daybook)</option>
+                    )}
                     {SPEND_CATEGORIES.filter((c) => !c.skipBooks).map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.label} (refund)
@@ -774,7 +847,9 @@ export default function ReceiptsView() {
                     ))}
                   </select>
                   <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
-                    Paid to manager adds Daybook cash only. Or pick a spend category if this is a refund.
+                    {isOwner
+                      ? "Paid to manager = owner hands cash into Manager Daybook (not Books). Or pick a spend category if this is a refund."
+                      : "Pick a spend category if this is a refund of a paid-out."}
                   </small>
                 </label>
               </div>
@@ -793,6 +868,11 @@ export default function ReceiptsView() {
                 if (v !== "minitruck") setPaidRounds("");
                 // Paid to owner always leaves the manager's Daybook cash
                 if (v === "paid-owner") setPaidBy("manager");
+                // Paid to manager = owner float into Daybook (cash-in)
+                if (v === "paid-manager") {
+                  setPaidBy("owner");
+                  if (!paidParty.trim()) setPaidParty("Owner");
+                }
               }}
             >
               {SPEND_CATEGORIES.map((c) => (
@@ -801,7 +881,13 @@ export default function ReceiptsView() {
                   {c.skipBooks ? " (not in Books)" : ""}
                 </option>
               ))}
+              <option value="paid-manager">Paid to manager (adds to Daybook)</option>
             </select>
+            {paidCat === "paid-manager" && (
+              <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
+                Owner cash goes into Manager Daybook balance — not in Books. Use Note for why / who.
+              </small>
+            )}
           </label>
         )}
 
@@ -824,15 +910,22 @@ export default function ReceiptsView() {
             <input type="number" inputMode="decimal" placeholder="0" value={amt} onChange={(e) => setAmt(e.target.value)} />
           </label>
           {showReceivedFields ? (
-            <label className="modal-field">
-              <span>Mode</span>
-              <select value={mode} onChange={(e) => setMode(e.target.value as "cash" | "owner" | "upi" | "uowner")}>
-                <option value="cash">Cash</option>
-                <option value="owner">Cash → Owner</option>
-                <option value="upi">UPI</option>
-                <option value="uowner">UPI → Owner</option>
-              </select>
-            </label>
+            recvCat === "paid-manager" ? (
+              <label className="modal-field">
+                <span>Mode</span>
+                <input readOnly value="Owner cash → Manager Daybook" />
+              </label>
+            ) : (
+              <label className="modal-field">
+                <span>Mode</span>
+                <select value={mode} onChange={(e) => setMode(e.target.value as "cash" | "owner" | "upi" | "uowner")}>
+                  <option value="cash">Cash</option>
+                  <option value="owner">Cash → Owner</option>
+                  <option value="upi">UPI</option>
+                  <option value="uowner">UPI → Owner</option>
+                </select>
+              </label>
+            )
           ) : (
             <label className="modal-field">
               <span>Note (optional)</span>
@@ -845,13 +938,13 @@ export default function ReceiptsView() {
           </label>
         </div>
 
-        {showReceivedFields && mode === "upi" && (
+        {showReceivedFields && recvCat !== "paid-manager" && mode === "upi" && (
           <div className="modal-field acct-field" style={{ marginTop: 12, width: "100%" }}>
             <span>UPI to which account?</span>
             <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
           </div>
         )}
-        {showReceivedFields && mode === "cash" && (
+        {showReceivedFields && recvCat !== "paid-manager" && mode === "cash" && (
           <div className="modal-field acct-field" style={{ marginTop: 12, width: "100%" }}>
             <span>Cash held by which account? <small style={{ color: "var(--ink-faint)" }}>(optional — blank = manager daybook)</small></span>
             <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
@@ -862,7 +955,13 @@ export default function ReceiptsView() {
             <span>Note (optional) <small style={{ color: "var(--ink-faint)" }}>— shows on the customer&apos;s statement PDF</small></span>
             <input
               type="text"
-              placeholder={mode === "upi" || mode === "uowner" ? "e.g. paid to Afsar's account" : "e.g. partial payment"}
+              placeholder={
+                recvCat === "paid-manager"
+                  ? "e.g. float for today"
+                  : mode === "upi" || mode === "uowner"
+                    ? "e.g. paid to Afsar's account"
+                    : "e.g. partial payment"
+              }
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
@@ -939,7 +1038,13 @@ export default function ReceiptsView() {
                 <span>Name (optional)</span>
                 <input
                   type="text"
-                  placeholder={paidCat === "minitruck" ? "e.g. driver / vehicle" : "e.g. who / where"}
+                  placeholder={
+                    paidCat === "paid-manager"
+                      ? "e.g. Owner / Afsar"
+                      : paidCat === "minitruck"
+                        ? "e.g. driver / vehicle"
+                        : "e.g. who / where"
+                  }
                   value={paidParty}
                   onChange={(e) => setPaidParty(e.target.value)}
                 />
@@ -1025,7 +1130,15 @@ export default function ReceiptsView() {
           </div>
         )}
 
-        {kind === "paid" && (
+        {kind === "paid" && paidCat === "paid-manager" && (
+          <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--panel-soft, #f6f1ea)", borderRadius: 8 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>Owner cash → Manager Daybook</div>
+            <small style={{ color: "var(--ink-faint)", display: "block", marginTop: 4 }}>
+              Adds this amount to Daybook cash. Name + Note are saved on the entry.
+            </small>
+          </div>
+        )}
+        {kind === "paid" && paidCat !== "paid-manager" && (
           <div className="att-paidby" style={{ marginTop: 12 }}>
             <span className="att-paidby-lbl">Paid by</span>
             <div className="db-seg sm">
@@ -1065,7 +1178,9 @@ export default function ReceiptsView() {
           {editing
             ? "Save changes"
             : kind === "paid"
-              ? "Record paid out — " + (SPEND_CATEGORIES.find((c) => c.id === paidCat)?.label || "Other")
+              ? paidCat === "paid-manager"
+                ? "Record — Paid to manager (add to Daybook)"
+                : "Record paid out — " + (SPEND_CATEGORIES.find((c) => c.id === paidCat)?.label || "Other")
               : recvVia === "name"
                 ? "Record received from " + (recvName.trim() || "name")
                 : "Record receipt"}

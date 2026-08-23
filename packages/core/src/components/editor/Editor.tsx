@@ -23,7 +23,7 @@ import { promoteTempTab, setTempDoc } from "@/lib/editor-tabs";
 import { OFFICIAL_DEFAULT_WOOD } from "@/lib/woods";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
-import type { BoxRect, Customer, Doc, Expense, Row } from "@/lib/types";
+import type { BoxRect, Carpenter, Customer, Doc, Expense, Row } from "@/lib/types";
 import SectionCard from "./SectionCard";
 import Totals from "./Totals";
 import QuoteCanvas from "./QuoteCanvas";
@@ -33,10 +33,10 @@ import InvoicePayBlock from "./InvoicePayBlock";
 import { applyAdvancesToInvoice } from "@/lib/vouchers";
 import InvoicePrintA from "./InvoicePrintA";
 import CustomerPicker from "./CustomerPicker";
+import CarpenterPicker, { knownCarpenters, type CarpenterHit } from "./CarpenterPicker";
 import GstinField from "./GstinField";
 import DateField from "./DateField";
 import EwayBillPanel from "./EwayBillPanel";
-import ReviewQR from "@/components/ReviewQR";
 import { showReviewQr } from "@/store/review-qr-store";
 import { extractPincode } from "@/lib/ewaybill";
 
@@ -96,6 +96,8 @@ export default function Editor({
   const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
   const [expenses, setExpenses] = useState<Expense[]>([]); // this quote's recorded payments (for the mini statements)
   const [customers, setCustomers] = useState<Customer[]>([]); // for the searchable customer picker (avoid duplicates)
+  const [quoteDocs, setQuoteDocs] = useState<Doc[]>([]); // carpenter name→phone directory (from past quotes too)
+  const [carpenterDir, setCarpenterDir] = useState<Carpenter[]>([]); // standalone carpenter contacts
   // Excel-style line copy/paste (clipboard is GLOBAL — see lineClipboard — so it works across quotations)
   const [selBox, setSelBox] = useState<number | null>(null); // box whose lines are selected
   const [selRows, setSelRows] = useState<Set<number>>(() => new Set()); // selected row indices in selBox
@@ -144,10 +146,17 @@ export default function Editor({
     loadExpenses();
   }, [loadExpenses, doc.id]);
 
-  // load existing customers for the searchable name picker
+  // load existing customers + quotes + carpenter directory for searchable pickers
   useEffect(() => {
     allRec<Customer>("customers").then(setCustomers);
+    allRec<Doc>("quotations").then(setQuoteDocs);
+    allRec<Carpenter>("carpenters").then(setCarpenterDir);
   }, []);
+
+  const carpenters = useMemo(
+    () => knownCarpenters(customers, quoteDocs, carpenterDir),
+    [customers, quoteDocs, carpenterDir],
+  );
 
   // apply queued focus after a row is added / re-rendered
   useEffect(() => {
@@ -318,6 +327,18 @@ export default function Editor({
       d.address = c.address || "";
       d.custGstin = c.gstin || "";
       d.custPincode = c.pincode || extractPincode(c.address) || d.custPincode || "";
+    });
+  // carpenter: typing an exact known name (or picking from list) fills carpenter phone when available
+  const onCarpenterType = (v: string) =>
+    update((d) => {
+      d.site = v;
+      const hit = carpenters.find((c) => c.name.toLowerCase() === v.trim().toLowerCase());
+      if (hit?.phone) d.sitePhone = hit.phone;
+    });
+  const pickCarpenter = (c: CarpenterHit) =>
+    update((d) => {
+      d.site = c.name;
+      if (c.phone) d.sitePhone = c.phone;
     });
   const onName = (si: number, v: string) =>
     update((d) => {
@@ -589,6 +610,19 @@ export default function Editor({
     commit(next, true);
   }
 
+  /** Typed new name → create/link customer so advances can sit on their account. */
+  async function ensureCustomer(): Promise<string | null> {
+    const cur = clone(docRef.current);
+    const name = (cur.customerName || "").trim();
+    if (!name) return null;
+    if (cur.customerId) return cur.customerId;
+    const cust = await upsertCustomerFromDoc(cur);
+    if (!cust?.id) return null;
+    commit(cur, true); // writes customerId onto the quotation
+    allRec<Customer>("customers").then(setCustomers);
+    return cust.id;
+  }
+
   // ---- actions ----
   async function onSaveClick() {
     await saveNow();
@@ -774,14 +808,17 @@ export default function Editor({
         }
         return; // keep width + min-height for print; unfit() restores them afterwards
       }
-      // quote: compact ~0.85cm rows (~26 per column, like the legacy print). Try to fit on ONE page —
-      // thin a touch (to no less than 0.7cm) if it's a hair over; when even 0.7cm can't hold it, flow
-      // onto the next page (a4multi) at the normal 0.85cm rows. Never balloon the rows.
+      // quote: compact ~0.72cm rows. Fit ONE page when possible.
+      // Match PDF / inv3a (272mm of the 285mm printable area) — pageH-14px (~281mm) still
+      // tips browser print onto a blank page 2. Never use overflow:hidden (clips bill/QR).
+      const printH = Math.max(120, Math.round(pageH * (272 / 285)));
       sheet.classList.add("a4fill");
-      sheet.style.height = pageH - 10 + "px";
+      sheet.style.height = printH + "px";
+      sheet.style.maxHeight = printH + "px";
       const sections = sheet.querySelector("#sections") as HTMLElement | null;
       const overflows = () =>
-        (!!sections && sections.scrollWidth > sections.clientWidth + 2) || sheet.scrollHeight > pageH + 2;
+        (!!sections && sections.scrollWidth > sections.clientWidth + 2) ||
+        sheet.scrollHeight > printH + 2;
       let rowCm = 0.72;
       sheet.style.setProperty("--sqrow", rowCm + "cm");
       while (rowCm > 0.7 && overflows()) {
@@ -793,12 +830,14 @@ export default function Editor({
         sheet.classList.remove("a4fill");
         sheet.classList.add("a4multi");
         sheet.style.height = "";
+        sheet.style.maxHeight = "";
         sheet.style.setProperty("--sqrow", "0.72cm");
       }
     };
     const unfit = () => {
       sheet.style.width = "";
       sheet.style.height = "";
+      sheet.style.maxHeight = "";
       sheet.style.minHeight = "";
       sheet.style.zoom = "1";
       sheet.style.removeProperty("--sqrow");
@@ -866,6 +905,21 @@ export default function Editor({
   };
   // this quote's recorded payments — printed as the settlement block when the toggle is on
   const payLines = !isInv ? statementsForQuote(doc, expenses) : undefined;
+  // ₹ held as “Advance for next quote” from this quotation (not applied as payment here)
+  const advanceAmt = !isInv
+    ? Math.round(
+        expenses
+          .filter(
+            (e) =>
+              e.type === "sale" &&
+              e.refQuoteId === doc.id &&
+              !e.sourceId &&
+              !e.charge &&
+              !!e.custId,
+          )
+          .reduce((s, e) => s + (+e.amount || 0), 0) * 100,
+      ) / 100
+    : 0;
   // what's still pending on this quote (final price if agreed, else the computed total)
   const remBalance = !isInv
     ? Math.max(
@@ -886,6 +940,7 @@ export default function Editor({
       totalCbm={totalCbm}
       totalPcs={totalPcs}
       payLines={payLines}
+      advanceAmt={advanceAmt}
       onGst={(v) => setField("gst", v)}
       onGstMode={(m) => setField("gstMode", m)}
     />
@@ -921,7 +976,7 @@ export default function Editor({
         </div>
         <div className="f">
           <label>Carpenter</label>
-          <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
+          <CarpenterPicker value={doc.site} carpenters={carpenters} onType={onCarpenterType} onPick={pickCarpenter} />
         </div>
         <div className="f">
           <label>Carpenter phone</label>
@@ -1195,7 +1250,7 @@ export default function Editor({
               <>
                 <div className="f">
                   <label>Carpenter</label>
-                  <input placeholder="—" value={doc.site} onChange={(e) => setField("site", e.target.value)} />
+                  <CarpenterPicker value={doc.site} carpenters={carpenters} onType={onCarpenterType} onPick={pickCarpenter} />
                 </div>
                 <div className="f">
                   <label>Carpenter phone</label>
@@ -1315,11 +1370,6 @@ export default function Editor({
             );
           })()}
         </div>
-        {feat.simpleQuote && !isInv && !freeMode && (
-          <div className="sq-review-qr">
-            <ReviewQR size={72} />
-          </div>
-        )}
           </>
         )}
         {!isRent && (
@@ -1337,6 +1387,7 @@ export default function Editor({
             totalCbm={totalCbm}
             totalPcs={totalPcs}
             payLines={payLines}
+            advanceAmt={advanceAmt}
             onGst={(v) => setField("gst", v)}
             onGstMode={(m) => setField("gstMode", m)}
           />
@@ -1377,10 +1428,7 @@ export default function Editor({
               </div>
             </div>
             {!isBuy && (
-              <div className="inv-thanks-row">
-                <div className="inv-thanks">Thank you for your business 🙏</div>
-                <ReviewQR size={64} />
-              </div>
+              <div className="inv-thanks">Thank you for your business 🙏</div>
             )}
           </div>
         )}
@@ -1449,11 +1497,11 @@ export default function Editor({
             {freeMode ? "✓ Free arrange" : "Free arrange"}
           </button>
         )}
-        {!isInv && (
+        {!isBuy && (
           <button
             type="button"
             className="btn"
-            onClick={() => showReviewQr()}
+            onClick={() => showReviewQr({ force: true })}
             title="Show the Google review QR for the customer to scan"
           >
             Review
@@ -1518,6 +1566,7 @@ export default function Editor({
           onClearAll={onClearPayments}
           reload={loadExpenses}
           highlightId={payFocus}
+          ensureCustomer={ensureCustomer}
         />
       )}
 

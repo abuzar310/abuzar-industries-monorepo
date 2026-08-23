@@ -1,8 +1,10 @@
-// Unofficial owner-only panic cloak: mask money/rates everywhere.
+// Panic cloak: mask money/rates everywhere (Cut Size / unofficial).
+// Owner and Manager share the toggle via CloakCapableStaff in staff-role.ts.
 // Flag lives in cloud meta so phone ↔ PC converge via /changes polling.
 // Business records are never deleted — toggle off restores every figure.
 import { metaGetCached, metaSet, prefGet, prefSet } from "./data";
 import { getFeatures } from "./features";
+import { canToggleCloak } from "./staff-role";
 import { bumpData, getState, setCloakMoney } from "@/store/app-store";
 
 const META = "cloakMoney";
@@ -64,10 +66,10 @@ function applyCloakDom(on: boolean): void {
   document.body.classList.toggle("cloak-money", on);
 }
 
-/** Owner-only silent toggle (writes cloud meta). Returns new state, or null if ignored. */
+/** Owner or Manager silent toggle (writes cloud meta). Returns new state, or null if ignored. */
 export async function toggleCloak(): Promise<boolean | null> {
   const user = getState().user;
-  if (!cloakAvailable() || user?.role !== "owner") return null;
+  if (!cloakAvailable() || !canToggleCloak(user?.role)) return null;
   const next = !getState().cloakMoney;
   await metaSet(META, next);
   setCloakMoney(next);

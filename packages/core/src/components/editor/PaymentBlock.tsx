@@ -4,6 +4,7 @@ import { inr, nowIso } from "@/lib/calc";
 import { addExpense } from "@/lib/expenses";
 import { delRec, getRec, put } from "@/lib/data";
 import { statementsForQuote, type PartyStatement } from "@/lib/payments";
+import { advanceBalance, applyAdvancesToQuote } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import AccountPicker from "@/components/AccountPicker";
 import { bumpData, toast } from "@/store/app-store";
@@ -46,21 +47,29 @@ interface Props {
   reload: () => void;
   /** payment line to scroll to + flash on open (arriving from a Statements click) */
   highlightId?: string;
+  /**
+   * Ensure the typed customer name is a real customer record (creates if new).
+   * Returns customerId, or null if there's no name to use.
+   */
+  ensureCustomer: () => Promise<string | null>;
 }
 
-export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, isOwner, onFinalPrice, onShowFinalOnPrint, setAggregates, onClearAll, reload, highlightId }: Props) {
+export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, isOwner, onFinalPrice, onShowFinalOnPrint, setAggregates, onClearAll, reload, highlightId, ensureCustomer }: Props) {
   const [amt, setAmt] = useState("");
   const [mode, setMode] = useState<"cash" | "owner" | "upi" | "uowner">("cash");
   const [acct, setAcct] = useState("");
   const [note, setNote] = useState(""); // free-text note on a cash payment (shown in Statements)
   const [payDate, setPayDate] = useState(""); // optional: when the payment actually happened (yyyy-mm-dd)
   const [editId, setEditId] = useState<string | null>(null); // a recorded payment being edited (its expense id)
+  /** Hold money on the customer account for a future quotation (not this quote's paid total). */
+  const [forNext, setForNext] = useState(false);
 
   const finalPrice = doc.finalPrice != null && doc.finalPrice > 0 ? doc.finalPrice : quoteGrand;
   const lines = statementsForQuote(doc, expenses); // this quote's payments, newest first (incl. legacy)
   const received = r2(lines.reduce((s, l) => s + l.amount, 0));
   const balance = r2(finalPrice - received);
   const settled = balance <= 0.5;
+  const advBal = advanceBalance(expenses, doc.customerId || "");
 
   // arriving from a Statements click: scroll to the exact payment line and flash it
   const [flashId, setFlashId] = useState<string | null>(null);
@@ -76,6 +85,29 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     return () => clearTimeout(t);
   }, [highlightId, hasLine]);
 
+  async function resolveCustId(): Promise<string | null> {
+    const id = await ensureCustomer();
+    if (!id) {
+      toast("Enter a customer name first — advance sits on their account");
+      return null;
+    }
+    return id;
+  }
+
+  async function applyAdv() {
+    const custId = await resolveCustId();
+    if (!custId) return;
+    const firstPay = (doc.payCash || 0) + (doc.payUpi || 0) <= 0.005;
+    // apply against a doc copy that has the resolved customerId (typed-new names)
+    const r = await applyAdvancesToQuote({ ...doc, customerId: custId });
+    if (r.applied <= 0) return toast("Nothing to apply — this quote may already be settled");
+    setAggregates(r.payCash, r.payUpi);
+    reload();
+    bumpData();
+    toast("₹" + inr(r.applied) + " advance applied to this quotation ✓");
+    if (firstPay) showReviewQr({ docId: doc.id });
+  }
+
   async function addLine() {
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return;
@@ -85,6 +117,37 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     // "to owner" = money that leaves the manager's daybook / collectable balance:
     // Cash → Owner, UPI → Owner, or any cash the owner records themselves.
     const toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
+
+    // Advance for next quote — sits on the customer account; does NOT pay this quotation.
+    if (forNext && !editId) {
+      const custId = await resolveCustId();
+      if (!custId) return;
+      await addExpense({
+        type: "sale",
+        amount: a,
+        mode: isUpiMode ? "upi" : "cash",
+        account: mode === "upi" || (isCash && mode !== "owner") ? acct.trim() : "",
+        toOwner,
+        custId,
+        refQuoteId: doc.id,
+        note: (doc.customerName || "").trim() || "Walk-in",
+        label: note.trim() || "Advance for next quote",
+        date: payDate ? toDmy(payDate) : undefined,
+        enteredBy: by,
+      });
+      setAmt("");
+      setAcct("");
+      setNote("");
+      setPayDate("");
+      setForNext(false);
+      reload();
+      bumpData();
+      toast("₹" + inr(a) + " held as advance for the next quotation");
+      return;
+    }
+
+    // Flyer only on the first amount entry for this quotation.
+    const firstPay = (doc.payCash || 0) + (doc.payUpi || 0) <= 0.005;
     await addExpense({
       type: "sale",
       amount: a,
@@ -118,7 +181,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
               ? acctLbl + " (Accounts)"
               : " · cash → Daybook"),
     );
-    showReviewQr();
+    if (firstPay) showReviewQr({ docId: doc.id });
   }
 
   async function delLine(l: PartyStatement) {
@@ -137,6 +200,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
   // load a recorded payment into the row form for editing
   function startEdit(l: PartyStatement) {
     setEditId(l.id);
+    setForNext(false);
     setAmt(String(l.amount));
     setMode(l.mode === "upi" ? (l.toOwner ? "uowner" : "upi") : l.toOwner ? "owner" : "cash");
     setAcct(l.account || "");
@@ -150,6 +214,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     setNote("");
     setPayDate("");
     setMode("cash");
+    setForNext(false);
   }
   async function saveEdit() {
     const old = lines.find((l) => l.id === editId);
@@ -189,6 +254,8 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
     toast("Payment updated");
   }
 
+  const showAdd = !settled || editId || forNext;
+
   return (
     <div className="panel-card no-print" style={{ marginTop: 12, padding: 14 }}>
       <label className="modal-field" style={{ marginBottom: 6 }}>
@@ -214,6 +281,17 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
         Show final price &amp; payments on the printed quotation
         {!(doc.finalPrice && doc.finalPrice > 0) && <small> (enter a final price first)</small>}
       </label>
+
+      {advBal > 0.5 && !settled && (
+        <div className="pb-editbar" style={{ marginBottom: 10 }}>
+          <span>
+            ₹{inr(advBal)} advance on {doc.customerName || "this customer"}&apos;s account — ready for this quotation
+          </span>
+          <button type="button" onClick={() => void applyAdv()}>
+            Apply to this quote
+          </button>
+        </div>
+      )}
 
       <div className="paybook">
         <div className="pb-r pb-h">
@@ -256,7 +334,34 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
           </div>
         )}
 
-        {(!settled || editId) && (
+        {!editId && (
+          <div className="db-seg sm" style={{ margin: "8px 0 4px", gridColumn: "1 / -1" }}>
+            <button
+              type="button"
+              className={"seg-btn" + (!forNext ? " on" : "")}
+              onClick={() => setForNext(false)}
+            >
+              Pay this quote
+            </button>
+            <button
+              type="button"
+              className={"seg-btn" + (forNext ? " on" : "")}
+              onClick={() => setForNext(true)}
+              title="Customer paid today for a future quotation — holds on their account until you apply it"
+            >
+              Advance for next quote
+            </button>
+          </div>
+        )}
+
+        {forNext && !editId && (
+          <small style={{ display: "block", color: "var(--ink-faint)", marginBottom: 6, lineHeight: 1.45 }}>
+            Holds ₹ on the customer&apos;s account (not on this quotation). Open the next quote and tap{" "}
+            <b>Apply to this quote</b>. Optional note = condition / reason (e.g. &quot;next teak order&quot;).
+          </small>
+        )}
+
+        {showAdd && (
           <div className="pb-r pb-add">
             <input
               className="pb-in"
@@ -293,7 +398,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
             <button
               className="pb-plus"
               type="button"
-              title={editId ? "Save changes" : "Add payment"}
+              title={editId ? "Save changes" : forNext ? "Hold as advance" : "Add payment"}
               onClick={editId ? saveEdit : addLine}
               disabled={!(+amt > 0)}
             >
@@ -301,12 +406,16 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
             </button>
           </div>
         )}
-        {(!settled || editId) && (
+        {showAdd && (
           <div className="pb-r pb-note">
             <input
               className="pb-in"
               type="text"
-              placeholder="Note (optional) — shows on statements"
+              placeholder={
+                forNext
+                  ? "Condition / note (optional) — e.g. next teak · before Aug 30"
+                  : "Note (optional) — shows on statements"
+              }
               value={note}
               onChange={(e) => setNote(e.target.value)}
               style={{ gridColumn: "1 / -1" }}
@@ -318,6 +427,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
           <span className="pb-amt">₹ {inr(received)}</span>
           <span className="pb-mode" style={{ gridColumn: "2 / 4", color: "var(--ink-faint)" }}>
             received of ₹{inr(finalPrice)}
+            {advBal > 0.5 ? ` · ₹${inr(advBal)} on account` : ""}
           </span>
           {settled ? (
             <span className="pb-bal ok">Settled ✓</span>
@@ -327,7 +437,10 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
               type="button"
               title="Tap to fill this balance into the amount"
               style={{ border: "none", background: "transparent", cursor: "pointer" }}
-              onClick={() => setAmt(String(balance))}
+              onClick={() => {
+                setForNext(false);
+                setAmt(String(balance));
+              }}
             >
               Bal ₹{inr(balance)}
             </button>

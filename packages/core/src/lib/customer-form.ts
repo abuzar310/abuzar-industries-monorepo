@@ -10,8 +10,10 @@ export async function editCustomerDialog(existing?: Customer): Promise<Customer 
     fields: [
       { name: "name", label: "Name", value: existing?.name, placeholder: "Customer name", required: true },
       { name: "phone", label: "Phone", type: "tel", inputMode: "numeric", value: existing?.phone, placeholder: "10-digit mobile" },
-      { name: "site", label: "Carpenter", value: existing?.site, placeholder: "Carpenter name (optional)" },
-      { name: "sitePhone", label: "Carpenter phone", value: existing?.sitePhone, placeholder: "Carpenter phone (optional)" },
+      { name: "site", label: "Carpenter name", value: existing?.site, placeholder: "Carpenter name (optional)" },
+      { name: "sitePhone", label: "Carpenter phone", type: "tel", inputMode: "numeric", value: existing?.sitePhone, placeholder: "Carpenter phone (optional)" },
+      { name: "siteVillage", label: "Carpenter village", value: existing?.siteVillage, placeholder: "Village (optional)" },
+      { name: "siteCity", label: "Carpenter city", value: existing?.siteCity, placeholder: "City (optional)" },
       { name: "address", label: "Address", value: existing?.address, placeholder: "Full address (optional)" },
       { name: "pincode", label: "PIN code", value: existing?.pincode, placeholder: "6-digit PIN (for e-way)" },
       { name: "gstin", label: "GSTIN", value: existing?.gstin, placeholder: "GST number (optional)" },
