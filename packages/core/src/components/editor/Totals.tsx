@@ -1,5 +1,6 @@
 "use client";
 import { inr, rupeesInWords } from "@/lib/calc";
+import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
 import type { PartyStatement } from "@/lib/payments";
 import type { Doc } from "@/lib/types";
@@ -18,24 +19,32 @@ interface Props {
   advanceAmt?: number;
   onGst: (v: string) => void;
   onGstMode: (m: "percent" | "flat") => void;
+  /** unofficial quote: optional permit fee charged to the customer */
+  onPermitFee?: (v: number | undefined) => void;
 }
 
-export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, payLines, advanceAmt, onGst, onGstMode }: Props) {
+export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, payLines, advanceAmt, onGst, onGstMode, onPermitFee }: Props) {
   const { cloakMoney } = useApp();
   const isInv = doc.kind === "invoice";
   const r2 = (n: number) => Math.round(n * 100) / 100;
+  const permit = !isInv ? r2(Math.max(0, +doc.permitFee || 0)) : 0;
+  const showPermit = permit > 0.005;
+  const editPermit = !isInv && !!onPermitFee && getFeatures().simpleQuote;
   const finalPrice = !isInv && (doc.finalPrice || 0) > 0 ? r2(doc.finalPrice!) : 0;
   const hasFinal = finalPrice > 0;
+  /** wood+GST only — permit sits on top of the rounded Final price, not inside the discount */
+  const wood = r2(grand - permit);
+  const billed = hasFinal ? r2(finalPrice + permit) : grand;
   /** print toggle — when off, discount/final still show on screen but stay off the paper */
   const printFinal = hasFinal && !!doc.showFinalOnPrint;
-  const discAmt = hasFinal ? r2(grand - finalPrice) : 0;
+  const discAmt = hasFinal ? r2(wood - finalPrice) : 0;
   const hasDiscount = hasFinal && Math.abs(discAmt) > 0.5;
   const screenOnly = hasFinal && !printFinal ? " no-print" : "";
   const advance = !isInv && (advanceAmt || 0) > 0.5 ? r2(advanceAmt!) : 0;
   // the settlement block: every payment + received + balance/settled — printed with the final price
   const pays = printFinal && payLines ? [...payLines].reverse() : []; // oldest first on paper
   const received = r2(pays.reduce((s, l) => s + l.amount, 0));
-  const balance = r2(finalPrice - received);
+  const balance = r2(billed - received);
   const settled = balance <= 0.5;
   const flat = doc.gstMode === "flat";
   const half = Math.round((+doc.gst || 0) * 50) / 100; // e.g. 18 -> 9
@@ -104,6 +113,37 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
           <span className="val">{inr(gstAmt)}</span>
         </div>
       )}
+      {/* unofficial: optional permit fee — prints only when an amount is set */}
+      {(editPermit || showPermit) && (
+        <div className={"t-row permit" + (showPermit ? "" : " no-print")}>
+          <span className="lab">Permit fee</span>
+          {editPermit ? (
+            <>
+              <span className="val no-print gst-lab">
+                ₹
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  placeholder="optional"
+                  value={cloakMoney ? "0" : doc.permitFee ? String(doc.permitFee) : ""}
+                  readOnly={cloakMoney}
+                  onChange={(e) => {
+                    if (cloakMoney || !onPermitFee) return;
+                    const raw = e.target.value.trim();
+                    const n = parseFloat(raw);
+                    if (!raw || !isFinite(n) || n <= 0) onPermitFee(undefined);
+                    else onPermitFee(r2(n));
+                  }}
+                />
+              </span>
+              {showPermit && <span className="val print-only">₹ {inr(permit)}</span>}
+            </>
+          ) : (
+            <span className="val">₹ {inr(permit)}</span>
+          )}
+        </div>
+      )}
       {/* dark bar stays on Grand total unless Final is also going on the printed sheet */}
       <div className={"t-row" + (printFinal ? "" : " grand")}>
         <span className="lab">Grand total</span>
@@ -122,7 +162,7 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
       {hasFinal && (
         <div className={"t-row" + (printFinal ? " grand final-print" : " final-screen") + screenOnly}>
           <span className="lab">Final price</span>
-          <span className="val">₹ {inr(finalPrice)}</span>
+          <span className="val">₹ {inr(billed)}</span>
         </div>
       )}
       {/* advance taken on this quote for the next one — always on the printed sheet */}
@@ -161,7 +201,7 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
               </tr>
             ))}
             <tr className="ps-tot">
-              <td colSpan={3}>Total received — of final price ₹{inr(finalPrice)}</td>
+              <td colSpan={3}>Total received — of final price ₹{inr(billed)}</td>
               <td className="amt">{inr(received)}</td>
             </tr>
             <tr className={"ps-bal" + (settled ? " ok" : "")}>
@@ -173,7 +213,7 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
       )}
       {/* amount-in-words lives OUTSIDE the totals box (which clips overflow) so it can never be cut off */}
       <div className={"words" + (hasFinal && !printFinal ? " no-print" : "")}>
-        Amount in words: <b>{rupeesInWords(hasFinal ? finalPrice : grand)}</b>
+        Amount in words: <b>{rupeesInWords(hasFinal ? billed : grand)}</b>
       </div>
       {hasFinal && !printFinal && (
         <div className="words print-only">

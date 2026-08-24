@@ -1,5 +1,5 @@
 import { activeBrand } from "./brand";
-import { cftOf, computeDoc, inr } from "./calc";
+import { cftOf, computeDoc, inr, quoteBill } from "./calc";
 import { isCloaked } from "./cloak";
 import { generatePdfFile } from "./pdf";
 import type { Doc } from "./types";
@@ -48,7 +48,7 @@ export function quoteMessage(doc: Doc): string {
 
 Sub-total: ₹${inr(t.sub)}
 GST (${doc.gst}%): ₹${inr(t.gstAmt)}
-Grand Total: ₹${inr(t.grand)}`;
+Grand Total: ₹${inr(quoteBill(doc))}`;
   return `${greet(doc.customerName)}
 Please find your ${kind.toLowerCase()} ${doc.number} from ${b.name}.
 

@@ -140,6 +140,7 @@ body{
 }
 .co-meta{font-family:var(--mono); font-size:13px; color:var(--ink-soft); line-height:1.6; margin:10px 0 0}
 .co-meta b{color:var(--walnut); font-weight:600}
+#sheet.inv .co-addr{font-weight:700}
 
 .meta{display:flex; flex-wrap:wrap; gap:0; position:relative; z-index:1; border-top:1px solid var(--line)}
 .meta .f{flex:1 1 30%; min-width:120px; padding:12px 28px; border-right:1px solid var(--line)}
@@ -630,17 +631,19 @@ body{
 .inv-tag-top{text-align:center; margin-bottom:8px}
 .inv-tag-top span{display:inline-block; font-family:var(--disp); text-transform:uppercase; letter-spacing:.22em;
   font-weight:800; font-size:13px; color:var(--ochre-deep); border:1.5px solid var(--ochre-deep); border-radius:6px; padding:5px 18px}
-/* invoice masthead: bold UPPERCASE name, centered (logo on top, name + address below) */
+/* invoice masthead: bold UPPERCASE name, then address + GSTIN stacked under it */
 #sheet.inv .co-name{font-weight:800; text-transform:uppercase; letter-spacing:.005em; font-size:46px}
 /* compact invoice masthead so the editing preview matches the tighter print density */
 #sheet.inv .mast-top{padding:14px 22px 10px}
 #sheet.inv .logo{height:2.5cm}
-/* logo stays on the left; the ABUZAR INDUSTRIES name is centered on that same line */
-.mast-c .mast-top{position:relative; justify-content:flex-start; align-items:center}
-.mast-c .brand-row{flex-direction:row; align-items:center; gap:0; flex:1 1 auto; min-height:1.7cm}
-.mast-c .brand{position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); text-align:center; min-width:0}
+/* logo stays on the left; name / address / GSTIN are a centered stack */
+.mast-c .mast-top{position:relative; justify-content:flex-start; align-items:flex-start}
+.mast-c .brand-row{display:block; position:relative; min-height:auto}
+.mast-c .logo{position:absolute; left:0; top:50%; transform:translateY(-50%); z-index:1}
+.mast-c .brand{position:relative; width:100%; text-align:center; transform:none}
 .mast-c .co-name{justify-content:center}
-.mast-c .co-meta{text-align:center; margin-top:4px}
+.mast-c .co-meta{text-align:center; width:100%; margin-top:6px}
+.mast-c .co-meta > div{text-align:center}
 .wmark{position:absolute; inset:0; z-index:0; display:flex; align-items:center; justify-content:center; pointer-events:none; overflow:hidden;
   -webkit-print-color-adjust:exact; print-color-adjust:exact}
 .wmark span{font-family:var(--serif); font-weight:600; font-size:78px; letter-spacing:.02em; color:var(--walnut); opacity:.055;
@@ -1084,14 +1087,15 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .inv3a .i3-kindtop{text-align:center; padding:3px 0 0}
 .inv3a .i3-kindtop span{font-family:var(--disp); font-size:12px; letter-spacing:.4em; color:var(--i3-soft);
   text-transform:uppercase; border-bottom:2px solid var(--i3-gold); padding:0 6px 3px; font-weight:700}
-.inv3a .i3-mast{display:flex; align-items:center; gap:16px; padding:6px var(--i3-pad) 8px}
-.inv3a .i3-mast img{height:106px; width:auto; margin:-9px 0}
+.inv3a .i3-mast{position:relative; display:block; padding:6px var(--i3-pad) 8px; min-height:88px}
+.inv3a .i3-mast img{position:absolute; left:var(--i3-pad); top:50%; transform:translateY(-50%); height:106px; width:auto; margin:0}
+.inv3a .i3-id{text-align:center}
 .inv3a .i3-nm{font-family:var(--disp); font-size:42px; font-weight:800; letter-spacing:.17em;
   font-stretch:expanded; line-height:1; color:var(--i3-maroon); text-transform:uppercase; white-space:nowrap}
-.inv3a .i3-ad{font-size:10.5px; color:var(--i3-soft); margin-top:5px; line-height:1.55; max-width:42em}
+.inv3a .i3-ad{font-size:10.5px; font-weight:700; color:var(--i3-soft); margin:5px auto 0; line-height:1.55; max-width:42em; text-align:center}
 .inv3a .i3-dbl{height:6px; border-top:3px solid var(--i3-maroon); border-bottom:1.5px solid var(--i3-gold); margin:0 var(--i3-pad)}
-/* seller GSTIN — slim line under the rule, not part of the logo/name stack */
-.inv3a .i3-gs{font-family:var(--mono); font-size:11px; font-weight:700; margin:6px var(--i3-pad) 0; color:var(--i3-ink)}
+/* seller GSTIN — centered under the address, same wording as before */
+.inv3a .i3-gs{font-family:var(--mono); font-size:11px; font-weight:700; margin:4px auto 0; color:var(--i3-ink); text-align:center}
 .inv3a .i3-chips{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; padding:10px var(--i3-pad) 0}
 .inv3a .i3-chip{background:var(--i3-bone); border:1px solid var(--i3-hair); padding:5px 9px; border-radius:7px}
 .inv3a .i3-chip span{display:block; font-size:8.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--i3-soft)}
@@ -1292,7 +1296,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   #sheet.inv .kindtag{font-size:10px; padding:2px 8px; font-weight:800; border-width:1px}
   #sheet.inv .co-meta{font-size:10px; line-height:1.3; margin-top:2px}
   #sheet.inv .co-goods{font-size:9px; margin-top:1px}
-  #sheet.inv .mast-c .brand-row{min-height:1.35cm}
+  #sheet.inv .mast-c .brand-row{min-height:auto}
   #sheet.inv .inv-tag-top{margin-bottom:4px}
   #sheet.inv .inv-tag-top span{font-size:11px; padding:3px 12px}
   /* compress the footer (bank / terms / thanks) so it never spills to page 2 —
@@ -1958,6 +1962,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .t-row.advance{background:rgba(176,124,40,.08); border-bottom:none}
 .t-row.advance .lab{color:var(--ochre-deep)}
 .t-row.advance .val{color:var(--ochre-deep); font-weight:700}
+.t-row.permit .gst-lab input{width:88px}
 /* the settlement box printed below the totals when "Show final price & payments" is on:
    every payment + total received + balance / Settled — the on-screen card, on paper */
 .pay-sheet{width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; margin-top:10px; background:var(--paper-2, #fff)}

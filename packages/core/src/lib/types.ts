@@ -67,6 +67,8 @@ export interface Doc {
   rentAmount?: number;
   /** rented invoice: description of the rent line (default "Rent"). */
   rentDesc?: string;
+  /** unofficial quote: optional permit fee charged to the customer. Unset / 0 = not on the bill or print. */
+  permitFee?: number;
   /** accepted round-figure price override; falls back to the computed grand total. */
   finalPrice?: number;
   /** print the agreed final price on the sheet (default OFF — clean quote format). */

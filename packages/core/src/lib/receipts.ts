@@ -12,7 +12,7 @@
 // account receipt. Result: Statements, Balances, the quotation and the Daybook all
 // move together.
 import { allRec, delRec, getRec, put } from "./data";
-import { computeDoc, nowIso, uid } from "./calc";
+import { nowIso, uid } from "./calc";
 import { addExpense } from "./expenses";
 import { quoteBill } from "./payments";
 import type { Doc, Expense } from "./types";
@@ -98,7 +98,7 @@ export async function applyCustomerReceipt(inp: ReceiptInput): Promise<ReceiptRe
     fresh.payCash = payCash;
     fresh.payUpi = payUpi;
     fresh.amountPaid = r2(payCash + payUpi);
-    const fp = fresh.finalPrice != null && fresh.finalPrice > 0 ? fresh.finalPrice : computeDoc(fresh).grand;
+    const fp = quoteBill(fresh);
     fresh.paymentStatus = fresh.amountPaid <= 0 ? "Pending" : fresh.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
     fresh.paidLogged = fresh.amountPaid > 0;
     fresh.updatedAt = nowIso();
@@ -141,7 +141,7 @@ export async function unwindReceiptPieces(pieces: Expense[]): Promise<void> {
         d.payCash = r2(Math.max(0, (+(d.payCash || 0) || 0) - (isCash ? amt : 0)));
         d.payUpi = r2(Math.max(0, (+(d.payUpi || 0) || 0) - (!isCash ? amt : 0)));
         d.amountPaid = r2(d.payCash + d.payUpi);
-        const fp = d.finalPrice != null && d.finalPrice > 0 ? d.finalPrice : computeDoc(d).grand;
+        const fp = quoteBill(d);
         d.paymentStatus = d.amountPaid <= 0 ? "Pending" : d.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
         d.paidLogged = d.amountPaid > 0;
         d.updatedAt = nowIso();
@@ -276,7 +276,7 @@ export async function migrateAccountReceiptsToQuotes(): Promise<MigrationResult>
       d.payCash = st.payCash;
       d.payUpi = st.payUpi;
       d.amountPaid = st.amountPaid;
-      const fp = d.finalPrice != null && d.finalPrice > 0 ? d.finalPrice : computeDoc(d).grand;
+      const fp = quoteBill(d);
       d.paymentStatus = d.amountPaid <= 0 ? "Pending" : d.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
       d.paidLogged = d.amountPaid > 0;
       d.updatedAt = nowIso();
