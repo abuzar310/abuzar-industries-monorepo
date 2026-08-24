@@ -56,7 +56,7 @@ export type AiQuickAction = {
   label: string;
   /** Instant draft (accurate ₹ from the open document). */
   readyText?: string;
-  /** Sent to Gemini when the action needs a rewrite / explanation. */
+  /** Sent to the model when the action needs a rewrite / explanation. */
   prompt?: string;
   /** Navigate in-app (open a quote, tab, etc.) instead of chatting. */
   href?: string;

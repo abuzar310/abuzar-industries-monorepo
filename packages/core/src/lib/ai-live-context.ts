@@ -108,7 +108,7 @@ export function navIntentHref(text: string): string | null {
   return null;
 }
 
-/** Instant answers (no Gemini) for the biggest dues questions + in-app jumps. */
+/** Instant answers (no model call) for the biggest dues questions + in-app jumps. */
 export function liveQuickActions(pathname: string): AiQuickAction[] {
   const path = (pathname || "/").split("?")[0];
   const out: AiQuickAction[] = [];
