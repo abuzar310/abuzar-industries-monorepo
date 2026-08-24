@@ -4,6 +4,7 @@
 import { allRec, delRec, metaGet, metaSet, put } from "./data";
 import { addExpense } from "./expenses";
 import { computeDoc, dateSortKey, nowIso, uid } from "./calc";
+import { quoteBill } from "./payments";
 import type { Doc, Expense } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -507,8 +508,7 @@ export async function applyAdvancesToQuote(
   const expenses = await allRec<Expense>("expenses");
   const adv = advancesOf(expenses, quote.customerId);
   if (!adv.length) return zero;
-  const grand =
-    quote.finalPrice != null && quote.finalPrice > 0 ? +quote.finalPrice : computeDoc(quote).grand;
+  const grand = quoteBill(quote);
   let payCash = zero.payCash;
   let payUpi = zero.payUpi;
   let due = r2(grand - r2(payCash + payUpi));

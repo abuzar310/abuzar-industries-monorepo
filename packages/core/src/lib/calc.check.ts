@@ -1,6 +1,6 @@
 // Self-check for the money / CFT / words logic. Run: node src/lib/calc.check.ts
 import assert from "node:assert/strict";
-import { cftOf, cbmToCft, computeDoc, docVolumeCft, rupeesInWords, inr, splitHandover } from "./calc.ts";
+import { cftOf, cbmToCft, computeDoc, docVolumeCft, quoteBill, rupeesInWords, inr, splitHandover } from "./calc.ts";
 import type { Doc } from "./types.ts";
 
 // CFT = (L × W × T × Pcs) ÷ 144
@@ -51,6 +51,18 @@ assert.equal(computeDoc(dr).sub, 210);
 const df = { sections: [{ name: "Teak", rate: 100, rows: [{ l: 12, w: 12, t: 12, pcs: 1 }] }], gst: 500, gstMode: "flat" } as unknown as Doc;
 assert.equal(computeDoc(df).gstAmt, 500);
 assert.equal(computeDoc(df).grand, 1700);
+
+// optional permit fee sits after GST; unset / 0 leaves the total unchanged
+const dp = { ...d, permitFee: 200 } as unknown as Doc;
+assert.equal(computeDoc(dp).sub, 1200);
+assert.equal(computeDoc(dp).gstAmt, 216);
+assert.equal(computeDoc(dp).grand, 1616);
+assert.equal(computeDoc({ ...d, permitFee: 0 } as unknown as Doc).grand, 1416);
+// Final price is the wood figure; permit sits on top of what they pay
+assert.equal(quoteBill(d), 1416);
+assert.equal(quoteBill(dp), 1616);
+assert.equal(quoteBill({ ...d, finalPrice: 1400 } as unknown as Doc), 1400);
+assert.equal(quoteBill({ ...d, finalPrice: 1400, permitFee: 200 } as unknown as Doc), 1600);
 
 // session handover split: 5500 in hand, give 5000 → 500 carries forward
 assert.deepEqual(splitHandover(0, 5500, 5000), { inHand: 5500, given: 5000, carried: 500 });

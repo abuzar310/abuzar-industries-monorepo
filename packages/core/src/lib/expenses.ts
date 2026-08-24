@@ -23,6 +23,7 @@ export const SPEND_CATEGORIES: SpendCategory[] = [
   { id: "pigmy", label: "Pignee", type: "custom" },
   { id: "shop", label: "Shop expenses", type: "custom" },
   { id: "unload", label: "Unloading charges", type: "custom" },
+  { id: "permit", label: "Permit expenses", type: "custom" },
   /** Manager hands cash to owner — cuts Daybook, hidden from Books */
   { id: "paid-owner", label: "Paid to owner", type: "custom", skipBooks: true },
   { id: "other", label: "Other", type: "custom" },

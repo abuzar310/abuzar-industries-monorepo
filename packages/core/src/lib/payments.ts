@@ -1,9 +1,9 @@
-import { computeDoc } from "./calc";
+import { quoteBill as quoteBillOf } from "./calc";
 import type { Customer, Doc, Expense, PayMode } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-/** the effective bill of a quote: the accepted round-figure override, else the computed grand total. */
-export const quoteBill = (d: Doc) => (d.finalPrice && d.finalPrice > 0 ? d.finalPrice : computeDoc(d).grand);
+/** the effective bill of a quote: accepted Final price (else wood+GST) plus any permit fee. */
+export const quoteBill = (d: Doc) => quoteBillOf(d);
 
 /** One payment line under a party — the "statement" (to which account, when, by whom, how). */
 export interface PartyStatement {

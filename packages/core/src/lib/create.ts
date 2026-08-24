@@ -38,6 +38,8 @@ export async function createInvoice(seed?: Partial<Doc>): Promise<Doc> {
   if (seed) Object.assign(d, seed, { kind: "invoice", tradeType: d.tradeType });
   // Payment mode default: Credit (Cash / UPI / Bank Transfer / Credit)
   d.payType = seed?.payType || "Credit";
+  // Tax invoice HSN — timber default; seed/convert can override, field stays editable
+  d.hsn = String(seed?.hsn || "").trim() || "4407";
   applyOfficialDefaultWood(d, seed);
   // server assigns the UID; a provided seed.number is honoured, else it fills the
   // lowest free display serial for this trade type

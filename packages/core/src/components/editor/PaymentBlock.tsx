@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { inr, nowIso } from "@/lib/calc";
 import { addExpense } from "@/lib/expenses";
 import { delRec, getRec, put } from "@/lib/data";
-import { statementsForQuote, type PartyStatement } from "@/lib/payments";
+import { quoteBill, statementsForQuote, type PartyStatement } from "@/lib/payments";
 import { advanceBalance, applyAdvancesToQuote } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import AccountPicker from "@/components/AccountPicker";
@@ -64,10 +64,10 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
   /** Hold money on the customer account for a future quotation (not this quote's paid total). */
   const [forNext, setForNext] = useState(false);
 
-  const finalPrice = doc.finalPrice != null && doc.finalPrice > 0 ? doc.finalPrice : quoteGrand;
+  const bill = quoteBill(doc);
   const lines = statementsForQuote(doc, expenses); // this quote's payments, newest first (incl. legacy)
   const received = r2(lines.reduce((s, l) => s + l.amount, 0));
-  const balance = r2(finalPrice - received);
+  const balance = r2(bill - received);
   const settled = balance <= 0.5;
   const advBal = advanceBalance(expenses, doc.customerId || "");
 
@@ -426,7 +426,7 @@ export default function PaymentBlock({ doc, quoteGrand, expenses, upiAccts, by, 
         <div className="pb-r pb-foot">
           <span className="pb-amt">₹ {inr(received)}</span>
           <span className="pb-mode" style={{ gridColumn: "2 / 4", color: "var(--ink-faint)" }}>
-            received of ₹{inr(finalPrice)}
+            received of ₹{inr(bill)}
             {advBal > 0.5 ? ` · ₹${inr(advBal)} on account` : ""}
           </span>
           {settled ? (
