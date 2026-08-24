@@ -137,6 +137,8 @@ export interface AppFeatures {
   ledger?: boolean;
   /** simple business vouchers: receipt/payment books + invoice payment acceptance (official). */
   vouchers?: boolean;
+  /** Cut Size: standalone Carpenters tab (commission + parties). */
+  carpenters?: boolean;
 }
 
 export interface Customer {

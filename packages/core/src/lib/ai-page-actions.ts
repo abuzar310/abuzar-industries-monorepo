@@ -142,6 +142,9 @@ function customersActions(detailName?: string): AiQuickAction[] {
   const base: AiQuickAction[] = [
     explain("What is Customers?", "customer directory with quote counts, paid, opening dues, outstanding — start new quotes and WhatsApp from cards; detail page has statement PDF"),
     how("Add a customer", "Customers → + Add customer → name, phone, carpenter/site → save."),
+    ...(cutSize()
+      ? [how("Carpenter commission book", "Carpenters tab — who they brought, when commission was given, how much.")]
+      : []),
     how("New quote for a customer", "Customers → card or detail → New quote (opens editor with that party)."),
     {
       id: "cust-followup",
@@ -186,7 +189,9 @@ function contactsActions(): AiQuickAction[] {
   return [
     explain("What is Contacts?", "printable phone book — Customers (with carpenter) or Carpenters (with their parties). Read-only; money is elsewhere"),
     how("Find a phone number", "Contacts → Customers or Carpenters → search → tap name to open customer detail."),
-    how("Parties under a carpenter", "Contacts → Carpenters view → find carpenter → see linked parties."),
+    how("Parties under a carpenter", cutSize()
+      ? "Carpenters tab (or Contacts → Carpenters) → open a carpenter → see linked parties and commission."
+      : "Contacts → Carpenters view → find carpenter → see linked parties."),
     draft("Intro to carpenter", "WhatsApp intro to a carpenter about timber supply from our yard — [Carpenter name]"),
     how("Print contact list", "Contacts → Print for a paper phone list."),
     draft("Ask missing phone", "WhatsApp to manager asking to update phone number for [Customer/Carpenter]"),
@@ -294,6 +299,7 @@ function pathKey(pathname: string): string {
   if (pth.startsWith("/receipts")) return "receipts";
   if (pth.startsWith("/accounts")) return "accounts";
   if (pth.startsWith("/customers")) return "customers";
+  if (pth.startsWith("/carpenters")) return "carpenters";
   if (pth.startsWith("/buys") || pth.startsWith("/suppliers")) return "suppliers";
   if (pth.startsWith("/contacts")) return "contacts";
   if (pth.startsWith("/expenses")) return "daybook";
@@ -340,6 +346,20 @@ export function resolveAiPageActions(pathname: string, doc: Doc | null): AiPageB
       return {
         title: m ? "Customer" : "Customers",
         actions: customersActions(),
+      };
+    }
+    case "carpenters": {
+      const m = pathname.match(/^\/carpenters\/([^/]+)/);
+      return {
+        title: m ? "Carpenter" : "Carpenters",
+        actions: [
+          explain("What is Carpenters?", "Cut Size dashboard of carpenters: who they are, customers they brought, and commission we paid. Transaction history is commission payouts only."),
+          how("Add a carpenter", "Carpenters → + Add carpenter → name, phone, village, city."),
+          how("See who / paid / customers", "Carpenters home shows totals, then a table of each carpenter. Open a row for that person."),
+          how("Transaction history", "Carpenters home and each carpenter page list commission we paid — date, customer, quote, amount. Other spends stay in Receipts."),
+          how("Record commission", "Carpenters → Record commission, or a carpenter → Record commission (Receipts Paid out → Carpenter commission)."),
+          draft("Intro to carpenter", "WhatsApp intro to a carpenter about timber supply from our yard — [Carpenter name]"),
+        ],
       };
     }
     case "suppliers":

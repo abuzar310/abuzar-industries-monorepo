@@ -137,6 +137,17 @@ export default function ReceiptsView() {
     if (cust) setOpenCust(cust);
   }, []);
 
+  // Carpenters tab → Record commission
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("paid") !== "carpenter") return;
+    setKind("paid");
+    setPaidCat("carpenter");
+    const name = (q.get("carpenter") || "").trim();
+    if (name) setPaidCarpenter(name);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
   // arrived from Balances (✎ on a payment line): ?edit=<rcptId | expenseId> → prefill the form
   const editConsumed = useRef(false);
   useEffect(() => {
