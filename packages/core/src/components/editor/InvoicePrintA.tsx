@@ -157,11 +157,10 @@ const InvoicePrintA = forwardRef<HTMLDivElement, Props>(function InvoicePrintA(
               {[brand.addr, brand.phone ? "Ph " + brand.phone : ""].filter(Boolean).join(" · ")}
             </div>
           )}
+          {brand.gstin && <div className="i3-gs">GSTIN {brand.gstin}</div>}
         </div>
       </div>
       <div className="i3-dbl" />
-      {/* seller GSTIN kept for the tax invoice, outside the brand block */}
-      {brand.gstin && <div className="i3-gs">GSTIN {brand.gstin}</div>}
 
       {/* ticket chips */}
       <div className="i3-chips">

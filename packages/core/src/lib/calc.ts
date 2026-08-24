@@ -168,8 +168,24 @@ export function computeDoc(d: Doc): DocTotals {
   // flat: gst is a rupee amount; percent: gst is a % of the sub-total.
   const gstAmt =
     d.gstMode === "flat" ? Math.round((+d.gst || 0) * 100) / 100 : Math.round(sub * (+d.gst || 0)) / 100;
-  const grand = Math.round((sub + gstAmt) * 100) / 100;
+  // optional permit fee (Cut Size) — added after GST; 0/unset does not change the bill
+  const permit = permitOf(d);
+  const grand = Math.round((sub + gstAmt + permit) * 100) / 100;
   return { sub, gstAmt, grand, secCft };
+}
+
+/** Optional permit add-on. Unset / 0 / negative → 0. */
+export function permitOf(d: Pick<Doc, "permitFee">): number {
+  return Math.round(Math.max(0, +(d.permitFee ?? 0) || 0) * 100) / 100;
+}
+
+/** What the customer is charged: accepted Final price (else wood+GST) plus any permit fee.
+ *  Permit is never folded into the rounded Final price — it sits on top. */
+export function quoteBill(d: Doc): number {
+  const permit = permitOf(d);
+  const wood = Math.round((computeDoc(d).grand - permit) * 100) / 100;
+  const base = d.finalPrice != null && +d.finalPrice > 0 ? +d.finalPrice : wood;
+  return Math.round((base + permit) * 100) / 100;
 }
 
 /** Split the cash in hand at session close into given vs carried-forward.

@@ -1,6 +1,7 @@
 // Named payment accounts (UPI + cash held by Tabrez, Afsar, etc.) — registry + rollup + daily collect.
 import { allRec, delRec, getRec, metaGet, metaSet, put } from "./data";
-import { computeDoc, nowIso, todayStr, uid } from "./calc";
+import { nowIso, todayStr, uid } from "./calc";
+import { quoteBill } from "./payments";
 import type { Customer, Doc, Expense } from "./types";
 
 const isUpi = (e: Expense) => e.type === "sale" && e.mode === "upi";
@@ -616,7 +617,7 @@ export async function deleteAccountEntry(id: string): Promise<void> {
       q.payCash = payCash;
       q.payUpi = payUpi;
       q.amountPaid = r2(payCash + payUpi);
-      const fp = q.finalPrice != null && q.finalPrice > 0 ? q.finalPrice : computeDoc(q).grand;
+      const fp = quoteBill(q);
       q.paymentStatus = q.amountPaid <= 0 ? "Pending" : q.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
       q.paidLogged = q.amountPaid > 0;
       q.updatedAt = nowIso();

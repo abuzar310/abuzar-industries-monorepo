@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, clone, prefSet, put, rpcNextInvoiceNumber } from "@/lib/data";
 import { seriesOf } from "@/lib/invoice-id";
-import { cftOf, computeDoc, inr, nowIso } from "@/lib/calc";
+import { cftOf, computeDoc, inr, nowIso, permitOf } from "@/lib/calc";
 import { getLineClip, setLineClip } from "@/lib/lineClipboard";
 import { STATUSES } from "@/lib/constants";
 import { brandFor } from "@/lib/brand";
@@ -15,7 +15,7 @@ import { findLiveByNumber } from "@/lib/durability";
 import { trashDoc } from "@/lib/trash";
 import { getFeatures } from "@/lib/features";
 import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
-import { statementsForQuote } from "@/lib/payments";
+import { quoteBill, statementsForQuote } from "@/lib/payments";
 import { postInvoice } from "@/lib/ledger-autopost";
 import { balanceReminderMessage, reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
 import { generatePdf, printOrSavePdf } from "@/lib/pdf";
@@ -604,7 +604,7 @@ export default function Editor({
     next.payCash = Math.round(payCash * 100) / 100;
     next.payUpi = Math.round(payUpi * 100) / 100;
     next.amountPaid = Math.round((next.payCash + next.payUpi) * 100) / 100;
-    const fp = next.finalPrice != null && next.finalPrice > 0 ? next.finalPrice : computeDoc(next).grand;
+    const fp = quoteBill(next);
     next.paymentStatus = next.amountPaid <= 0 ? "Pending" : next.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
     next.paidLogged = next.amountPaid > 0;
     commit(next, true);
@@ -670,7 +670,7 @@ export default function Editor({
   /** Standard automated reminder: the balance pending from the total — nothing else. */
   function onWaBalance() {
     const d = docRef.current;
-    const total = d.finalPrice && d.finalPrice > 0 ? d.finalPrice : totals.grand;
+    const total = quoteBill(d);
     const received = (payLines || []).reduce((s, l) => s + l.amount, 0);
     const balance = Math.max(0, Math.round((total - received) * 100) / 100);
     const msg = balanceReminderMessage({
@@ -925,7 +925,7 @@ export default function Editor({
     ? Math.max(
         0,
         Math.round(
-          ((doc.finalPrice && doc.finalPrice > 0 ? doc.finalPrice : totals.grand) -
+          (quoteBill(doc) -
             (payLines || []).reduce((s, l) => s + l.amount, 0)) * 100,
         ) / 100,
       )
@@ -943,6 +943,12 @@ export default function Editor({
       advanceAmt={advanceAmt}
       onGst={(v) => setField("gst", v)}
       onGstMode={(m) => setField("gstMode", m)}
+      onPermitFee={(v) =>
+        update((d) => {
+          if (v == null) delete d.permitFee;
+          else d.permitFee = v;
+        })
+      }
     />
   );
   // compact masthead rendered inside the A4 canvas in free-arrange mode
@@ -1168,7 +1174,7 @@ export default function Editor({
                     </div>
                   ) : (
                     <div className="co-meta">
-                      {brand.addr && <div>{brand.addr}</div>}
+                      {brand.addr && <div className={isInv ? "co-addr" : undefined}>{brand.addr}</div>}
                       {brand.gstin && (
                         <div>
                           <b>GSTIN</b> {brand.gstin}
@@ -1555,7 +1561,7 @@ export default function Editor({
       {feat.acceptPayment && !isInv && !temporary && (
         <PaymentBlock
           doc={doc}
-          quoteGrand={totals.grand}
+          quoteGrand={Math.round((totals.grand - permitOf(doc)) * 100) / 100}
           expenses={expenses}
           upiAccts={upiAccts}
           by={user?.id || "unknown"}
