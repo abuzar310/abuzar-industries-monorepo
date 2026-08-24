@@ -391,14 +391,23 @@ export function createDataApi(schema: AppSchema) {
     // ---------- everything below requires a session ----------
     const user = userFrom(req);
     if (!user) return err(401, "Not signed in");
-    await ensureChatTable(schema);
-    await ensureCarpentersTable(schema);
-    await ensureWebsiteQuotationsTable(schema);
+    // Read paths skip CREATE TABLE — those DDL trips to Tokyo blow the Vercel
+    // time budget and the client stays on Loading with an empty cache.
+    const readFast = method === "GET" && (a === "bootstrap" || a === "changes");
+    if (!readFast) {
+      await Promise.all([
+        ensureChatTable(schema),
+        ensureCarpentersTable(schema),
+        ensureWebsiteQuotationsTable(schema),
+      ]);
+    }
 
     if (a === "bootstrap" && method === "GET") {
       const out: AnyRec = {};
-      for (const table of SYNC_TABLES) {
-        const rows = await listRows(schema, table);
+      const listed = await Promise.all(
+        SYNC_TABLES.map(async (table) => [table, await listRows(schema, table)] as const),
+      );
+      for (const [table, rows] of listed) {
         if (table === "documents") {
           Object.assign(out, splitDocs(rows));
         } else {

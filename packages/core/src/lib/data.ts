@@ -127,20 +127,30 @@ interface Bootstrap {
 
 /** Load the full dataset from the server into the cache. Requires a session. */
 export async function bootData(): Promise<void> {
-  const b = await call<Bootstrap>("/bootstrap");
-  for (const s of DATA_STORES) {
-    const m = new Map<string, unknown>();
-    for (const rec of b.stores[s] || []) {
-      const k = keyOf(s, rec);
-      if (k) m.set(k, rec);
+  let last: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const b = await call<Bootstrap>("/bootstrap");
+      for (const s of DATA_STORES) {
+        const m = new Map<string, unknown>();
+        for (const rec of b.stores[s] || []) {
+          const k = keyOf(s, rec);
+          if (k) m.set(k, rec);
+        }
+        cache.set(s, m);
+      }
+      metaCache = b.meta || {};
+      lastServerNow = b.now;
+      booted = true;
+      setSyncState("on");
+      bumpData();
+      return;
+    } catch (e) {
+      last = e;
+      setSyncState("off");
     }
-    cache.set(s, m);
   }
-  metaCache = b.meta || {};
-  lastServerNow = b.now;
-  booted = true;
-  setSyncState("on");
-  bumpData();
+  throw last instanceof Error ? last : new Error("bootstrap failed");
 }
 
 export const isBooted = () => booted;

@@ -2,6 +2,8 @@
 import type { NextRequest } from "next/server";
 import { createDataApi } from "@/server/api";
 
+export const maxDuration = 60;
+
 const api = createDataApi("official");
 
 type Ctx = { params: Promise<{ path?: string[] }> };
