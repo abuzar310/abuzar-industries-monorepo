@@ -760,6 +760,20 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 @media(max-width:760px){.dash-grid,.dash-grid.g3{grid-template-columns:repeat(2,1fr); gap:10px}}
 @media(max-width:380px){.dash-grid,.dash-grid.g2,.dash-grid.g3{grid-template-columns:1fr}}
 
+/* Carpenters dashboard roster */
+.carp-roster{width:100%; border-collapse:collapse}
+.carp-roster th{padding:8px 12px; text-align:left; font-family:var(--disp); font-size:9px; font-weight:700;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--ink-faint); border-bottom:1px solid var(--line)}
+.carp-roster td{padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:middle}
+.carp-roster tbody tr{cursor:pointer}
+.carp-roster tbody tr:hover{background:rgba(176,124,40,.05)}
+.carp-roster .nm{font-family:var(--disp); font-weight:600; color:var(--ink)}
+.carp-roster .ph{font-family:var(--mono); font-size:11px; color:var(--ochre-deep); margin-top:2px}
+.carp-roster .num{font-family:var(--mono); font-variant-numeric:tabular-nums; text-align:right}
+.carp-roster .paid{font-family:var(--mono); font-weight:700; text-align:right; color:var(--ochre-deep); font-variant-numeric:tabular-nums}
+.carp-roster .mut{font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+@media(max-width:640px){.carp-roster .col-phone,.carp-roster .col-last{display:none}}
+
 /* stock statement (CFT + value) */
 .stmt{display:grid; grid-template-columns:1fr auto auto; gap:8px 22px; padding:10px 16px; border-bottom:1px solid var(--line);
   font-family:var(--mono); font-size:13.5px; align-items:center; font-variant-numeric:tabular-nums}

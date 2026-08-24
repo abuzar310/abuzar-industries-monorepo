@@ -27,7 +27,7 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
   const { cloakMoney } = useApp();
   const isInv = doc.kind === "invoice";
   const r2 = (n: number) => Math.round(n * 100) / 100;
-  const permit = !isInv ? r2(Math.max(0, +doc.permitFee || 0)) : 0;
+  const permit = !isInv ? r2(Math.max(0, +(doc.permitFee ?? 0) || 0)) : 0;
   const showPermit = permit > 0.005;
   const editPermit = !isInv && !!onPermitFee && getFeatures().simpleQuote;
   const finalPrice = !isInv && (doc.finalPrice || 0) > 0 ? r2(doc.finalPrice!) : 0;

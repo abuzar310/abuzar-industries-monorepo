@@ -13,7 +13,7 @@
     "start:official": "next start apps/official -p 3020",
     "lint": "eslint apps packages",
     "typecheck": "tsc --noEmit",
-    "check": "node --no-warnings packages/core/src/lib/calc.check.ts && node --no-warnings packages/core/src/lib/ledger.check.ts && node --no-warnings packages/core/src/lib/trading.check.ts",
+    "check": "node --no-warnings packages/core/src/lib/calc.check.ts && node --no-warnings packages/core/src/lib/ledger.check.ts && node --no-warnings packages/core/src/lib/trading.check.ts && node --no-warnings packages/core/src/lib/carpenter-financials.check.ts",
     "check:review-qr": "node --no-warnings packages/core/src/lib/review-qr.check.ts",
     "bake:review-qr": "node scripts/bake-review-flyer-qr.mjs"
   },

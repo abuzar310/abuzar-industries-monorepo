@@ -121,6 +121,8 @@ export default function CustomersView() {
     window.open(waLink(c.phone, "Hello " + (c.name || "")), "_blank");
   }
 
+  const carpTab = !!getFeatures().carpenters;
+  const view: Mode = carpTab ? "customers" : mode;
   const invoiceMode = getFeatures().invoices;
   const quotesAsBills = !invoiceMode;
   async function newDoc(e: React.MouseEvent, id: string) {
@@ -158,7 +160,7 @@ export default function CustomersView() {
   return (
     <div>
       <div className="sectitle">
-        {mode === "customers" ? (
+        {view === "customers" ? (
           <>
             Customers <small>— {list.length} contact{list.length === 1 ? "" : "s"}</small>
           </>
@@ -169,15 +171,17 @@ export default function CustomersView() {
         )}
       </div>
       <div className="rowbtns" style={{ alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div className="db-seg sm" role="group" aria-label="Customers or carpenters">
-          <button className={"seg-btn" + (mode === "customers" ? " on" : "")} type="button" onClick={() => pickMode("customers")}>
-            Customers
-          </button>
-          <button className={"seg-btn" + (mode === "carpenters" ? " on" : "")} type="button" onClick={() => pickMode("carpenters")}>
-            Carpenters
-          </button>
-        </div>
-        {mode === "customers" ? (
+        {!carpTab && (
+          <div className="db-seg sm" role="group" aria-label="Customers or carpenters">
+            <button className={"seg-btn" + (view === "customers" ? " on" : "")} type="button" onClick={() => pickMode("customers")}>
+              Customers
+            </button>
+            <button className={"seg-btn" + (view === "carpenters" ? " on" : "")} type="button" onClick={() => pickMode("carpenters")}>
+              Carpenters
+            </button>
+          </div>
+        )}
+        {view === "customers" ? (
           <button className="btn primary sm" onClick={addCustomer}>
             + Add customer
           </button>
@@ -186,7 +190,7 @@ export default function CustomersView() {
             + Add carpenter
           </button>
         )}
-        {mode === "customers" && (
+        {view === "customers" && (
           <div className="db-seg sm" style={{ marginLeft: "auto" }} role="group" aria-label="Sort customers">
             <button className={"seg-btn" + (sortBy === "az" ? " on" : "")} type="button" onClick={() => pickSort("az")}>
               A–Z
@@ -198,7 +202,7 @@ export default function CustomersView() {
         )}
       </div>
 
-      {mode === "customers" ? (
+      {view === "customers" ? (
         <div className="custgrid">
           {entries.length ? (
             entries.map(({ c, f }) => (
