@@ -32,6 +32,7 @@
     "packages/core/src/lib/ledger.check.ts",
     "packages/core/src/lib/trading.check.ts",
     "packages/core/src/lib/numbering.check.ts",
-    "packages/core/src/lib/invoice-id.check.ts"
+    "packages/core/src/lib/invoice-id.check.ts",
+    "packages/core/src/lib/carpenter-financials.check.ts"
   ]
 }
