@@ -21,6 +21,8 @@ export default function SettingsView() {
   const [archive, setArchive] = useState<Doc[]>([]);
   const [bizPin, setBizPin] = useState("");
   const [aiKey, setAiKey] = useState("");
+  const [aiHost, setAiHost] = useState("https://api.openai.com/v1");
+  const [aiModel, setAiModel] = useState("gpt-4o-mini");
   const [aiConfigured, setAiConfigured] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const ledgerOn = getFeatures().ledger;
@@ -37,8 +39,10 @@ export default function SettingsView() {
     loadTrash();
     fetch("/api/ai/config", { credentials: "same-origin" })
       .then((r) => r.json())
-      .then((d: { configured?: boolean }) => {
+      .then((d: { configured?: boolean; host?: string; model?: string }) => {
         setAiConfigured(!!d.configured);
+        if (typeof d.host === "string" && d.host.trim()) setAiHost(d.host);
+        if (typeof d.model === "string" && d.model.trim()) setAiModel(d.model);
       })
       .catch(() => undefined);
   }, [ewayOn]);
@@ -51,13 +55,24 @@ export default function SettingsView() {
         method: "PUT",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey: aiKey.trim() || undefined }),
+        body: JSON.stringify({
+          host: aiHost.trim(),
+          model: aiModel.trim() || undefined,
+          apiKey: aiKey.trim() || undefined,
+        }),
       });
-      const d = (await r.json().catch(() => ({}))) as { error?: string; configured?: boolean };
+      const d = (await r.json().catch(() => ({}))) as {
+        error?: string;
+        configured?: boolean;
+        host?: string;
+        model?: string;
+      };
       if (!r.ok) throw new Error(d.error || "Could not save");
       setAiKey("");
+      if (typeof d.host === "string" && d.host.trim()) setAiHost(d.host);
+      if (typeof d.model === "string" && d.model.trim()) setAiModel(d.model);
       setAiConfigured(!!d.configured);
-      toast(d.configured ? "OpenAI key saved" : "Paste an OpenAI API key");
+      toast(d.configured ? "AI settings saved" : "Saved host — paste an API key to enable chat");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Could not save");
     } finally {
@@ -141,14 +156,34 @@ export default function SettingsView() {
       <div className="setbox">
         <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>AI assistant</div>
         <p className="note">
-          Owner only. Uses official OpenAI (<b>gpt-4o-mini</b>). The key is stored in this app&apos;s cloud and is
-          never shown again.
+          Owner only. Any OpenAI-compatible chat API (OpenAI, Groq, OpenRouter, a local server). The key is stored
+          in this app&apos;s cloud and is never shown again.
         </p>
         <label>
-          OpenAI API key {aiConfigured ? <small style={{ textTransform: "none", letterSpacing: 0 }}>— saved</small> : null}
+          Host URL
+          <input
+            type="url"
+            placeholder="https://api.openai.com/v1"
+            value={aiHost}
+            onChange={(e) => setAiHost(e.target.value)}
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          Model
+          <input
+            type="text"
+            placeholder="gpt-4o-mini"
+            value={aiModel}
+            onChange={(e) => setAiModel(e.target.value)}
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          API key {aiConfigured ? <small style={{ textTransform: "none", letterSpacing: 0 }}>— saved</small> : null}
           <input
             type="password"
-            placeholder={aiConfigured ? "Leave blank to keep the saved key" : "Paste sk-proj-… key"}
+            placeholder={aiConfigured ? "Leave blank to keep the saved key" : "Paste sk-… or provider key"}
             value={aiKey}
             onChange={(e) => setAiKey(e.target.value)}
             autoComplete="new-password"

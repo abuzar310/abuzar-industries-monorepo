@@ -22,7 +22,7 @@ import { generatePdf, printOrSavePdf } from "@/lib/pdf";
 import { promoteTempTab, setTempDoc } from "@/lib/editor-tabs";
 import { OFFICIAL_DEFAULT_WOOD } from "@/lib/woods";
 import { bumpData, toast } from "@/store/app-store";
-import { confirmDialog } from "@/store/dialog-store";
+import { confirmDialog, formDialog } from "@/store/dialog-store";
 import type { BoxRect, Carpenter, Customer, Doc, Expense, Row } from "@/lib/types";
 import SectionCard from "./SectionCard";
 import Totals from "./Totals";
@@ -32,6 +32,7 @@ import PaymentBlock from "./PaymentBlock";
 import InvoicePayBlock from "./InvoicePayBlock";
 import { applyAdvancesToInvoice } from "@/lib/vouchers";
 import InvoicePrintA from "./InvoicePrintA";
+import PermitLetter, { type PermitFields } from "./PermitLetter";
 import CustomerPicker from "./CustomerPicker";
 import CarpenterPicker, { knownCarpenters, type CarpenterHit } from "./CarpenterPicker";
 import GstinField from "./GstinField";
@@ -93,6 +94,7 @@ export default function Editor({
   const pendingFocus = useRef<{ si: number; ri: number; k: string } | null>(null);
   const [editingNo, setEditingNo] = useState(false);
   const [ewayAutoRun, setEwayAutoRun] = useState(false);
+  const [permit, setPermit] = useState<PermitFields | null>(null);
   const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
   const [expenses, setExpenses] = useState<Expense[]>([]); // this quote's recorded payments (for the mini statements)
   const [customers, setCustomers] = useState<Customer[]>([]); // for the searchable customer picker (avoid duplicates)
@@ -639,6 +641,27 @@ export default function Editor({
     // Android / installed app: no print dialog — the sheet downloads as a PDF instead
     if ((await printOrSavePdf(printNode(), docRef.current.number || docRef.current.id)) === "pdf")
       toast("PDF downloaded \u2713");
+  }
+  async function onPermit() {
+    if (!(doc.customerName || "").trim()) return toast("Pick a customer first");
+    const res = await formDialog({
+      title: "Permit letter",
+      message: "Customer, CFT and pieces come from this quotation. Enter the old permit leaf and book.",
+      fields: [
+        { name: "leaf", label: "Leaf no", required: true, value: permit?.leaf || "" },
+        { name: "book", label: "Book no", required: true, value: permit?.book || "" },
+        { name: "form", label: "Old permit form no", required: true, value: permit?.form || "" },
+        { name: "oldDate", label: "Old permit date (dd/mm/yy)", required: true, value: permit?.oldDate || "" },
+      ],
+      submitLabel: "Show letter",
+    });
+    if (!res) return;
+    setPermit({
+      leaf: (res.leaf || "").trim(),
+      book: (res.book || "").trim(),
+      form: (res.form || "").trim(),
+      oldDate: (res.oldDate || "").trim(),
+    });
   }
   async function onPdf() {
     try {
@@ -1513,6 +1536,16 @@ export default function Editor({
             Review
           </button>
         )}
+        {!isInv && !isBuy && feat.simpleQuote && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => void onPermit()}
+            title="Forest permit letter — customer, CFT and pieces from this quotation"
+          >
+            Permit
+          </button>
+        )}
         {feat.invoices && !isInv && (
           <button className="btn" onClick={onConvert}>
             Convert to Invoice
@@ -1623,6 +1656,16 @@ export default function Editor({
         Use the <b>arrow keys</b> to move between L · W · T · Pcs boxes, and <b>Enter</b> to drop to the next row (a new
         row is added automatically). Click <b>Save</b> (or press <b>Ctrl+S</b>) to save your changes.
       </p>
+      {permit && (
+        <PermitLetter
+          customerName={doc.customerName}
+          cft={totalCft || 0}
+          pcs={totalPcs || 0}
+          date={doc.date}
+          fields={permit}
+          onClose={() => setPermit(null)}
+        />
+      )}
     </div>
   );
 }

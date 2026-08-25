@@ -1,53 +1,49 @@
 import { allRec, delRec, put } from "./data";
 import { nowIso, splitHandover, todayStr, uid } from "./calc";
 import type { DaybookSession, EntryType, Expense, PayMode } from "./types";
+import { liveSpendCategories, SPEND_CATEGORIES, type SpendCategory } from "./book-catalog";
 
-export type SpendCategory = {
-  id: string;
-  label: string;
-  type: EntryType;
-  /** Daybook cash only — never income/spend in Books */
-  skipBooks?: boolean;
-};
-
-/** Prebuilt money-out categories — Daybook, Receipts Paid out, and Books all share these.
- *  Food/Salary use native types; the rest store as `custom` with `label` = category name. */
-export const SPEND_CATEGORIES: SpendCategory[] = [
-  { id: "food", label: "Food", type: "food" },
-  { id: "salary", label: "Salary", type: "salary" },
-  { id: "carpenter", label: "Carpenter commission", type: "custom" },
-  { id: "truck", label: "Truck rent", type: "custom" },
-  { id: "minitruck", label: "Mini truck", type: "custom" },
-  { id: "bills", label: "Bills", type: "custom" },
-  { id: "tea", label: "Tea bill", type: "custom" },
-  { id: "pigmy", label: "Pignee", type: "custom" },
-  { id: "shop", label: "Shop expenses", type: "custom" },
-  { id: "unload", label: "Unloading charges", type: "custom" },
-  { id: "permit", label: "Permit expenses", type: "custom" },
-  /** Manager hands cash to owner — cuts Daybook, hidden from Books */
-  { id: "paid-owner", label: "Paid to owner", type: "custom", skipBooks: true },
-  { id: "other", label: "Other", type: "custom" },
-];
+export type { SpendCategory };
+export { SPEND_CATEGORIES, liveSpendCategories };
 
 /** Money-in label: owner (or anyone) tops up manager cash — Daybook only, not Books. */
 export const PAID_TO_MANAGER_LABEL = "Paid to manager";
 export const PAID_TO_OWNER_LABEL = "Paid to owner";
 
-const SPEND_LABELS = new Set(SPEND_CATEGORIES.map((c) => c.label));
+function cats() {
+  return liveSpendCategories({ hidden: true });
+}
+
+/** Old printed names that still map to a live category id. */
+function catAlias(lab: string): string | undefined {
+  if (lab === "Pigmy") return "pigmy";
+  if (lab === "Truck rent") return "truck";
+  return undefined;
+}
+
+function otherLabel() {
+  return cats().find((c) => c.id === "other")?.label || "Other";
+}
+
+export function spendLabels(): Set<string> {
+  const s = new Set(cats().map((c) => c.label));
+  s.add("Pigmy");
+  s.add("Truck rent");
+  return s;
+}
 
 /** True when the row should appear in Books (income / spends / month ledger). */
 export function inBooks(e: Expense): boolean {
   if (e.charge) return false;
   if (e.skipBooks) return false;
   const lab = (e.label || "").trim();
-  if (lab === PAID_TO_OWNER_LABEL || lab === PAID_TO_MANAGER_LABEL) return false;
+  if (lab === PAID_TO_MANAGER_LABEL) return false;
+  const match = cats().find((c) => c.label === lab || c.id === catAlias(lab));
+  if (match?.skipBooks) return false;
   return true;
 }
 
-/**
- * Books / reports category bucket. Only the prebuilt SPEND_CATEGORIES.
- * Legacy Additional + freeform Custom labels all roll into Other — notes stay on the row.
- */
+/** Books / reports category bucket. Matches live names (renames stay on the same id). */
 export function spendCategoryOf(e: Expense): string {
   if (e.type === "sale") {
     if (e.charge) return "Due";
@@ -55,23 +51,27 @@ export function spendCategoryOf(e: Expense): string {
     if (lab === PAID_TO_MANAGER_LABEL) return PAID_TO_MANAGER_LABEL;
     return "Sale";
   }
-  if (e.type === "food") return "Food";
-  if (e.type === "salary") return "Salary";
+  if (e.type === "food") return cats().find((c) => c.id === "food")?.label || "Food";
+  if (e.type === "salary") return cats().find((c) => c.id === "salary")?.label || "Salary";
   if (e.type === "custom") {
     const lab = (e.label || "").trim();
-    if (lab === "Pigmy") return "Pignee"; // renamed
-    if (SPEND_LABELS.has(lab)) return lab;
+    const alias = catAlias(lab);
+    if (alias) return cats().find((c) => c.id === alias)?.label || lab;
+    const hit = cats().find((c) => c.label === lab);
+    if (hit) return hit.label;
   }
-  // additional, old custom notes ("Afsar bhaiya", "Carp com…"), etc.
-  return "Other";
+  return otherLabel();
 }
 
-/** Stable group key for Books — always one of the prebuilt category ids (or sale/due). */
+/** Stable group key for Books — category id (or sale/due). */
 export function spendCatKey(e: Expense): string {
-  const label = spendCategoryOf(e);
-  if (label === "Sale") return "sale";
-  if (label === "Due") return "due";
-  return SPEND_CATEGORIES.find((c) => c.label === label)?.id || "other";
+  if (e.type === "sale") return e.charge ? "due" : "sale";
+  if (e.type === "food") return "food";
+  if (e.type === "salary") return "salary";
+  const lab = (e.label || "").trim();
+  const alias = catAlias(lab);
+  if (alias) return alias;
+  return cats().find((c) => c.label === lab)?.id || "other";
 }
 
 /** Detail line for lists: party · carpenter · quote · rounds · note. */
@@ -89,7 +89,7 @@ export function spendDetailOf(e: Expense): string {
   if (note) bits.push(note);
   if (bits.length) return bits.join(" · ");
   const lab = (e.label || "").trim();
-  if (lab && !SPEND_LABELS.has(lab)) return lab;
+  if (lab && !spendLabels().has(lab)) return lab;
   return "";
 }
 
