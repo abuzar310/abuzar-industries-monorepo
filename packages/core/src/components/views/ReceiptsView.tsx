@@ -8,9 +8,13 @@ import {
   PAID_TO_MANAGER_LABEL,
   spendCategoryOf,
   spendDetailOf,
+  spendLabels,
+  liveSpendCategories,
   SPEND_CATEGORIES,
+  spendCatKey,
   upiAccounts,
 } from "@/lib/expenses";
+import { liveIncomeLines } from "@/lib/book-catalog";
 import { listWorkers, payWorker, repayWorker, type Worker } from "@/lib/attendance";
 import { partyLedger, quoteBill } from "@/lib/payments";
 import { applyCustomerReceipt, unwindReceiptPieces } from "@/lib/receipts";
@@ -34,14 +38,13 @@ const fromDmy = (v: string) => {
 };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-const SPEND_LABELS = new Set(SPEND_CATEGORIES.map((c) => c.label));
 /** Category spends recorded as Paid out (and daybook food/salary/custom with our labels). */
 const isCategoryPayout = (e: Expense) =>
   !e.custId &&
   !e.charge &&
   (e.type === "food" ||
     e.type === "salary" ||
-    (e.type === "custom" && SPEND_LABELS.has(e.label || "")));
+    (e.type === "custom" && spendLabels().has(e.label || "")));
 
 /** Money received back from a person/name (not a customer ledger receipt). */
 const isNameReceipt = (e: Expense) =>
@@ -83,7 +86,7 @@ export default function ReceiptsView() {
   }, [isOwner, recvCat]);
   /** whose cash the "Paid out" money left (null = default to the logged-in role) */
   const [paidBy, setPaidBy] = useState<"owner" | "manager" | null>(null);
-  /** Paid out category — Food / Salary / Truck rent / … */
+  /** Paid out category — Food / Salary / Heavy truck / … */
   const [paidCat, setPaidCat] = useState(SPEND_CATEGORIES[0].id);
   /** Paid out: party (carpenter = customer pick/type) or free name for other cats */
   const [paidParty, setPaidParty] = useState("");
@@ -93,6 +96,8 @@ export default function ReceiptsView() {
   const [paidCarpenter, setPaidCarpenter] = useState("");
   /** Mini truck rounds */
   const [paidRounds, setPaidRounds] = useState("");
+  /** Books / Carpenters deep-link: show only this paid-out category (and optional month). */
+  const [focusPaid, setFocusPaid] = useState<{ id: string; mm: string; yy: string } | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   /** editing a whole receipt (possibly split across quotes): its pieces get unwound + re-applied on save */
   const [editRcpt, setEditRcpt] = useState<{ id: string; pieces: Expense[] } | null>(null);
@@ -137,26 +142,51 @@ export default function ReceiptsView() {
     if (cust) setOpenCust(cust);
   }, []);
 
-  // Carpenters tab → Record commission
+  // Carpenters / Books → Paid out for a category
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    if (q.get("paid") !== "carpenter") return;
+    const paid = q.get("paid");
+    if (!paid) return;
     setKind("paid");
-    setPaidCat("carpenter");
+    const known = paid === "carpenter" || liveSpendCategories({ hidden: true }).some((c) => c.id === paid);
+    if (known) setPaidCat(paid);
     const name = (q.get("carpenter") || "").trim();
     if (name) setPaidCarpenter(name);
+    setFocusPaid({ id: paid, mm: q.get("mm") || "", yy: q.get("yy") || "" });
     window.history.replaceState(null, "", window.location.pathname);
   }, []);
 
-  // arrived from Balances (✎ on a payment line): ?edit=<rcptId | expenseId> → prefill the form
+  // arrived from Books / Balances: ?edit=<rcptId | expenseId> → prefill the form
   const editConsumed = useRef(false);
   useEffect(() => {
-    if (editConsumed.current || !expenses.length || !customers.length) return;
+    if (editConsumed.current || !expenses.length) return;
     const editParam = new URLSearchParams(window.location.search).get("edit");
     if (!editParam) {
       editConsumed.current = true;
       return;
     }
+    const payout = expenses.find((e) => e.id === editParam && isCategoryPayout(e));
+    if (payout) {
+      editConsumed.current = true;
+      window.history.replaceState(null, "", window.location.pathname);
+      const t = setTimeout(() => {
+        startEdit({ key: payout.id, cid: "", e: payout, amount: +payout.amount || 0, locked: false, paid: true });
+        setFocusPaid({ id: spendCatKey(payout), mm: "", yy: "" });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }, 0);
+      return () => clearTimeout(t);
+    }
+    const named = expenses.find((e) => e.id === editParam && isNameReceipt(e));
+    if (named) {
+      editConsumed.current = true;
+      window.history.replaceState(null, "", window.location.pathname);
+      const t = setTimeout(() => {
+        startEdit({ key: named.id, cid: "", e: named, amount: +named.amount || 0, locked: false, paid: false });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }, 0);
+      return () => clearTimeout(t);
+    }
+    if (!customers.length) return;
     const pieces = expenses.filter((e) => e.type === "sale" && !e.charge && e.rcptId === editParam);
     const single = pieces.length ? null : expenses.find((e) => e.id === editParam && e.type === "sale");
     const rep = pieces.find((x) => !!x.custId) || pieces[0] || single;
@@ -177,6 +207,14 @@ export default function ReceiptsView() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- startEdit is stable enough for this one-shot prefill
   }, [expenses, customers, quotes]);
+
+  useEffect(() => {
+    if (!focusPaid) return;
+    const t = setTimeout(() => {
+      document.getElementById("receipts-paid-out")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    return () => clearTimeout(t);
+  }, [focusPaid]);
 
   const ledger = partyLedger(quotes, expenses, customers);
   const party = picked ? ledger.parties.find((p) => p.custId === picked.id) : null;
@@ -271,9 +309,11 @@ export default function ReceiptsView() {
       }
       const catLab = paidMgr
         ? PAID_TO_MANAGER_LABEL
-        : recvCat
-          ? SPEND_CATEGORIES.find((c) => c.id === recvCat)?.label || ""
-          : "";
+        : recvCat.startsWith("inc:")
+          ? liveIncomeLines({ hidden: true }).find((l) => l.id === recvCat.slice(4))?.label || ""
+          : recvCat
+            ? liveSpendCategories({ hidden: true }).find((c) => c.id === recvCat)?.label || ""
+            : "";
       // Paid to manager: owner float → Manager Daybook cash (not Books, not Owner pocket)
       const useMode = paidMgr ? "cash" : isUpiMode ? "upi" : "cash";
       const useToOwner = paidMgr ? false : toOwner;
@@ -373,7 +413,7 @@ export default function ReceiptsView() {
         return toast("₹" + inr(a) + " · Paid to manager — added to Daybook (not in Books)");
       }
 
-      const cat = SPEND_CATEGORIES.find((c) => c.id === paidCat) || SPEND_CATEGORIES[SPEND_CATEGORIES.length - 1];
+      const cat = liveSpendCategories({ hidden: true }).find((c) => c.id === paidCat) || liveSpendCategories({ hidden: true }).find((c) => c.id === "other")!;
       const by = paidBy ?? (isOwner ? "owner" : "manager");
       const party = paidParty.trim();
       const rounds = cat.id === "minitruck" ? Math.max(0, Math.floor(+paidRounds || 0)) : 0;
@@ -588,7 +628,7 @@ export default function ReceiptsView() {
       setEditRcpt(null);
       setKind("paid");
       setAmt(String(e.amount));
-      const match = SPEND_CATEGORIES.find((c) => c.label === spendCategoryOf(e));
+      const match = liveSpendCategories({ hidden: true }).find((c) => c.label === spendCategoryOf(e));
       setPaidCat(match?.id || "other");
       setPaidBy(e.toOwner ? "owner" : "manager");
       setNote(e.note || "");
@@ -626,8 +666,10 @@ export default function ReceiptsView() {
       setKind("received");
       setRecvVia("name");
       setRecvName(e.party || "");
-      const catMatch = SPEND_CATEGORIES.find((c) => c.label === (e.label || "").trim());
-      setRecvCat(catMatch?.id || "");
+      const lab = (e.label || "").trim();
+      const incMatch = liveIncomeLines({ hidden: true }).find((l) => l.label === lab);
+      const catMatch = liveSpendCategories({ hidden: true }).find((c) => c.label === lab);
+      setRecvCat(incMatch ? "inc:" + incMatch.id : catMatch?.id || "");
       setAmt(String(e.amount));
       setNote(e.note || "");
       setDate(e.date ? fromDmy(e.date) : "");
@@ -704,9 +746,18 @@ export default function ReceiptsView() {
       arr.push({ key: e.id, cid, e, amount: +e.amount || 0, locked: false, paid: true });
       byCust.set(cid, arr);
     });
-  // Category paid-outs (Food / Salary / Truck rent / …) — listed separately, no customer
+  // Category paid-outs (Food / Salary / Heavy truck / …) — listed separately, no customer
   const paidOutList = expenses
     .filter(isCategoryPayout)
+    .filter((e) => {
+      if (!focusPaid) return true;
+      if (spendCatKey(e) !== focusPaid.id) return false;
+      if (focusPaid.mm && focusPaid.yy) {
+        const [, m = "", y = ""] = (e.date || "").split("-");
+        return m === focusPaid.mm && y === focusPaid.yy;
+      }
+      return true;
+    })
     .map((e) => ({ key: e.id, cid: "", e, amount: +e.amount || 0, locked: false, paid: true as const }))
     .sort((a, b) => (b.e.createdAt || "").localeCompare(a.e.createdAt || ""));
   const paidOutTotal = r2(paidOutList.reduce((s, x) => s + x.amount, 0));
@@ -851,7 +902,12 @@ export default function ReceiptsView() {
                     {isOwner && (
                       <option value="paid-manager">Paid to manager (Owner cash → Daybook)</option>
                     )}
-                    {SPEND_CATEGORIES.filter((c) => !c.skipBooks).map((c) => (
+                    {liveIncomeLines().filter((l) => l.custom).map((l) => (
+                      <option key={l.id} value={"inc:" + l.id}>
+                        {l.label}
+                      </option>
+                    ))}
+                    {liveSpendCategories({ skipBooks: false }).map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.label} (refund)
                       </option>
@@ -886,7 +942,7 @@ export default function ReceiptsView() {
                 }
               }}
             >
-              {SPEND_CATEGORIES.map((c) => (
+              {liveSpendCategories().map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.label}
                   {c.skipBooks ? " (not in Books)" : ""}
@@ -1191,7 +1247,7 @@ export default function ReceiptsView() {
             : kind === "paid"
               ? paidCat === "paid-manager"
                 ? "Record — Paid to manager (add to Daybook)"
-                : "Record paid out — " + (SPEND_CATEGORIES.find((c) => c.id === paidCat)?.label || "Other")
+                : "Record paid out — " + (liveSpendCategories({ hidden: true }).find((c) => c.id === paidCat)?.label || "Other")
               : recvVia === "name"
                 ? "Record received from " + (recvName.trim() || "name")
                 : "Record receipt"}
@@ -1307,8 +1363,21 @@ export default function ReceiptsView() {
         </div>
       )}
 
-      <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
-        Paid out <small>— ₹{inr(paidOutTotal)} · {paidOutList.length}</small>
+      <div id="receipts-paid-out" className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+        Paid out
+        <small>
+          {" — ₹"}{inr(paidOutTotal)} · {paidOutList.length}
+          {focusPaid
+            ? " · " +
+              (liveSpendCategories({ hidden: true }).find((c) => c.id === focusPaid.id)?.label || focusPaid.id) +
+              (focusPaid.mm && focusPaid.yy ? " · " + focusPaid.mm + "/20" + focusPaid.yy : "")
+            : ""}
+        </small>
+        {focusPaid && (
+          <button type="button" className="btn sm no-print" style={{ marginLeft: 10, fontSize: 12 }} onClick={() => setFocusPaid(null)}>
+            Show all
+          </button>
+        )}
       </div>
       {paidOutList.length ? (
         <div className="panel-card" style={{ padding: "0 0 4px" }}>
@@ -1340,7 +1409,11 @@ export default function ReceiptsView() {
         </div>
       ) : (
         <div className="panel-card">
-          <div className="empty">No category paid-outs yet — Food, Salary, Truck rent, etc.</div>
+          <div className="empty">
+            {focusPaid
+              ? "No paid-outs in this filter."
+              : "No category paid-outs yet — Food, Salary, Heavy truck, etc."}
+          </div>
         </div>
       )}
 

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { allRec, delRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
-import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, inDaybook, isInflow, isUpi, requestHandover, spendCategoryOf, spendDetailOf, SPEND_CATEGORIES, upiAccounts } from "@/lib/expenses";
+import { addExpense, allExpenses, allSessions, confirmHandover, dayTotals, declineHandover, deleteSession, inDaybook, isInflow, isUpi, liveSpendCategories, requestHandover, spendCategoryOf, spendDetailOf, SPEND_CATEGORIES, upiAccounts } from "@/lib/expenses";
 import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
 import { isIOS, isStandalone } from "@/lib/pwa";
 import { USERS } from "@/lib/local-auth";
@@ -123,7 +123,7 @@ export default function ExpensesView() {
       bumpData();
       return toast(upiEntry ? "UPI entry added" : "Entry added");
     }
-    const cat = SPEND_CATEGORIES.find((c) => c.id === spendCat) || SPEND_CATEGORIES[SPEND_CATEGORIES.length - 1];
+    const cat = liveSpendCategories({ hidden: true }).find((c) => c.id === spendCat) || liveSpendCategories({ hidden: true }).find((c) => c.id === "other")!;
     await addExpense({
       type: cat.type,
       amount: amt,
@@ -384,7 +384,7 @@ export default function ExpensesView() {
             <label className="db-cat">
               <span>Category</span>
               <select value={spendCat} onChange={(ev) => setSpendCat(ev.target.value)}>
-                {SPEND_CATEGORIES.map((c) => (
+                {liveSpendCategories().map((c) => (
                   <option key={c.id} value={c.id}>{c.label}</option>
                 ))}
               </select>
