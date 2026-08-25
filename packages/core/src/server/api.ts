@@ -522,7 +522,7 @@ export function createDataApi(schema: AppSchema) {
 
     if (a === "meta" && b && method === "PUT") {
       const mk = decodeURIComponent(b);
-      if (mk === "aiApiKey") return err(403, "Set the AI key in Settings");
+      if (mk === "aiApiKey" || mk === "aiHost" || mk === "aiModel") return err(403, "Set AI in Settings");
       const body = (await req.json().catch(() => ({}))) as AnyRec;
       await metaSet(schema, mk, body.v);
       return json({ ok: true });

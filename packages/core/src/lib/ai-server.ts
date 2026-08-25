@@ -1,12 +1,10 @@
 // Server-only AI chat proxy. Key stays on the server (never to the browser).
-// Official OpenAI Chat Completions only — no Gemini.
+// OpenAI-compatible Chat Completions (OpenAI, Groq, OpenRouter, local, …).
 import { readSessionToken, SESSION_COOKIE } from "@/server/auth";
 import { metaGetAll, metaSet, type AppSchema } from "@/server/db";
+import { chatCompletionsUrl, DEFAULT_AI_HOST, normalizeAiHost, normalizeAiModel } from "@/lib/ai-host";
 
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
-
-const OPENAI_HOST = "https://api.openai.com/v1";
-const DEFAULT_MODEL = "gpt-4o-mini";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -21,21 +19,11 @@ function sessionUser(req: Request) {
   return readSessionToken(token);
 }
 
-function trimHost(h: string) {
-  return h.trim().replace(/\/+$/, "");
-}
-
-function openaiHost(raw: string) {
-  const h = trimHost(raw);
-  if (!h || /googleapis\.com|generativelanguage|aistudio|gemini/i.test(h)) return OPENAI_HOST;
-  return h;
-}
-
 async function aiCreds(schema: AppSchema) {
   const meta = await metaGetAll(schema);
   const key = String(meta.aiApiKey || process.env.AI_API_KEY || "").trim();
-  const host = openaiHost(String(meta.aiHost || process.env.AI_BASE_URL || ""));
-  const model = (process.env.AI_MODEL || "").trim() || DEFAULT_MODEL;
+  const host = normalizeAiHost(String(meta.aiHost || process.env.AI_BASE_URL || "")) || DEFAULT_AI_HOST;
+  const model = normalizeAiModel(String(meta.aiModel || process.env.AI_MODEL || ""));
   return { key, host, model };
 }
 
@@ -68,33 +56,40 @@ function upstreamErrorMessage(data: unknown, status: number): string {
   return "AI error " + status;
 }
 
-/** GET/PUT /api/ai/config — owner sets OpenAI key in Settings. Key never returned. */
+/** GET/PUT /api/ai/config — owner sets key + host in Settings. Key never returned. */
 export async function handleAiConfig(req: Request, schema: AppSchema): Promise<Response> {
   const user = sessionUser(req);
   if (!user) return json({ error: "Sign in first" }, 401);
 
   if (req.method === "GET") {
     const c = await aiCreds(schema);
-    return json({ host: c.host, configured: !!c.key, provider: "openai" });
+    return json({ host: c.host, model: c.model, configured: !!c.key });
   }
 
   if (req.method !== "PUT") return json({ error: "Method not allowed" }, 405);
   if (user.role !== "owner") return json({ error: "Owner only" }, 403);
 
-  let body: { host?: string; apiKey?: string };
+  let body: { host?: string; apiKey?: string; model?: string };
   try {
     body = (await req.json()) as typeof body;
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  await metaSet(schema, "aiHost", OPENAI_HOST);
+  if (typeof body.host === "string") {
+    const host = normalizeAiHost(body.host);
+    if (!host) return json({ error: "Enter a valid http(s) host URL" }, 400);
+    await metaSet(schema, "aiHost", host.slice(0, 300));
+  }
+  if (typeof body.model === "string" && body.model.trim()) {
+    await metaSet(schema, "aiModel", normalizeAiModel(body.model));
+  }
   if (typeof body.apiKey === "string" && body.apiKey.trim()) {
     await metaSet(schema, "aiApiKey", body.apiKey.trim().slice(0, 600));
   }
 
   const c = await aiCreds(schema);
-  return json({ ok: true, host: c.host, configured: !!c.key, provider: "openai" });
+  return json({ ok: true, host: c.host, model: c.model, configured: !!c.key });
 }
 
 /** POST /api/ai/chat — { messages, pathname?, docId?, cloak? }  Read-only DB snapshot; never writes. */
@@ -103,7 +98,7 @@ export async function handleAiChat(req: Request, appLabel: string, schema: AppSc
   if (!user) return json({ error: "Sign in first" }, 401);
 
   const { key, host, model } = await aiCreds(schema);
-  if (!key) return json({ error: "Add the OpenAI API key in Settings" }, 503);
+  if (!key) return json({ error: "Add an API key in Settings → AI assistant" }, 503);
 
   let body: {
     messages?: AiChatMessage[];
@@ -148,7 +143,7 @@ export async function handleAiChat(req: Request, appLabel: string, schema: AppSc
     typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(60000) : undefined;
 
   try {
-    const url = /\/chat\/completions$/i.test(host) ? host : host + "/chat/completions";
+    const url = chatCompletionsUrl(host);
     const upstream = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
@@ -169,7 +164,7 @@ export async function handleAiChat(req: Request, appLabel: string, schema: AppSc
       return json({ error: upstreamErrorMessage(data, upstream.status).slice(0, 400) }, 502);
     }
     const text = (data?.choices?.[0]?.message?.content || "").trim();
-    if (!text) return json({ error: "Empty reply from OpenAI" }, 502);
+    if (!text) return json({ error: "Empty reply from the AI host" }, 502);
     return json({ reply: text, model });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "AI request failed";

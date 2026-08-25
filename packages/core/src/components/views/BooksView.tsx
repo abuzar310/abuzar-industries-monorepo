@@ -1,8 +1,24 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
-import { inBooks, inDaybook, isInflow, openingCarry, spendCategoryOf, spendCatKey, spendDetailOf, SPEND_CATEGORIES } from "@/lib/expenses";
+import {
+  addIncomeLine,
+  addSpendCategory,
+  bookLabel,
+  liveIncomeLines,
+  liveSpendCategories,
+  removeIncomeLine,
+  removeSpendCategory,
+  renameIncomeLine,
+  renameSpendCategory,
+  setBookLabel,
+  spendLocked,
+  splitCustomIncome,
+} from "@/lib/book-catalog";
+import { inBooks, inDaybook, isInflow, openingCarry, spendCategoryOf, spendCatKey, spendDetailOf } from "@/lib/expenses";
+import { confirmDialog, formDialog } from "@/store/dialog-store";
 import { partyLedger, quoteBill } from "@/lib/payments";
 import { acctLedger, listCollections, listHolders, type AccountCollection, type PayHolder } from "@/lib/accounts";
 import { listAttendance, listWorkers, workerAccount, type AttendanceMark, type Worker } from "@/lib/attendance";
@@ -34,11 +50,13 @@ const isBillable = (d: Doc) =>
 
 export default function BooksView() {
   const { ready, dataVersion, cloakMoney } = useApp();
+  const router = useRouter();
   const now = new Date();
   const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, "0"));
   const [year, setYear] = useState(String(now.getFullYear()).slice(2));
   // which book to show — a visible chooser at the top instead of one long scroll
   const [view, setView] = useState<"pnl" | "ledger" | "cash" | "bank" | "balance" | "assets">("pnl");
+  const [editNames, setEditNames] = useState(false);
   const pageRef = useRef<HTMLDivElement>(null);
 
   const [expensesRaw, setExpenses] = useState<Expense[]>([]);
@@ -108,18 +126,14 @@ export default function BooksView() {
     [expenses, month, year], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const income = useMemo(() => {
-    const sales = monthExp.filter((e) => e.type === "sale" && !e.charge);
-    const cash = r2(sales.filter((e) => e.mode !== "upi").reduce((s, e) => s + (+e.amount || 0), 0));
-    const upiOwner = r2(
-      sales.filter((e) => e.mode === "upi" && e.toOwner).reduce((s, e) => s + (+e.amount || 0), 0),
-    );
-    const upiOther = r2(
-      sales.filter((e) => e.mode === "upi" && !e.toOwner).reduce((s, e) => s + (+e.amount || 0), 0),
-    );
-    const upi = r2(upiOwner + upiOther);
-    return { cash, upi, upiOwner, upiOther, total: r2(cash + upi), count: sales.length };
-  }, [monthExp]);
+  const income = useMemo(
+    () =>
+      splitCustomIncome(
+        monthExp.filter((e) => e.type === "sale" && !e.charge),
+        liveIncomeLines().filter((l) => l.custom),
+      ),
+    [monthExp, dataVersion],
+  );
 
   const spends = useMemo(() => {
     const outs = monthExp.filter((e) => !isInflow(e.type) && !e.charge);
@@ -149,7 +163,46 @@ export default function BooksView() {
     [quotes, month, year], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  const spendCats = liveSpendCategories({ skipBooks: false });
+  const incomeLines = liveIncomeLines();
+
   const net = r2(income.total - spends.total);
+
+  async function askName(title: string, current: string) {
+    const res = await formDialog({
+      title,
+      fields: [{ name: "label", label: "Name", value: current, required: true }],
+      submitLabel: "Save",
+    });
+    const v = (res?.label || "").trim();
+    return v || null;
+  }
+
+  async function onRenameLabel(id: string, current: string) {
+    const v = await askName("Rename", current);
+    if (v) await setBookLabel(id, v);
+  }
+
+  function openPaid(id: string) {
+    router.push("/receipts?paid=" + encodeURIComponent(id) + "&mm=" + month + "&yy=" + year);
+  }
+  function openTxn(id: string) {
+    router.push("/receipts?edit=" + encodeURIComponent(id));
+  }
+
+  function Name({ id, extra }: { id: string; extra?: string }) {
+    const text = bookLabel(id) + (extra || "");
+    return (
+      <span className="books-name">
+        {text}
+        {editNames && (
+          <button type="button" className="books-name-btn no-print" onClick={() => void onRenameLabel(id, bookLabel(id))} aria-label="Rename">
+            ✎
+          </button>
+        )}
+      </span>
+    );
+  }
 
   // ── month ledger: every money event chronologically with a running net ────
   const monthRows = useMemo(() => {
@@ -370,7 +423,10 @@ export default function BooksView() {
       </div>
 
       {/* Save the on-screen section as a website-quality PDF (direct download) */}
-      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
+        <button className={"btn sm" + (editNames ? " primary" : "")} type="button" onClick={() => setEditNames((v) => !v)}>
+          {editNames ? "Done" : "Edit names"}
+        </button>
         <button className="btn sm" type="button" onClick={savePdf}>Save PDF</button>
       </div>
 
@@ -397,7 +453,7 @@ export default function BooksView() {
       {/* monthly P&L cards */}
       <div className="party-grid">
         <div className="party-card">
-          <div className="party-stat-label">Income · {monthLabel}</div>
+          <div className="party-stat-label"><Name id="pnl.income" extra={" · " + monthLabel} /></div>
           <div className="party-stat-value ok">₹ {inr(income.total)}</div>
           <div className="party-stat-sub">
             {income.count} receipts · cash ₹{inr(income.cash)} · UPI ₹{inr(income.upi)}
@@ -405,43 +461,113 @@ export default function BooksView() {
           </div>
         </div>
         <div className="party-card">
-          <div className="party-stat-label">Expenses · {monthLabel}</div>
+          <div className="party-stat-label"><Name id="pnl.expenses" extra={" · " + monthLabel} /></div>
           <div className="party-stat-value due">₹ {inr(spends.total)}</div>
           <div className="party-stat-sub">{spends.count} entries across {spends.byCat.size} categories</div>
         </div>
         <div className="party-card hero">
-          <div className="party-stat-label">Net · {monthLabel}</div>
+          <div className="party-stat-label"><Name id="pnl.net" extra={" · " + monthLabel} /></div>
           <div className={"party-stat-value " + (net >= 0 ? "ok" : "due")}>{net < 0 ? "−" : ""}₹ {inr(Math.abs(net))}</div>
-          <div className="party-stat-sub">{net >= 0 ? "surplus this month" : "deficit this month"}</div>
+          <div className="party-stat-sub"><Name id={net >= 0 ? "pnl.surplus" : "pnl.deficit"} /></div>
         </div>
       </div>
 
       {/* income / expense breakdown */}
       <div className="books-grid">
         <div className="party-card">
-          <div className="party-stat-label" style={{ marginBottom: 10 }}>Income breakdown</div>
-          <div className="books-row"><span>Cash received</span><b className="ok">₹{inr(income.cash)}</b></div>
-          <div className="books-row"><span>UPI received by owner</span><b className="ok">₹{inr(income.upiOwner)}</b></div>
-          <div className="books-row"><span>UPI others</span><b className="ok">₹{inr(income.upiOther)}</b></div>
-          {billedMonth > 0 && <div className="books-row"><span>Billed (quotes of {monthLabel})</span><b>₹{inr(billedMonth)}</b></div>}
-          {duesAdded > 0 && <div className="books-row"><span>Dues added (no cash)</span><b className="due">₹{inr(duesAdded)}</b></div>}
-          <div className="books-row books-total"><span>Total income</span><b className="ok">₹{inr(income.total)}</b></div>
+          <div className="party-stat-label" style={{ marginBottom: 10 }}>
+            <Name id="inc.head" />
+            {editNames && (
+              <button
+                type="button"
+                className="books-name-btn no-print"
+                onClick={async () => {
+                  const v = await askName("Add income name", "");
+                  if (v) await addIncomeLine(v);
+                }}
+              >
+                +
+              </button>
+            )}
+          </div>
+          <div className="books-row"><span><Name id="inc.cash" /></span><b className="ok">₹{inr(income.cash)}</b></div>
+          <div className="books-row"><span><Name id="inc.upiOwner" /></span><b className="ok">₹{inr(income.upiOwner)}</b></div>
+          <div className="books-row"><span><Name id="inc.upiOther" /></span><b className="ok">₹{inr(income.upiOther)}</b></div>
+          {income.extra.map((g) => (
+            <div className="books-row" key={g.id}>
+              <span className="books-name">
+                {g.label}
+                {editNames && (
+                  <span className="no-print">
+                    <button type="button" className="books-name-btn" onClick={async () => { const v = await askName("Rename", g.label); if (v) await renameIncomeLine(g.id, v); }}>✎</button>
+                    <button type="button" className="books-name-btn" onClick={async () => { if (await confirmDialog({ title: "Remove this name?", message: "Money stays. It goes back into cash / UPI.", confirmLabel: "Remove", danger: true })) await removeIncomeLine(g.id); }}>×</button>
+                  </span>
+                )}
+              </span>
+              <b className="ok">₹{inr(g.amount)}</b>
+            </div>
+          ))}
+          {editNames && incomeLines.filter((l) => l.custom && !income.extra.some((g) => g.id === l.id)).map((l) => (
+            <div className="books-row" key={l.id}>
+              <span className="books-name">
+                {l.label}
+                <span className="no-print">
+                  <button type="button" className="books-name-btn" onClick={async () => { const v = await askName("Rename", l.label); if (v) await renameIncomeLine(l.id, v); }}>✎</button>
+                  <button type="button" className="books-name-btn" onClick={async () => { if (await confirmDialog({ title: "Remove this name?", confirmLabel: "Remove", danger: true })) await removeIncomeLine(l.id); }}>×</button>
+                </span>
+              </span>
+              <b>—</b>
+            </div>
+          ))}
+          {(billedMonth > 0 || editNames) && <div className="books-row"><span><Name id="inc.billed" extra={" · " + monthLabel} /></span><b>₹{inr(billedMonth)}</b></div>}
+          {(duesAdded > 0 || editNames) && <div className="books-row"><span><Name id="inc.dues" /></span><b className="due">₹{inr(duesAdded)}</b></div>}
+          <div className="books-row books-total"><span><Name id="inc.total" /></span><b className="ok">₹{inr(income.total)}</b></div>
         </div>
         <div className="party-card">
-          <div className="party-stat-label" style={{ marginBottom: 10 }}>Expense breakdown</div>
-          {spends.byCat.size === 0 && <div className="books-row"><span>No expenses this month</span><b>—</b></div>}
-          {SPEND_CATEGORIES.filter((c) => spends.byCat.has(c.id))
-            .sort((a, b) => (spends.byCat.get(b.id)!.amount - spends.byCat.get(a.id)!.amount))
+          <div className="party-stat-label" style={{ marginBottom: 10 }}>
+            <Name id="exp.head" />
+            {editNames && (
+              <button
+                type="button"
+                className="books-name-btn no-print"
+                onClick={async () => {
+                  const v = await askName("Add expense name", "");
+                  if (v) await addSpendCategory(v);
+                }}
+              >
+                +
+              </button>
+            )}
+          </div>
+          {spends.byCat.size === 0 && !editNames && <div className="books-row"><span><Name id="exp.empty" /></span><b>—</b></div>}
+          {(editNames ? spendCats : spendCats.filter((c) => spends.byCat.has(c.id)))
+            .slice()
+            .sort((a, b) => (spends.byCat.get(b.id)?.amount || 0) - (spends.byCat.get(a.id)?.amount || 0))
             .map((c) => {
-              const g = spends.byCat.get(c.id)!;
+              const g = spends.byCat.get(c.id);
               return (
-                <div className="books-row" key={c.id}>
-                  <span>{c.label} <small>· {g.count}</small></span>
-                  <b className="due">₹{inr(g.amount)}</b>
+                <div
+                  className={"books-row" + (!editNames && g ? " books-go" : "")}
+                  key={c.id}
+                  onClick={() => { if (!editNames && g) openPaid(c.id); }}
+                  role={!editNames && g ? "link" : undefined}
+                >
+                  <span className="books-name">
+                    {c.label}{g ? <small> · {g.count}</small> : null}
+                    {editNames && (
+                      <span className="no-print" onClick={(ev) => ev.stopPropagation()}>
+                        <button type="button" className="books-name-btn" onClick={async () => { const v = await askName("Rename", c.label); if (v) await renameSpendCategory(c.id, v); }}>✎</button>
+                        {!spendLocked(c.id) && (
+                          <button type="button" className="books-name-btn" onClick={async () => { if (await confirmDialog({ title: "Remove " + c.label + "?", message: "Old rows stay, under Other. Receipts / Daybook drop this name.", confirmLabel: "Remove", danger: true })) await removeSpendCategory(c.id); }}>×</button>
+                        )}
+                      </span>
+                    )}
+                  </span>
+                  <b className="due">{g ? "₹" + inr(g.amount) : "—"}</b>
                 </div>
               );
             })}
-          <div className="books-row books-total"><span>Total expenses</span><b className="due">₹{inr(spends.total)}</b></div>
+          <div className="books-row books-total"><span><Name id="exp.total" /></span><b className="due">₹{inr(spends.total)}</b></div>
         </div>
       </div>
       </>
@@ -451,7 +577,7 @@ export default function BooksView() {
       {view === "ledger" && (
       <div className="panel-card" style={{ marginTop: 18 }}>
         <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-          <span>Month ledger · {monthRows.length} {monthRows.length === 1 ? "entry" : "entries"}</span>
+          <span><Name id="led.head" extra={" · " + monthRows.length + (monthRows.length === 1 ? " entry" : " entries")} /></span>
           <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
             in ₹{inr(ledIn)} · out ₹{inr(ledOut)}
           </span>
@@ -469,10 +595,10 @@ export default function BooksView() {
           <label className="modal-field" style={{ flex: "1 1 160px", minWidth: 140, margin: 0 }}>
             <span>Category</span>
             <select value={ledCat} onChange={(e) => setLedCat(e.target.value)}>
-              <option value="all">All</option>
-              <option value="in">Money in</option>
-              <option value="out">All expenses</option>
-              {SPEND_CATEGORIES.map((c) => (
+              <option value="all">{bookLabel("led.all")}</option>
+              <option value="in">{bookLabel("led.in")}</option>
+              <option value="out">{bookLabel("led.out")}</option>
+              {spendCats.map((c) => (
                 <option key={c.id} value={c.id}>{c.label}</option>
               ))}
             </select>
@@ -510,7 +636,7 @@ export default function BooksView() {
               // Line tag: money-out = Dr, money-in = Cr
               const lineDr = row.debit > 0.005;
               return (
-              <div className="bank-row" key={row.id}>
+              <div className="bank-row books-go" key={row.id} onClick={() => openTxn(row.id)} role="link">
                 <span className="bank-date">{row.date}</span>
                 <span className="bank-parts">
                   {row.particulars}
@@ -533,7 +659,7 @@ export default function BooksView() {
             })}
             <div className="bank-row bank-total">
               <span className="bank-date"></span>
-              <span className="bank-parts">{ledFiltered ? "Filtered net" : "Net for " + monthLabel}</span>
+              <span className="bank-parts">{ledFiltered ? bookLabel("led.filtered") : bookLabel("led.net") + " " + monthLabel}</span>
               <span className="bank-amt dr">₹{inr(ledOut)}</span>
               <span className="bank-amt cr">₹{inr(ledIn)}</span>
               <span className={"bank-amt bal" + (ledNet < -0.005 ? " dr" : " cr")}>
@@ -554,7 +680,7 @@ export default function BooksView() {
       {view === "cash" && (
       <div className="panel-card" style={{ marginTop: 18 }}>
         <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-          <span>Cash book · cash in hand</span>
+          <span><Name id="cash.head" /></span>
           <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
             closing ₹{inr(cashClose)}
           </span>
@@ -570,8 +696,8 @@ export default function BooksView() {
           <div className="bank-row">
             <span className="bank-date"></span>
             <span className="bank-parts">
-              Opening balance
-              <small>carried forward</small>
+              <Name id="cash.open" />
+              <small>{bookLabel("cash.openNote")}</small>
             </span>
             <span className="bank-amt"></span>
             <span className="bank-amt"></span>
@@ -584,7 +710,7 @@ export default function BooksView() {
             const balDr = row.balance < -0.005;
             const lineDr = row.debit > 0.005;
             return (
-              <div className="bank-row" key={row.id}>
+              <div className="bank-row books-go" key={row.id} onClick={() => openTxn(row.id)} role="link">
                 <span className="bank-date">{row.date}</span>
                 <span className="bank-parts">
                   {row.particulars}
@@ -607,7 +733,7 @@ export default function BooksView() {
           })}
           <div className="bank-row bank-total">
             <span className="bank-date"></span>
-            <span className="bank-parts">Closing balance</span>
+            <span className="bank-parts"><Name id="cash.close" /></span>
             <span className="bank-amt dr">₹{inr(cashOut)}</span>
             <span className="bank-amt cr">₹{inr(cashIn)}</span>
             <span className={"bank-amt bal" + (cashClose < -0.005 ? " dr" : " cr")}>
@@ -623,7 +749,7 @@ export default function BooksView() {
       {view === "bank" && (
       <div className="panel-card" style={{ marginTop: 18 }}>
         <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-          <span>Bank book · UPI accounts</span>
+          <span><Name id="bank.head" /></span>
           <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
             on hand ₹{inr(bankLedger.totalBalance)}
           </span>
@@ -631,7 +757,7 @@ export default function BooksView() {
         <div className="bank-ledger" style={{ margin: "0 12px 12px" }}>
           <div className="bank-hdr">
             <span></span>
-            <span>Account</span>
+            <span><Name id="bank.acct" /></span>
             <span className="bank-amt">Received ₹</span>
             <span className="bank-amt">Handed ₹</span>
             <span className="bank-amt">Balance</span>
@@ -659,7 +785,7 @@ export default function BooksView() {
           })}
           <div className="bank-row bank-total">
             <span className="bank-date"></span>
-            <span className="bank-parts">Total UPI on hand</span>
+            <span className="bank-parts"><Name id="bank.total" /></span>
             <span className="bank-amt cr">₹{inr(bankLedger.totalReceived)}</span>
             <span className="bank-amt dr">₹{inr(bankLedger.totalCollected)}</span>
             <span className={"bank-amt bal" + (bankLedger.totalBalance < -0.005 ? " dr" : " cr")}>
@@ -682,26 +808,26 @@ export default function BooksView() {
       {view === "balance" && (
       <>
       <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
-        Balance sheet <small>— as of today · both sides tie</small>
+        <Name id="bal.head" />
       </div>
       <div className="books-grid">
         <div className="party-card">
-          <div className="party-stat-label" style={{ marginBottom: 10 }}>Liabilities &amp; Capital</div>
-          <div className="books-row"><span>Unpaid wages <small>· Attendance</small></span><b className="due">₹{inr(snapshot.unpaidWages)}</b></div>
-          <div className="books-row"><span>Customer advances <small>· Balances</small></span><b className="due">₹{inr(snapshot.custAdvances)}</b></div>
+          <div className="party-stat-label" style={{ marginBottom: 10 }}><Name id="bal.liab" /></div>
+          <div className="books-row"><span><Name id="bal.wages" /> <small>· Attendance</small></span><b className="due">₹{inr(snapshot.unpaidWages)}</b></div>
+          <div className="books-row"><span><Name id="bal.custAdv" /> <small>· Balances</small></span><b className="due">₹{inr(snapshot.custAdvances)}</b></div>
           <div className="books-row">
-            <span>Owner&rsquo;s capital <small>· balancing figure</small></span>
+            <span><Name id="bal.capital" /> <small>· balancing figure</small></span>
             <b className={snapshot.position >= 0 ? "ok" : "due"}>{snapshot.position < 0 ? "−" : ""}₹{inr(Math.abs(snapshot.position))}</b>
           </div>
-          <div className="books-row books-total"><span>Total</span><b>₹{inr(snapshot.assets)}</b></div>
+          <div className="books-row books-total"><span><Name id="bal.total" /></span><b>₹{inr(snapshot.assets)}</b></div>
         </div>
         <div className="party-card">
-          <div className="party-stat-label" style={{ marginBottom: 10 }}>Assets</div>
-          <div className="books-row"><span>Cash in hand <small>· Daybook</small></span><b>₹{inr(snapshot.cashInHand)}</b></div>
-          <div className="books-row"><span>UPI with holders <small>· Accounts</small></span><b>₹{inr(snapshot.upiWithHolders)}</b></div>
-          <div className="books-row"><span>Customer dues <small>· Balances</small></span><b>₹{inr(snapshot.receivables)}</b></div>
-          <div className="books-row"><span>Worker advances <small>· Attendance</small></span><b>₹{inr(snapshot.workerAdvances)}</b></div>
-          <div className="books-row books-total"><span>Total</span><b>₹{inr(snapshot.assets)}</b></div>
+          <div className="party-stat-label" style={{ marginBottom: 10 }}><Name id="bal.assets" /></div>
+          <div className="books-row"><span><Name id="bal.cash" /> <small>· Daybook</small></span><b>₹{inr(snapshot.cashInHand)}</b></div>
+          <div className="books-row"><span><Name id="bal.upi" /> <small>· Accounts</small></span><b>₹{inr(snapshot.upiWithHolders)}</b></div>
+          <div className="books-row"><span><Name id="bal.dues" /> <small>· Balances</small></span><b>₹{inr(snapshot.receivables)}</b></div>
+          <div className="books-row"><span><Name id="bal.worker" /> <small>· Attendance</small></span><b>₹{inr(snapshot.workerAdvances)}</b></div>
+          <div className="books-row books-total"><span><Name id="bal.total" /></span><b>₹{inr(snapshot.assets)}</b></div>
         </div>
       </div>
       <div className="stmt-sub" style={{ padding: "10px 2px", opacity: 0.7, fontSize: 12 }}>
@@ -714,24 +840,24 @@ export default function BooksView() {
       <>
       {/* assets & liabilities — live snapshot */}
       <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
-        Assets &amp; Liabilities <small>— as of today, from every tab</small>
+        <Name id="ast.head" />
       </div>
       <div className="books-grid">
         <div className="party-card">
-          <div className="party-stat-label" style={{ marginBottom: 10 }}>Assets — what the business holds</div>
-          <div className="books-row"><span>Cash in hand <small>· Daybook</small></span><b>₹{inr(snapshot.cashInHand)}</b></div>
-          <div className="books-row"><span>UPI with holders <small>· Accounts</small></span><b>₹{inr(snapshot.upiWithHolders)}</b></div>
-          <div className="books-row"><span>Customer dues <small>· Balances</small></span><b>₹{inr(snapshot.receivables)}</b></div>
-          <div className="books-row"><span>Worker advances <small>· Attendance</small></span><b>₹{inr(snapshot.workerAdvances)}</b></div>
-          <div className="books-row books-total"><span>Total assets</span><b className="ok">₹{inr(snapshot.assets)}</b></div>
+          <div className="party-stat-label" style={{ marginBottom: 10 }}><Name id="ast.hold" /></div>
+          <div className="books-row"><span><Name id="bal.cash" /> <small>· Daybook</small></span><b>₹{inr(snapshot.cashInHand)}</b></div>
+          <div className="books-row"><span><Name id="bal.upi" /> <small>· Accounts</small></span><b>₹{inr(snapshot.upiWithHolders)}</b></div>
+          <div className="books-row"><span><Name id="bal.dues" /> <small>· Balances</small></span><b>₹{inr(snapshot.receivables)}</b></div>
+          <div className="books-row"><span><Name id="bal.worker" /> <small>· Attendance</small></span><b>₹{inr(snapshot.workerAdvances)}</b></div>
+          <div className="books-row books-total"><span><Name id="ast.assets" /></span><b className="ok">₹{inr(snapshot.assets)}</b></div>
         </div>
         <div className="party-card">
-          <div className="party-stat-label" style={{ marginBottom: 10 }}>Liabilities — what the business owes</div>
-          <div className="books-row"><span>Unpaid wages <small>· Attendance</small></span><b>₹{inr(snapshot.unpaidWages)}</b></div>
-          <div className="books-row"><span>Customer advances <small>· Balances</small></span><b>₹{inr(snapshot.custAdvances)}</b></div>
-          <div className="books-row books-total"><span>Total liabilities</span><b className="due">₹{inr(snapshot.liabilities)}</b></div>
+          <div className="party-stat-label" style={{ marginBottom: 10 }}><Name id="ast.owe" /></div>
+          <div className="books-row"><span><Name id="bal.wages" /> <small>· Attendance</small></span><b className="due">₹{inr(snapshot.unpaidWages)}</b></div>
+          <div className="books-row"><span><Name id="bal.custAdv" /> <small>· Balances</small></span><b className="due">₹{inr(snapshot.custAdvances)}</b></div>
+          <div className="books-row books-total"><span><Name id="ast.liab" /></span><b className="due">₹{inr(snapshot.liabilities)}</b></div>
           <div className="books-row books-total" style={{ marginTop: 8 }}>
-            <span>Net position</span>
+            <span><Name id="ast.net" /></span>
             <b className={snapshot.position >= 0 ? "ok" : "due"}>{snapshot.position < 0 ? "−" : ""}₹{inr(Math.abs(snapshot.position))}</b>
           </div>
         </div>

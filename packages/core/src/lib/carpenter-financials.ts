@@ -1,5 +1,5 @@
 import { dateSortKey } from "./calc";
-import { spendCategoryOf } from "./expenses";
+import { spendCatKey } from "./expenses";
 import type { Carpenter, Customer, Doc, Expense } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -10,7 +10,7 @@ export function carpenterKey(name: string): string {
 
 export function isCarpenterCommission(e: Expense): boolean {
   if (e.type === "sale" || e.charge) return false;
-  return spendCategoryOf(e) === "Carpenter commission";
+  return spendCatKey(e) === "carpenter";
 }
 
 export function carpenterHref(key: string, recordId?: string): string {

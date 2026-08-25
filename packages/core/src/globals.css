@@ -2407,6 +2407,12 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .books-row b.ok{color:var(--green)} .books-row b.due{color:var(--danger)}
 .books-row.books-total{border-top:2px solid var(--line-2); border-bottom:none; margin-top:4px; padding-top:9px; font-weight:700}
 .books-row.books-total b{font-size:14.5px}
+.books-name{display:inline-flex; align-items:baseline; gap:6px; flex-wrap:wrap}
+.books-name-btn{border:0; background:transparent; color:var(--ink-faint); cursor:pointer; font-size:12px; padding:0 2px; line-height:1}
+.books-name-btn:hover{color:var(--ink)}
+.books-go{cursor:pointer}
+.books-row.books-go:hover{background:var(--panel-2)}
+@media print{ .books-go{cursor:default} }
 @media(max-width:640px){ .books-grid{grid-template-columns:1fr; gap:12px} }
 
 /* very small phones: shrink amounts further, drop the Dr/Cr pill */
@@ -2827,6 +2833,56 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   border-radius:999px;
 }
 .review-qr-close:hover{color:#3d2418}
+
+/* Permit letter overlay — invoice letterhead + forest-officer letter */
+.permit-overlay{
+  position:fixed; inset:0; z-index:8900;
+  background:rgba(26,20,16,.58);
+  display:flex; align-items:flex-start; justify-content:center;
+  padding:16px; box-sizing:border-box; overflow:auto;
+  backdrop-filter:blur(2px);
+}
+.permit-panel{width:210mm; max-width:100%; margin:12px auto 24px}
+.permit-actions{display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-bottom:10px}
+.permit-hint{margin-right:auto; font-size:13px; color:#f3ead8}
+.permit-sheet{
+  display:flex; flex-direction:column;
+  width:210mm; max-width:100%; min-height:297mm;
+  box-sizing:border-box; box-shadow:0 12px 40px rgba(42,33,24,.22);
+}
+.permit-sheet .i3-mast{
+  display:flex; align-items:center; justify-content:flex-start; gap:10px;
+  min-height:0; padding:12px 16px 10px 12px;
+}
+.permit-sheet .i3-mast img{
+  position:static; transform:none; flex:0 0 auto; height:96px;
+}
+.inv3a.permit-sheet .i3-id{flex:0 0 auto; width:min-content; padding:0; text-align:left}
+.inv3a.permit-sheet .i3-nm{font-size:42px; letter-spacing:.1em; text-align:left}
+.inv3a.permit-sheet .i3-ad,.inv3a.permit-sheet .i3-gs{max-width:none; margin:5px 0 0; white-space:normal; text-align:left}
+.permit-body{
+  padding:40px 44px 48px; font-size:21px; line-height:2.05; color:var(--i3-ink, #2A2118)
+}
+.permit-body p{margin:0 0 22px}
+.permit-sign{
+  display:flex; justify-content:space-between; align-items:flex-start;
+  margin-top:52px; padding-top:8px; gap:32px; font-size:21px; line-height:1.9
+}
+.permit-faith{text-align:right; min-width:9em; padding-top:2.6em}
+.permit-sheet [contenteditable]{outline:none; border-radius:4px}
+.permit-sheet [contenteditable]:focus{box-shadow:inset 0 0 0 2px rgba(194,154,75,.35)}
+@media print{
+  body:has(.permit-overlay) #sheet,
+  body:has(.permit-overlay) .cd-print{display:none !important}
+  body:has(.permit-overlay) .permit-overlay{
+    position:static; inset:auto; background:none; padding:0; overflow:visible;
+    display:block !important; backdrop-filter:none;
+  }
+  body:has(.permit-overlay) .permit-panel{margin:0; width:100%; max-width:none}
+  body:has(.permit-overlay) .permit-sheet{
+    width:100%; min-height:272mm; box-shadow:none;
+  }
+}
 
 /* ── AI Assistant (tab + floating fab) ── */
 .ai-page{
