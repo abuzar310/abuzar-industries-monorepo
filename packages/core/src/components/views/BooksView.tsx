@@ -46,7 +46,11 @@ const MONTHS: [string, string][] = [
 
 /** A quote counts as billed once Created OR money was taken against it (same rule as Balances). */
 const isBillable = (d: Doc) =>
-  d.status === "Created" || (+(d.payCash || 0)) > 0 || (+(d.payUpi || 0)) > 0 || (+(d.amountPaid || 0)) > 0;
+  d.status === "Created" ||
+  (+(d.payCash || 0)) > 0 ||
+  (+(d.payUpi || 0)) > 0 ||
+  (+(d.payCommission || 0)) > 0 ||
+  (+(d.amountPaid || 0)) > 0;
 
 export default function BooksView() {
   const { ready, dataVersion, cloakMoney } = useApp();

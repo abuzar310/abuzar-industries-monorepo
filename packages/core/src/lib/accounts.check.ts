@@ -1,7 +1,16 @@
 // Self-check for per-account payment rollup + daily collect.
 // Run: npx tsx packages/core/src/lib/accounts.check.ts
 import type { Doc, Expense } from "./types";
-import { accountDayLedger, accountLedger, accountOverview } from "./accounts";
+import {
+  accountDayLedger,
+  accountLedger,
+  accountOverview,
+  holderPassbookLines,
+  passbookRunning,
+  type AccountCollection,
+  type AcctBalance,
+  type AcctStmtLine,
+} from "./accounts";
 
 let n = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -40,6 +49,53 @@ export function demo() {
 
   const { accounts, grandTotal } = accountLedger(expenses, quotes);
   ok(accounts.length === 2 && grandTotal === 10500, "lifetime total incl. older day");
+
+  // Passbook: collect sits in the same stream; later UPI continues from the reduced balance.
+  const sub: AcctBalance = {
+    name: "TABREZ GT TRADER",
+    received: 276200,
+    ownerReceived: 0,
+    collected: 0,
+    balance: 276200,
+    lines: [
+      { id: "u-naik", kind: "in", amount: 6000, date: "19-08-26", at: "2026-08-19T10:00:00.000Z", by: "ajju", customer: "Naik" },
+      { id: "u-manju", kind: "in", amount: 50000, date: "19-08-26", at: "2026-08-19T13:21:00.000Z", by: "ajju", customer: "MANJUNATH" },
+    ],
+  };
+  const cols: AccountCollection[] = [
+    {
+      id: "COL-gafoor",
+      account: "TABREZ",
+      holderId: "h1",
+      amount: 100000,
+      date: "19-08-26",
+      by: "ajju",
+      note: "Cash From Gafoor",
+      createdAt: "2026-08-19T11:21:00.000Z",
+      updatedAt: "2026-08-19T11:21:00.000Z",
+    },
+    {
+      id: "COL-tabrez",
+      account: "TABREZ",
+      holderId: "h1",
+      amount: 150000,
+      date: "20-08-26",
+      by: "ajju",
+      note: "from Tabrez",
+      createdAt: "2026-08-20T06:36:00.000Z",
+      updatedAt: "2026-08-20T06:36:00.000Z",
+    },
+  ];
+  const book = holderPassbookLines([sub], cols);
+  ok(book.length === 4, "UPI + holder collects share one passbook");
+  ok(book.filter((l: AcctStmtLine) => l.kind === "collect").length === 2, "two collect lines in the same book");
+  const run = passbookRunning(book, 220200); // already 2,20,200 before the 6k Naik line
+  ok(run.after[0].id === "u-naik" && run.after[0].balance === 226200, "Naik 6k → 2,26,200");
+  ok(run.after[1].id === "COL-gafoor" && run.after[1].balance === 126200, "same-day collect 1,00,000 drops the book to 1,26,200");
+  ok(run.after[2].id === "u-manju" && run.after[2].balance === 176200, "Manjunath 50k continues from the new balance → 1,76,200");
+  ok(run.after[3].id === "COL-tabrez" && run.after[3].balance === 26200, "next-day collect 1,50,000 → 26,200");
+  ok(run.closing === 26200, "closing follows the last collect, not the old 2,76,200");
+
   console.log(`accounts.check OK (${n} assertions)`);
 }
 

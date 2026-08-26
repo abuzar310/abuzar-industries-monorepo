@@ -1,7 +1,7 @@
 // Self-check for the party-balance rollup (pure, no DB).
 // Run: npx tsx packages/core/src/lib/payments.check.ts
 import type { Doc, Expense } from "./types";
-import { partyLedger, quoteLedger } from "./payments";
+import { floorQuotePaidFromExpenses, partyLedger, quoteLedger } from "./payments";
 
 let n = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -152,6 +152,65 @@ export function demoPaidDraft() {
   console.log(`payments.check paid-draft OK (${n} assertions)`);
 }
 
+/** Wood taken against carpenter commission pays the quote without cash/UPI. */
+export function demoCommission() {
+  const q = Q("q1", "Ramesh", "SF-1", 15000, 10000, 0, 0);
+  q.payCommission = 10000;
+  const e = {
+    id: "c1",
+    type: "custom",
+    label: "Carpenter commission",
+    sourceId: "q1",
+    amount: 10000,
+    mode: "",
+    carpenter: "Ravi",
+    party: "Ramesh",
+    date: "01-08-26",
+    createdAt: "c1",
+    enteredBy: "ajju",
+  } as unknown as Expense;
+  const { quotes: rows } = quoteLedger([q], [e]);
+  const r = rows[0];
+  ok(r.paid === 10000, "commission counts as paid on the quote");
+  ok(r.balance === 5000, "balance after commission = 15000 − 10000");
+  ok(r.statements.length === 1 && r.statements[0].commission === true, "commission statement");
+  const p = partyLedger([q], [e]).parties.find((x) => x.name === "Ramesh")!;
+  ok(p.paid === 10000 && p.cashPaid === 0 && p.upiPaid === 0, "party paid via commission, not cash/UPI");
+  console.log(`payments.check commission OK (${n} assertions)`);
+}
+
+/** Manager recorded UPI on the daybook but the quote's payUpi was never bumped (Patil Sir). */
+export function demoExpenseWithoutQuoteTotals() {
+  const quotes = [Q("2026-27-258", "PATIL SIR", "2026-27-258", 27000, 0, 0, 0)];
+  const expenses = [E("e-upi", "2026-27-258", 27000, "upi", "Tabrez GT Trader")];
+  const p = partyLedger(quotes, expenses).parties.find((x) => x.name === "PATIL SIR")!;
+  ok(p.paid === 27000, "itemised UPI counts as paid even when payUpi on the quote is 0");
+  ok(p.balance === 0, "₹27,000 bill fully covered by the UPI line → not outstanding");
+  ok(p.upiPaid === 27000, "UPI split comes from the expense");
+  const { quotes: rows } = quoteLedger(quotes, expenses);
+  ok(rows[0].paid === 27000 && rows[0].balance === 0, "Statements tab matches Balances");
+  console.log(`payments.check expense-without-totals OK (${n} assertions)`);
+}
+
+/** Stale editor save must not drop payUpi below an existing UPI line. */
+export function demoPaidFloor() {
+  const q = Q("q1", "PATIL SIR", "258", 27000, 0, 0, 0);
+  const expenses = [E("e1", "q1", 27000, "upi", "Tabrez GT Trader")];
+  floorQuotePaidFromExpenses(q, expenses);
+  ok(q.payUpi === 27000 && q.amountPaid === 27000, "floor lifts payUpi from the UPI line");
+  ok(q.paymentStatus === "Paid", "status follows the floor");
+  q.payUpi = 0;
+  q.amountPaid = 0;
+  floorQuotePaidFromExpenses(q, []);
+  ok(q.payUpi === 0, "with no lines, zeros stay (Clear payments)");
+  const inv = Q("inv1", "X", "1", 1000, 500, 0, 0);
+  (inv as { kind?: string }).kind = "invoice";
+  inv.payUpi = 0;
+  floorQuotePaidFromExpenses(inv, [E("e2", "inv1", 500, "upi")]);
+  ok(inv.payUpi === 0 && inv.amountPaid === 500, "invoices are not floored");
+  console.log(`payments.check paid-floor OK (${n} assertions)`);
+}
+
 demo();
 demoQuotes();
 demoReconcile();
@@ -159,3 +218,6 @@ demoTrash();
 demoReceipts();
 demoCharge();
 demoPaidDraft();
+demoCommission();
+demoExpenseWithoutQuoteTotals();
+demoPaidFloor();

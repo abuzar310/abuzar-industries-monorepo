@@ -35,6 +35,16 @@ export interface Section {
   box?: BoxRect;
 }
 
+/** Decided carpenter commission. Not a payment — pending on Carpenters until given. */
+export interface CommissionLock {
+  amount: number;
+  carpenter: string;
+  party?: string;
+  partyId?: string;
+  lockedBy: string;
+  lockedAt: string;
+}
+
 export interface Doc {
   id: string;
   kind: Kind;
@@ -108,6 +118,10 @@ export interface Doc {
   /** App A (daybook): cash / UPI split accepted against this quotation. */
   payCash?: number;
   payUpi?: number;
+  /** Wood taken against carpenter commission (not cash / UPI). amountPaid includes this. */
+  payCommission?: number;
+  /** Decided carpenter commission, not given yet. Pending on Carpenters until paid. */
+  commLock?: CommissionLock;
   /** true once the accepted payment has been logged to the daybook (prevents double-posting). */
   paidLogged?: boolean;
   createdAt: string;
@@ -241,9 +255,13 @@ export interface Carpenter {
   id: string;
   name: string;
   phone: string;
+  /** Second mobile — WhatsApp / missed-call number. */
+  phoneAlt?: string;
   village?: string;
   city?: string;
   notes?: string;
+  /** Compressed JPEG data URL from the phone camera or gallery. */
+  photo?: string;
   createdAt: string;
   updatedAt?: string;
 }

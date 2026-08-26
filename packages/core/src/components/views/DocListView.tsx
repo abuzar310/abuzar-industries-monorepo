@@ -24,6 +24,7 @@ const isBillable = (d: Doc) =>
   d.status === "Created" ||
   (+(d.payCash || 0)) > 0 ||
   (+(d.payUpi || 0)) > 0 ||
+  (+(d.payCommission || 0)) > 0 ||
   (+(d.amountPaid || 0)) > 0;
 
 /** Month-wise report of quotations: every quotation listed under its month, with

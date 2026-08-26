@@ -15,7 +15,12 @@ export const metadata: Metadata = {
   // No Abuzar branding on the unofficial (Vanya Timber) app — use the browser default icon.
 };
 
-export const viewport: Viewport = { themeColor: "#5A3D24" };
+export const viewport: Viewport = {
+  themeColor: "#5A3D24",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

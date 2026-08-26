@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, clone, prefSet, put, rpcNextInvoiceNumber } from "@/lib/data";
+import { allRec, clone, listCached, prefSet, put, rpcNextInvoiceNumber } from "@/lib/data";
 import { seriesOf } from "@/lib/invoice-id";
 import { cftOf, computeDoc, inr, nowIso, permitOf } from "@/lib/calc";
 import { getLineClip, setLineClip } from "@/lib/lineClipboard";
@@ -15,7 +15,8 @@ import { findLiveByNumber } from "@/lib/durability";
 import { trashDoc } from "@/lib/trash";
 import { getFeatures } from "@/lib/features";
 import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
-import { quoteBill, statementsForQuote } from "@/lib/payments";
+import { floorQuotePaidFromExpenses, quoteBill, quotePaid, statementsForQuote } from "@/lib/payments";
+import { lockAmount } from "@/lib/carpenter-financials";
 import { postInvoice } from "@/lib/ledger-autopost";
 import { balanceReminderMessage, reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
 import { generatePdf, printOrSavePdf } from "@/lib/pdf";
@@ -23,12 +24,13 @@ import { promoteTempTab, setTempDoc } from "@/lib/editor-tabs";
 import { OFFICIAL_DEFAULT_WOOD } from "@/lib/woods";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
-import type { BoxRect, Carpenter, Customer, Doc, Expense, Row } from "@/lib/types";
+import type { BoxRect, Carpenter, CommissionLock as CommLock, Customer, Doc, Expense, Row } from "@/lib/types";
 import SectionCard from "./SectionCard";
 import Totals from "./Totals";
 import QuoteCanvas from "./QuoteCanvas";
 import MoreMenu from "./MoreMenu";
 import PaymentBlock from "./PaymentBlock";
+import CommissionLock from "./CommissionLock";
 import InvoicePayBlock from "./InvoicePayBlock";
 import { applyAdvancesToInvoice } from "@/lib/vouchers";
 import InvoicePrintA from "./InvoicePrintA";
@@ -186,6 +188,9 @@ export default function Editor({
       markDirty(true);
       return;
     }
+    if (feat.acceptPayment && d.kind !== "invoice") {
+      floorQuotePaidFromExpenses(d, listCached<Expense>("expenses"));
+    }
     put(docStore(d), clone(d)); // optimistic cache + retrying outbox → the database
     // optional: mirror this invoice into the Tally ledger (no-op unless the toggle is on)
     if (d.kind === "invoice") postInvoice(d).catch(() => {});
@@ -219,6 +224,9 @@ export default function Editor({
       return;
     }
     const prev = stack.pop()!;
+    if (feat.acceptPayment && prev.kind !== "invoice") {
+      floorQuotePaidFromExpenses(prev, listCached<Expense>("expenses"));
+    }
     docRef.current = prev;
     setDoc(prev);
     markDirty(true);
@@ -600,16 +608,38 @@ export default function Editor({
   const onSecAmt = (si: number, v: string) =>
     update((d) => (d.sections[si].amtOverride = v.trim() === "" ? undefined : Math.max(0, +v || 0)));
 
-  // persist the running cash/UPI totals onto the doc after PaymentBlock adds/removes a payment line
-  function setPayAggregates(payCash: number, payUpi: number) {
+  // persist cash / UPI / commission totals after PaymentBlock adds or removes a line
+  function setPayAggregates(payCash: number, payUpi: number, payCommission?: number) {
     const next = clone(docRef.current);
     next.payCash = Math.round(payCash * 100) / 100;
     next.payUpi = Math.round(payUpi * 100) / 100;
-    next.amountPaid = Math.round((next.payCash + next.payUpi) * 100) / 100;
+    if (payCommission !== undefined) next.payCommission = Math.round(payCommission * 100) / 100;
+    next.amountPaid = quotePaid(next);
     const fp = quoteBill(next);
     next.paymentStatus = next.amountPaid <= 0 ? "Pending" : next.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
     next.paidLogged = next.amountPaid > 0;
     commit(next, true);
+  }
+
+  function setCommLock(lock: CommLock | undefined) {
+    const next = clone(docRef.current);
+    if (lock) next.commLock = lock;
+    else delete next.commLock;
+    commit(next, true);
+    bumpData();
+  }
+
+  async function deleteCommLockOnDoc() {
+    const ok = await confirmDialog({
+      title: "Delete this lock?",
+      message:
+        "Removes the decided amount from Carpenters pending. The quotation stays. Money already given stays in history.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    setCommLock(undefined);
+    toast("Lock deleted");
   }
 
   /** Typed new name → create/link customer so advances can sit on their account. */
@@ -643,10 +673,11 @@ export default function Editor({
       toast("PDF downloaded \u2713");
   }
   async function onPermit() {
-    if (!(doc.customerName || "").trim()) return toast("Pick a customer first");
+    await saveNow();
+    if (!(docRef.current.customerName || "").trim()) return toast("Pick a customer first");
     const res = await formDialog({
       title: "Permit letter",
-      message: "Customer, CFT and pieces come from this quotation. Enter the old permit leaf and book.",
+      message: "Customer, CFT and pieces come from this invoice. Enter the old permit leaf and book.",
       fields: [
         { name: "leaf", label: "Leaf no", required: true, value: permit?.leaf || "" },
         { name: "book", label: "Book no", required: true, value: permit?.book || "" },
@@ -768,6 +799,7 @@ export default function Editor({
     const next = clone(docRef.current);
     next.payCash = 0;
     next.payUpi = 0;
+    next.payCommission = 0;
     next.amountPaid = 0;
     next.paidLogged = false;
     next.paymentStatus = "Pending";
@@ -880,6 +912,7 @@ export default function Editor({
   const badgeText = isInv ? (isBuy ? "Purchase Invoice" : doc.rented ? "Rented Invoice" : "Invoice") : doc.status;
   const showLink = isInv && !!doc.quotationId;
   const freeMode = feat.simpleQuote && !!doc.freeLayout;
+  const commLockedAmt = !isInv && !temporary ? lockAmount(doc) : 0;
 
   // panic cloak: open quote must not show customer/lines — look like nothing is open
   if (cloakMoney && feat.simpleQuote) {
@@ -966,12 +999,6 @@ export default function Editor({
       advanceAmt={advanceAmt}
       onGst={(v) => setField("gst", v)}
       onGstMode={(m) => setField("gstMode", m)}
-      onPermitFee={(v) =>
-        update((d) => {
-          if (v == null) delete d.permitFee;
-          else d.permitFee = v;
-        })
-      }
     />
   );
   // compact masthead rendered inside the A4 canvas in free-arrange mode
@@ -1105,6 +1132,18 @@ export default function Editor({
         <span className={"badge " + (temporary ? "b-follow" : badgeCls)}>
           {temporary ? "COMPARE · UNSAVED" : badgeText}
         </span>
+        {commLockedAmt > 0 && (
+          <button
+            type="button"
+            className="badge b-lock"
+            title="Open commission lock"
+            onClick={() =>
+              document.getElementById("comm-lock")?.scrollIntoView({ behavior: "smooth", block: "center" })
+            }
+          >
+            Locked ₹{inr(commLockedAmt)}
+          </button>
+        )}
       </div>
 
       {/* printable sheet */}
@@ -1265,6 +1304,28 @@ export default function Editor({
               </div>
             )}
           </div>
+          )}
+          {commLockedAmt > 0 && (
+            <div className="comm-lock-bar no-print">
+              <span className="comm-lock-stamp">Locked</span>
+              <span className="comm-lock-bar-txt">
+                Commission ₹{inr(commLockedAmt)}
+                {doc.commLock?.carpenter ? " · " + doc.commLock.carpenter : ""}
+              </span>
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => {
+                  document.getElementById("comm-lock")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  window.dispatchEvent(new Event("abuzar-comm-lock-edit"));
+                }}
+              >
+                Edit
+              </button>
+              <button type="button" className="btn warn sm" onClick={() => void deleteCommLockOnDoc()}>
+                Delete
+              </button>
+            </div>
           )}
           <div className={"cust-block" + (!isInv || (isInv && !isBuy && !isRent) ? " c4" : "")}>
             <div className="f">
@@ -1536,12 +1597,12 @@ export default function Editor({
             Review
           </button>
         )}
-        {!isInv && !isBuy && feat.simpleQuote && (
+        {feat.invoices && isInv && !isBuy && !isRent && (
           <button
             type="button"
             className="btn"
             onClick={() => void onPermit()}
-            title="Forest permit letter — customer, CFT and pieces from this quotation"
+            title="Forest permit letter — customer, CFT and pieces from this invoice"
           >
             Permit
           </button>
@@ -1596,6 +1657,8 @@ export default function Editor({
           doc={doc}
           quoteGrand={Math.round((totals.grand - permitOf(doc)) * 100) / 100}
           expenses={expenses}
+          customers={customers}
+          quotes={quoteDocs}
           upiAccts={upiAccts}
           by={user?.id || "unknown"}
           isOwner={user?.role === "owner"}
@@ -1606,6 +1669,16 @@ export default function Editor({
           reload={loadExpenses}
           highlightId={payFocus}
           ensureCustomer={ensureCustomer}
+        />
+      )}
+      {feat.acceptPayment && !isInv && !temporary && (
+        <CommissionLock
+          doc={doc}
+          expenses={expenses}
+          customers={customers}
+          carpenters={carpenters}
+          by={user?.id || "unknown"}
+          onCommit={setCommLock}
         />
       )}
 

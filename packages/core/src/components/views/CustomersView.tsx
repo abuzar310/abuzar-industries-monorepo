@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, delRec, getRec, prefGet, prefSet } from "@/lib/data";
 import { inr } from "@/lib/calc";
@@ -7,42 +7,37 @@ import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/crea
 import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
-import { deleteCarpenter, editCarpenterDialog, listCarpenters } from "@/lib/carpenters";
-import { customerFollowupMessage, waLink } from "@/lib/whatsapp";
+import { deleteCarpenter, editCarpenterDialog, listCarpenters, setCarpenterPhoto } from "@/lib/carpenters";
+import { partyMatches } from "@/lib/party-search";
+import { customerFollowupMessage, dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
-import { bumpData } from "@/store/app-store";
+import { bumpData, setSearch, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
+import PartySearchBar from "../PartySearchBar";
+import PhotoField from "../PhotoField";
 import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 
 type Mode = "customers" | "carpenters";
 
-function applyCustSearch(list: Customer[], q: string) {
-  q = (q || "").trim().toLowerCase();
-  if (!q) return list;
-  return list.filter((c) =>
-    [c.name, c.phone, c.site, c.sitePhone, c.siteVillage, c.siteCity].some((v) =>
-      String(v || "")
-        .toLowerCase()
-        .includes(q),
-    ),
-  );
+function customerFields(c: Customer) {
+  return [c.name, c.phone, c.site, c.sitePhone, c.siteVillage, c.siteCity, c.address, c.notes, c.gstin, c.pincode];
 }
 
-function applyCarpSearch(list: Carpenter[], q: string) {
-  q = (q || "").trim().toLowerCase();
-  if (!q) return list;
-  return list.filter((c) =>
-    [c.name, c.phone, c.village, c.city, c.notes].some((v) =>
-      String(v || "")
-        .toLowerCase()
-        .includes(q),
-    ),
-  );
+function carpenterFields(c: Carpenter) {
+  return [c.name, c.phone, c.phoneAlt, c.village, c.city, c.notes];
 }
 
 export default function CustomersView() {
   const { dataVersion, searchTerm, cloakMoney } = useApp();
   const router = useRouter();
+  const [q, setQ] = useState(searchTerm);
+  useEffect(() => {
+    setQ(searchTerm);
+  }, [searchTerm]);
+  function pickQuery(v: string) {
+    setQ(v);
+    if (!v) setSearch("");
+  }
   const [list, setList] = useState<Customer[]>([]);
   const [carpenters, setCarpenters] = useState<Carpenter[]>([]);
   const [quotes, setQuotes] = useState<Doc[]>([]);
@@ -115,10 +110,33 @@ export default function CustomersView() {
     load();
     bumpData();
   }
-  function waCarpenter(e: React.MouseEvent, c: Carpenter) {
+  async function saveCarpPhoto(c: Carpenter, photo: string) {
+    await setCarpenterPhoto(
+      {
+        record: c,
+        name: c.name,
+        phone: c.phone,
+        phoneAlt: c.phoneAlt,
+        village: c.village || "",
+        city: c.city || "",
+        notes: c.notes || "",
+      },
+      photo,
+    );
+    load();
+    bumpData();
+    toast(photo ? "Photo saved" : "Photo removed");
+  }
+  function waCarpenter(e: React.MouseEvent, c: Carpenter, phone?: string) {
     e.stopPropagation();
-    if (!c.phone) return;
-    window.open(waLink(c.phone, "Hello " + (c.name || "")), "_blank");
+    const n = (phone || c.phone || "").trim();
+    if (!n) return;
+    window.open(waLink(n, "Hello " + (c.name || "")), "_blank");
+  }
+  function callCarpenter(e: React.MouseEvent, c: Carpenter, phone?: string) {
+    const n = (phone || c.phone || "").trim();
+    if (!n) return;
+    dialPhone(n, e);
   }
 
   const carpTab = !!getFeatures().carpenters;
@@ -134,7 +152,12 @@ export default function CustomersView() {
   }
   function whatsapp(e: React.MouseEvent, c: Customer) {
     e.stopPropagation();
+    if (!c.phone) return;
     window.open(waLink(c.phone, customerFollowupMessage(c.name)), "_blank");
+  }
+  function callCustomer(e: React.MouseEvent, c: Customer) {
+    if (!c.phone) return;
+    dialPhone(c.phone, e);
   }
   async function remove(e: React.MouseEvent, c: Customer) {
     e.stopPropagation();
@@ -149,13 +172,21 @@ export default function CustomersView() {
     load();
   }
 
-  const entries = applyCustSearch(cloakMoney ? [] : list, searchTerm).map((c) => ({
-    c,
-    f: customerFinancials(c.id, quotes, invs, c.opening || 0, expenses, quotesAsBills),
-  }));
-  if (sortBy === "due") entries.sort((a, b) => b.f.outstanding - a.f.outstanding || (a.c.name || "").localeCompare(b.c.name || ""));
+  const query = q.trim();
+  const entries = useMemo(() => {
+    const src = cloakMoney ? [] : list.filter((c) => partyMatches(query, customerFields(c)));
+    const next = src.map((c) => ({
+      c,
+      f: customerFinancials(c.id, quotes, invs, c.opening || 0, expenses, quotesAsBills),
+    }));
+    if (sortBy === "due") next.sort((a, b) => b.f.outstanding - a.f.outstanding || (a.c.name || "").localeCompare(b.c.name || ""));
+    return next;
+  }, [cloakMoney, list, query, quotes, invs, expenses, quotesAsBills, sortBy]);
 
-  const carpList = applyCarpSearch(cloakMoney ? [] : carpenters, searchTerm);
+  const carpList = useMemo(
+    () => (cloakMoney ? [] : carpenters.filter((c) => partyMatches(query, carpenterFields(c)))),
+    [cloakMoney, carpenters, query],
+  );
 
   return (
     <div>
@@ -201,6 +232,14 @@ export default function CustomersView() {
           </div>
         )}
       </div>
+
+      <PartySearchBar
+        value={q}
+        onChange={pickQuery}
+        placeholder={view === "customers" ? "Search name, phone, carpenter, GSTIN…" : "Search name, phone, village…"}
+        count={view === "customers" ? entries.length : carpList.length}
+        total={view === "customers" ? list.length : carpenters.length}
+      />
 
       {view === "customers" ? (
         <div className="custgrid">
@@ -249,9 +288,16 @@ export default function CustomersView() {
                   <button className="btn sm" onClick={(e) => newDoc(e, c.id)}>
                     {invoiceMode ? "New invoice" : "New quote"}
                   </button>
-                  <button className="btn wa sm" onClick={(e) => whatsapp(e, c)}>
-                    WhatsApp
-                  </button>
+                  {c.phone ? (
+                    <>
+                      <button className="btn call sm" onClick={(e) => callCustomer(e, c)}>
+                        Call
+                      </button>
+                      <button className="btn wa sm" onClick={(e) => whatsapp(e, c)}>
+                        WhatsApp
+                      </button>
+                    </>
+                  ) : null}
                   <button className="btn warn sm" onClick={(e) => remove(e, c)}>
                     Delete
                   </button>
@@ -261,8 +307,12 @@ export default function CustomersView() {
           ) : (
             <div className="empty">
               <div className="empty-icon">👥</div>
-              <div className="empty-title">No customers yet</div>
-              <div className="empty-note">They&apos;re saved automatically when you make a quotation, or add one now.</div>
+              <div className="empty-title">{query ? "No matches" : "No customers yet"}</div>
+              <div className="empty-note">
+                {query
+                  ? "Try a name, phone digits, carpenter, or GSTIN."
+                  : "They're saved automatically when you make a quotation, or add one now."}
+              </div>
             </div>
           )}
         </div>
@@ -271,8 +321,20 @@ export default function CustomersView() {
           {carpList.length ? (
             carpList.map((c) => (
               <div className="custcard" key={c.id} style={{ cursor: "default" }}>
-                <h3>{c.name}</h3>
-                <div className="ph">{c.phone || "—"}</div>
+                <div className="carp-card-top">
+                  <PhotoField
+                    compact
+                    size={72}
+                    name={c.name}
+                    value={c.photo || ""}
+                    onChange={(url) => void saveCarpPhoto(c, url)}
+                  />
+                  <div className="carp-who">
+                    <h3>{c.name}</h3>
+                    <div className="ph">{c.phone || "—"}</div>
+                    {c.phoneAlt ? <div className="ph">Alt {c.phoneAlt}</div> : null}
+                  </div>
+                </div>
                 <div className="meta2">
                   {(c.village || c.city) && (
                     <>
@@ -287,9 +349,24 @@ export default function CustomersView() {
                     Edit
                   </button>
                   {c.phone && (
-                    <button className="btn wa sm" onClick={(e) => waCarpenter(e, c)}>
-                      WhatsApp
-                    </button>
+                    <>
+                      <button className="btn call sm" onClick={(e) => callCarpenter(e, c, c.phone)}>
+                        Call
+                      </button>
+                      <button className="btn wa sm" onClick={(e) => waCarpenter(e, c, c.phone)}>
+                        WhatsApp
+                      </button>
+                    </>
+                  )}
+                  {c.phoneAlt && c.phoneAlt !== c.phone && (
+                    <>
+                      <button className="btn call sm" onClick={(e) => callCarpenter(e, c, c.phoneAlt)}>
+                        Call alt
+                      </button>
+                      <button className="btn wa sm" onClick={(e) => waCarpenter(e, c, c.phoneAlt)}>
+                        Alt WhatsApp
+                      </button>
+                    </>
                   )}
                   <button className="btn warn sm" onClick={(e) => removeCarpenter(e, c)}>
                     Delete
@@ -300,8 +377,12 @@ export default function CustomersView() {
           ) : (
             <div className="empty">
               <div className="empty-icon">🪚</div>
-              <div className="empty-title">No carpenters yet</div>
-              <div className="empty-note">Add a carpenter with name, phone, village, and city — no customer needed.</div>
+              <div className="empty-title">{query ? "No matches" : "No carpenters yet"}</div>
+              <div className="empty-note">
+                {query
+                  ? "Try a name, phone digits, village, or city."
+                  : "Add a carpenter with name, phone, village, and city — no customer needed."}
+              </div>
             </div>
           )}
         </div>

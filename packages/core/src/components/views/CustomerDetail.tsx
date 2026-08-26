@@ -10,7 +10,7 @@ import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
 import { mergeReceiptPieces, quoteBill, type PartyStatement } from "@/lib/payments";
-import { balanceReminderMessage, customerFollowupMessage, waLink } from "@/lib/whatsapp";
+import { balanceReminderMessage, customerFollowupMessage, dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -168,7 +168,12 @@ export default function CustomerDetail({ id }: { id: string }) {
     router.push("/editor/" + d.id);
   }
   function whatsapp() {
+    if (!cust!.phone) return;
     window.open(waLink(cust!.phone, customerFollowupMessage(cust!.name)), "_blank");
+  }
+  function call() {
+    if (!cust!.phone) return;
+    dialPhone(cust!.phone);
   }
   /** Standard automated reminder: the account's balance pending from the total — nothing else. */
   function remind() {
@@ -221,7 +226,12 @@ export default function CustomerDetail({ id }: { id: string }) {
           </div>
           <div className="links" style={{ marginTop: 0 }}>
             <button className="btn primary sm" onClick={newDoc}>{invoiceMode ? "New invoice" : "New quote"}</button>
-            <button className="btn wa sm" onClick={whatsapp}>WhatsApp</button>
+            {cust.phone ? (
+              <>
+                <button className="btn call sm" onClick={call}>Call</button>
+                <button className="btn wa sm" onClick={whatsapp}>WhatsApp</button>
+              </>
+            ) : null}
             {f.outstanding > 0.5 && (
               <button className="btn wa sm" onClick={remind} title="WhatsApp just the balance figures — total, payments, pending">
                 Remind

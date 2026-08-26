@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { closeDialog, useDialog } from "@/store/dialog-store";
+import PhotoField from "./PhotoField";
 
 export default function DialogHost() {
   const dialog = useDialog();
@@ -19,7 +20,9 @@ export default function DialogHost() {
 
   if (!dialog) return null;
 
-  const missingRequired = dialog.fields.some((f) => f.required && !(values[f.name] || "").trim());
+  const missingRequired = dialog.fields.some(
+    (f) => f.required && f.type !== "photo" && !(values[f.name] || "").trim(),
+  );
 
   function submit() {
     if (missingRequired) return;
@@ -41,7 +44,18 @@ export default function DialogHost() {
               submit();
             }}
           >
-            {dialog.fields.map((f, i) => (
+            {dialog.fields.map((f, i) =>
+              f.type === "photo" ? (
+                <div key={f.name} className="modal-field">
+                  <span>{f.label}</span>
+                  <PhotoField
+                    value={values[f.name] || ""}
+                    onChange={(url) => setValues((v) => ({ ...v, [f.name]: url }))}
+                    size={88}
+                    name={values.name}
+                  />
+                </div>
+              ) : (
               <label key={f.name} className="modal-field">
                 <span>{f.label}</span>
                 {f.type === "select" ? (

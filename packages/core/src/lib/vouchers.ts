@@ -4,7 +4,7 @@
 import { allRec, delRec, metaGet, metaSet, put } from "./data";
 import { addExpense } from "./expenses";
 import { computeDoc, dateSortKey, nowIso, uid } from "./calc";
-import { quoteBill } from "./payments";
+import { quoteBill, quotePaid } from "./payments";
 import type { Doc, Expense } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -511,7 +511,7 @@ export async function applyAdvancesToQuote(
   const grand = quoteBill(quote);
   let payCash = zero.payCash;
   let payUpi = zero.payUpi;
-  let due = r2(grand - r2(payCash + payUpi));
+  let due = r2(grand - quotePaid(quote));
   let applied = 0;
   for (const a of adv) {
     if (due <= 0.5) break;
@@ -543,7 +543,7 @@ export async function applyAdvancesToQuote(
   if (applied > 0 && opts.persist) {
     quote.payCash = payCash;
     quote.payUpi = payUpi;
-    quote.amountPaid = r2(payCash + payUpi);
+    quote.amountPaid = quotePaid(quote);
     quote.paymentStatus =
       quote.amountPaid <= 0 ? "Pending" : quote.amountPaid + 0.001 >= grand ? "Paid" : "Partial";
     quote.paidLogged = quote.amountPaid > 0;

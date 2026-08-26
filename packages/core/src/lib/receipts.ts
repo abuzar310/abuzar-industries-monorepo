@@ -13,8 +13,8 @@
 // move together.
 import { allRec, delRec, getRec, put } from "./data";
 import { nowIso, uid } from "./calc";
-import { addExpense } from "./expenses";
-import { quoteBill } from "./payments";
+import { addExpense, isQuoteCommissionPay } from "./expenses";
+import { quoteBill, quotePaid } from "./payments";
 import type { Doc, Expense } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -51,6 +51,7 @@ const isBillable = (d: Doc) =>
   (d.status === "Created" ||
     (+(d.payCash || 0)) > 0 ||
     (+(d.payUpi || 0)) > 0 ||
+    (+(d.payCommission || 0)) > 0 ||
     (+(d.amountPaid || 0)) > 0);
 
 /** Record a received payment for a customer, applying it to their open quotations
@@ -97,7 +98,7 @@ export async function applyCustomerReceipt(inp: ReceiptInput): Promise<ReceiptRe
     const payUpi = r2((+(fresh.payUpi || 0) || 0) + (inp.mode === "upi" ? apply : 0));
     fresh.payCash = payCash;
     fresh.payUpi = payUpi;
-    fresh.amountPaid = r2(payCash + payUpi);
+    fresh.amountPaid = quotePaid(fresh);
     const fp = quoteBill(fresh);
     fresh.paymentStatus = fresh.amountPaid <= 0 ? "Pending" : fresh.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
     fresh.paidLogged = fresh.amountPaid > 0;
@@ -137,10 +138,14 @@ export async function unwindReceiptPieces(pieces: Expense[]): Promise<void> {
       const d = await getRec<Doc>("quotations", e.sourceId);
       if (d) {
         const amt = r2(+e.amount || 0);
-        const isCash = e.mode !== "upi";
-        d.payCash = r2(Math.max(0, (+(d.payCash || 0) || 0) - (isCash ? amt : 0)));
-        d.payUpi = r2(Math.max(0, (+(d.payUpi || 0) || 0) - (!isCash ? amt : 0)));
-        d.amountPaid = r2(d.payCash + d.payUpi);
+        if (isQuoteCommissionPay(e)) {
+          d.payCommission = r2(Math.max(0, (+(d.payCommission || 0) || 0) - amt));
+        } else {
+          const isCash = e.mode !== "upi";
+          d.payCash = r2(Math.max(0, (+(d.payCash || 0) || 0) - (isCash ? amt : 0)));
+          d.payUpi = r2(Math.max(0, (+(d.payUpi || 0) || 0) - (!isCash ? amt : 0)));
+        }
+        d.amountPaid = quotePaid(d);
         const fp = quoteBill(d);
         d.paymentStatus = d.amountPaid <= 0 ? "Pending" : d.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
         d.paidLogged = d.amountPaid > 0;

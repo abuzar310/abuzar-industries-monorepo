@@ -8,12 +8,13 @@ import {
   carpenterHref,
   findCarpenterRollup,
 } from "@/lib/carpenter-financials";
-import { deleteCarpenter, editCarpenterDialog, listCarpenters } from "@/lib/carpenters";
-import { waLink } from "@/lib/whatsapp";
+import { deleteCarpenter, editCarpenterDialog, listCarpenters, setCarpenterPhoto } from "@/lib/carpenters";
+import { dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
-import CarpenterHistory from "./CarpenterHistory";
+import CarpenterHistory, { CarpenterPendingList } from "./CarpenterHistory";
+import PhotoField from "../PhotoField";
 import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 
 export default function CarpenterDetail({ id }: { id: string }) {
@@ -65,9 +66,11 @@ export default function CarpenterDetail({ id }: { id: string }) {
         ({
           name: rollup!.name,
           phone: rollup!.phone,
+          phoneAlt: rollup!.phoneAlt,
           village: rollup!.village,
           city: rollup!.city,
           notes: rollup!.notes,
+          photo: rollup!.photo,
         } as Carpenter),
     );
     if (!next) return;
@@ -75,9 +78,22 @@ export default function CarpenterDetail({ id }: { id: string }) {
     bumpData();
     if (!rollup!.record) router.replace(carpenterHref(rollup!.key, next.id));
   }
-  function whatsapp() {
-    if (!rollup!.phone) return;
-    window.open(waLink(rollup!.phone, "Hello " + (rollup!.name || "")), "_blank");
+  async function savePhoto(photo: string) {
+    const next = await setCarpenterPhoto(rollup!, photo);
+    load();
+    bumpData();
+    toast(photo ? "Photo saved" : "Photo removed");
+    if (!rollup!.record) router.replace(carpenterHref(rollup!.key, next.id));
+  }
+  function whatsapp(phone?: string) {
+    const n = (phone || "").trim();
+    if (!n) return;
+    window.open(waLink(n, "Hello " + (rollup!.name || "")), "_blank");
+  }
+  function call(phone?: string) {
+    const n = (phone || "").trim();
+    if (!n) return;
+    dialPhone(n);
   }
   function recordCommission() {
     const q = new URLSearchParams({ paid: "carpenter", carpenter: rollup!.name });
@@ -105,9 +121,17 @@ export default function CarpenterDetail({ id }: { id: string }) {
 
       <div className="custcard" style={{ cursor: "default" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
-          <div>
+          <div className="carp-card-top" style={{ flex: "1 1 220px" }}>
+            <PhotoField
+              size={96}
+              name={rollup.name}
+              value={rollup.photo || rollup.record?.photo || ""}
+              onChange={(url) => void savePhoto(url)}
+            />
+            <div className="carp-who">
             <h3 style={{ fontSize: 26 }}>{rollup.name}</h3>
             <div className="ph">{rollup.phone || "—"}</div>
+            {rollup.phoneAlt ? <div className="ph">Alt {rollup.phoneAlt}</div> : null}
             <div className="meta2">
               {(rollup.village || rollup.city) && (
                 <>
@@ -117,15 +141,31 @@ export default function CarpenterDetail({ id }: { id: string }) {
               )}
               {rollup.notes && <>Note: {rollup.notes}</>}
             </div>
+            </div>
           </div>
           <div className="links" style={{ marginTop: 0 }}>
             <button className="btn primary sm" onClick={recordCommission}>
               Record commission
             </button>
             {rollup.phone && (
-              <button className="btn wa sm" onClick={whatsapp}>
-                WhatsApp
-              </button>
+              <>
+                <button className="btn call sm" onClick={() => call(rollup.phone)}>
+                  Call
+                </button>
+                <button className="btn wa sm" onClick={() => whatsapp(rollup.phone)}>
+                  WhatsApp
+                </button>
+              </>
+            )}
+            {rollup.phoneAlt && rollup.phoneAlt !== rollup.phone && (
+              <>
+                <button className="btn call sm" onClick={() => call(rollup.phoneAlt)}>
+                  Call alt
+                </button>
+                <button className="btn wa sm" onClick={() => whatsapp(rollup.phoneAlt)}>
+                  Alt WhatsApp
+                </button>
+              </>
             )}
             <button className="btn sm" onClick={saveContact}>
               {rollup.record ? "Edit" : "Save contact"}
@@ -139,7 +179,7 @@ export default function CarpenterDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="dash-grid g3" style={{ marginTop: 16 }}>
+      <div className="dash-grid" style={{ marginTop: 16 }}>
         <div className="stat">
           <div className="k">Customers</div>
           <div className="v">{rollup.customerCount}</div>
@@ -148,6 +188,11 @@ export default function CarpenterDetail({ id }: { id: string }) {
           <div className="k">Paid them</div>
           <div className="v money">₹ {inr(rollup.commissionTotal)}</div>
           <div className="sub">{rollup.payoutCount} payout{rollup.payoutCount === 1 ? "" : "s"}</div>
+        </div>
+        <div className="stat">
+          <div className="k">Pending</div>
+          <div className="v money">₹ {inr(rollup.pendingTotal)}</div>
+          <div className="sub">{rollup.pendingCount} locked</div>
         </div>
         <div className="stat">
           <div className="k">Last payout</div>
@@ -192,6 +237,21 @@ export default function CarpenterDetail({ id }: { id: string }) {
           <div className="empty-title">No customers yet</div>
           <div className="empty-note">They show here when a customer or quotation names this carpenter.</div>
         </div>
+      )}
+
+      {rollup.pendingCount > 0 && (
+        <>
+          <div className="dash-section" style={{ marginTop: 22 }}>
+            Pending
+            <span>· locked, not yet given</span>
+          </div>
+          <CarpenterPendingList
+            lines={rollup.pending.map((p) => ({
+              ...p,
+              href: carpenterHref(rollup.key, rollup.record?.id),
+            }))}
+          />
+        </>
       )}
 
       <div className="dash-section" style={{ marginTop: 22 }}>

@@ -14,6 +14,7 @@ import {
   deleteCollection,
   getClearMarks,
   holderClearKey,
+  holderPassbookLines,
   listCollections,
   listHolders,
   listPayAccounts,
@@ -37,13 +38,11 @@ import { brandFor } from "@/lib/brand";
 import { addExpense, PAID_TO_MANAGER_LABEL } from "@/lib/expenses";
 import { printOrSavePdf } from "@/lib/pdf";
 import { waLink } from "@/lib/whatsapp";
-import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
-const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
 const hhmm = (iso: string) => {
   if (!iso) return "";
   const d = new Date(iso);
@@ -123,6 +122,28 @@ export default function AccountsView() {
 
   // move a payment to another account
   const [moveFor, setMoveFor] = useState<string | null>(null);
+  const [rowMenu, setRowMenu] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!rowMenu && !moveFor) return;
+    const onDoc = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el?.closest("[data-acct-row-ui]")) return;
+      setRowMenu(null);
+      setMoveFor(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setRowMenu(null);
+      setMoveFor(null);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [rowMenu, moveFor]);
 
   // holder create / edit
   const [showAddHolder, setShowAddHolder] = useState(false);
@@ -619,7 +640,7 @@ export default function AccountsView() {
         rows.push({
           date: line.date,
           at: line.at,
-          particulars: `By UPI – ${line.customer || "—"}`,
+          particulars: `By UPI — ${line.customer || "—"}`,
           detail: [line.quoteNo ? `#${line.quoteNo}` : line.custId ? "receipt" : "", line.toOwner ? "to owner" : "", line.legacyCollected ? "✓" : ""].filter(Boolean).join(" · "),
           debit: 0,
           credit: line.amount,
@@ -639,12 +660,11 @@ export default function AccountsView() {
         });
       }
     }
-    // chronological sort
-    const sortKey = (d: string) => { const [dd, mm, yy] = (d || "").split("-"); return dd && mm && yy ? `20${yy}-${mm}-${dd}` : ""; };
-    rows.sort((a, b) => {
-      const da = sortKey(a.date).localeCompare(sortKey(b.date));
+    const dayKey = (d: string) => { const [dd, mm, yy] = (d || "").split("-"); return dd && mm && yy ? `20${yy}-${mm}-${dd}` : ""; };
+    rows.sort((x, y) => {
+      const da = dayKey(x.date).localeCompare(dayKey(y.date));
       if (da !== 0) return da;
-      return (a.at || "").localeCompare(b.at || "");
+      return (x.at || "").localeCompare(y.at || "");
     });
     const result: AcctLedgerRow[] = [];
     if (parentOpening > 0) {
@@ -658,54 +678,156 @@ export default function AccountsView() {
     return result;
   }
 
+  function viewLine(row: AcctLedgerRow) {
+    if (row.kind === "in" && row.l.quoteNo) {
+      const id = quotes.find((d) => d.number === row.l.quoteNo)?.id;
+      if (id) router.push("/editor/" + id);
+    } else if (row.kind === "in" && row.l.custId) {
+      router.push("/receipts?cust=" + encodeURIComponent(row.l.custId));
+    }
+  }
+  function txnMeta(row: AcctLedgerRow) {
+    if (row.isOpen || row.isClose) return "";
+    const bits: string[] = [];
+    if (row.detail) bits.push(row.detail);
+    const t = hhmm(row.l.at);
+    if (t) bits.push(t);
+    return bits.join(" · ");
+  }
+
   // ── render an account's full bank-ledger table ──────────────────────────
   function renderAccountLedger(a: AcctBalance, parentOpening = 0) {
     const ledgerRows = buildAcctLedger(a, parentOpening);
     const due = ledgerRows.length > 0 ? ledgerRows[ledgerRows.length - 1].balance > 0.5 : false;
+    const moveTargets = allNames.filter((n) => lc(n) !== lc(a.name));
     return (
-      <div className="bank-ledger" style={{ marginTop: 0 }}>
+      <div className="bank-ledger acct-book">
         <div className="bank-hdr">
           <span>Date</span>
           <span>Particulars</span>
-          <span className="bank-amt">Dr ₹</span>
-          <span className="bank-amt">Cr ₹</span>
+          <span className="bank-amt">Dr</span>
+          <span className="bank-amt">Cr</span>
           <span className="bank-amt">Balance</span>
+          <span className="acct-txn-more-slot" aria-hidden="true" />
         </div>
         {ledgerRows.map((row, i) => {
-          const rowCls = ["bank-row", row.isOpen ? "bank-open" : "", row.isClose ? "bank-total" : ""].filter(Boolean).join(" ");
           const isUpi = row.kind === "in" && !row.isOpen && !row.isClose;
+          const isTxn = !row.isOpen && !row.isClose;
+          const menuId = row.l.id || "";
+          const menuOpen = isTxn && rowMenu === menuId;
+          const moving = isUpi && moveFor === menuId;
+          const canView = isUpi && !!(row.l.quoteNo || row.l.custId);
+          const canEdit = isUpi && !!row.l.quoteNo;
+          const meta = txnMeta(row);
+          const rowCls = [
+            "bank-row",
+            "acct-txn",
+            row.isOpen ? "bank-open" : "",
+            row.isClose ? "bank-total" : "",
+            menuOpen || moving ? "on" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
           return (
-            <div
-              key={i}
-              className={rowCls}
-              style={{ cursor: row.isOpen || row.isClose ? "default" : "pointer" }}
-              onClick={() => {
-                if (row.isOpen || row.isClose) return;
-                if (row.kind === "in" && row.l.quoteNo) router.push("/editor/" + (quotes.find((d) => d.number === row.l.quoteNo)?.id || ""));
-                else if (row.kind === "in" && row.l.custId) router.push("/receipts?cust=" + encodeURIComponent(row.l.custId));
-              }}
-            >
-              <span className="bank-date">{!row.isOpen && !row.isClose ? row.date : ""}</span>
+            <div key={i} className={rowCls}>
+              <span className="bank-date">{isTxn ? row.date : ""}</span>
               <span className="bank-parts">
-                {row.particulars}
-                {row.detail && <small>{row.detail}</small>}
-                {isUpi && (row.l.at ? <> · <small>{hhmm(row.l.at)}</small></> : null)}
-                {isUpi && <span className="bl-acts">
-                  <button className="bl-btn" title="Move to another account" type="button" onClick={(e) => { e.stopPropagation(); setMoveFor(moveFor === row.l.id ? null : row.l.id); }}>⇄</button>
-                  <button className="bl-btn danger" title="Delete" type="button" onClick={(e) => { e.stopPropagation(); delEntry(row.l.id, row.l.quoteNo); }}>×</button>
-                </span>}
-                {row.kind === "collect" && !row.isClose && (
-                  <span className="bl-acts">
-                    <button className="bl-btn danger" title="Delete collection" type="button" onClick={(e) => { e.stopPropagation(); delCollection(row.l.id); }}>×</button>
-                  </span>
-                )}
+                <span className="acct-txn-who">{row.particulars}</span>
+                {meta ? <small>{meta}</small> : null}
               </span>
               <span className={"bank-amt" + (row.debit > 0 ? " dr" : "")}>{row.debit > 0 ? "₹" + inr(row.debit) : ""}</span>
               <span className={"bank-amt" + (row.credit > 0 ? " cr" : "")}>{row.credit > 0 ? "₹" + inr(row.credit) : ""}</span>
               <span className={"bank-amt bal" + (row.isClose ? (due ? " due" : " ok") : "")}>
                 ₹{inr(Math.abs(row.balance))}
-                {!row.isOpen && <span className={"bal-tag " + (row.balance > 0.5 ? "dr" : "cr")}>{row.balance > 0.5 ? "Dr" : "Cr"}</span>}
+                {!row.isOpen && (
+                  <span className={"bal-tag " + (row.balance > 0.5 ? "dr" : "cr")}>{row.balance > 0.5 ? "Dr" : "Cr"}</span>
+                )}
               </span>
+              {isTxn ? (
+                <span className="acct-txn-more" data-acct-row-ui>
+                  <button
+                    type="button"
+                    className={"acct-more-btn" + (menuOpen || moving ? " on" : "")}
+                    aria-label="Transaction actions"
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    onClick={() => {
+                      setRowMenu(menuOpen ? null : menuId);
+                      if (moveFor && moveFor !== menuId) setMoveFor(null);
+                    }}
+                  >
+                    ⋮
+                  </button>
+                  {menuOpen && (
+                    <div className="acct-row-menu" role="menu">
+                      {canView && (
+                        <button type="button" role="menuitem" onClick={() => { setRowMenu(null); viewLine(row); }}>
+                          View
+                        </button>
+                      )}
+                      {canEdit && (
+                        <button type="button" role="menuitem" onClick={() => { setRowMenu(null); viewLine(row); }}>
+                          Edit
+                        </button>
+                      )}
+                      {isUpi && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMoveFor(menuId);
+                            setRowMenu(null);
+                          }}
+                        >
+                          Transfer / Adjust
+                        </button>
+                      )}
+                      {isUpi && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="danger"
+                          onClick={() => {
+                            setRowMenu(null);
+                            delEntry(row.l.id, row.l.quoteNo);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
+                      {row.kind === "collect" && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="danger"
+                          onClick={() => {
+                            setRowMenu(null);
+                            delCollection(row.l.id);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </span>
+              ) : (
+                <span className="acct-txn-more-slot" aria-hidden="true" />
+              )}
+              {moving && (
+                <div className="acct-move" data-acct-row-ui>
+                  <span className="acct-move-lbl">Move to</span>
+                  {moveTargets.length ? (
+                    moveTargets.map((n) => (
+                      <button key={n} type="button" className="acct-chip" onClick={() => moveEntry(row.l.id, n)}>
+                        {n}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="acct-move-lbl">No other account</span>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
@@ -720,27 +842,26 @@ export default function AccountsView() {
     const collecting = collectFor === a.name;
     const cleared = !due && a.received > 0;
     const grouped = !!holderId;
-    const parentOpening = grouped && holders.find(h => h.id === holderId) ? (holders.find(h => h.id === holderId)!.opening || 0) : 0;
+    const holder = grouped ? holders.find((h) => h.id === holderId) : undefined;
+    const holderSubs = holder ? holderAccounts(holder) : [];
+    const soleSub = grouped && holderSubs.length === 1;
+    const parentOpening = soleSub ? holder!.opening || 0 : 0;
+    const book: AcctBalance = soleSub
+      ? { ...a, lines: holderPassbookLines([a], holderCols(holder!.id)) }
+      : a;
+    const showLedger = !grouped || soleSub;
     return (
-      <div className={"panel-card acct-sub" + (cleared && !grouped ? " acct-done" : "")} key={a.name}>
-        <div className="pc-head acct-head">
-          <span style={{ cursor: "pointer", flex: 1, minWidth: 0 }} onClick={() => setCollapsedAccts((s) => { const n = new Set(s); isOpen ? n.add(a.name) : n.delete(a.name); return n; })}>
-            <span className="um-caret" style={{ marginRight: 6 }}>
-              {isOpen ? "▾" : "▸"}
-            </span>
+      <div className={"acct-sub" + (cleared && !grouped ? " acct-done" : "")} key={a.name}>
+        <div className="acct-sub-bar">
+          <span className="acct-sub-name" onClick={() => setCollapsedAccts((s) => { const n = new Set(s); isOpen ? n.add(a.name) : n.delete(a.name); return n; })}>
+            <span className="um-caret" aria-hidden="true">{isOpen ? "▾" : "▸"}</span>
             {a.name}
             {cleared && !grouped && <span className="acct-collected-badge">Cleared ✓</span>}
           </span>
-          <span className="acct-head-totals">
-            {a.received > 0 && <span className="acct-tag upi">In ₹{inr(a.received)}</span>}
-            {a.ownerReceived > 0 && <span className="acct-tag">Owner ₹{inr(a.ownerReceived)}</span>}
-            {!grouped &&
-              (due ? (
-                <span className="acct-tag pending">Bal ₹{inr(a.balance)}</span>
-              ) : (
-                a.collected > 0 && <span className="acct-tag ok">₹{inr(a.collected)}</span>
-              ))}
-          </span>
+          {a.received > 0 && <span className="acct-sub-fig">₹{inr(a.received)}</span>}
+          {a.ownerReceived > 0 && <span className="acct-sub-note">Owner ₹{inr(a.ownerReceived)}</span>}
+          {!grouped && due && <span className="acct-sub-note due">Bal ₹{inr(a.balance)}</span>}
+          {!grouped && !due && a.collected > 0 && <span className="acct-sub-note ok">₹{inr(a.collected)}</span>}
           {!grouped && due && !collecting && (
             <button className="btn primary sm acct-collect-btn" type="button" onClick={() => startCollect({ account: a.name }, a.balance, a.name)}>
               Collect
@@ -789,7 +910,7 @@ export default function AccountsView() {
         </div>
 
         {!grouped && collecting && (
-          <div className="panel-card" style={{ padding: 12, margin: "0 0 4px" }}>
+          <div className="acct-form">
             <div className="db-seg sm" style={{ marginBottom: 10 }}>
               <button type="button" className={"seg-btn" + (cBy === "owner" ? " on" : "")} onClick={() => setCBy("owner")}>
                 By Owner
@@ -828,9 +949,9 @@ export default function AccountsView() {
           </div>
         )}
 
-        {isOpen &&
-          (a.lines.length ? (
-            <>{renderAccountLedger(a, parentOpening)}</>
+        {isOpen && showLedger &&
+          (book.lines.length || parentOpening > 0 ? (
+            <>{renderAccountLedger(book, parentOpening)}</>
           ) : clearMarks[acctClearKey(a.name)] ? (
             <div className="stmt-sub" style={{ padding: "8px 12px", opacity: 0.7 }}>
               Log cleared on {clearedOn(acctClearKey(a.name))} — fresh start. History is kept everywhere else.
@@ -850,14 +971,14 @@ export default function AccountsView() {
   const ungroupedNames = ungrouped.map((a) => a.name);
 
   return (
-    <div className="ledger-page">
+    <div className="ledger-page acct-page">
       <div className="cd-screen">
       <div className="sectitle">
         Accounts <small>— holders, their UPI accounts &amp; hand-overs</small>
       </div>
 
       {/* overall */}
-      <div className="panel-card acct-overall">
+      <div className="acct-overall">
         <div className="acct-overall-h">Overall</div>
         <div className="acct-overall-grid">
           <div className="acct-stat">
@@ -886,7 +1007,7 @@ export default function AccountsView() {
       </div>
 
       {showAddHolder && (
-        <div className="panel-card" style={{ padding: 14, marginBottom: 12 }}>
+        <div className="acct-form">
           <div className="acct-add-row">
             <label className="modal-field" style={{ flex: 1, minWidth: 0 }}>
               <span>New holder name</span>
@@ -919,8 +1040,8 @@ export default function AccountsView() {
         const collecting = collectHolder === h.id;
         const editingOpening = openingForId === h.id;
         return (
-          <div className="panel-card acct-holder" key={h.id}>
-            <div className="pc-head acct-head acct-holder-head">
+          <div className="acct-holder" key={h.id}>
+            <div className="acct-holder-bar">
               {renaming ? (
                 <span style={{ flex: 1, display: "flex", gap: 6 }}>
                   <input
@@ -941,15 +1062,10 @@ export default function AccountsView() {
                     {h.name}
                     <span className="acct-holder-count"> · {subs.length} acc{subs.length === 1 ? "" : "s"}</span>
                   </span>
-                  <span className="acct-head-totals">
-                    {opening > 0 && <span className="acct-tag">Opening ₹{inr(opening)}</span>}
-                    {received > 0 && <span className="acct-tag upi">In ₹{inr(received)}</span>}
-                    {owner > 0 && <span className="acct-tag">Owner ₹{inr(owner)}</span>}
-                    {due ? (
-                      <span className="acct-tag pending">Bal ₹{inr(balance)}</span>
-                    ) : (
-                      received > 0 && <span className="acct-tag ok">Cleared ✓</span>
-                    )}
+                  <span className="acct-holder-meta">
+                    {opening > 0 && <span>Opening ₹{inr(opening)}</span>}
+                    {owner > 0 && <span>Owner ₹{inr(owner)}</span>}
+                    {due ? <span className="due">Bal ₹{inr(balance)}</span> : received > 0 ? <span className="ok">Cleared</span> : null}
                   </span>
                   {due && !collecting && (
                     <button className="btn primary sm acct-collect-btn" type="button" onClick={() => startCollect({ holderId: h.id }, balance, h.id)}>
@@ -961,7 +1077,7 @@ export default function AccountsView() {
             </div>
 
             {collecting && (
-              <div className="panel-card" style={{ padding: 12, margin: "0 0 8px" }}>
+              <div className="acct-form">
                 <div className="db-seg sm" style={{ marginBottom: 10 }}>
                   <button type="button" className={"seg-btn" + (cBy === "owner" ? " on" : "")} onClick={() => setCBy("owner")}>
                     By Owner
@@ -1004,52 +1120,41 @@ export default function AccountsView() {
             {isOpen && (
               <div className="acct-holder-body">
                 {subs.length ? (
-                  subs.map((a) => renderAccount(a, h.id))
+                  <>
+                    {subs.map((a) => renderAccount(a, h.id))}
+                    {subs.length > 1 && (holderPassbookLines(subs, cols).length > 0 || opening > 0) &&
+                      renderAccountLedger(
+                        {
+                          name: h.name,
+                          received,
+                          ownerReceived: owner,
+                          collected,
+                          balance,
+                          lines: holderPassbookLines(subs, cols),
+                        },
+                        opening,
+                      )}
+                  </>
                 ) : (
-                  <div className="stmt-sub" style={{ padding: "6px 4px", opacity: 0.7 }}>No accounts yet — add one below.</div>
-                )}
-
-                {cols.length > 0 && (
-                  <div className="acct-handovers">
-                    <div className="bank-ledger" style={{ marginTop: 8 }}>
-                      <div className="bank-hdr">
-                        <span>Date</span>
-                        <span>Particulars</span>
-                        <span className="bank-amt">Dr ₹</span>
-                        <span className="bank-amt">Cr ₹</span>
-                        <span className="bank-amt">Balance</span>
-                      </div>
-                      {cols
-                        .slice()
-                        .sort((x, y) => {
-                          const dx = (x.createdAt || "").localeCompare(y.createdAt || "");
-                          return dx;
-                        })
-                        .map((c, i) => {
-                          const bal = r2(cols.slice(0, i + 1).reduce((s, x) => s + (+x.amount || 0), 0));
-                          return (
-                            <div className="bank-row" key={c.id}>
-                              <span className="bank-date">{c.date}</span>
-                              <span className="bank-parts">
-                                Collected → {c.toManager ? "Manager Daybook" : "Owner"}
-                                {c.note ? " · " + c.note : ""}
-                                <small>{hhmm(c.createdAt) ? " · " + hhmm(c.createdAt) : ""} · by {userName(c.by)}</small>
-                              </span>
-                              <span className="bank-amt dr">₹{inr(c.amount)}</span>
-                              <span className="bank-amt cr"></span>
-                              <span className="bank-amt bal">
-                                ₹{inr(Math.abs(balance - bal))}
-                                <span className={"bal-tag " + (balance - bal > 0.5 ? "dr" : "cr")}>{balance - bal > 0.5 ? "Dr" : "Cr"}</span>
-                              </span>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
+                  <>
+                    <div className="stmt-sub" style={{ padding: "6px 4px", opacity: 0.7 }}>No accounts yet — add one below.</div>
+                    {(cols.length > 0 || opening > 0) &&
+                      renderAccountLedger(
+                        {
+                          name: h.name,
+                          received,
+                          ownerReceived: owner,
+                          collected,
+                          balance,
+                          lines: holderPassbookLines([], cols),
+                        },
+                        opening,
+                      )}
+                  </>
                 )}
 
                 {editingOpening && (
-                  <div className="panel-card" style={{ padding: 12, margin: "6px 0 2px" }}>
+                  <div className="acct-form">
                     <div className="acct-add-row" style={{ alignItems: "flex-end" }}>
                       <label className="modal-field" style={{ flex: 1, minWidth: 0 }}>
                         <span>Opening balance ₹ <small style={{ color: "var(--ink-faint)" }}>(already in {h.name}&apos;s hands)</small></span>
@@ -1070,7 +1175,7 @@ export default function AccountsView() {
                 )}
 
                 {adding ? (
-                  <div className="panel-card" style={{ padding: 12, margin: "6px 0 2px" }}>
+                  <div className="acct-form">
                     <div className="acct-add-row">
                       <label className="modal-field" style={{ flex: 1, minWidth: 0 }}>
                         <span>Account name</span>
@@ -1175,7 +1280,7 @@ export default function AccountsView() {
       )}
 
       {holders.length === 0 && ungrouped.length === 0 && (
-        <div className="panel-card">
+        <div className="acct-empty">
           <div className="empty">
             No account holders yet. Add one (e.g. Tabrez), then add their UPI accounts inside.
           </div>
