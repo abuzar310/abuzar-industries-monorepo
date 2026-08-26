@@ -16,7 +16,7 @@ import {
 } from "@/lib/expenses";
 import { liveIncomeLines } from "@/lib/book-catalog";
 import { listWorkers, payWorker, repayWorker, type Worker } from "@/lib/attendance";
-import { partyLedger, quoteBill } from "@/lib/payments";
+import { partyLedger, quoteBill, quotePaid } from "@/lib/payments";
 import { applyCustomerReceipt, unwindReceiptPieces } from "@/lib/receipts";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
@@ -152,6 +152,14 @@ export default function ReceiptsView() {
     if (known) setPaidCat(paid);
     const name = (q.get("carpenter") || "").trim();
     if (name) setPaidCarpenter(name);
+    const party = (q.get("party") || "").trim();
+    if (party) setPaidParty(party);
+    const cust = (q.get("cust") || "").trim();
+    if (cust) setPaidCustId(cust);
+    const quote = (q.get("quote") || "").trim();
+    if (quote) setPaidQuoteId(quote);
+    const amtQ = (q.get("amt") || "").trim();
+    if (amtQ && +amtQ > 0) setAmt(amtQ);
     setFocusPaid({ id: paid, mm: q.get("mm") || "", yy: q.get("yy") || "" });
     window.history.replaceState(null, "", window.location.pathname);
   }, []);
@@ -263,13 +271,14 @@ export default function ReceiptsView() {
             d.status === "Created" ||
             (+(d.payCash || 0)) > 0 ||
             (+(d.payUpi || 0)) > 0 ||
+            (+(d.payCommission || 0)) > 0 ||
             (+(d.amountPaid || 0)) > 0;
           if (!billable) return false;
-          return r2(quoteBill(d) - (+d.amountPaid || 0)) > 0.5;
+          return r2(quoteBill(d) - quotePaid(d)) > 0.5;
         })
         .map((d) => {
           const total = quoteBill(d);
-          const due = r2(total - (+d.amountPaid || 0));
+          const due = r2(total - quotePaid(d));
           const no = d.displayNumber || d.number || d.id;
           return { d, total, due, no };
         })
@@ -278,17 +287,22 @@ export default function ReceiptsView() {
   const pickedQuote = openQuotes.find((x) => x.d.id === quoteId) || null;
 
   /** All quotations for the carpenter-commission party (not only open/due). */
-  const paidCustQuotes = paidCustId
-    ? quotes
-        .filter((d) => !d.deletedAt && !d.purgedAt && d.customerId === paidCustId)
+  const paidCustQuotes = (() => {
+    const live = quotes.filter((d) => !d.deletedAt && !d.purgedAt);
+    const mapped = (list: typeof live) =>
+      list
         .map((d) => ({
           d,
           no: d.displayNumber || d.number || d.id,
           carpenter: (d.site || "").trim(),
           total: quoteBill(d),
         }))
-        .sort((a, b) => (b.d.createdAt || "").localeCompare(a.d.createdAt || ""))
-    : [];
+        .sort((a, b) => (b.d.createdAt || "").localeCompare(a.d.createdAt || ""));
+    if (paidCustId) return mapped(live.filter((d) => d.customerId === paidCustId));
+    const name = paidParty.trim().toLowerCase();
+    if (name) return mapped(live.filter((d) => (d.customerName || "").trim().toLowerCase() === name));
+    return [];
+  })();
   const paidCust = paidCustId ? customers.find((c) => c.id === paidCustId) || null : null;
 
   async function record() {
@@ -419,9 +433,13 @@ export default function ReceiptsView() {
       const rounds = cat.id === "minitruck" ? Math.max(0, Math.floor(+paidRounds || 0)) : 0;
       const isCarp = cat.id === "carpenter";
       const carpenter = isCarp ? paidCarpenter.trim() : "";
-      const q = isCarp && paidQuoteId ? paidCustQuotes.find((x) => x.d.id === paidQuoteId) : null;
-      const refQuoteId = q?.d.id || "";
-      const quoteNo = q ? q.no : "";
+      const quoted =
+        isCarp && paidQuoteId
+          ? paidCustQuotes.find((x) => x.d.id === paidQuoteId)?.d ||
+            quotes.find((d) => d.id === paidQuoteId && !d.deletedAt && !d.purgedAt)
+          : undefined;
+      const refQuoteId = quoted?.id || "";
+      const quoteNo = quoted ? (quoted.displayNumber || quoted.number || "") : "";
       // Paid to owner must cut manager Daybook — never mark as owner's pocket (toOwner)
       const skipBooks = !!cat.skipBooks;
       const payToOwner = by === "owner" && !skipBooks;
@@ -1060,7 +1078,7 @@ export default function ReceiptsView() {
                     maxResults={12}
                   />
                 </label>
-                {paidCustId && (
+                {(paidCustId || paidParty.trim() || paidQuoteId) && (
                   <label className="modal-field" style={{ width: "100%" }}>
                     <span>Quotation (optional)</span>
                     <select

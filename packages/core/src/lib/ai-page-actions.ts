@@ -353,10 +353,12 @@ export function resolveAiPageActions(pathname: string, doc: Doc | null): AiPageB
       return {
         title: m ? "Carpenter" : "Carpenters",
         actions: [
-          explain("What is Carpenters?", "Cut Size dashboard of carpenters: who they are, customers they brought, and commission we paid. Transaction history is commission payouts only."),
-          how("Add a carpenter", "Carpenters → + Add carpenter → name, phone, village, city."),
-          how("See who / paid / customers", "Carpenters home shows totals, then a table of each carpenter. Open a row for that person."),
-          how("Transaction history", "Carpenters home and each carpenter page list commission we paid — date, customer, quote, amount. Other spends stay in Receipts."),
+          explain("What is Carpenters?", "Cut Size list of carpenters (Who) plus Commission: pending locks, paid totals, and payout history."),
+          how("Add a carpenter", "Carpenters → + Add carpenter → name, phone, alternative number, village, city, photo (Take photo or From phone)."),
+          how("Call a carpenter", "Carpenters → Who card → Call (opens the phone dialer). WhatsApp beside it opens chat."),
+          how("Carpenter photo", "On Who, tap the Photo circle. On a carpenter page use Take photo or From phone. Saved on the contact; compressed so it syncs."),
+          how("See who / paid / customers", "Carpenters → Who is the card list. Commission has pending, the roster, and payout history. Open a card or row for that person."),
+          how("Transaction history", "Carpenters → Commission, and each carpenter page, list commission we paid — date, customer, quote, amount. Other spends stay in Receipts."),
           how("Record commission", "Carpenters → Record commission, or a carpenter → Record commission (Receipts Paid out → Carpenter commission)."),
           draft("Intro to carpenter", "WhatsApp intro to a carpenter about timber supply from our yard — [Carpenter name]"),
         ],

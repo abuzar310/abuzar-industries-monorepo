@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 export interface DialogField {
   name: string;
   label: string;
-  type?: "text" | "number" | "tel" | "email" | "textarea" | "select" | "password";
+  type?: "text" | "number" | "tel" | "email" | "textarea" | "select" | "password" | "photo";
   placeholder?: string;
   value?: string;
   required?: boolean;

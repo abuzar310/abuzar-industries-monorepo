@@ -4,10 +4,26 @@ import { isCloaked } from "./cloak";
 import { generatePdfFile } from "./pdf";
 import type { Doc } from "./types";
 
-export function waLink(phone: string, text: string): string {
+export function phoneDigits(phone: string): string {
   let p = (phone || "").replace(/[^0-9]/g, "");
   if (p.length === 10) p = "91" + p;
-  return "https://wa.me/" + p + "?text=" + encodeURIComponent(text);
+  return p;
+}
+
+export function waLink(phone: string, text: string): string {
+  return "https://wa.me/" + phoneDigits(phone) + "?text=" + encodeURIComponent(text);
+}
+
+/** Opens the phone dialer. On a computer the OS asks which app should call. */
+export function telHref(phone: string): string {
+  const p = phoneDigits(phone);
+  return p ? "tel:+" + p : "";
+}
+
+export function dialPhone(phone: string, e?: { stopPropagation(): void }) {
+  e?.stopPropagation();
+  const href = telHref(phone);
+  if (href) window.location.href = href;
 }
 
 /** Neutral, professional greeting with the customer's name. */

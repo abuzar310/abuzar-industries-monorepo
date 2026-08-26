@@ -107,10 +107,20 @@ export const typeLabel = (t: EntryType) => ENTRY_TYPES.find((e) => e.value === t
 export const isInflow = (t: EntryType) => t === "sale";
 /** UPI money-in: kept OUT of the cash daybook (Manager only owes cash) and shown in its own section. */
 export const isUpi = (e: Expense) => isInflow(e.type) && e.mode === "upi";
+/** Quote payment settled as carpenter commission (wood, no cash). Has sourceId on the wood quote. */
+export function isQuoteCommissionPay(e: Expense): boolean {
+  if (e.type === "sale" || e.charge) return false;
+  return spendCatKey(e) === "carpenter" && !!e.sourceId;
+}
+
 /** Does this entry belong in the manager's cash daybook? Excludes UPI, cash sent straight to owner,
- *  cash assigned to a named account, and customer dues/charges (a charge moves no cash). */
+ *  cash assigned to a named account, customer dues/charges, and wood-against-commission. */
 export const inDaybook = (e: Expense) =>
-  !isUpi(e) && !e.toOwner && !e.charge && !(e.mode === "cash" && !!(e.account || "").trim());
+  !isUpi(e) &&
+  !e.toOwner &&
+  !e.charge &&
+  !(e.mode === "cash" && !!(e.account || "").trim()) &&
+  !isQuoteCommissionPay(e);
 
 export interface DayTotals {
   cashIn: number;
