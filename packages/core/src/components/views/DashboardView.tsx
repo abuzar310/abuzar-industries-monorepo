@@ -137,6 +137,7 @@ export default function DashboardView() {
         qd.status === "Created" ||
         (+(qd.payCash || 0)) > 0 ||
         (+(qd.payUpi || 0)) > 0 ||
+        (+(qd.payCommission || 0)) > 0 ||
         (+(qd.amountPaid || 0)) > 0;
       if (!billable) return;
       periodRev += quoteBill(qd);
@@ -213,6 +214,7 @@ export default function DashboardView() {
           qd.status === "Created" ||
           (+(qd.payCash || 0)) > 0 ||
           (+(qd.payUpi || 0)) > 0 ||
+          (+(qd.payCommission || 0)) > 0 ||
           (+(qd.amountPaid || 0)) > 0;
         return billable ? s + quoteBill(qd) : s;
       }, 0)

@@ -1,7 +1,7 @@
 // Named payment accounts (UPI + cash held by Tabrez, Afsar, etc.) — registry + rollup + daily collect.
 import { allRec, delRec, getRec, metaGet, metaSet, put } from "./data";
 import { nowIso, todayStr, uid } from "./calc";
-import { quoteBill } from "./payments";
+import { quoteBill, quotePaid } from "./payments";
 import type { Customer, Doc, Expense } from "./types";
 
 const isUpi = (e: Expense) => e.type === "sale" && e.mode === "upi";
@@ -612,11 +612,13 @@ export async function deleteAccountEntry(id: string): Promise<void> {
     const q = await getRec<Doc>("quotations", e.sourceId);
     if (q) {
       const amt = +e.amount || 0;
-      const payCash = r2(Math.max(0, (+(q.payCash || 0) || 0) - (e.mode === "cash" ? amt : 0)));
-      const payUpi = r2(Math.max(0, (+(q.payUpi || 0) || 0) - (e.mode === "upi" ? amt : 0)));
-      q.payCash = payCash;
-      q.payUpi = payUpi;
-      q.amountPaid = r2(payCash + payUpi);
+      if (e.type !== "sale" && !e.charge && e.sourceId) {
+        q.payCommission = r2(Math.max(0, (+(q.payCommission || 0) || 0) - amt));
+      } else {
+        q.payCash = r2(Math.max(0, (+(q.payCash || 0) || 0) - (e.mode === "cash" ? amt : 0)));
+        q.payUpi = r2(Math.max(0, (+(q.payUpi || 0) || 0) - (e.mode === "upi" ? amt : 0)));
+      }
+      q.amountPaid = quotePaid(q);
       const fp = quoteBill(q);
       q.paymentStatus = q.amountPaid <= 0 ? "Pending" : q.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
       q.paidLogged = q.amountPaid > 0;
@@ -666,6 +668,60 @@ export interface AcctLedger {
   totalOwner: number;
   totalCollected: number;
   totalBalance: number;
+}
+
+export function stmtFromCollection(c: AccountCollection): AcctStmtLine {
+  return {
+    id: c.id,
+    kind: "collect",
+    amount: +c.amount || 0,
+    date: c.date,
+    at: c.createdAt || "",
+    by: c.by,
+    note: c.note,
+    toManager: !!c.toManager,
+  };
+}
+
+const passbookDayKey = (d: string) => {
+  const [dd, mm, yy] = (d || "").split("-");
+  return dd && mm && yy ? `20${yy}-${mm}-${dd}` : "";
+};
+
+/** Oldest first: printed date, then createdAt (clock time). */
+export function sortPassbookLines(lines: AcctStmtLine[]): AcctStmtLine[] {
+  return lines.slice().sort((a, b) => {
+    const da = passbookDayKey(a.date).localeCompare(passbookDayKey(b.date));
+    if (da !== 0) return da;
+    return (a.at || "").localeCompare(b.at || "");
+  });
+}
+
+/** One holder passbook: every sub-account UPI line + holder-level hand-overs. */
+export function holderPassbookLines(subs: AcctBalance[], cols: AccountCollection[]): AcctStmtLine[] {
+  const multi = subs.length > 1;
+  const lines: AcctStmtLine[] = [];
+  for (const a of subs) {
+    for (const l of a.lines) {
+      lines.push(multi && l.kind === "in" ? { ...l, customer: (l.customer || "—") + " · " + a.name } : l);
+    }
+  }
+  for (const c of cols) lines.push(stmtFromCollection(c));
+  return lines;
+}
+
+/** Opening + UPI in − collects. After a collect, later lines continue from the new balance. */
+export function passbookRunning(
+  lines: AcctStmtLine[],
+  opening = 0,
+): { closing: number; after: { id: string; balance: number }[] } {
+  let bal = opening;
+  const after: { id: string; balance: number }[] = [];
+  for (const l of sortPassbookLines(lines)) {
+    bal = r2(bal + (l.kind === "collect" ? -l.amount : l.amount));
+    after.push({ id: l.id, balance: bal });
+  }
+  return { closing: r2(bal), after };
 }
 
 /** Per-UPI-account balances + a merged (credits + collections) statement, newest first. */

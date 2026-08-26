@@ -1,9 +1,14 @@
 import { quoteBill as quoteBillOf } from "./calc";
+import { isQuoteCommissionPay } from "./expenses";
 import type { Customer, Doc, Expense, PayMode } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 /** the effective bill of a quote: accepted Final price (else wood+GST) plus any permit fee. */
 export const quoteBill = (d: Doc) => quoteBillOf(d);
+
+/** Cash + UPI + wood-against-commission recorded on the quote. */
+export const quotePaid = (d: Pick<Doc, "payCash" | "payUpi" | "payCommission">) =>
+  r2((+(d.payCash || 0)) + (+(d.payUpi || 0)) + (+(d.payCommission || 0)));
 
 /** One payment line under a party — the "statement" (to which account, when, by whom, how). */
 export interface PartyStatement {
@@ -19,6 +24,8 @@ export interface PartyStatement {
   note?: string;
   /** cash that went straight to the owner (not in the manager's daybook). */
   toOwner?: boolean;
+  /** wood taken against carpenter commission — not cash / UPI. */
+  commission?: boolean;
   /** derived from the quote's own payCash/payUpi (legacy payment never itemised as its own expense). */
   synthetic?: boolean;
   /** groups the pieces of one split customer receipt (see receipts.ts). */
@@ -80,25 +87,90 @@ export function mergeReceiptPieces(statements: PartyStatement[]): PartyStatement
   return out;
 }
 
+function mkPayLine(e: Expense, quoteNo: string): PartyStatement {
+  const s = mkStatement(e, quoteNo);
+  if (isQuoteCommissionPay(e)) {
+    s.commission = true;
+    s.mode = "";
+    s.note = [e.carpenter, e.party, e.note].filter(Boolean).join(" · ") || e.label || "";
+  }
+  return s;
+}
+
+function isQuotePayExpense(e: Expense): boolean {
+  if (!e.sourceId) return false;
+  return e.type === "sale" || isQuoteCommissionPay(e);
+}
+
 /** Surface any paid amount recorded on the quote itself (payCash/payUpi) that was never written
  *  as its own expense — so an old cash payment still shows as a recorded statement. Never mutates. */
 export function reconcileStatements(d: Doc, statements: PartyStatement[]): PartyStatement[] {
-  const sumBy = (m: PayMode) => statements.reduce((t, s) => (s.mode === m ? t + s.amount : t), 0);
+  const sumBy = (m: PayMode) => statements.reduce((t, s) => (!s.commission && s.mode === m ? t + s.amount : t), 0);
   const out = [...statements];
-  const add = (mode: PayMode, amount: number) =>
-    out.push({ id: d.id + ":" + mode, amount: r2(amount), mode, account: "", date: d.date, at: "", by: "", quoteNo: d.number, synthetic: true });
+  const add = (mode: PayMode, amount: number, extra?: Partial<PartyStatement>) =>
+    out.push({
+      id: d.id + ":" + (extra?.commission ? "commission" : mode),
+      amount: r2(amount),
+      mode,
+      account: "",
+      date: d.date,
+      at: "",
+      by: "",
+      quoteNo: d.number,
+      synthetic: true,
+      ...extra,
+    });
   const missCash = r2((d.payCash || 0) - sumBy("cash"));
   const missUpi = r2((d.payUpi || 0) - sumBy("upi"));
+  const missComm = r2(
+    (d.payCommission || 0) - statements.reduce((t, s) => (s.commission ? t + s.amount : t), 0),
+  );
   if (missCash > 0.5) add("cash", missCash);
   if (missUpi > 0.5) add("upi", missUpi);
+  if (missComm > 0.5) add("", missComm, { commission: true });
   return out;
 }
 
 /** This one quote's recorded payments as statement lines (newest first), including any legacy
  *  payCash/payUpi never itemised as its own expense. Same rollup quoteLedger does, for a single quote. */
 export function statementsForQuote(d: Doc, expenses: Expense[]): PartyStatement[] {
-  const lines = expenses.filter((e) => e.type === "sale" && e.sourceId === d.id).map((e) => mkStatement(e, d.number));
+  const lines = expenses.filter((e) => e.sourceId === d.id && isQuotePayExpense(e)).map((e) => mkPayLine(e, d.number));
   return reconcileStatements(d, lines).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+}
+
+/** What Balances / Statements / the editor Payment block all count as received on this quote.
+ *  Itemised daybook lines win when they exist; leftover payCash/payUpi on the quote (never
+ *  written as an expense) still counts via reconcileStatements. */
+export function quoteReceived(d: Doc, expenses: Expense[]): number {
+  return r2(statementsForQuote(d, expenses).reduce((s, l) => s + l.amount, 0));
+}
+
+/** Never let a later Cut Size quote Save drop cash/UPI below the daybook lines still
+ *  linked to it. No-op on invoices and when there are no linked lines (so a real
+ *  Clear payments, and official/Tally docs, are left alone). Mutates `d` only when
+ *  a floor actually applies. */
+export function floorQuotePaidFromExpenses(d: Doc, expenses: Expense[]): void {
+  if (d.kind === "invoice") return;
+  let cash = 0;
+  let upi = 0;
+  let comm = 0;
+  for (const e of expenses) {
+    if (e.sourceId !== d.id) continue;
+    const amt = +e.amount || 0;
+    if (isQuoteCommissionPay(e)) comm += amt;
+    else if (e.type === "sale" && !e.charge) {
+      if (e.mode === "upi") upi += amt;
+      else cash += amt;
+    }
+  }
+  if (cash + upi + comm < 0.005) return;
+  d.payCash = r2(Math.max(+(d.payCash || 0), cash));
+  d.payUpi = r2(Math.max(+(d.payUpi || 0), upi));
+  d.payCommission = r2(Math.max(+(d.payCommission || 0), comm));
+  d.amountPaid = quotePaid(d);
+  const fp = quoteBill(d);
+  d.paymentStatus = d.amountPaid <= 0 ? "Pending" : d.amountPaid + 0.001 >= fp ? "Paid" : "Partial";
+  d.paidLogged = d.amountPaid > 0;
 }
 
 export interface PartyQuote {
@@ -142,7 +214,7 @@ export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Custo
   // so the two views always reconcile: money shown in Statements can never go missing from Balances.
   // Trashed quotes are excluded.
   const paidSrc = new Set(
-    expenses.filter((e) => e.type === "sale" && !!e.sourceId).map((e) => e.sourceId as string),
+    expenses.filter((e) => isQuotePayExpense(e)).map((e) => e.sourceId as string),
   );
   const billable = quotes.filter(
     (d) =>
@@ -151,13 +223,12 @@ export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Custo
         paidSrc.has(d.id) ||
         (+(d.payCash || 0)) > 0 ||
         (+(d.payUpi || 0)) > 0 ||
+        (+(d.payCommission || 0)) > 0 ||
         (+(d.amountPaid || 0)) > 0),
   );
   const key = (d: Doc) => d.customerId || "name:" + (d.customerName || "").trim().toLowerCase() + "|" + (d.phone || "");
-  const quoteNoById = new Map(quotes.map((d) => [d.id, d.number] as const));
 
   const map = new Map<string, Party>();
-  const quoteOwner = new Map<string, string>(); // quoteId → party key (for linking statements)
   for (const d of billable) {
     const k = key(d);
     let p = map.get(k);
@@ -171,24 +242,17 @@ export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Custo
       map.set(k, p);
     }
     const b = quoteBill(d);
-    const pd = +d.amountPaid || 0;
+    const stmts = statementsForQuote(d, expenses);
+    const pd = r2(stmts.reduce((s, l) => s + l.amount, 0));
     p.billed += b;
     p.paid += pd;
-    p.cashPaid += d.payCash || 0;
-    p.upiPaid += d.payUpi || 0;
+    p.cashPaid += stmts.reduce((s, l) => (!l.commission && l.mode === "cash" ? s + l.amount : s), 0);
+    p.upiPaid += stmts.reduce((s, l) => (l.mode === "upi" ? s + l.amount : s), 0);
     p.quoteCount++;
     p.quotes.push({ id: d.id, number: d.number, displayNumber: d.displayNumber, date: d.date, bill: r2(b), paid: r2(pd), balance: r2(b - pd), status: d.status });
+    p.statements.push(...stmts);
     if (!p.custId) p.custId = d.customerId || "";
     if (!p.phone) p.phone = d.phone || "";
-    quoteOwner.set(d.id, k);
-  }
-
-  // attach each recorded sale (accept-payment writes type "sale" with sourceId = quote id)
-  for (const e of expenses) {
-    if (e.type !== "sale" || !e.sourceId) continue;
-    const k = quoteOwner.get(e.sourceId);
-    if (!k) continue;
-    map.get(k)!.statements.push(mkStatement(e, quoteNoById.get(e.sourceId) || ""));
   }
 
   // fold in each customer's opening balance (old dues before the app) — adds to what they owe
@@ -211,7 +275,7 @@ export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Custo
   // standalone Receipts-tab entries against a customer (no quote): a charge adds to what they owe,
   // a receipt reduces it (and shows as a statement)
   for (const e of expenses) {
-    if (e.type !== "sale" || !e.custId) continue;
+    if (e.type !== "sale" || !e.custId || e.sourceId) continue;
     const p = map.get(e.custId) || newParty(e.custId);
     const amt = +e.amount || 0;
     if (e.charge) {
@@ -273,24 +337,30 @@ export function quoteLedger(quotes: Doc[], expenses: Expense[]): QuoteLedger {
   const byQuote = new Map<string, PartyStatement[]>();
   const quoteNoById = new Map(quotes.map((d) => [d.id, d.number] as const));
   for (const e of expenses) {
-    if (e.type !== "sale" || !e.sourceId) continue;
+    if (!isQuotePayExpense(e) || !e.sourceId) continue;
     const list = byQuote.get(e.sourceId) || [];
-    list.push(mkStatement(e, quoteNoById.get(e.sourceId) || ""));
+    list.push(mkPayLine(e, quoteNoById.get(e.sourceId) || ""));
     byQuote.set(e.sourceId, list);
   }
   // show a quote if it's Created OR carries any payment — an advance on a still-Draft quote appears too;
   // trashed quotes are excluded (they live in the Recycle bin)
   const shown = quotes.filter(
-    (d) => !d.deletedAt && (d.status === "Created" || byQuote.has(d.id) || (+(d.payCash || 0)) > 0 || (+(d.payUpi || 0)) > 0),
+    (d) =>
+      !d.deletedAt &&
+      (d.status === "Created" ||
+        byQuote.has(d.id) ||
+        (+(d.payCash || 0)) > 0 ||
+        (+(d.payUpi || 0)) > 0 ||
+        (+(d.payCommission || 0)) > 0),
   );
 
   const rows: QuoteStatements[] = shown
     .map((d) => {
       const bill = quoteBill(d);
-      const paid = +d.amountPaid || 0;
       const statements = reconcileStatements(d, byQuote.get(d.id) || []).sort((a, b) =>
         (b.at || "").localeCompare(a.at || ""),
       );
+      const paid = r2(statements.reduce((s, l) => s + l.amount, 0));
       return {
         id: d.id,
         number: d.number,

@@ -1,6 +1,5 @@
 "use client";
 import { inr, rupeesInWords } from "@/lib/calc";
-import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
 import type { PartyStatement } from "@/lib/payments";
 import type { Doc } from "@/lib/types";
@@ -19,17 +18,14 @@ interface Props {
   advanceAmt?: number;
   onGst: (v: string) => void;
   onGstMode: (m: "percent" | "flat") => void;
-  /** unofficial quote: optional permit fee charged to the customer */
-  onPermitFee?: (v: number | undefined) => void;
 }
 
-export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, payLines, advanceAmt, onGst, onGstMode, onPermitFee }: Props) {
+export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, payLines, advanceAmt, onGst, onGstMode }: Props) {
   const { cloakMoney } = useApp();
   const isInv = doc.kind === "invoice";
   const r2 = (n: number) => Math.round(n * 100) / 100;
   const permit = !isInv ? r2(Math.max(0, +(doc.permitFee ?? 0) || 0)) : 0;
   const showPermit = permit > 0.005;
-  const editPermit = !isInv && !!onPermitFee && getFeatures().simpleQuote;
   const finalPrice = !isInv && (doc.finalPrice || 0) > 0 ? r2(doc.finalPrice!) : 0;
   const hasFinal = finalPrice > 0;
   /** wood+GST only — permit sits on top of the rounded Final price, not inside the discount */
@@ -114,34 +110,11 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
         </div>
       )}
       {/* unofficial: optional permit fee — prints only when an amount is set */}
-      {(editPermit || showPermit) && (
-        <div className={"t-row permit" + (showPermit ? "" : " no-print")}>
+      {/* old unofficial quotes that already have a permit fee still print it */}
+      {showPermit && (
+        <div className="t-row permit">
           <span className="lab">Permit fee</span>
-          {editPermit ? (
-            <>
-              <span className="val no-print gst-lab">
-                ₹
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  placeholder="optional"
-                  value={cloakMoney ? "0" : doc.permitFee ? String(doc.permitFee) : ""}
-                  readOnly={cloakMoney}
-                  onChange={(e) => {
-                    if (cloakMoney || !onPermitFee) return;
-                    const raw = e.target.value.trim();
-                    const n = parseFloat(raw);
-                    if (!raw || !isFinite(n) || n <= 0) onPermitFee(undefined);
-                    else onPermitFee(r2(n));
-                  }}
-                />
-              </span>
-              {showPermit && <span className="val print-only">₹ {inr(permit)}</span>}
-            </>
-          ) : (
-            <span className="val">₹ {inr(permit)}</span>
-          )}
+          <span className="val">₹ {inr(permit)}</span>
         </div>
       )}
       {/* dark bar stays on Grand total unless Final is also going on the printed sheet */}

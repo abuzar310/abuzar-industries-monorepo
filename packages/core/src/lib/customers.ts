@@ -1,6 +1,6 @@
 import { allRec, getRec, put } from "./data";
 import { computeDoc, nowIso, uid } from "./calc";
-import { quoteBill } from "./payments";
+import { quoteBill, quoteReceived } from "./payments";
 import type { Customer, Doc, Expense } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -51,7 +51,7 @@ export function customerFinancials(
   let charges = 0;
   let receipts = 0;
   for (const e of expenses) {
-    if (e.type !== "sale" || e.custId !== custId) continue;
+    if (e.type !== "sale" || e.custId !== custId || e.sourceId) continue;
     if (e.charge) charges += +e.amount || 0;
     else receipts += +e.amount || 0;
   }
@@ -67,17 +67,20 @@ export function customerFinancials(
   if (quotesAsBills) {
     // a quote is a bill once it's Created — or once any money is recorded against it (an advance on
     // a still-Draft quote). Same rule as partyLedger, so Customers/Balances/Statements all reconcile.
+    const paidSrc = new Set(expenses.filter((e) => e.sourceId).map((e) => e.sourceId as string));
     let billedQ = 0;
     let paidQ = 0;
     q.filter(
       (d) =>
         d.status === "Created" ||
+        paidSrc.has(d.id) ||
         (+(d.payCash || 0)) > 0 ||
         (+(d.payUpi || 0)) > 0 ||
+        (+(d.payCommission || 0)) > 0 ||
         (+(d.amountPaid || 0)) > 0,
     ).forEach((d) => {
       billedQ += quoteBill(d);
-      paidQ += +d.amountPaid || 0;
+      paidQ += quoteReceived(d, expenses);
     });
     const billed = r2(op + billedQ + charges);
     const paid = r2(paidQ + receipts);

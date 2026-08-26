@@ -1,4 +1,5 @@
 import { dateSortKey } from "./calc";
+import { getRec, put } from "./data";
 import { spendCatKey } from "./expenses";
 import type { Carpenter, Customer, Doc, Expense } from "./types";
 
@@ -44,21 +45,40 @@ export interface CarpenterPayout {
   createdAt: string;
 }
 
+export interface CarpenterPending {
+  quoteId: string;
+  quoteNo: string;
+  carpenter: string;
+  carpenterKey: string;
+  party: string;
+  partyId?: string;
+  locked: number;
+  given: number;
+  pending: number;
+  lockedAt: string;
+  lockedBy: string;
+}
+
 export interface CarpenterRollup {
   key: string;
   name: string;
   record?: Carpenter;
   phone: string;
+  phoneAlt: string;
   village: string;
   city: string;
   notes: string;
   customers: CarpenterParty[];
   payouts: CarpenterPayout[];
+  pending: CarpenterPending[];
   customerCount: number;
   quoteCount: number;
   payoutCount: number;
   commissionTotal: number;
+  pendingTotal: number;
+  pendingCount: number;
   lastPaid: string;
+  photo: string;
 }
 
 type Acc = {
@@ -66,12 +86,14 @@ type Acc = {
   name: string;
   record?: Carpenter;
   phone: string;
+  phoneAlt: string;
   village: string;
   city: string;
   notes: string;
   parties: Map<string, CarpenterParty>;
   quoteIds: Set<string>;
   payouts: CarpenterPayout[];
+  pending: CarpenterPending[];
 };
 
 function liveDoc(d: Doc): boolean {
@@ -97,22 +119,77 @@ function sortPayouts(a: CarpenterPayout, b: CarpenterPayout): number {
 function finish(a: Acc): CarpenterRollup {
   const customers = [...a.parties.values()].sort((x, y) => x.name.localeCompare(y.name));
   const payouts = [...a.payouts].sort(sortPayouts);
+  const pending = [...a.pending]
+    .filter((p) => p.pending > 0.005)
+    .sort((x, y) => (y.lockedAt || "").localeCompare(x.lockedAt || ""));
   return {
     key: a.key,
     name: a.name,
     record: a.record,
     phone: a.phone,
+    phoneAlt: a.phoneAlt || a.record?.phoneAlt || "",
     village: a.village,
     city: a.city,
     notes: a.notes,
     customers,
     payouts,
+    pending,
     customerCount: customers.length,
     quoteCount: a.quoteIds.size,
     payoutCount: payouts.length,
     commissionTotal: r2(payouts.reduce((s, p) => s + p.amount, 0)),
+    pendingTotal: r2(pending.reduce((s, p) => s + p.pending, 0)),
+    pendingCount: pending.length,
     lastPaid: payouts[0]?.date || "",
+    photo: a.record?.photo || "",
   };
+}
+
+export function lockAmount(d: Pick<Doc, "commLock">): number {
+  return r2(Math.max(0, +(d.commLock?.amount || 0) || 0));
+}
+
+/** Carpenter commission already given against this quote (wood Commission pay or cash Record commission).
+ *  Pass `sinceIso` (the lock time) so money given before the lock does not eat the new pending. */
+export function commissionGivenOnQuote(quoteId: string, expenses: Expense[], sinceIso?: string): number {
+  if (!quoteId) return 0;
+  const seen = new Set<string>();
+  let t = 0;
+  for (const e of expenses) {
+    if (!isCarpenterCommission(e)) continue;
+    if (e.sourceId !== quoteId && e.refQuoteId !== quoteId) continue;
+    if (sinceIso && (e.createdAt || "") && e.createdAt < sinceIso) continue;
+    if (seen.has(e.id)) continue;
+    seen.add(e.id);
+    t += +e.amount || 0;
+  }
+  return r2(t);
+}
+
+export function commissionPendingOnQuote(d: Doc, expenses: Expense[]): number {
+  const locked = lockAmount(d);
+  if (locked <= 0 || !liveDoc(d)) return 0;
+  return r2(Math.max(0, locked - commissionGivenOnQuote(d.id, expenses, d.commLock?.lockedAt)));
+}
+
+export function pendingPayHref(p: Pick<CarpenterPending, "carpenter" | "party" | "partyId" | "quoteId" | "pending">): string {
+  const q = new URLSearchParams({ paid: "carpenter" });
+  if (p.carpenter) q.set("carpenter", p.carpenter);
+  if (p.party) q.set("party", p.party);
+  if (p.partyId) q.set("cust", p.partyId);
+  if (p.quoteId) q.set("quote", p.quoteId);
+  if (p.pending > 0) q.set("amt", String(p.pending));
+  return "/receipts?" + q.toString();
+}
+
+/** Strip the lock on a quotation. Does not touch payments or expenses. */
+export async function deleteCommLock(quoteId: string): Promise<boolean> {
+  const d = await getRec<Doc>("quotations", quoteId);
+  if (!d?.commLock) return false;
+  const next = { ...d };
+  delete next.commLock;
+  await put("quotations", next);
+  return true;
 }
 
 /** Directory + customer/quote names + commission payouts, grouped by carpenter name. */
@@ -133,12 +210,14 @@ export function rollupCarpenters(
         key,
         name: (name || "").trim() || key,
         phone: "",
+        phoneAlt: "",
         village: "",
         city: "",
         notes: "",
         parties: new Map(),
         quoteIds: new Set(),
         payouts: [],
+        pending: [],
       };
       map.set(key, a);
     } else if (name.trim() && a.name === a.key && name.trim() !== a.key) {
@@ -165,6 +244,7 @@ export function rollupCarpenters(
     a.record = c;
     a.name = (c.name || "").trim() || a.name;
     if (c.phone) a.phone = c.phone;
+    if (c.phoneAlt) a.phoneAlt = c.phoneAlt;
     if (c.village) a.village = c.village;
     if (c.city) a.city = c.city;
     if (c.notes) a.notes = c.notes;
@@ -236,6 +316,46 @@ export function rollupCarpenters(
     });
   }
 
+  for (const d of quotes) {
+    if (!liveDoc(d)) continue;
+    const locked = lockAmount(d);
+    if (locked <= 0) continue;
+    const carpenter = (d.commLock?.carpenter || d.site || "").trim();
+    const key = carpenterKey(carpenter);
+    if (!key) continue;
+    const a = ensure(key, carpenter);
+    const cust = d.commLock?.partyId
+      ? byId.get(d.commLock.partyId)
+      : d.customerId
+        ? byId.get(d.customerId)
+        : undefined;
+    const partyName = (d.commLock?.party || cust?.name || d.customerName || "").trim();
+    if (partyName) {
+      addParty(a, {
+        id: cust?.id || d.commLock?.partyId || d.customerId || undefined,
+        name: partyName,
+        phone: cust?.phone || d.phone || "",
+        quoteCount: 0,
+      });
+    }
+    const given = commissionGivenOnQuote(d.id, expenses, d.commLock?.lockedAt);
+    const pendingAmt = r2(Math.max(0, locked - given));
+    if (pendingAmt <= 0.005) continue;
+    a.pending.push({
+      quoteId: d.id,
+      quoteNo: (d.displayNumber || d.number || "").trim(),
+      carpenter: (carpenter || a.name).trim(),
+      carpenterKey: key,
+      party: partyName || "—",
+      partyId: cust?.id || d.commLock?.partyId || d.customerId || undefined,
+      locked,
+      given,
+      pending: pendingAmt,
+      lockedAt: d.commLock?.lockedAt || "",
+      lockedBy: d.commLock?.lockedBy || "",
+    });
+  }
+
   return [...map.values()].map(finish).sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -250,6 +370,8 @@ export interface CarpenterDashboard {
   customerCount: number;
   commissionTotal: number;
   payoutCount: number;
+  pendingTotal: number;
+  pendingCount: number;
 }
 
 /** Yard totals for the Carpenters home. Customers counted once even if they sit under two names. */
@@ -263,7 +385,26 @@ export function carpenterDashboard(rows: CarpenterRollup[]): CarpenterDashboard 
     customerCount: seen.size,
     commissionTotal: r2(rows.reduce((s, r) => s + r.commissionTotal, 0)),
     payoutCount: rows.reduce((s, r) => s + r.payoutCount, 0),
+    pendingTotal: r2(rows.reduce((s, r) => s + r.pendingTotal, 0)),
+    pendingCount: rows.reduce((s, r) => s + r.pendingCount, 0),
   };
+}
+
+export interface CarpenterPendingLine extends CarpenterPending {
+  href: string;
+}
+
+/** Remaining locked commission, newest lock first. */
+export function carpenterPendingAll(rows: CarpenterRollup[]): CarpenterPendingLine[] {
+  const lines: CarpenterPendingLine[] = [];
+  for (const r of rows) {
+    const href = carpenterHref(r.key, r.record?.id);
+    for (const p of r.pending) {
+      lines.push({ ...p, href });
+    }
+  }
+  lines.sort((a, b) => (b.lockedAt || "").localeCompare(a.lockedAt || ""));
+  return lines;
 }
 
 /** Every commission payout, newest first — money we paid carpenters only. */
