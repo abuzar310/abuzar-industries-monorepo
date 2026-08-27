@@ -114,6 +114,12 @@ function demo() {
     lockedAt: "2026-08-21T10:00:00.000Z",
   };
   quotes.push(paidOff, dead, otherCarp);
+  const ownBuy = quote("QOWN", "C-RAVI", "", "88");
+  ownBuy.customerName = "Ravi";
+  ownBuy.finalPrice = 15000;
+  ownBuy.payCash = 5000;
+  ownBuy.amountPaid = 5000;
+  quotes.push(ownBuy);
   const expenses = [
     pay({ id: "e3", amount: 500, carpenter: "RAVI", party: "Imran", refQuoteId: "Q1", quoteNo: "12", date: "12-08-26" }),
     pay({ id: "e4", amount: 300, carpenter: "", party: "Salim" }),
@@ -141,6 +147,10 @@ function demo() {
   ok(!inDaybook(expenses[2]), "quote commission pay stays out of Daybook cash");
   ok(inDaybook(expenses[0]), "cash Record commission still hits Daybook");
   ok(r.lastPaid === "12-08-26", "latest payout date");
+  ok(r.ownQuotes.length === 1 && r.ownQuotes[0].id === "QOWN", "quote in carpenter's own name is a personal buy");
+  ok(r.ownBill === 15000, "personal bill is the quote final price");
+  ok(r.broughtQuotes.some((q) => q.id === "Q1"), "party quote they brought is listed");
+  ok(!r.broughtQuotes.some((q) => q.id === "QOWN"), "personal buy is not also a brought quote");
   ok(commissionPendingOnQuote(quotes[0], expenses) === 8500, "quote pending helper");
   ok(commissionPendingOnQuote(paidOff, expenses) === 0, "given >= lock → pending 0");
   ok(commissionPendingOnQuote(dead, expenses) === 0, "deleted quote has no pending");

@@ -21,6 +21,8 @@ export interface DialogState {
   submitLabel: string;
   cancelLabel: string;
   danger?: boolean;
+  /** Extra left-side action (e.g. Delete). Resolves `{ __action: "delete" }`. */
+  deleteLabel?: string;
   resolve: (v: Record<string, string> | null) => void;
 }
 
@@ -79,6 +81,7 @@ export function formDialog(opts: {
   fields: DialogField[];
   submitLabel?: string;
   cancelLabel?: string;
+  deleteLabel?: string;
 }): Promise<Record<string, string> | null> {
   return open({
     title: opts.title,
@@ -86,5 +89,6 @@ export function formDialog(opts: {
     fields: opts.fields,
     submitLabel: opts.submitLabel || "Save",
     cancelLabel: opts.cancelLabel || "Cancel",
+    deleteLabel: opts.deleteLabel,
   });
 }

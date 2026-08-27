@@ -1,6 +1,7 @@
 import { allRec, delRec, getRec, put } from "./data";
 import { nowIso, uid } from "./calc";
-import { formDialog } from "@/store/dialog-store";
+import { confirmDialog, formDialog } from "@/store/dialog-store";
+import { toast } from "@/store/app-store";
 import type { Carpenter } from "./types";
 
 export async function listCarpenters(): Promise<Carpenter[]> {
@@ -70,8 +71,8 @@ export async function deleteCarpenter(id: string): Promise<void> {
   await delRec("carpenters", id);
 }
 
-/** Add/edit standalone carpenter (no customer required). */
-export async function editCarpenterDialog(existing?: Carpenter): Promise<Carpenter | null> {
+/** Add/edit standalone carpenter (no customer required). `"deleted"` if they used Delete in the dialog. */
+export async function editCarpenterDialog(existing?: Carpenter): Promise<Carpenter | "deleted" | null> {
   const res = await formDialog({
     title: existing ? "Edit carpenter" : "Add carpenter",
     message: "Saved on its own — not linked to a customer. Photo is taken on this phone.",
@@ -99,7 +100,21 @@ export async function editCarpenterDialog(existing?: Carpenter): Promise<Carpent
       { name: "photo", label: "Photo", type: "photo", value: existing?.photo },
     ],
     submitLabel: existing ? "Save changes" : "Add carpenter",
+    deleteLabel: existing?.id ? "Delete" : undefined,
   });
   if (!res) return null;
+  if (res.__action === "delete") {
+    if (!existing?.id) return null;
+    const ok = await confirmDialog({
+      title: "Delete " + (existing.name || "this carpenter") + "?",
+      message: "Removes this carpenter contact only. Customers and commission payouts stay.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return null;
+    await deleteCarpenter(existing.id);
+    toast("Carpenter deleted");
+    return "deleted";
+  }
   return saveCarpenter({ id: existing?.id, ...res, name: res.name, photo: res.photo ?? existing?.photo ?? "" });
 }

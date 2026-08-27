@@ -1063,6 +1063,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .modal-field input:focus,.modal-field textarea:focus,.modal-field select:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}
 .modal-actions{display:flex; justify-content:flex-end; gap:9px; margin-top:22px}
 .modal-actions .btn{padding:9px 16px}
+.modal-actions .btn.warn:first-child{ margin-right:auto }
 
 /* ---------- overflow "More" menu ---------- */
 .moremenu{position:relative; display:inline-block}

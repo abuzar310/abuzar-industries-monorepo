@@ -6,6 +6,7 @@ import {
   pendingPayHref,
   type CarpenterHistoryLine,
   type CarpenterPendingLine,
+  type CarpenterQuoteLine,
 } from "@/lib/carpenter-financials";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -168,6 +169,54 @@ export function CarpenterPendingList({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+export function CarpenterQuoteList({
+  lines,
+  showParty,
+  empty,
+}: {
+  lines: CarpenterQuoteLine[];
+  showParty?: boolean;
+  empty: string;
+}) {
+  const router = useRouter();
+  if (!lines.length) {
+    return (
+      <div className="empty" style={{ padding: 20 }}>
+        <div className="empty-title">{empty}</div>
+      </div>
+    );
+  }
+  return (
+    <div className="panel-card" style={{ marginTop: 0 }}>
+      <table className="carp-roster">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Quote</th>
+            {showParty ? <th>Party</th> : null}
+            <th className="num">Bill</th>
+            <th className="num">Paid</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((q) => (
+            <tr key={q.id} onClick={() => router.push("/editor/" + q.id)} style={{ cursor: "pointer" }}>
+              <td className="mut">{q.date || "—"}</td>
+              <td>
+                <div className="nm">#{q.number || q.id}</div>
+                {q.status ? <div className="ph">{q.status}</div> : null}
+              </td>
+              {showParty ? <td>{q.party}</td> : null}
+              <td className="num">₹ {inr(q.bill)}</td>
+              <td className="paid">{q.paid > 0 ? "₹ " + inr(q.paid) : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

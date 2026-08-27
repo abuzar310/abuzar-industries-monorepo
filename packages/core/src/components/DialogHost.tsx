@@ -93,6 +93,15 @@ export default function DialogHost() {
           </form>
         )}
         <div className="modal-actions">
+          {dialog.deleteLabel ? (
+            <button
+              type="button"
+              className="btn warn sm"
+              onClick={() => closeDialog({ __action: "delete" })}
+            >
+              {dialog.deleteLabel}
+            </button>
+          ) : null}
           <button className="btn sm" onClick={cancel}>
             {dialog.cancelLabel}
           </button>

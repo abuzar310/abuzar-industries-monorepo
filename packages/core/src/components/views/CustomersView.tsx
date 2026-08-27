@@ -7,7 +7,7 @@ import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/crea
 import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
-import { deleteCarpenter, editCarpenterDialog, listCarpenters, setCarpenterPhoto } from "@/lib/carpenters";
+import { editCarpenterDialog, listCarpenters, setCarpenterPhoto } from "@/lib/carpenters";
 import { partyMatches } from "@/lib/party-search";
 import { customerFollowupMessage, dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
@@ -96,19 +96,6 @@ export default function CustomersView() {
       load();
       bumpData();
     }
-  }
-  async function removeCarpenter(e: React.MouseEvent, c: Carpenter) {
-    e.stopPropagation();
-    const ok = await confirmDialog({
-      title: "Delete " + c.name + "?",
-      message: "Removes this carpenter contact only.",
-      confirmLabel: "Delete",
-      danger: true,
-    });
-    if (!ok) return;
-    await deleteCarpenter(c.id);
-    load();
-    bumpData();
   }
   async function saveCarpPhoto(c: Carpenter, photo: string) {
     await setCarpenterPhoto(
@@ -368,9 +355,6 @@ export default function CustomersView() {
                       </button>
                     </>
                   )}
-                  <button className="btn warn sm" onClick={(e) => removeCarpenter(e, c)}>
-                    Delete
-                  </button>
                 </div>
               </div>
             ))

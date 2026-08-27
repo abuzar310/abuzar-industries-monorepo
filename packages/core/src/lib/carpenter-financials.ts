@@ -1,4 +1,4 @@
-import { dateSortKey } from "./calc";
+import { dateSortKey, quoteBill } from "./calc";
 import { getRec, put } from "./data";
 import { spendCatKey } from "./expenses";
 import type { Carpenter, Customer, Doc, Expense } from "./types";
@@ -31,6 +31,17 @@ export interface CarpenterParty {
   name: string;
   phone: string;
   quoteCount: number;
+}
+
+/** One quotation on the carpenter page — either they bought it, or they brought the party. */
+export interface CarpenterQuoteLine {
+  id: string;
+  number: string;
+  date: string;
+  party: string;
+  bill: number;
+  paid: number;
+  status: string;
 }
 
 export interface CarpenterPayout {
@@ -79,6 +90,14 @@ export interface CarpenterRollup {
   pendingCount: number;
   lastPaid: string;
   photo: string;
+  /** Quotations where this carpenter is the customer (bought themselves). */
+  ownQuotes: CarpenterQuoteLine[];
+  ownBill: number;
+  ownPaid: number;
+  /** Quotations they brought (site = this carpenter, party is someone else). */
+  broughtQuotes: CarpenterQuoteLine[];
+  broughtBill: number;
+  broughtPaid: number;
 }
 
 type Acc = {
@@ -94,6 +113,8 @@ type Acc = {
   quoteIds: Set<string>;
   payouts: CarpenterPayout[];
   pending: CarpenterPending[];
+  ownQuotes: CarpenterQuoteLine[];
+  broughtQuotes: CarpenterQuoteLine[];
 };
 
 function liveDoc(d: Doc): boolean {
@@ -110,18 +131,65 @@ function findCustomerByName(customers: Customer[], name: string): Customer | und
   return customers.find((c) => carpenterKey(c.name) === k);
 }
 
+function quotePaidOn(d: Doc, expenses: Expense[]): number {
+  let fromExp = 0;
+  for (const e of expenses) {
+    if (e.sourceId !== d.id) continue;
+    if (e.type === "sale" && !e.charge) fromExp += +e.amount || 0;
+  }
+  const onDoc = (+(d.payCash || 0)) + (+(d.payUpi || 0)) + (+(d.payCommission || 0));
+  return r2(Math.max(fromExp, onDoc, +(d.amountPaid || 0)));
+}
+
+function last10(phone: string): string {
+  const d = (phone || "").replace(/\D/g, "");
+  return d.length >= 10 ? d.slice(-10) : d;
+}
+
+function phonesEq(a: string, b: string): boolean {
+  const x = last10(a);
+  const y = last10(b);
+  if (x.length < 10 || y.length < 10) return false;
+  return x === y;
+}
+
+function isPersonalBuy(a: { key: string; phone: string; phoneAlt: string }, d: Doc, cust?: Customer): boolean {
+  if (a.key && carpenterKey(d.customerName) === a.key) return true;
+  if (a.key && cust && carpenterKey(cust.name) === a.key) return true;
+  if (a.phone && (phonesEq(a.phone, d.phone) || (cust && phonesEq(a.phone, cust.phone)))) return true;
+  if (a.phoneAlt && (phonesEq(a.phoneAlt, d.phone) || (cust && phonesEq(a.phoneAlt, cust.phone)))) return true;
+  return false;
+}
+
+function isSelfParty(a: Acc, p: CarpenterParty): boolean {
+  if (a.key && carpenterKey(p.name) === a.key) return true;
+  if (a.phone && phonesEq(a.phone, p.phone)) return true;
+  if (a.phoneAlt && phonesEq(a.phoneAlt, p.phone)) return true;
+  return false;
+}
+
 function sortPayouts(a: CarpenterPayout, b: CarpenterPayout): number {
   const kb = dateSortKey(b.date) || b.createdAt || "";
   const ka = dateSortKey(a.date) || a.createdAt || "";
   return kb.localeCompare(ka) || (b.createdAt || "").localeCompare(a.createdAt || "");
 }
 
+function sortQuotes(a: CarpenterQuoteLine, b: CarpenterQuoteLine): number {
+  const kb = dateSortKey(b.date) || "";
+  const ka = dateSortKey(a.date) || "";
+  return kb.localeCompare(ka) || (b.number || "").localeCompare(a.number || "");
+}
+
 function finish(a: Acc): CarpenterRollup {
-  const customers = [...a.parties.values()].sort((x, y) => x.name.localeCompare(y.name));
+  const customers = [...a.parties.values()]
+    .filter((p) => !isSelfParty(a, p))
+    .sort((x, y) => x.name.localeCompare(y.name));
   const payouts = [...a.payouts].sort(sortPayouts);
   const pending = [...a.pending]
     .filter((p) => p.pending > 0.005)
     .sort((x, y) => (y.lockedAt || "").localeCompare(x.lockedAt || ""));
+  const ownQuotes = [...a.ownQuotes].sort(sortQuotes);
+  const broughtQuotes = [...a.broughtQuotes].sort(sortQuotes);
   return {
     key: a.key,
     name: a.name,
@@ -142,6 +210,12 @@ function finish(a: Acc): CarpenterRollup {
     pendingCount: pending.length,
     lastPaid: payouts[0]?.date || "",
     photo: a.record?.photo || "",
+    ownQuotes,
+    ownBill: r2(ownQuotes.reduce((s, q) => s + q.bill, 0)),
+    ownPaid: r2(ownQuotes.reduce((s, q) => s + q.paid, 0)),
+    broughtQuotes,
+    broughtBill: r2(broughtQuotes.reduce((s, q) => s + q.bill, 0)),
+    broughtPaid: r2(broughtQuotes.reduce((s, q) => s + q.paid, 0)),
   };
 }
 
@@ -218,6 +292,8 @@ export function rollupCarpenters(
         quoteIds: new Set(),
         payouts: [],
         pending: [],
+        ownQuotes: [],
+        broughtQuotes: [],
       };
       map.set(key, a);
     } else if (name.trim() && a.name === a.key && name.trim() !== a.key) {
@@ -354,6 +430,28 @@ export function rollupCarpenters(
       lockedAt: d.commLock?.lockedAt || "",
       lockedBy: d.commLock?.lockedBy || "",
     });
+  }
+
+  for (const d of quotes) {
+    if (!liveDoc(d)) continue;
+    const cust = d.customerId ? byId.get(d.customerId) : undefined;
+    const party = (cust?.name || d.customerName || "").trim() || "—";
+    const line: CarpenterQuoteLine = {
+      id: d.id,
+      number: (d.displayNumber || d.number || "").trim(),
+      date: d.date || "",
+      party,
+      bill: quoteBill(d),
+      paid: quotePaidOn(d, expenses),
+      status: d.status || "",
+    };
+    for (const a of map.values()) {
+      if (isPersonalBuy(a, d, cust)) a.ownQuotes.push(line);
+    }
+    const siteKey = carpenterKey(d.site);
+    if (!siteKey) continue;
+    const site = map.get(siteKey);
+    if (site && !isPersonalBuy(site, d, cust)) site.broughtQuotes.push(line);
   }
 
   return [...map.values()].map(finish).sort((a, b) => a.name.localeCompare(b.name));
