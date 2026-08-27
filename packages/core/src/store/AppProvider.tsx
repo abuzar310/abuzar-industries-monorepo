@@ -17,7 +17,6 @@ import LockGate from "@/components/LockGate";
 import DialogHost from "@/components/DialogHost";
 import ReviewQrOverlay from "@/components/ReviewQrOverlay";
 import AiFab from "@/components/AiFab";
-import ChatFab from "@/components/ChatFab";
 
 export default function AppProvider({
   children,
@@ -112,7 +111,6 @@ export default function AppProvider({
       <LockGate />
       <DialogHost />
       <ReviewQrOverlay />
-      <ChatFab />
       <AiFab />
     </>
   );

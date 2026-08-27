@@ -11,12 +11,11 @@ import {
   rollupCarpenters,
   type CarpenterRollup,
 } from "@/lib/carpenter-financials";
-import { deleteCarpenter, editCarpenterDialog, listCarpenters, setCarpenterPhoto } from "@/lib/carpenters";
+import { editCarpenterDialog, listCarpenters, setCarpenterPhoto } from "@/lib/carpenters";
 import { partyMatches } from "@/lib/party-search";
 import { dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, setSearch, toast } from "@/store/app-store";
-import { confirmDialog } from "@/store/dialog-store";
 import CarpenterHistory, { CarpenterPendingList } from "./CarpenterHistory";
 import PartySearchBar from "../PartySearchBar";
 import PhotoField from "../PhotoField";
@@ -103,18 +102,21 @@ export default function CarpentersView() {
     if (!n) return;
     dialPhone(n, e);
   }
-  async function remove(e: React.MouseEvent, r: CarpenterRollup) {
+  async function edit(e: React.MouseEvent, r: CarpenterRollup) {
     e.stopPropagation();
-    if (!r.record) return;
-    const ok = await confirmDialog({
-      title: "Delete " + r.name + "?",
-      message: "Removes this carpenter contact only. Customers and commission payouts stay.",
-      confirmLabel: "Delete",
-      danger: true,
-    });
-    if (!ok) return;
-    await deleteCarpenter(r.record.id);
-    toast("Carpenter deleted");
+    const next = await editCarpenterDialog(
+      r.record ||
+        ({
+          name: r.name,
+          phone: r.phone,
+          phoneAlt: r.phoneAlt,
+          village: r.village,
+          city: r.city,
+          notes: r.notes,
+          photo: r.photo,
+        } as Carpenter),
+    );
+    if (!next) return;
     load();
     bumpData();
   }
@@ -273,11 +275,9 @@ export default function CarpentersView() {
                       </button>
                     </>
                   ) : null}
-                  {r.record ? (
-                    <button className="btn warn sm" onClick={(e) => void remove(e, r)}>
-                      Delete
-                    </button>
-                  ) : null}
+                  <button className="btn sm" onClick={(e) => void edit(e, r)}>
+                    Edit
+                  </button>
                 </div>
               </div>
             ))

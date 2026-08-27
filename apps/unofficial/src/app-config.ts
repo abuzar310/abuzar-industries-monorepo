@@ -22,6 +22,6 @@ export const TABS: Tab[] = [
   { label: "Logs", href: "/logs", owner: true },
   { label: "Attendance", href: "/attendance" },
   { label: "AI", href: "/ai" },
-  { label: "Chat", href: "/chat", badge: "chat" },
+  // Chat tab removed — page still at /chat for direct access
   { label: "Settings", href: "/settings", owner: true },
 ];

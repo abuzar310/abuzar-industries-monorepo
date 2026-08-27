@@ -8,12 +8,11 @@ import {
   carpenterHref,
   findCarpenterRollup,
 } from "@/lib/carpenter-financials";
-import { deleteCarpenter, editCarpenterDialog, listCarpenters, setCarpenterPhoto } from "@/lib/carpenters";
+import { editCarpenterDialog, listCarpenters, setCarpenterPhoto } from "@/lib/carpenters";
 import { dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
-import { confirmDialog } from "@/store/dialog-store";
-import CarpenterHistory, { CarpenterPendingList } from "./CarpenterHistory";
+import CarpenterHistory, { CarpenterPendingList, CarpenterQuoteList } from "./CarpenterHistory";
 import PhotoField from "../PhotoField";
 import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 
@@ -74,6 +73,10 @@ export default function CarpenterDetail({ id }: { id: string }) {
         } as Carpenter),
     );
     if (!next) return;
+    if (next === "deleted") {
+      router.push("/carpenters");
+      return;
+    }
     load();
     bumpData();
     if (!rollup!.record) router.replace(carpenterHref(rollup!.key, next.id));
@@ -98,19 +101,6 @@ export default function CarpenterDetail({ id }: { id: string }) {
   function recordCommission() {
     const q = new URLSearchParams({ paid: "carpenter", carpenter: rollup!.name });
     router.push("/receipts?" + q.toString());
-  }
-  async function remove() {
-    if (!rollup!.record) return;
-    const ok = await confirmDialog({
-      title: "Delete " + rollup!.name + "?",
-      message: "Removes this carpenter contact only. Customers and commission payouts stay.",
-      confirmLabel: "Delete",
-      danger: true,
-    });
-    if (!ok) return;
-    await deleteCarpenter(rollup!.record.id);
-    toast("Carpenter deleted");
-    router.push("/carpenters");
   }
 
   return (
@@ -168,13 +158,8 @@ export default function CarpenterDetail({ id }: { id: string }) {
               </>
             )}
             <button className="btn sm" onClick={saveContact}>
-              {rollup.record ? "Edit" : "Save contact"}
+              Edit
             </button>
-            {rollup.record && (
-              <button className="btn warn sm" onClick={remove}>
-                Delete
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -183,6 +168,15 @@ export default function CarpenterDetail({ id }: { id: string }) {
         <div className="stat">
           <div className="k">Customers</div>
           <div className="v">{rollup.customerCount}</div>
+          <div className="sub">parties they brought</div>
+        </div>
+        <div className="stat">
+          <div className="k">They bought</div>
+          <div className="v money">₹ {inr(rollup.ownBill)}</div>
+          <div className="sub">
+            {rollup.ownQuotes.length} quote{rollup.ownQuotes.length === 1 ? "" : "s"}
+            {rollup.ownPaid > 0 ? " · paid ₹ " + inr(rollup.ownPaid) : ""}
+          </div>
         </div>
         <div className="stat">
           <div className="k">Paid them</div>
@@ -194,11 +188,19 @@ export default function CarpenterDetail({ id }: { id: string }) {
           <div className="v money">₹ {inr(rollup.pendingTotal)}</div>
           <div className="sub">{rollup.pendingCount} locked</div>
         </div>
-        <div className="stat">
-          <div className="k">Last payout</div>
-          <div className="v" style={{ fontSize: 22 }}>{rollup.lastPaid || "—"}</div>
-        </div>
       </div>
+
+      <div className="dash-section" style={{ marginTop: 22 }}>
+        Bought themselves
+        <span>· wood they purchased</span>
+      </div>
+      <CarpenterQuoteList lines={rollup.ownQuotes} empty="No quotations in their own name." />
+
+      <div className="dash-section" style={{ marginTop: 22 }}>
+        Quotations they brought
+        <span>· {rollup.broughtQuotes.length} · billed ₹ {inr(rollup.broughtBill)}</span>
+      </div>
+      <CarpenterQuoteList lines={rollup.broughtQuotes} showParty empty="No quotations naming them as carpenter." />
 
       <div className="dash-section" style={{ marginTop: 22 }}>
         Customers <span>· {rollup.customerCount}</span>

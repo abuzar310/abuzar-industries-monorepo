@@ -18,7 +18,7 @@ export const TABS: Tab[] = [
   { label: "Stock", href: "/stock" },
   { label: "Reports", href: "/reports" },
   { label: "AI", href: "/ai" },
-  { label: "Chat", href: "/chat", badge: "chat" },
+  // Chat tab removed — page still at /chat for direct access
   // Ledger tab removed from the nav — the pages still exist at /ledger for direct access
   { label: "Settings", href: "/settings", owner: true },
 ];

@@ -356,6 +356,7 @@ export function resolveAiPageActions(pathname: string, doc: Doc | null): AiPageB
           explain("What is Carpenters?", "Cut Size list of carpenters (Who) plus Commission: pending locks, paid totals, and payout history."),
           how("Add a carpenter", "Carpenters → + Add carpenter → name, phone, alternative number, village, city, photo (Take photo or From phone)."),
           how("Call a carpenter", "Carpenters → Who card → Call (opens the phone dialer). WhatsApp beside it opens chat."),
+          how("Edit a carpenter", "Carpenters → Who card → Edit. Delete is inside that Edit dialog. Tap the card for commission paid, wood they bought, and quotations they brought."),
           how("Carpenter photo", "On Who, tap the Photo circle. On a carpenter page use Take photo or From phone. Saved on the contact; compressed so it syncs."),
           how("See who / paid / customers", "Carpenters → Who is the card list. Commission has pending, the roster, and payout history. Open a card or row for that person."),
           how("Transaction history", "Carpenters → Commission, and each carpenter page, list commission we paid — date, customer, quote, amount. Other spends stay in Receipts."),
