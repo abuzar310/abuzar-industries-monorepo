@@ -6,6 +6,7 @@ import Link from "next/link";
 import { allRec } from "@/lib/data";
 import { brandFor } from "@/lib/brand";
 import { useApp } from "@/store/useApp";
+import Pager, { PAGE, usePager } from "@/components/Pager";
 import type { Customer, Doc } from "@/lib/types";
 
 type Party = {
@@ -109,6 +110,9 @@ export default function ContactsView() {
     });
   }, [carpenters, q]);
 
+  const partyPg = usePager(filteredParties, PAGE, q + "\0" + mode);
+  const carpPg = usePager(filteredCarpenters, PAGE, q + "\0" + mode);
+
   if (user && user.role !== "owner") {
     return (
       <div className="empty" style={{ padding: 24 }}>
@@ -211,9 +215,9 @@ export default function ContactsView() {
                 </tr>
               </thead>
               <tbody>
-                {filteredParties.map((p, i) => (
+                {partyPg.view.map((p, i) => (
                   <tr key={p.id}>
-                    <td className="c-n">{i + 1}</td>
+                    <td className="c-n">{partyPg.page * PAGE + i + 1}</td>
                     <td className="c-cust">
                       <Link href={"/customers/" + p.id} style={{ color: "inherit", fontWeight: 600 }}>
                         {p.name}
@@ -248,9 +252,9 @@ export default function ContactsView() {
               </tr>
             </thead>
             <tbody>
-              {filteredCarpenters.map((c, i) => (
+              {carpPg.view.map((c, i) => (
                 <tr key={c.key}>
-                  <td className="c-n">{i + 1}</td>
+                  <td className="c-n">{carpPg.page * PAGE + i + 1}</td>
                   <td style={{ fontWeight: 600 }}>{c.name}</td>
                   <td className="c-no">{c.phone || "—"}</td>
                   <td className="c-n">{c.parties.length}</td>
@@ -270,6 +274,13 @@ export default function ContactsView() {
             </tbody>
           </table>
         )}
+
+        <Pager
+          page={mode === "customers" ? partyPg.page : carpPg.page}
+          pages={mode === "customers" ? partyPg.pages : carpPg.pages}
+          total={mode === "customers" ? partyPg.total : carpPg.total}
+          onPage={mode === "customers" ? partyPg.setPage : carpPg.setPage}
+        />
 
         <div className="rep-foot no-print">Tap a customer name to open · owner only</div>
       </div>

@@ -27,6 +27,7 @@ import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense } from "@/lib/types";
 import { generatePdf } from "@/lib/pdf";
 import { toast } from "@/store/app-store";
+import Pager, { PAGE, usePager } from "@/components/Pager";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
@@ -313,6 +314,13 @@ export default function BooksView() {
   const cashIn = r2(cashRows.reduce((s, r) => s + r.credit, 0));
   const cashOut = r2(cashRows.reduce((s, r) => s + r.debit, 0));
   const cashClose = r2(carry + cashIn - cashOut); // ties to snapshot.cashInHand
+
+  const monthPg = usePager(
+    [...monthRows].reverse(),
+    PAGE,
+    month + "\0" + year + "\0" + ledCat + "\0" + ledFrom + "\0" + ledTo,
+  );
+  const cashPg = usePager([...cashRows].reverse(), PAGE, "");
 
   // ── bank book: UPI accounts (no bank-account model exists — UPI IS the bank) ──
   const bankLedger = useMemo(
@@ -626,6 +634,7 @@ export default function BooksView() {
           )}
         </div>
         {monthRows.length ? (
+          <>
           <div className="bank-ledger" style={{ margin: "0 12px 12px" }}>
             <div className="bank-hdr">
               <span>Date</span>
@@ -634,7 +643,7 @@ export default function BooksView() {
               <span className="bank-amt">In ₹</span>
               <span className="bank-amt">Net</span>
             </div>
-            {monthRows.map((row) => {
+            {monthPg.view.map((row) => {
               // Net Cr/Dr = running balance (surplus Cr, deficit Dr)
               const balDr = row.balance < -0.005;
               // Line tag: money-out = Dr, money-in = Cr
@@ -672,6 +681,8 @@ export default function BooksView() {
               </span>
             </div>
           </div>
+          <Pager page={monthPg.page} pages={monthPg.pages} total={monthPg.total} onPage={monthPg.setPage} />
+          </>
         ) : (
           <div className="stmt-sub" style={{ padding: "10px 16px", opacity: 0.7 }}>
             {ledFiltered ? "No entries match these filters." : "No money moved in " + monthLabel + "."}
@@ -682,6 +693,7 @@ export default function BooksView() {
 
       {/* cash book — the manager's open cash, running balance from opening carry */}
       {view === "cash" && (
+      <>
       <div className="panel-card" style={{ marginTop: 18 }}>
         <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <span><Name id="cash.head" /></span>
@@ -710,7 +722,7 @@ export default function BooksView() {
               <span className={"bal-tag " + (carry < -0.005 ? "dr" : "cr")}>{carry < -0.005 ? "Dr" : "Cr"}</span>
             </span>
           </div>
-          {cashRows.map((row) => {
+          {cashPg.view.map((row) => {
             const balDr = row.balance < -0.005;
             const lineDr = row.debit > 0.005;
             return (
@@ -747,6 +759,8 @@ export default function BooksView() {
           </div>
         </div>
       </div>
+      <Pager page={cashPg.page} pages={cashPg.pages} total={cashPg.total} onPage={cashPg.setPage} />
+      </>
       )}
 
       {/* bank book — the UPI accounts (same data as the Accounts tab) */}

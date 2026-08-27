@@ -41,6 +41,7 @@ import { waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
+import { Paged } from "@/components/Pager";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
 const hhmm = (iso: string) => {
@@ -701,6 +702,8 @@ export default function AccountsView() {
     const due = ledgerRows.length > 0 ? ledgerRows[ledgerRows.length - 1].balance > 0.5 : false;
     const moveTargets = allNames.filter((n) => lc(n) !== lc(a.name));
     return (
+      <Paged items={ledgerRows} resetKey={a.name + "\0" + parentOpening}>
+        {(view) => (
       <div className="bank-ledger acct-book">
         <div className="bank-hdr">
           <span>Date</span>
@@ -710,7 +713,7 @@ export default function AccountsView() {
           <span className="bank-amt">Balance</span>
           <span className="acct-txn-more-slot" aria-hidden="true" />
         </div>
-        {ledgerRows.map((row, i) => {
+        {view.map((row, i) => {
           const isUpi = row.kind === "in" && !row.isOpen && !row.isClose;
           const isTxn = !row.isOpen && !row.isClose;
           const menuId = row.l.id || "";
@@ -729,7 +732,7 @@ export default function AccountsView() {
             .filter(Boolean)
             .join(" ");
           return (
-            <div key={i} className={rowCls}>
+            <div key={row.l.id || row.date + "-" + i} className={rowCls}>
               <span className="bank-date">{isTxn ? row.date : ""}</span>
               <span className="bank-parts">
                 <span className="acct-txn-who">{row.particulars}</span>
@@ -832,6 +835,8 @@ export default function AccountsView() {
           );
         })}
       </div>
+        )}
+      </Paged>
     );
   }
 

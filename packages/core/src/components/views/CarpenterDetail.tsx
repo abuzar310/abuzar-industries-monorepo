@@ -14,6 +14,7 @@ import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import CarpenterHistory, { CarpenterPendingList, CarpenterQuoteList } from "./CarpenterHistory";
 import PhotoField from "../PhotoField";
+import { Paged } from "../Pager";
 import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 
 export default function CarpenterDetail({ id }: { id: string }) {
@@ -194,18 +195,24 @@ export default function CarpenterDetail({ id }: { id: string }) {
         Bought themselves
         <span>· wood they purchased</span>
       </div>
-      <CarpenterQuoteList lines={rollup.ownQuotes} empty="No quotations in their own name." />
+      <Paged items={rollup.ownQuotes} resetKey={id + "own"}>
+        {(view) => <CarpenterQuoteList lines={view} empty="No quotations in their own name." />}
+      </Paged>
 
       <div className="dash-section" style={{ marginTop: 22 }}>
         Quotations they brought
         <span>· {rollup.broughtQuotes.length} · billed ₹ {inr(rollup.broughtBill)}</span>
       </div>
-      <CarpenterQuoteList lines={rollup.broughtQuotes} showParty empty="No quotations naming them as carpenter." />
+      <Paged items={rollup.broughtQuotes} resetKey={id + "br"}>
+        {(view) => <CarpenterQuoteList lines={view} showParty empty="No quotations naming them as carpenter." />}
+      </Paged>
 
       <div className="dash-section" style={{ marginTop: 22 }}>
         Customers <span>· {rollup.customerCount}</span>
       </div>
       {rollup.customers.length ? (
+        <Paged items={rollup.customers} resetKey={id + "c"}>
+          {(view) => (
         <div className="panel-card" style={{ marginTop: 0 }}>
           <table className="carp-roster">
             <thead>
@@ -216,7 +223,7 @@ export default function CarpenterDetail({ id }: { id: string }) {
               </tr>
             </thead>
             <tbody>
-              {rollup.customers.map((c) => (
+              {view.map((c) => (
                 <tr
                   key={c.id || c.name}
                   onClick={c.id ? () => router.push("/customers/" + c.id) : undefined}
@@ -234,6 +241,8 @@ export default function CarpenterDetail({ id }: { id: string }) {
             </tbody>
           </table>
         </div>
+          )}
+        </Paged>
       ) : (
         <div className="empty">
           <div className="empty-title">No customers yet</div>
@@ -247,12 +256,12 @@ export default function CarpenterDetail({ id }: { id: string }) {
             Pending
             <span>· locked, not yet given</span>
           </div>
-          <CarpenterPendingList
-            lines={rollup.pending.map((p) => ({
+          <Paged items={rollup.pending.map((p) => ({
               ...p,
               href: carpenterHref(rollup.key, rollup.record?.id),
-            }))}
-          />
+            }))} resetKey={id + "p"}>
+            {(view) => <CarpenterPendingList lines={view} />}
+          </Paged>
         </>
       )}
 
@@ -261,7 +270,9 @@ export default function CarpenterDetail({ id }: { id: string }) {
         <span>· commission we paid</span>
       </div>
       {history.length ? (
-        <CarpenterHistory lines={history} />
+        <Paged items={history} resetKey={id + "h"}>
+          {(view) => <CarpenterHistory lines={view} />}
+        </Paged>
       ) : (
         <div className="empty">
           <div className="empty-title">No commission yet</div>

@@ -12,6 +12,7 @@ import { bankBook, cashBook, getBankAccounts, liveInvoices, type BookEntry } fro
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { toast } from "@/store/app-store";
+import Pager, { PAGE, usePager } from "@/components/Pager";
 import type { Doc, Expense } from "@/lib/types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -99,6 +100,16 @@ export default function AccountBooksView() {
       list: [...list].reverse(),
     }))
     .sort((a, b) => (dateSortKey(b.date) || "").localeCompare(dateSortKey(a.date) || ""));
+  const accLines = dayGroups.flatMap((g) =>
+    g.list.map((r, i) => ({
+      date: g.date,
+      in: g.in,
+      out: g.out,
+      r,
+      head: i === 0,
+    })),
+  );
+  const accPg = usePager(accLines, PAGE, seg + "\0" + activeBank + "\0" + from + "\0" + to + "\0" + q);
 
   function preset(p: "thisMonth" | "lastMonth" | "fy" | "all") {
     const now = new Date();
@@ -201,33 +212,34 @@ export default function AccountBooksView() {
         </div>
       </div>
 
+      <>
       <div className="panel-card" style={{ padding: "0 0 4px" }}>
-        {dayGroups.length ? (
-          dayGroups.map((g) => (
-            <div className="db-day" key={g.date}>
+        {accLines.length ? (
+          accPg.view.map((row, i) => (
+            <div className="db-day" key={row.r.e.id}>
+              {(row.head || i === 0) && (
               <div className="db-day-head">
-                <span className="db-day-date">{g.date}</span>
+                <span className="db-day-date">{row.date}</span>
                 <span className="db-day-mini">
-                  {g.in > 0 ? "in ₹" + inr(g.in) : ""}
-                  {g.in > 0 && g.out > 0 ? " · " : ""}
-                  {g.out > 0 ? "out ₹" + inr(g.out) : ""}
+                  {row.in > 0 ? "in ₹" + inr(row.in) : ""}
+                  {row.in > 0 && row.out > 0 ? " · " : ""}
+                  {row.out > 0 ? "out ₹" + inr(row.out) : ""}
                 </span>
               </div>
-              {g.list.map((r) => (
-                <div className="stmt" key={r.e.id}>
-                  <div className={"stmt-ic " + (r.in ? "cash" : "due")}>{r.in ? "+" : "−"}</div>
+              )}
+                <div className="stmt">
+                  <div className={"stmt-ic " + (row.r.in ? "cash" : "due")}>{row.r.in ? "+" : "−"}</div>
                   <div className="stmt-main">
-                    <div className="stmt-to">{r.what}</div>
+                    <div className="stmt-to">{row.r.what}</div>
                     <div className="stmt-sub">
-                      {(r.e.note && r.what.indexOf(r.e.note) === -1 ? r.e.note + " · " : "")}by {userName(r.e.enteredBy)}
+                      {(row.r.e.note && row.r.what.indexOf(row.r.e.note) === -1 ? row.r.e.note + " · " : "")}by {userName(row.r.e.enteredBy)}
                     </div>
                   </div>
                   <div className="cs-amt">
-                    <div className={"stmt-amt" + (r.in ? "" : " due")}>{r.in ? "+" : "−"}₹{inr(r.e.amount)}</div>
-                    <small className="cs-runbal">bal ₹{inr(r.bal)}</small>
+                    <div className={"stmt-amt" + (row.r.in ? "" : " due")}>{row.r.in ? "+" : "−"}₹{inr(row.r.e.amount)}</div>
+                    <small className="cs-runbal">bal ₹{inr(row.r.bal)}</small>
                   </div>
                 </div>
-              ))}
             </div>
           ))
         ) : (
@@ -241,6 +253,8 @@ export default function AccountBooksView() {
           </div>
         )}
       </div>
+      <Pager page={accPg.page} pages={accPg.pages} total={accPg.total} onPage={accPg.setPage} />
+      </>
       </div>
 
       {/* ---- printable book (matches the filters) ---- */}

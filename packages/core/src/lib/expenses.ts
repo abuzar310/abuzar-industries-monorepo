@@ -115,10 +115,16 @@ export function isQuoteCommissionPay(e: Expense): boolean {
 
 /** Does this entry belong in the manager's cash daybook? Excludes UPI, cash sent straight to owner,
  *  cash assigned to a named account, customer dues/charges, and wood-against-commission. */
+/** Place-rent set-off: commission given without cash — not till money. */
+export function isPlaceRentSetoff(e: Expense): boolean {
+  return e.placeRentKind === "setoff";
+}
+
 export const inDaybook = (e: Expense) =>
   !isUpi(e) &&
   !e.toOwner &&
   !e.charge &&
+  !isPlaceRentSetoff(e) &&
   !(e.mode === "cash" && !!(e.account || "").trim()) &&
   !isQuoteCommissionPay(e);
 
@@ -160,6 +166,8 @@ export async function addExpense(fields: {
   party?: string;
   rounds?: number;
   carpenter?: string;
+  carpenterId?: string;
+  placeRentKind?: "charge" | "opening" | "received" | "setoff";
   refQuoteId?: string;
   quoteNo?: string;
   account?: string;
@@ -194,6 +202,8 @@ export async function addExpense(fields: {
     party: (fields.party || "").trim() || undefined,
     rounds: rounds > 0 ? rounds : undefined,
     carpenter: (fields.carpenter || "").trim() || undefined,
+    carpenterId: (fields.carpenterId || "").trim() || undefined,
+    placeRentKind: fields.placeRentKind || undefined,
     refQuoteId: (fields.refQuoteId || "").trim() || undefined,
     quoteNo: (fields.quoteNo || "").trim() || undefined,
     account: (fields.account || "").trim(),
