@@ -25,6 +25,7 @@ import { showReviewQr } from "@/store/review-qr-store";
 import { confirmDialog } from "@/store/dialog-store";
 import AccountPicker from "@/components/AccountPicker";
 import CustomerPicker from "@/components/editor/CustomerPicker";
+import Pager, { PAGE, usePager } from "@/components/Pager";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
@@ -42,6 +43,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const isCategoryPayout = (e: Expense) =>
   !e.custId &&
   !e.charge &&
+  !e.placeRentKind &&
   (e.type === "food" ||
     e.type === "salary" ||
     (e.type === "custom" && spendLabels().has(e.label || "")));
@@ -820,6 +822,10 @@ export default function ReceiptsView() {
     })
     .sort((a, b) => b.received + b.dueAdded + b.paidOut - (a.received + a.dueAdded + a.paidOut));
 
+  const namePg = usePager(nameRecvList, PAGE, "");
+  const paidPg = usePager(paidOutList, PAGE, focusPaid ? focusPaid.id + "/" + focusPaid.mm + "/" + focusPaid.yy : "");
+  const groupPg = usePager(groups, PAGE, "");
+
   const editing = !!editId || !!editRcpt;
   const showReceivedFields = kind === "received";
   const recvFromCustomer = kind === "received" && recvVia === "customer";
@@ -1348,7 +1354,7 @@ export default function ReceiptsView() {
       </div>
       {nameRecvList.length ? (
         <div className="panel-card" style={{ padding: "0 0 4px" }}>
-          {nameRecvList.map((entry) => (
+          {namePg.view.map((entry) => (
             <div className="stmt" key={entry.key}>
               <div className={"stmt-ic " + (entry.e.mode === "upi" ? "upi" : "cash")}>
                 {(entry.e.party || "?").slice(0, 3)}
@@ -1380,6 +1386,7 @@ export default function ReceiptsView() {
           <div className="empty">No name receipts yet — use Received → From name when someone returns money.</div>
         </div>
       )}
+      <Pager page={namePg.page} pages={namePg.pages} total={namePg.total} onPage={namePg.setPage} />
 
       <div id="receipts-paid-out" className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
         Paid out
@@ -1399,7 +1406,7 @@ export default function ReceiptsView() {
       </div>
       {paidOutList.length ? (
         <div className="panel-card" style={{ padding: "0 0 4px" }}>
-          {paidOutList.map((entry) => (
+          {paidPg.view.map((entry) => (
             <div className="stmt" key={entry.key}>
               <div className="stmt-ic due">{spendCategoryOf(entry.e).slice(0, 3)}</div>
               <div className="stmt-main">
@@ -1434,12 +1441,14 @@ export default function ReceiptsView() {
           </div>
         </div>
       )}
+      <Pager page={paidPg.page} pages={paidPg.pages} total={paidPg.total} onPage={paidPg.setPage} />
 
       <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
         By customer <small>— {groups.length}</small>
       </div>
       {groups.length ? (
-        groups.map((g) => {
+        <div>
+        {groupPg.view.map((g) => {
           const open = openCust === g.cid;
           return (
             <div className="panel-card" key={g.cid}>
@@ -1527,11 +1536,15 @@ export default function ReceiptsView() {
                 })()}
             </div>
           );
-        })
+        })}
+        </div>
       ) : (
         <div className="panel-card">
           <div className="empty">No receipts or dues recorded yet.</div>
         </div>
+      )}
+      {groups.length > PAGE && (
+        <Pager page={groupPg.page} pages={groupPg.pages} total={groupPg.total} onPage={groupPg.setPage} />
       )}
     </div>
   );

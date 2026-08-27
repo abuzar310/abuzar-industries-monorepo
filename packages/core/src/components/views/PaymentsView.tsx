@@ -9,6 +9,7 @@ import { useFocusFlash } from "@/lib/use-focus-flash";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
+import Pager, { PAGE, Paged, usePager } from "@/components/Pager";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
 // dd-mm-yy → yyyy-mm-dd for chronological sorting
@@ -164,6 +165,7 @@ export default function PaymentsView() {
   const shown = parties
     .filter((p) => p.balance > 0.5)
     .filter((p) => (term ? p.name.toLowerCase().includes(term) || p.phone.includes(term) : true));
+  const balPg = usePager(shown, PAGE, term);
 
   const balClass = (b: number) => (cloakMoney || b <= 0.5 ? "ok" : b < -0.5 ? "adv" : "due");
   const balText = (b: number) =>
@@ -226,7 +228,8 @@ export default function PaymentsView() {
           </div>
         </div>
       ) : (
-        shown.map((p) => (
+        <>
+        {balPg.view.map((p) => (
           <PartyCard
             key={p.custId || p.name}
             p={p}
@@ -239,7 +242,9 @@ export default function PaymentsView() {
             customers={customers}
             reload={load}
           />
-        ))
+        ))}
+        <Pager page={balPg.page} pages={balPg.pages} total={balPg.total} onPage={balPg.setPage} />
+        </>
       )}
     </div>
   );
@@ -345,6 +350,8 @@ function PartyCard({
           </div>
 
           {/* ── Bank-format ledger ── */}
+          <Paged items={ledgerRows} resetKey={pid}>
+            {(view) => (
           <div className="bank-ledger">
             <div className="bank-hdr">
               <span>Date</span>
@@ -354,7 +361,7 @@ function PartyCard({
               <span className="bank-amt">Balance</span>
             </div>
 
-            {ledgerRows.map((row, i) => {
+            {view.map((row, i) => {
               const isPayment = !row.isOpening && !row.isClosing && row.refType === "payment";
               const rowClass = [
                 "bank-row",
@@ -432,6 +439,8 @@ function PartyCard({
               );
             })}
           </div>
+            )}
+          </Paged>
         </div>
       )}
     </div>

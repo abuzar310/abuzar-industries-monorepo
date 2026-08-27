@@ -7,6 +7,7 @@ import { seedSuppliersFromPurchases } from "@/lib/suppliers";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
+import Pager, { PAGE, usePager } from "@/components/Pager";
 import type { Doc, Supplier } from "@/lib/types";
 
 function applySearch(list: Supplier[], q: string) {
@@ -93,6 +94,7 @@ export default function SuppliersView() {
   }
 
   const shown = applySearch(list, q || searchTerm);
+  const supPg = usePager(shown, PAGE, q + "\0" + searchTerm);
 
   return (
     <div>
@@ -136,7 +138,7 @@ export default function SuppliersView() {
           <span />
         </div>
         {shown.length ? (
-          shown.map((s) => {
+          supPg.view.map((s) => {
             const n = countFor(s);
             return (
               <div
@@ -177,6 +179,7 @@ export default function SuppliersView() {
           </div>
         )}
       </div>
+      <Pager page={supPg.page} pages={supPg.pages} total={supPg.total} onPage={supPg.setPage} />
     </div>
   );
 }

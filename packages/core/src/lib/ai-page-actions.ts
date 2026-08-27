@@ -300,6 +300,7 @@ function pathKey(pathname: string): string {
   if (pth.startsWith("/accounts")) return "accounts";
   if (pth.startsWith("/customers")) return "customers";
   if (pth.startsWith("/carpenters")) return "carpenters";
+  if (pth.startsWith("/rent")) return "rent";
   if (pth.startsWith("/buys") || pth.startsWith("/suppliers")) return "suppliers";
   if (pth.startsWith("/contacts")) return "contacts";
   if (pth.startsWith("/expenses")) return "daybook";
@@ -348,6 +349,18 @@ export function resolveAiPageActions(pathname: string, doc: Doc | null): AiPageB
         actions: customersActions(),
       };
     }
+    case "rent":
+      return {
+        title: "Rent",
+        actions: [
+          explain("What is Rent?", "Cut Size place rent for two people (Ismail and Suresha). Two cards on top. Tap a card for that person's section: what they owe, rent history, and commission converted into rent."),
+          how("Set monthly rent", "Rent → tap the person → Monthly rent ₹ → Save monthly ₹. Charge still lets you type a different amount for an odd month."),
+          how("Add old debt", "Rent → tap the person → Record → Old debt. Type what they already owe from before. This raises place rent due. It is not this month's charge and not Daybook cash."),
+          how("Charge this month", "Rent → tap the person → Record dropdown → Charge this month. Type ₹. Does not put cash in Daybook."),
+          how("Record cash received", "Rent → tap the person → Record → Cash received. Cash goes to Daybook and Receipts."),
+          how("Convert commission into rent", "Rent → tap the person → Record → Convert commission → rent. Or on a locked quotation: Commission lock → Against rent. Against rent is not cash; cash commission goes to Daybook."),
+        ],
+      };
     case "carpenters": {
       const m = pathname.match(/^\/carpenters\/([^/]+)/);
       return {

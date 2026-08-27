@@ -8,6 +8,7 @@ import { inr, nowIso, qty } from "@/lib/calc";
 import { useApp } from "@/store/useApp";
 import { bumpData, setWebsitePending, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
+import Pager, { PAGE, usePager } from "@/components/Pager";
 import type { WebsiteQuotation } from "@/lib/types";
 
 type Filter = "pending" | "imported" | "all";
@@ -59,6 +60,7 @@ export default function WebsiteQuotationsView() {
     });
   }, [rows, filter, q, cloakMoney]);
 
+  const wqPg = usePager(shown, PAGE, filter + "\0" + q);
   const pendingN = rows.filter((w) => w.status === "Pending").length;
 
   async function onImport(w: WebsiteQuotation) {
@@ -199,8 +201,9 @@ export default function WebsiteQuotationsView() {
           </div>
         </div>
       ) : (
+        <>
         <ul className="wq-list">
-          {shown.map((w) => {
+          {wqPg.view.map((w) => {
             const open = openId === w.id;
             return (
               <li key={w.id} className={"wq-card" + (w.status === "Imported" ? " imported" : "")}>
@@ -321,6 +324,8 @@ export default function WebsiteQuotationsView() {
             );
           })}
         </ul>
+        <Pager page={wqPg.page} pages={wqPg.pages} total={wqPg.total} onPage={wqPg.setPage} />
+        </>
       )}
     </div>
   );

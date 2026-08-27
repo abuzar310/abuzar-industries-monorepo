@@ -15,6 +15,7 @@ import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { Customer, Doc, Expense } from "@/lib/types";
+import { Paged } from "../Pager";
 import DocList from "./DocList";
 
 export default function CustomerDetail({ id }: { id: string }) {
@@ -270,8 +271,10 @@ export default function CustomerDetail({ id }: { id: string }) {
               </button>
             )}
           </div>
+          <Paged items={stmtRows} resetKey={id}>
+            {(view, info) => (
           <div className="panel-card cs-card">
-            {opening > 0 && (
+            {opening > 0 && info.page === 0 && (
               <div className="stmt">
                 <div className="stmt-ic due">₹</div>
                 <div className="stmt-main">
@@ -284,7 +287,7 @@ export default function CustomerDetail({ id }: { id: string }) {
                 </div>
               </div>
             )}
-            {stmtRows.map((ev) => (
+            {view.map((ev) => (
               <div
                 className="stmt"
                 key={ev.kind + ev.id}
@@ -315,6 +318,8 @@ export default function CustomerDetail({ id }: { id: string }) {
               </span>
             </div>
           </div>
+            )}
+          </Paged>
         </>
       )}
 

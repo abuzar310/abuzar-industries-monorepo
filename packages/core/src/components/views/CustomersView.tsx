@@ -15,6 +15,7 @@ import { bumpData, setSearch, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import PartySearchBar from "../PartySearchBar";
 import PhotoField from "../PhotoField";
+import Pager, { PAGE, usePager } from "../Pager";
 import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 
 type Mode = "customers" | "carpenters";
@@ -175,6 +176,9 @@ export default function CustomersView() {
     [cloakMoney, carpenters, query],
   );
 
+  const custPg = usePager(entries, PAGE, query + "\0" + sortBy);
+  const carpPg = usePager(carpList, PAGE, query);
+
   return (
     <div>
       <div className="sectitle">
@@ -229,9 +233,10 @@ export default function CustomersView() {
       />
 
       {view === "customers" ? (
+        <>
         <div className="custgrid">
           {entries.length ? (
-            entries.map(({ c, f }) => (
+            custPg.view.map(({ c, f }) => (
               <div className="custcard" key={c.id} onClick={() => router.push("/customers/" + c.id)} style={{ cursor: "pointer" }}>
                 <h3>{c.name}</h3>
                 <div className="ph">{c.phone || "—"}</div>
@@ -303,10 +308,13 @@ export default function CustomersView() {
             </div>
           )}
         </div>
+        <Pager page={custPg.page} pages={custPg.pages} total={custPg.total} onPage={custPg.setPage} />
+        </>
       ) : (
+        <>
         <div className="custgrid">
           {carpList.length ? (
-            carpList.map((c) => (
+            carpPg.view.map((c) => (
               <div className="custcard" key={c.id} style={{ cursor: "default" }}>
                 <div className="carp-card-top">
                   <PhotoField
@@ -370,6 +378,8 @@ export default function CustomersView() {
             </div>
           )}
         </div>
+        <Pager page={carpPg.page} pages={carpPg.pages} total={carpPg.total} onPage={carpPg.setPage} />
+        </>
       )}
     </div>
   );

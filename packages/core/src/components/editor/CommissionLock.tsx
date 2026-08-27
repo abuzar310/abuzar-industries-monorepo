@@ -7,14 +7,21 @@ import {
   lockAmount,
   pendingPayHref,
 } from "@/lib/carpenter-financials";
+import {
+  applyAgainstRent,
+  ensurePlaceRentTenants,
+  matchPlaceRentTenant,
+  placeRentDue,
+} from "@/lib/place-rent";
 import { USERS } from "@/lib/local-auth";
-import { toast } from "@/store/app-store";
+import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
-import type { CommissionLock as Lock, Customer, Doc, Expense } from "@/lib/types";
+import type { Carpenter, CommissionLock as Lock, Customer, Doc, Expense } from "@/lib/types";
 import CustomerPicker from "./CustomerPicker";
 import CarpenterPicker, { type CarpenterHit } from "./CarpenterPicker";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export default function CommissionLock({
   doc,
@@ -23,6 +30,7 @@ export default function CommissionLock({
   carpenters,
   by,
   onCommit,
+  onApplied,
 }: {
   doc: Doc;
   expenses: Expense[];
@@ -30,6 +38,7 @@ export default function CommissionLock({
   carpenters: CarpenterHit[];
   by: string;
   onCommit: (lock: Lock | undefined) => void;
+  onApplied?: () => void;
 }) {
   const router = useRouter();
   const lockedAmt = lockAmount(doc);
@@ -44,9 +53,18 @@ export default function CommissionLock({
   const [party, setParty] = useState("");
   const [partyId, setPartyId] = useState("");
   const [editing, setEditing] = useState(false);
+  const [tenants, setTenants] = useState<Carpenter[]>([]);
+  const [splitting, setSplitting] = useState(false);
+  const [against, setAgainst] = useState("");
+  const [cash, setCash] = useState("");
+
+  useEffect(() => {
+    void ensurePlaceRentTenants().then(setTenants);
+  }, []);
 
   useEffect(() => {
     setEditing(false);
+    setSplitting(false);
     const L = doc.commLock;
     if (L && +(L.amount || 0) > 0) {
       setAmt(String(L.amount));
@@ -68,6 +86,23 @@ export default function CommissionLock({
     window.addEventListener("abuzar-comm-lock-edit", go);
     return () => window.removeEventListener("abuzar-comm-lock-edit", go);
   }, []);
+
+  const carpenterLabel = (doc.commLock?.carpenter || carpenter || doc.site || "").trim();
+  const partyLabel = (doc.commLock?.party || party || doc.customerName || "").trim();
+  const tenant = matchPlaceRentTenant(
+    {
+      site: carpenterLabel || doc.site,
+      sitePhone: doc.sitePhone,
+      commLock: {
+        amount: lockedAmt,
+        carpenter: carpenterLabel,
+        lockedBy: doc.commLock?.lockedBy || "",
+        lockedAt: doc.commLock?.lockedAt || "",
+      },
+    },
+    tenants,
+  );
+  const due = tenant ? placeRentDue(tenant, expenses) : 0;
 
   function fillFromDoc() {
     const L = doc.commLock;
@@ -125,8 +160,71 @@ export default function CommissionLock({
     );
   }
 
-  const carpenterLabel = (doc.commLock?.carpenter || carpenter || doc.site || "").trim();
-  const partyLabel = (doc.commLock?.party || party || doc.customerName || "").trim();
+  function startSplit() {
+    if (!tenant || pending <= 0) return;
+    setAgainst(String(r2(Math.min(pending, due)) || 0));
+    setCash("0");
+    setSplitting(true);
+  }
+
+  async function applySplit() {
+    if (!tenant) return;
+    try {
+      await applyAgainstRent({
+        tenant,
+        quote: doc,
+        against: +against || 0,
+        cash: +cash || 0,
+        enteredBy: by,
+        expenses,
+      });
+      bumpData();
+      onApplied?.();
+      setSplitting(false);
+      toast("Applied against rent");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not apply");
+    }
+  }
+
+  const againstBtns =
+    tenant && pending > 0 ? (
+      splitting ? (
+        <div style={{ width: "100%", marginTop: 8 }}>
+          <small style={{ display: "block", color: "var(--ink-faint)", marginBottom: 8, lineHeight: 1.45 }}>
+            Place rent due ₹{inr(due)}. Against rent is not cash. Cash commission goes to Daybook. Sum cannot exceed
+            pending ₹{inr(pending)}.
+          </small>
+          <div className="rec-grid rec-grid-due">
+            <label className="modal-field">
+              <span>Against rent ₹</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={against}
+                onChange={(e) => setAgainst(e.target.value)}
+              />
+            </label>
+            <label className="modal-field">
+              <span>Cash commission ₹</span>
+              <input type="number" inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} />
+            </label>
+          </div>
+          <div className="rowbtns" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+            <button className="btn primary" type="button" onClick={() => void applySplit()}>
+              Apply
+            </button>
+            <button className="btn" type="button" onClick={() => setSplitting(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button className="btn" type="button" onClick={startSplit}>
+          Against rent
+        </button>
+      )
+    ) : null;
 
   return (
     <div
@@ -143,6 +241,7 @@ export default function CommissionLock({
           <div className="comm-lock-meta">
             {carpenterLabel}
             {partyLabel ? ` · ${partyLabel}` : ""}
+            {tenant ? " · Rent" : ""}
             <br />
             {pending > 0
               ? `Pending ₹${inr(pending)} of ₹${inr(lockedAmt)}`
@@ -161,6 +260,7 @@ export default function CommissionLock({
                 Pay ₹{inr(pending)}
               </button>
             )}
+            {againstBtns}
           </div>
         </>
       ) : (
@@ -180,6 +280,7 @@ export default function CommissionLock({
               : ""}
             .
             {isLocked && doc.commLock?.lockedBy ? ` Locked by ${userName(doc.commLock.lockedBy)}.` : ""}
+            {tenant ? " This person is on Rent — Against rent can set off commission without cash." : ""}
           </small>
           <div className="pb-comm" style={{ padding: 0, borderBottom: 0 }}>
             <div className="rec-grid rec-grid-due">
@@ -232,6 +333,7 @@ export default function CommissionLock({
                   onClick={() => {
                     fillFromDoc();
                     setEditing(false);
+                    setSplitting(false);
                   }}
                 >
                   Cancel
@@ -247,6 +349,7 @@ export default function CommissionLock({
                   Pay ₹{inr(pending)}
                 </button>
               )}
+              {againstBtns}
             </div>
           </div>
         </>

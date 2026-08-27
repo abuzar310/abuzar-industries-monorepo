@@ -7,6 +7,7 @@ import { partyLedger, quoteBill, quoteLedger } from "@/lib/payments";
 import { computeTrading, docTrade, getStockConfig, type StockConfig } from "@/lib/trading";
 import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
+import Pager from "@/components/Pager";
 import type { Customer, Doc, Expense, Stock } from "@/lib/types";
 import { StatusBadge } from "./DocList";
 
@@ -449,17 +450,6 @@ export default function DashboardView() {
             <span>All Transactions</span>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               <button className="dash-link" onClick={() => router.push("/transactions")}>Open full view →</button>
-              <span className="sub" style={{ fontSize: 12, color: "var(--ink-faint)" }}>
-                {txnsTotal} total · page {txnsPage + 1} of {Math.ceil(txnsTotal / TXNS_PAGE_SIZE) || 1}
-              </span>
-              {txnsPage > 0 && (
-                <button className="btn sm" onClick={() => setTxnsPage((p) => p - 1)} disabled={txnsLoading}>
-                  ‹ Prev
-                </button>
-              )}
-              <button className="btn sm" onClick={() => setTxnsPage((p) => p + 1)} disabled={txnsLoading || (txnsPage + 1) * TXNS_PAGE_SIZE >= txnsTotal}>
-                Next ›
-              </button>
             </div>
           </div>
 
@@ -535,6 +525,12 @@ export default function DashboardView() {
               </table>
             </div>
           )}
+          <Pager
+            page={txnsPage}
+            pages={Math.ceil(txnsTotal / TXNS_PAGE_SIZE) || 1}
+            total={txnsTotal}
+            onPage={setTxnsPage}
+          />
         </div>
       )}
     </div>

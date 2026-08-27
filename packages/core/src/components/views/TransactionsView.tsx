@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { fetchAllTransactions, type AllTransaction } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { useApp } from "@/store/useApp";
+import Pager from "@/components/Pager";
 
 const TXNS_PAGE_SIZE = 100;
 
@@ -286,38 +287,7 @@ export default function TransactionsView() {
           </div>
         )}
 
-        {/* Pagination */}
-        {total > TXNS_PAGE_SIZE && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: 8,
-              padding: "10px 14px",
-              borderTop: "1px solid var(--line)",
-              fontSize: 12,
-            }}
-          >
-            <span style={{ color: "var(--ink-faint)" }}>
-              Page {page + 1} of {totalPages} · {total} total
-            </span>
-            <button
-              className="btn sm"
-              disabled={page === 0 || loading}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              ‹ Prev
-            </button>
-            <button
-              className="btn sm"
-              disabled={page >= totalPages - 1 || loading}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next ›
-            </button>
-          </div>
-        )}
+        <Pager page={page} pages={totalPages} total={total} onPage={setPage} />
       </div>
     </div>
   );
