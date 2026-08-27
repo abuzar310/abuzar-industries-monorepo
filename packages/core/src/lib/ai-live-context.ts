@@ -120,10 +120,6 @@ export function liveQuickActions(pathname: string): AiQuickAction[] {
     }
   }
 
-  if (path === "/" || path.startsWith("/expenses") || path.startsWith("/books")) {
-    out.push({ id: "nav-yard-chat", label: "Open yard chat", href: "/chat" });
-  }
-
   if (isCloaked()) return out;
 
   const onMoneyTab =

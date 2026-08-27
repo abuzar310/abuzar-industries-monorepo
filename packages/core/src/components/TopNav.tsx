@@ -97,7 +97,7 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
               : t.badge ? unseen : 0;
             return (
               <Link key={t.href} href={t.href} className={cls}>
-                {t.href === "/ai" || t.href === "/chat" ? (
+                {t.href === "/ai" ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src="/icon.png" alt="" width={16} height={16} className="tab-favicon" />
                 ) : (

@@ -103,6 +103,24 @@ export default function CarpentersView() {
     if (!n) return;
     dialPhone(n, e);
   }
+  async function edit(e: React.MouseEvent, r: CarpenterRollup) {
+    e.stopPropagation();
+    const next = await editCarpenterDialog(
+      r.record ||
+        ({
+          name: r.name,
+          phone: r.phone,
+          phoneAlt: r.phoneAlt,
+          village: r.village,
+          city: r.city,
+          notes: r.notes,
+          photo: r.photo,
+        } as Carpenter),
+    );
+    if (!next) return;
+    load();
+    bumpData();
+  }
   async function remove(e: React.MouseEvent, r: CarpenterRollup) {
     e.stopPropagation();
     if (!r.record) return;
@@ -273,6 +291,9 @@ export default function CarpentersView() {
                       </button>
                     </>
                   ) : null}
+                  <button className="btn sm" onClick={(e) => void edit(e, r)}>
+                    {r.record ? "Edit" : "Save contact"}
+                  </button>
                   {r.record ? (
                     <button className="btn warn sm" onClick={(e) => void remove(e, r)}>
                       Delete
