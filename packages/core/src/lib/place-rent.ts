@@ -1,7 +1,7 @@
 import { dateSortKey, nowIso, todayStr } from "./calc";
-import { put } from "./data";
+import { allRec, delRec, getRec, put } from "./data";
 import { carpenterKey, commissionPendingOnQuote } from "./carpenter-financials";
-import { saveCarpenter, listCarpenters } from "./carpenters";
+import { deleteCarpenter, listCarpenters } from "./carpenters";
 import { addExpense } from "./expenses";
 import type { Carpenter, Doc, Expense, PayMode } from "./types";
 
@@ -45,12 +45,23 @@ export function belongsToTenant(e: Expense, c: Carpenter): boolean {
   return false;
 }
 
+/** Standing old balance on the tenant profile, else the sum of legacy "old debt" rows. */
+export function rentOpeningOf(c: Carpenter, expenses: Expense[]): number {
+  if (c.rentOpening != null && Number.isFinite(+c.rentOpening)) return r2(Math.max(0, +c.rentOpening));
+  let s = 0;
+  for (const e of expenses) {
+    if (e.placeRentKind === "opening" && belongsToTenant(e, c)) s += r2(+e.amount || 0);
+  }
+  return r2(s);
+}
+
 export function placeRentDue(c: Carpenter, expenses: Expense[]): number {
-  let due = 0;
+  let due = rentOpeningOf(c, expenses);
   for (const e of expenses) {
     if (!e.placeRentKind || !belongsToTenant(e, c)) continue;
+    if (e.placeRentKind === "opening") continue;
     const a = r2(+e.amount || 0);
-    if (e.placeRentKind === "charge" || e.placeRentKind === "opening") due += a;
+    if (e.placeRentKind === "charge") due += a;
     else due -= a;
   }
   return r2(Math.max(0, due));
@@ -111,45 +122,105 @@ export interface PlaceRentStmt {
 }
 
 export function placeRentStatement(c: Carpenter, expenses: Expense[]): PlaceRentStmt[] {
+  const opening = rentOpeningOf(c, expenses);
   const rows = expenses
-    .filter((e) => !!e.placeRentKind && belongsToTenant(e, c))
+    .filter((e) => !!e.placeRentKind && e.placeRentKind !== "opening" && belongsToTenant(e, c))
     .sort((a, b) => {
       const d = (dateSortKey(a.date) || "").localeCompare(dateSortKey(b.date) || "");
       if (d) return d;
       return (a.createdAt || "").localeCompare(b.createdAt || "");
     });
-  let bal = 0;
-  return rows.map((e) => {
+  let bal = opening;
+  const out: PlaceRentStmt[] = [];
+  if (opening > 0.5) {
+    out.push({
+      id: "opening:" + c.id,
+      date: "",
+      at: "",
+      kind: "opening",
+      label: "Old balance",
+      sub: "On profile",
+      signed: opening,
+      bal: opening,
+    });
+  }
+  for (const e of rows) {
     const a = r2(+e.amount || 0);
-    const signed = e.placeRentKind === "charge" || e.placeRentKind === "opening" ? a : -a;
+    const signed = e.placeRentKind === "charge" ? a : -a;
     bal = r2(bal + signed);
     const kind = e.placeRentKind!;
     const label =
-      kind === "charge"
-        ? "Place rent charged"
-        : kind === "opening"
-          ? "Old debt"
-          : kind === "received"
-            ? "Received"
-            : "Against rent";
+      kind === "charge" ? "Place rent charged" : kind === "received" ? "Received" : "Against rent";
     const sub = [e.note, e.quoteNo ? "Q#" + e.quoteNo : "", e.mode === "upi" ? "UPI" : kind === "received" ? "Cash" : ""]
       .filter(Boolean)
       .join(" · ");
-    return { id: e.id, date: e.date, at: e.createdAt || "", kind, label, sub, signed, bal, quoteId: e.refQuoteId };
-  });
+    out.push({ id: e.id, date: e.date, at: e.createdAt || "", kind, label, sub, signed, bal, quoteId: e.refQuoteId });
+  }
+  return out;
+}
+
+export function hasTenantPhone(c: Carpenter): boolean {
+  return phoneDigits(c.phone).length >= 8 || phoneDigits(c.phoneAlt || "").length >= 8;
+}
+
+/** Empty "Suresha" / "Ismail" shells created for the Rent tab — not the real carpenter. */
+export function isSeedStub(c: Carpenter, seed: string): boolean {
+  if (!nameHitsSeed(c.name, seed)) return false;
+  if (hasTenantPhone(c)) return false;
+  if (carpenterKey(c.name) !== carpenterKey(seed)) return false;
+  const note = carpenterKey(c.notes || "");
+  return !note || note === carpenterKey("Place rent");
+}
+
+export function tenantScore(c: Carpenter, seed: string): number {
+  let n = 0;
+  if (hasTenantPhone(c)) n += 100;
+  if (carpenterKey(c.name).length > carpenterKey(seed).length) n += 40;
+  if (c.placeRent) n += 8;
+  if (r2(+(c.monthlyRent || 0) || 0) > 0) n += 4;
+  const note = carpenterKey(c.notes || "");
+  if (note && note !== carpenterKey("Place rent")) n += 6;
+  return n;
+}
+
+export function pickPlaceRentForSeed(all: Carpenter[], seed: string): Carpenter | undefined {
+  const hits = all.filter((c) => nameHitsSeed(c.name, seed));
+  if (!hits.length) return undefined;
+  return hits.slice().sort((a, b) => {
+    const d = tenantScore(b, seed) - tenantScore(a, seed);
+    if (d) return d;
+    return (a.createdAt || "").localeCompare(b.createdAt || "");
+  })[0];
 }
 
 function pickForSeed(all: Carpenter[], seed: string): Carpenter | undefined {
-  const hits = all.filter((c) => nameHitsSeed(c.name, seed));
-  if (!hits.length) return undefined;
-  const flagged = hits.filter(isPlaceRentTenant);
-  const pool = flagged.length ? flagged : hits;
-  return pool.slice().sort((a, b) => {
-    const pa = (a.phone || "").trim() ? 1 : 0;
-    const pb = (b.phone || "").trim() ? 1 : 0;
-    if (pb !== pa) return pb - pa;
-    return (a.createdAt || "").localeCompare(b.createdAt || "");
-  })[0];
+  return pickPlaceRentForSeed(all, seed);
+}
+
+export function preferKeep(a: Carpenter, b: Carpenter): Carpenter {
+  const seed = PLACE_RENT_SEEDS.find((s) => nameHitsSeed(a.name, s) && nameHitsSeed(b.name, s));
+  if (seed) return tenantScore(a, seed) >= tenantScore(b, seed) ? a : b;
+  if (hasTenantPhone(b) !== hasTenantPhone(a)) return hasTenantPhone(b) ? b : a;
+  return a;
+}
+
+export function findDuplicateCarpenters(tenant: Carpenter, all: Carpenter[]): Carpenter[] {
+  return all.filter((c) => {
+    if (c.id === tenant.id) return false;
+    const sameName =
+      carpenterKey(c.name) === carpenterKey(tenant.name) ||
+      nameHitsSeed(c.name, tenant.name) ||
+      nameHitsSeed(tenant.name, c.name);
+    const samePhone =
+      phonesMatch(c.phone, tenant.phone) ||
+      phonesMatch(c.phoneAlt || "", tenant.phone) ||
+      phonesMatch(c.phone, tenant.phoneAlt || "") ||
+      phonesMatch(c.phoneAlt || "", tenant.phoneAlt || "");
+    if (sameName && samePhone) return true;
+    return PLACE_RENT_SEEDS.some(
+      (s) => nameHitsSeed(tenant.name, s) && nameHitsSeed(c.name, s) && (isSeedStub(c, s) || isSeedStub(tenant, s)),
+    );
+  });
 }
 
 let ensureInflight: Promise<Carpenter[]> | undefined;
@@ -164,41 +235,130 @@ export async function ensurePlaceRentTenants(): Promise<Carpenter[]> {
 }
 
 async function ensurePlaceRentTenantsOnce(): Promise<Carpenter[]> {
-  const all = await listCarpenters();
-  const out: Carpenter[] = [];
+  let all = await listCarpenters();
   const keep = new Set<string>();
+  const out: Carpenter[] = [];
+
   for (const seed of PLACE_RENT_SEEDS) {
     const hit = pickForSeed(all, seed);
-    if (hit) {
-      if (!hit.placeRent) {
-        hit.placeRent = true;
-        hit.updatedAt = nowIso();
-        await put("carpenters", hit);
-      }
-      keep.add(hit.id);
-      out.push(hit);
-      continue;
+    if (!hit) continue;
+    let tenant = hit;
+    const stubs = all.filter((c) => c.id !== hit.id && isSeedStub(c, seed));
+    for (const stub of stubs) {
+      tenant = await mergePlaceRentTenants(tenant, stub);
+      all = await listCarpenters();
     }
-    const created = await saveCarpenter({ name: seed, notes: "Place rent" });
-    created.placeRent = true;
-    created.updatedAt = nowIso();
-    await put("carpenters", created);
-    keep.add(created.id);
-    out.push(created);
+    if (!tenant.placeRent) {
+      tenant = { ...tenant, placeRent: true, updatedAt: nowIso() };
+      await put("carpenters", tenant);
+    }
+    keep.add(tenant.id);
+    out.push(tenant);
   }
+
+  all = await listCarpenters();
   for (const c of all) {
     if (!c.placeRent || keep.has(c.id)) continue;
-    c.placeRent = false;
-    c.updatedAt = nowIso();
-    await put("carpenters", c);
+    if (PLACE_RENT_SEEDS.some((s) => isSeedStub(c, s))) {
+      c.placeRent = false;
+      c.updatedAt = nowIso();
+      await put("carpenters", c);
+      continue;
+    }
+    keep.add(c.id);
+    out.push(c);
   }
   return out.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 
-export async function setMonthlyRent(c: Carpenter, amount: number): Promise<Carpenter> {
-  const next = { ...c, monthlyRent: r2(Math.max(0, amount)), placeRent: true, updatedAt: nowIso() };
+async function patchCarpenter(c: Carpenter, patch: Partial<Carpenter>): Promise<Carpenter> {
+  const live = (c.id ? await getRec<Carpenter>("carpenters", c.id) : undefined) || c;
+  const next: Carpenter = { ...live, ...patch, id: live.id, placeRent: true, updatedAt: nowIso() };
   await put("carpenters", next);
   return next;
+}
+
+export async function setMonthlyRent(c: Carpenter, amount: number): Promise<Carpenter> {
+  return patchCarpenter(c, { monthlyRent: r2(Math.max(0, amount)) });
+}
+
+/** Save old balance on the person. Replaces leftover "old debt" rows so the figure cannot snap back. */
+export async function setRentOpening(c: Carpenter, amount: number, enteredBy = "unknown"): Promise<Carpenter> {
+  const a = r2(Math.max(0, amount));
+  const next = await patchCarpenter(c, { rentOpening: a });
+  const expenses = await allRec<Expense>("expenses");
+  for (const e of expenses) {
+    if (e.placeRentKind === "opening" && belongsToTenant(e, next)) await delRec("expenses", e.id);
+  }
+  if (a > 0.5) await addPlaceRentDebt(next, a, enteredBy, "Old balance");
+  return next;
+}
+
+export async function mergePlaceRentTenants(keep: Carpenter, drop: Carpenter): Promise<Carpenter> {
+  if (keep.id === drop.id) return keep;
+  const expenses = await allRec<Expense>("expenses");
+  const quotes = await allRec<Doc>("quotations");
+  const kOpen = keep.rentOpening;
+  const dOpen = drop.rentOpening;
+  const rentOpening =
+    kOpen != null && dOpen != null
+      ? r2(Math.max(0, +kOpen + +dOpen))
+      : kOpen != null
+        ? r2(Math.max(0, +kOpen))
+        : dOpen != null
+          ? r2(Math.max(0, +dOpen))
+          : keep.rentOpening;
+  const monthly = r2(+(keep.monthlyRent || 0) || 0) || r2(+(drop.monthlyRent || 0) || 0);
+  const next: Carpenter = {
+    ...keep,
+    phone: keep.phone || drop.phone,
+    phoneAlt: keep.phoneAlt || drop.phoneAlt,
+    village: keep.village || drop.village,
+    city: keep.city || drop.city,
+    notes: keep.notes || drop.notes,
+    photo: keep.photo || drop.photo,
+    placeRent: true,
+    monthlyRent: monthly || keep.monthlyRent || drop.monthlyRent,
+    rentOpening,
+    updatedAt: nowIso(),
+  };
+  await put("carpenters", next);
+
+  const dropKey = carpenterKey(drop.name);
+  for (const e of expenses) {
+    const hit =
+      e.carpenterId === drop.id ||
+      (!!e.placeRentKind && carpenterKey(e.carpenter || "") === dropKey) ||
+      (!!e.placeRentKind && carpenterKey(e.party || "") === dropKey);
+    if (!hit) continue;
+    const patch: Expense = { ...e, carpenterId: next.id, carpenter: next.name };
+    if (carpenterKey(e.party || "") === dropKey) patch.party = next.name;
+    await put("expenses", patch);
+  }
+  for (const q of quotes) {
+    if (!q.commLock?.carpenter) continue;
+    if (carpenterKey(q.commLock.carpenter) !== dropKey) continue;
+    await put("quotations", { ...q, commLock: { ...q.commLock, carpenter: next.name } });
+  }
+  await deleteCarpenter(drop.id);
+  return next;
+}
+
+export async function adoptCarpenterAsTenant(current: Carpenter | undefined, chosen: Carpenter): Promise<Carpenter> {
+  if (!current) {
+    const next = { ...chosen, placeRent: true, updatedAt: nowIso() };
+    await put("carpenters", next);
+    return next;
+  }
+  if (current.id === chosen.id) {
+    if (chosen.placeRent) return chosen;
+    const next = { ...chosen, placeRent: true, updatedAt: nowIso() };
+    await put("carpenters", next);
+    return next;
+  }
+  const keep = preferKeep(chosen, current);
+  const drop = keep.id === chosen.id ? current : chosen;
+  return mergePlaceRentTenants(keep, drop);
 }
 
 /** Brought-forward rent they already owe. Hits the due, not this month's Charge, not the till. */
@@ -210,7 +370,7 @@ export async function addPlaceRentDebt(
   date = todayStr(),
 ): Promise<Expense> {
   const a = r2(Math.max(0, amount));
-  if (a <= 0.5) throw new Error("Enter the old debt amount");
+  if (a <= 0.5) throw new Error("Enter the old balance");
   return addExpense({
     type: "sale",
     amount: a,
@@ -222,7 +382,7 @@ export async function addPlaceRentDebt(
     carpenter: c.name,
     carpenterId: c.id,
     placeRentKind: "opening",
-    note: (note || "").trim() || "Old debt",
+    note: (note || "").trim() || "Old balance",
     date,
     enteredBy,
   });

@@ -15,6 +15,7 @@ import {
   pendingPayHref,
   rollupCarpenters,
 } from "./carpenter-financials";
+import { nextCarpenterPhoto, resolveCarpenterRecord } from "./carpenters";
 
 let n = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -186,6 +187,16 @@ function demo() {
   ok(pending[0].pending === 3000 && pending[0].carpenter === "Kumar", "newest lock first");
   const payUrl = pendingPayHref(pending[1]);
   ok(payUrl.includes("paid=carpenter") && payUrl.includes("amt=8500") && payUrl.includes("quote=Q1"), "Pay URL prefills Receipts");
+
+  ok(nextCarpenterPhoto("data:old", undefined) === "data:old", "missing photo field keeps the old photo");
+  ok(nextCarpenterPhoto("data:old", "") === undefined, "blank photo is an explicit remove");
+  ok(nextCarpenterPhoto("data:old", "", { allowBlankRemove: false }) === "data:old", "empty dialog does not wipe a found record");
+  ok(nextCarpenterPhoto("data:old", "data:new") === "data:new", "new photo replaces");
+  const ply = carp("CARP-PLY", "SURESHA CARPENTER PLYNING WORK", "9880919422");
+  ply.photo = "data:image/jpeg;base64,QQ==";
+  const stub = carp("CARP-STUB", "Suresha");
+  ok(resolveCarpenterRecord({ name: "Suresha" }, [stub, ply])?.id === "CARP-PLY", "edit Suresha uses plyning-work row");
+  ok(resolveCarpenterRecord({ record: ply, name: "Suresha" }, [stub, ply])?.id === "CARP-PLY", "saved id wins");
 
   console.log("carpenter-financials.check OK (" + n + " assertions)");
 }
