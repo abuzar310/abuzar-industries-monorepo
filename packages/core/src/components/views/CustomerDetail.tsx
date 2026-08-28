@@ -155,6 +155,7 @@ export default function CustomerDetail({ id }: { id: string }) {
     { rows: [], bal: opening },
   ).rows;
   const canPrint = quotes.length > 0 || opening > 0;
+  const custName = cust.name || "customer";
   const stmtPdfRows: PassbookLine[] = [
     ...(opening > 0
       ? [{ key: "open", date: "", who: "Opening Balance", debit: 0, credit: 0, balance: opening, open: true }]
@@ -183,10 +184,10 @@ export default function CustomerDetail({ id }: { id: string }) {
     if (!printRef.current) return;
     if (!preview) toast("Preparing PDF…");
     try {
-      await generatePdf(printRef.current, (cust.name || "customer") + "-statement", {
+      await generatePdf(printRef.current, custName + "-statement", {
         pageBreak: ".bank-row,.acct-print-sum,.acct-print-hdr",
         width: 700,
-        title: (brand.name || "Statement") + " — " + cust.name,
+        title: (brand.name || "Statement") + " — " + custName,
         marginMm: 8,
         preview,
       });
