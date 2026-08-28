@@ -229,6 +229,8 @@ export interface Carpenter {
   placeRent?: boolean;
   /** Default monthly place rent ₹ (Charge can still type a different figure). */
   monthlyRent?: number;
+  /** Brought-forward place rent they already owe — a profile figure, like a bank opening. */
+  rentOpening?: number;
   createdAt: string;
   updatedAt?: string;
 }
