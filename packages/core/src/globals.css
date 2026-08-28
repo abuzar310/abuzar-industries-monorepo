@@ -171,6 +171,41 @@ body{
 .cust-block{display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); position:relative; z-index:1}
 /* invoice: Name · Phone · GSTIN · Ship To on ONE line (address below, full width) */
 .cust-block.c4{grid-template-columns:repeat(4,1fr)}
+.cust-block.c2{grid-template-columns:1fr 1fr}
+.carp-mode{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:7px 20px 4px; border-top:1px solid var(--line);
+}
+.carp-mode.on{background:rgba(176,124,40,.07)}
+.carp-mode + .cust-block{border-top:0}
+.carp-mode-sw{
+  display:inline-flex; align-items:center; gap:9px; margin:0; padding:2px 0;
+  border:0; background:none; cursor:pointer;
+  font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-soft);
+}
+.carp-mode-sw:hover{color:var(--ink)}
+.carp-mode.on .carp-mode-sw{color:var(--ochre-deep)}
+.carp-sw{
+  width:36px; height:20px; border-radius:10px; flex:0 0 auto;
+  background:var(--line-2); position:relative;
+  transition:background .15s ease;
+}
+.carp-mode.on .carp-sw{background:var(--ochre-deep)}
+.carp-sw::after{
+  content:""; position:absolute; top:2px; left:2px;
+  width:16px; height:16px; border-radius:50%; background:#fff;
+  box-shadow:0 1px 3px rgba(40,28,12,.28);
+  transition:transform .15s ease;
+}
+.carp-mode.on .carp-sw::after{transform:translateX(16px)}
+.carp-mode-hint{font-size:12px; color:var(--ink-faint)}
+.carp-mode.on .carp-mode-hint{color:var(--ochre-deep)}
+@media (prefers-reduced-motion: reduce){
+  .carp-sw, .carp-sw::after{transition:none}
+}
+@media print{ .carp-mode{display:none !important} }
+#sheet.sq .carp-mode{padding:4px 20px 2px}
 .cust-block .f{padding:13px 28px; border-right:1px solid var(--line)}
 .cust-block .f:last-child{border-right:none}
 .cust-block label{
@@ -185,7 +220,7 @@ body{
 .cust-block select{cursor:pointer}
 .cust-block input::placeholder{color:var(--ink-faint)}
 .cust-block input:focus, .cust-block select:focus{outline:none; box-shadow:0 2px 0 var(--ochre)}
-@media(max-width:560px){ .cust-block, .cust-block.c4{grid-template-columns:1fr 1fr} }
+@media(max-width:560px){ .cust-block, .cust-block.c4, .cust-block.c2{grid-template-columns:1fr 1fr} }
 
 /* searchable customer name picker (avoids duplicate customers) */
 .custpick{position:relative; width:100%}
@@ -1184,6 +1219,41 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .modal-actions{display:flex; justify-content:flex-end; gap:9px; margin-top:22px}
 .modal-actions .btn{padding:9px 16px}
 .modal-actions .btn.warn:first-child{ margin-right:auto }
+
+/* PDF preview — look at the passbook on cream paper before downloading */
+.pdf-preview{
+  position:fixed; inset:0; z-index:205; display:flex; flex-direction:column;
+  background:#1c140e;
+}
+.pdf-preview-bar{
+  flex:none; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:10px 14px; background:#241810; border-bottom:1px solid #3a2c20;
+}
+.pdf-preview-who{min-width:0; flex:1}
+.pdf-preview-who b{
+  display:block; font-family:var(--serif); font-weight:600; font-size:18px;
+  color:#F4E9D8; letter-spacing:-.015em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.pdf-preview-who small{
+  display:block; font-family:var(--mono); font-size:11px; color:#c4b39a; margin-top:2px;
+}
+.pdf-preview-acts{display:flex; gap:8px; flex-wrap:wrap; margin-left:auto}
+.pdf-preview-acts .btn{background:#FCFAF4}
+.pdf-preview-wait{
+  flex:1; display:flex; align-items:center; justify-content:center;
+  font-family:var(--serif); font-size:20px; color:#F4E9D8;
+}
+.pdf-preview-pages{
+  flex:1; overflow:auto; padding:18px 12px 32px;
+  display:flex; flex-direction:column; align-items:center; gap:18px;
+}
+.pdf-preview-page{
+  width:min(720px, 100%);
+  height:auto;
+  background:#FAF6EF;
+  box-shadow:0 16px 40px rgba(0,0,0,.4);
+  border-radius:2px;
+}
 
 /* ---------- overflow "More" menu ---------- */
 .moremenu{position:relative; display:inline-block}
@@ -3513,12 +3583,12 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 
 /* Accounts PDF: same passbook as on screen. html2canvas captures at ~700px, which
    would otherwise trigger the stacked phone layout — lock the 5-column ledger. */
-.acct-print{
+.acct-print, .pdf-book{
   padding:4px 2px 12px;
   background:#FAF6EF;
   color:var(--ink);
 }
-.acct-print .acct-print-sum{
+.acct-print .acct-print-sum, .pdf-book .acct-print-sum{
   display:grid;
   grid-template-columns:repeat(3, minmax(0,1fr));
   gap:12px 18px;
@@ -3526,8 +3596,8 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   padding:0 0 14px;
   border-bottom:1px solid var(--line);
 }
-.acct-print .acct-print-sum.cols4{grid-template-columns:repeat(4, minmax(0,1fr))}
-.acct-print .acct-print-sum span{
+.acct-print .acct-print-sum.cols4, .pdf-book .acct-print-sum.cols4{grid-template-columns:repeat(4, minmax(0,1fr))}
+.acct-print .acct-print-sum span, .pdf-book .acct-print-sum span{
   display:block;
   font-family:var(--disp);
   font-size:10px;
@@ -3536,7 +3606,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   color:var(--ink-soft);
   margin-bottom:4px;
 }
-.acct-print .acct-print-sum b{
+.acct-print .acct-print-sum b, .pdf-book .acct-print-sum b{
   display:block;
   font-family:var(--mono);
   font-size:18px;
@@ -3544,19 +3614,45 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   letter-spacing:-.02em;
   color:var(--ink);
 }
-.acct-print.acct-page .acct-book .bank-hdr{
+.acct-print.acct-page .acct-book .bank-hdr, .pdf-book.acct-page .acct-book .bank-hdr{
   display:grid !important;
 }
 .acct-print.acct-page .acct-book .bank-hdr,
 .acct-print.acct-page .acct-book .bank-row,
-.acct-print.acct-page .acct-book .bank-row.acct-txn{
+.acct-print.acct-page .acct-book .bank-row.acct-txn,
+.pdf-book.acct-page .acct-book .bank-hdr,
+.pdf-book.acct-page .acct-book .bank-row,
+.pdf-book.acct-page .acct-book .bank-row.acct-txn{
   display:grid !important;
   grid-template-columns:76px minmax(0,1.5fr) 96px 96px 140px !important;
   grid-template-areas:none !important;
   gap:8px 10px !important;
 }
-.acct-print.acct-page .acct-book .bank-row.acct-txn > *{grid-area:auto !important}
-.acct-print.acct-page .acct-book .bank-date{display:block !important}
+.acct-print.acct-page .acct-book .bank-row.acct-txn > *,
+.pdf-book.acct-page .acct-book .bank-row.acct-txn > *{grid-area:auto !important}
+.acct-print.acct-page .acct-book .bank-date,
+.pdf-book.acct-page .acct-book .bank-date{display:block !important}
+
+/* html2canvas card captures (Books / Suppliers) pin desktop columns so 700px
+   width does not fire the phone grids. */
+.pdf-capture.ledger-page .bank-hdr span:first-child{display:block !important}
+.pdf-capture .bank-hdr,
+.pdf-capture .bank-row,
+.pdf-capture.ledger-page .bank-hdr,
+.pdf-capture.ledger-page .bank-row{
+  display:grid !important;
+  grid-template-columns:76px minmax(0,1.5fr) 96px 96px 140px !important;
+  grid-template-areas:none !important;
+}
+.pdf-capture .bank-date{display:block !important}
+.pdf-capture .books-grid{grid-template-columns:1fr 1fr !important}
+.pdf-capture .party-grid{grid-template-columns:repeat(3, minmax(0,1fr)) !important}
+.pdf-capture .buys-reg-sides{grid-template-columns:1fr 1fr !important}
+.pdf-capture .buys-reg-row{padding:18px 16px !important}
+.pdf-capture .buys-kpis{grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr)) !important}
+.pdf-capture .buys-kpi.head{grid-column:auto !important}
+.pdf-capture .buys-ov-head{display:grid !important}
+.pdf-capture .buys-ov-head,.pdf-capture .buys-ov-row{grid-template-columns:minmax(0,1fr) minmax(120px,200px) !important}
 
 @media(max-width:640px){
   .custgrid{grid-template-columns:1fr}

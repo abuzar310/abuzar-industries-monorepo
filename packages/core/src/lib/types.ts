@@ -57,6 +57,8 @@ export interface Doc {
   site: string;
   /** Carpenter's phone (Cut Size quotations). */
   sitePhone?: string;
+  /** Cut Size quote: carpenter is the buyer (hide Customer; bill still uses customerName = carpenter). */
+  buyer?: "party" | "carpenter";
   address: string;
   notes: string;
   date: string;
