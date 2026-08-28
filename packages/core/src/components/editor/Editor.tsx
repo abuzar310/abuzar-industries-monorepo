@@ -46,6 +46,29 @@ import { extractPincode } from "@/lib/ewaybill";
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 const NO_SEL: Set<number> = new Set(); // stable empty selection for non-active boxes
 
+const namesEq = (a: string, b: string) => {
+  const x = (a || "").trim().toLowerCase();
+  const y = (b || "").trim().toLowerCase();
+  return !!x && x === y;
+};
+/** Carpenter is the buyer when the user picked that mode, or old quotes where both names match. */
+const isCarpenterBuyer = (d: Doc) => {
+  if (d.buyer === "carpenter") return true;
+  if (d.buyer === "party") return false;
+  return namesEq(d.customerName, d.site);
+};
+const customerIdFor = (name: string, phone: string, list: Customer[]) => {
+  const n = name.trim().toLowerCase();
+  if (!n) return "";
+  const p = (phone || "").trim();
+  const hit = list.find((c) => {
+    if ((c.name || "").toLowerCase() !== n) return false;
+    const cp = (c.phone || "").trim();
+    return !p || !cp || cp === p;
+  });
+  return hit?.id || "";
+};
+
 const STATUS_BADGE: Record<string, string> = {
   Draft: "b-draft",
   Created: "b-confirm",
@@ -112,6 +135,7 @@ export default function Editor({
   const isInv = doc.kind === "invoice";
   const isBuy = isInv && doc.tradeType === "buy"; // purchase invoice
   const isRent = isInv && !isBuy && !!doc.rented; // rental invoice: single rent amount, no wood lines
+  const carpBuyer = feat.simpleQuote && !isInv && isCarpenterBuyer(doc);
   // entry modes offered per section per app:
   //  invoice → by-size + total-CFT + total-CBM + per-price; unofficial quote → by-size + per-price; official quote → by-size + total-CFT + running-ft
   const secModes: ("cft" | "direct" | "rft" | "pcs" | "cbm")[] =
@@ -344,11 +368,38 @@ export default function Editor({
       d.site = v;
       const hit = carpenters.find((c) => c.name.toLowerCase() === v.trim().toLowerCase());
       if (hit?.phone) d.sitePhone = hit.phone;
+      if (isCarpenterBuyer(d)) {
+        d.customerName = v;
+        if (hit?.phone) d.phone = hit.phone;
+        d.customerId = customerIdFor(v, d.phone, customers);
+      }
     });
   const pickCarpenter = (c: CarpenterHit) =>
     update((d) => {
       d.site = c.name;
       if (c.phone) d.sitePhone = c.phone;
+      if (isCarpenterBuyer(d)) {
+        d.customerName = c.name;
+        d.phone = c.phone || c.phoneAlt || "";
+        d.customerId = customerIdFor(c.name, d.phone, customers);
+      }
+    });
+  const setBuyer = (mode: "party" | "carpenter") =>
+    update((d) => {
+      d.buyer = mode;
+      if (mode === "carpenter") {
+        const name = (d.site || d.customerName || "").trim();
+        const phone = (d.sitePhone || d.phone || "").trim();
+        d.site = name;
+        d.sitePhone = phone;
+        d.customerName = name;
+        d.phone = phone;
+        d.customerId = customerIdFor(name, phone, customers);
+      } else if (namesEq(d.customerName, d.site)) {
+        d.customerName = "";
+        d.phone = "";
+        d.customerId = "";
+      }
     });
   const onName = (si: number, v: string) =>
     update((d) => {
@@ -1001,6 +1052,66 @@ export default function Editor({
       onGstMode={(m) => setField("gstMode", m)}
     />
   );
+  const quotePartyFields = feat.simpleQuote && !isInv && (
+    <>
+      <div className={"carp-mode no-print" + (carpBuyer ? " on" : "")}>
+        <button
+          type="button"
+          className="carp-mode-sw"
+          role="switch"
+          aria-checked={carpBuyer}
+          title={carpBuyer ? "Carpenter is buying — Customer is hidden" : "Turn on when the carpenter came for wood himself"}
+          onClick={() => setBuyer(carpBuyer ? "party" : "carpenter")}
+        >
+          <span className="carp-sw" aria-hidden />
+          Carpenter mode
+        </button>
+        <span className="carp-mode-hint">{carpBuyer ? "Customer hidden — bill under carpenter" : "House owner? Leave off"}</span>
+      </div>
+      {carpBuyer ? (
+        <div className="cust-block c2">
+          <div className="f">
+            <label>Carpenter</label>
+            <CarpenterPicker value={doc.site} carpenters={carpenters} onType={onCarpenterType} onPick={pickCarpenter} />
+          </div>
+          <div className="f">
+            <label>Phone</label>
+            <input
+              placeholder="—"
+              value={doc.sitePhone || ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                update((d) => {
+                  d.sitePhone = v;
+                  d.phone = v;
+                  d.customerId = customerIdFor(d.customerName, v, customers);
+                });
+              }}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="cust-block c4">
+          <div className="f">
+            <label>Customer Name</label>
+            <CustomerPicker value={doc.customerName} customers={customers} onType={onCustomerType} onPick={pickCustomer} />
+          </div>
+          <div className="f">
+            <label>Phone</label>
+            <input placeholder="—" value={doc.phone} onChange={(e) => setField("phone", e.target.value)} />
+          </div>
+          <div className="f">
+            <label>Carpenter</label>
+            <CarpenterPicker value={doc.site} carpenters={carpenters} onType={onCarpenterType} onPick={pickCarpenter} />
+          </div>
+          <div className="f">
+            <label>Carpenter phone</label>
+            <input placeholder="—" value={doc.sitePhone || ""} onChange={(e) => setField("sitePhone", e.target.value)} />
+          </div>
+        </div>
+      )}
+    </>
+  );
   // compact masthead rendered inside the A4 canvas in free-arrange mode
   const sqHeader = (
     <>
@@ -1021,24 +1132,7 @@ export default function Editor({
           <DateField value={doc.date} onChange={(v) => setField("date", v)} />
         </div>
       </div>
-      <div className="cust-block c4">
-        <div className="f">
-          <label>Customer Name</label>
-          <CustomerPicker value={doc.customerName} customers={customers} onType={onCustomerType} onPick={pickCustomer} />
-        </div>
-        <div className="f">
-          <label>Phone</label>
-          <input placeholder="—" value={doc.phone} onChange={(e) => setField("phone", e.target.value)} />
-        </div>
-        <div className="f">
-          <label>Carpenter</label>
-          <CarpenterPicker value={doc.site} carpenters={carpenters} onType={onCarpenterType} onPick={pickCarpenter} />
-        </div>
-        <div className="f">
-          <label>Carpenter phone</label>
-          <input placeholder="—" value={doc.sitePhone || ""} onChange={(e) => setField("sitePhone", e.target.value)} />
-        </div>
-      </div>
+      {quotePartyFields}
     </>
   );
 
@@ -1327,6 +1421,9 @@ export default function Editor({
               </button>
             </div>
           )}
+          {feat.simpleQuote && !isInv ? (
+            quotePartyFields
+          ) : (
           <div className={"cust-block" + (!isInv || (isInv && !isBuy && !isRent) ? " c4" : "")}>
             <div className="f">
               <label>{isBuy ? "Supplier Name" : "Customer Name"}</label>
@@ -1388,6 +1485,7 @@ export default function Editor({
               </>
             )}
           </div>
+          )}
         </div>
 
         <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} onFocus={onSecFocusIn} className={feat.simpleQuote ? "twocol" : ""}>

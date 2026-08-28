@@ -15,6 +15,7 @@ import TopNav from "@/components/TopNav";
 import Toast from "@/components/Toast";
 import LockGate from "@/components/LockGate";
 import DialogHost from "@/components/DialogHost";
+import PdfPreviewHost from "@/components/PdfPreviewHost";
 import ReviewQrOverlay from "@/components/ReviewQrOverlay";
 import AiFab from "@/components/AiFab";
 
@@ -110,6 +111,7 @@ export default function AppProvider({
       <Toast />
       <LockGate />
       <DialogHost />
+      <PdfPreviewHost />
       <ReviewQrOverlay />
       <AiFab />
     </>

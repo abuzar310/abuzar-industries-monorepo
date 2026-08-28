@@ -31,6 +31,7 @@ import { bumpData, setBuysDue, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import { generatePdf } from "@/lib/pdf";
 import DateField from "@/components/editor/DateField";
+import PdfButtons from "@/components/PdfButtons";
 import type { Purchase, Supplier } from "@/lib/types";
 
 type Seg = "ledger" | "payments" | "buyers";
@@ -581,23 +582,24 @@ export default function BuysView() {
   const balAbs = Math.abs(totals.balance);
   const balTone = balAbs <= 0.5 ? "ok" : totals.balance > 0 ? "due" : "adv";
 
-  function exportFullRegister() {
+  function exportFullRegister(preview = false) {
     const el = pageRef.current;
     if (!el) return;
-    toast("Preparing PDF…");
+    if (!preview) toast("Preparing PDF…");
     generatePdf(el, "suppliers-" + todayStr(), {
       // Atomic rows/items/footer only — not .buys-card (outer wrap fights whole-row packing)
       pageBreak: ".buys-reg-row,.buys-grid tbody tr,.buys-ov-item,.buys-reg-foot",
       width: 700,
       title: "Suppliers",
       marginMm: 8,
+      preview,
     })
-      .then(() => toast("PDF downloaded ✓"))
+      .then(() => { if (!preview) toast("PDF downloaded ✓"); })
       .catch(() => toast("Could not create the PDF"));
   }
 
-  function exportSupplierDetail(b: Supplier) {
-    toast("Preparing PDF…");
+  function exportSupplierDetail(b: Supplier, preview = false) {
+    if (!preview) toast("Preparing PDF…");
     setSeg("buyers");
     setOpenBuyerId(b.id);
     // let the card expand, then capture just that supplier card
@@ -611,9 +613,9 @@ export default function BuysView() {
         el,
         "supplier-" + (b.name || "detail").replace(/[^a-z0-9]+/gi, "-") + "-" + todayStr(),
         // One card = usually one page; break only between from-account rows if it grows tall.
-        { pageBreak: ".buys-ov-froms li", width: 680, title: b.name, marginMm: 8 },
+        { pageBreak: ".buys-ov-froms li", width: 680, title: b.name, marginMm: 8, preview },
       )
-        .then(() => toast("PDF downloaded ✓"))
+        .then(() => { if (!preview) toast("PDF downloaded ✓"); })
         .catch(() => toast("Could not create the PDF"));
     }, 120);
   }
@@ -703,9 +705,11 @@ export default function BuysView() {
               </button>
             )}
             {(seg === "ledger" || seg === "payments") && (
-              <button type="button" className="btn sm" onClick={exportFullRegister}>
-                Save PDF
-              </button>
+              <PdfButtons
+                onPreview={() => exportFullRegister(true)}
+                onDownload={() => exportFullRegister(false)}
+                downloadLabel="Save PDF"
+              />
             )}
           </>
         )}
@@ -843,6 +847,13 @@ export default function BuysView() {
                             }}
                           >
                             Payments
+                          </button>
+                          <button
+                            type="button"
+                            className="buys-link"
+                            onClick={() => exportSupplierDetail(b, true)}
+                          >
+                            Preview
                           </button>
                           <button
                             type="button"

@@ -28,6 +28,8 @@ import type { Customer, Doc, Expense } from "@/lib/types";
 import { generatePdf } from "@/lib/pdf";
 import { toast } from "@/store/app-store";
 import Pager, { PAGE, usePager } from "@/components/Pager";
+import PassbookPrint, { type PassbookLine } from "@/components/PassbookPrint";
+import PdfButtons from "@/components/PdfButtons";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
@@ -63,6 +65,7 @@ export default function BooksView() {
   const [view, setView] = useState<"pnl" | "ledger" | "cash" | "bank" | "balance" | "assets">("pnl");
   const [editNames, setEditNames] = useState(false);
   const pageRef = useRef<HTMLDivElement>(null);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const [expensesRaw, setExpenses] = useState<Expense[]>([]);
   const [quotesRaw, setQuotes] = useState<Doc[]>([]);
@@ -372,6 +375,56 @@ export default function BooksView() {
   }, [expenses, quotes, customers, collections, holders, workers, marks, carry]);
 
   const monthLabel = (MONTHS.find(([v]) => v === month)?.[1] || month) + " 20" + year;
+  const ledgerPdfRows: PassbookLine[] = [
+    ...monthRows.map((row) => ({
+      key: row.id,
+      date: row.date,
+      who: row.particulars,
+      detail: row.detail,
+      debit: row.debit,
+      credit: row.credit,
+      balance: row.balance,
+    })),
+    {
+      key: "led-close",
+      date: "",
+      who: ledFiltered ? bookLabel("led.filtered") : bookLabel("led.net") + " " + monthLabel,
+      debit: ledOut,
+      credit: ledIn,
+      balance: ledNet,
+      close: true,
+    },
+  ];
+  const cashPdfRows: PassbookLine[] = [
+    {
+      key: "cash-open",
+      date: "",
+      who: bookLabel("cash.open"),
+      detail: bookLabel("cash.openNote"),
+      debit: 0,
+      credit: 0,
+      balance: carry,
+      open: true,
+    },
+    ...cashRows.map((row) => ({
+      key: row.id,
+      date: row.date,
+      who: row.particulars,
+      detail: row.detail,
+      debit: row.debit,
+      credit: row.credit,
+      balance: row.balance,
+    })),
+    {
+      key: "cash-close",
+      date: "",
+      who: bookLabel("cash.close"),
+      debit: cashOut,
+      credit: cashIn,
+      balance: cashClose,
+      close: true,
+    },
+  ];
   const step = (dir: -1 | 1) => {
     let m = parseInt(month, 10) + dir;
     let y = parseInt(year, 10);
@@ -386,8 +439,9 @@ export default function BooksView() {
 
   // Save the CURRENT section as a PDF that looks like the on-screen cards (not a
   // separate table). Card-aware pagination keeps cards/rows whole across pages.
-  const savePdf = useCallback(() => {
-    const el = pageRef.current;
+  const savePdf = useCallback((preview = false) => {
+    const bookPass = view === "ledger" || view === "cash";
+    const el = bookPass ? printRef.current : pageRef.current;
     if (!el) return;
     const label =
       view === "pnl" ? "Income & Expense · " + monthLabel
@@ -397,12 +451,17 @@ export default function BooksView() {
       : view === "balance" ? "Balance sheet"
       : "Assets & Liabilities";
     const stamp = new Date().toISOString().slice(0, 10);
+    if (!preview) toast("Preparing PDF…");
     generatePdf(el, "books-" + view + "-" + stamp, {
-      pageBreak: ".party-card,.bank-row,.books-row,.books-total",
+      pageBreak: bookPass
+        ? ".bank-row,.acct-print-sum,.acct-print-hdr"
+        : ".party-card,.bank-row,.books-row,.books-total",
       width: 700,
       title: "Books — " + label,
+      marginMm: 8,
+      preview,
     })
-      .then(() => toast("PDF downloaded ✓"))
+      .then(() => { if (!preview) toast("PDF downloaded ✓"); })
       .catch(() => toast("Could not create the PDF"));
   }, [view, monthLabel]);
 
@@ -439,7 +498,7 @@ export default function BooksView() {
         <button className={"btn sm" + (editNames ? " primary" : "")} type="button" onClick={() => setEditNames((v) => !v)}>
           {editNames ? "Done" : "Edit names"}
         </button>
-        <button className="btn sm" type="button" onClick={savePdf}>Save PDF</button>
+        <PdfButtons onPreview={() => savePdf(true)} onDownload={() => savePdf(false)} downloadLabel="Save PDF" />
       </div>
 
       {/* month picker — drives Income & Expense and the Month ledger */}
@@ -881,6 +940,29 @@ export default function BooksView() {
         </div>
       </div>
       </>
+      )}
+      {(view === "ledger" || view === "cash") && (
+        <PassbookPrint
+          printRef={printRef}
+          dr="Out ₹"
+          cr="In ₹"
+          positiveIsDr={false}
+          summary={
+            view === "ledger"
+              ? [
+                  { k: "Out", v: "₹ " + inr(ledOut) },
+                  { k: "In", v: "₹ " + inr(ledIn) },
+                  { k: "Net", v: "₹ " + inr(ledNet) },
+                ]
+              : [
+                  { k: "Opening", v: "₹ " + inr(carry) },
+                  { k: "In", v: "₹ " + inr(cashIn) },
+                  { k: "Out", v: "₹ " + inr(cashOut) },
+                  { k: "Closing", v: "₹ " + inr(cashClose) },
+                ]
+          }
+          rows={view === "ledger" ? ledgerPdfRows : cashPdfRows}
+        />
       )}
     </div>
   );
