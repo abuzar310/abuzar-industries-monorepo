@@ -1679,6 +1679,7 @@ export default function Editor({
           carpenters={carpenters}
           by={user?.id || "unknown"}
           onCommit={setCommLock}
+          onApplied={loadExpenses}
         />
       )}
 

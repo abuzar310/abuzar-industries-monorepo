@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { computeDoc, docVolumeCft, inr } from "@/lib/calc";
 import { quoteBill } from "@/lib/payments";
+import Pager, { PAGE, usePager } from "../Pager";
 import type { Doc } from "@/lib/types";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -20,11 +21,13 @@ export function StatusBadge({ doc }: { doc: Doc }) {
 
 export default function DocList({ docs, empty }: { docs: Doc[]; empty: string }) {
   const router = useRouter();
+  const pg = usePager(docs, PAGE, "");
   if (!docs.length) return <div className="empty">{empty}</div>;
   const open = (id: string, suffix = "") => router.push("/editor/" + id + suffix);
   return (
     <>
-      {docs.map((d) => {
+      <div>
+      {pg.view.map((d) => {
         const t = computeDoc(d);
         const cft = docVolumeCft(d);
         // what the row shows: the agreed final price when one is fixed (same as Balances), else the computed total
@@ -66,6 +69,8 @@ export default function DocList({ docs, empty }: { docs: Doc[]; empty: string })
           </div>
         );
       })}
+      </div>
+      <Pager page={pg.page} pages={pg.pages} total={pg.total} onPage={pg.setPage} />
     </>
   );
 }

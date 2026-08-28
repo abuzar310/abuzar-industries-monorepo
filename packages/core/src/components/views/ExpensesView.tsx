@@ -7,6 +7,7 @@ import { markExpensesSeen, requestNotifyPermission } from "@/lib/notify";
 import { isIOS, isStandalone } from "@/lib/pwa";
 import { USERS } from "@/lib/local-auth";
 import AccountPicker from "@/components/AccountPicker";
+import Pager, { PAGE, usePager } from "@/components/Pager";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
@@ -277,6 +278,19 @@ export default function ExpensesView() {
     return rows.reverse(); // newest day first on screen
   })();
 
+  const sessionLines = dayGroups.flatMap((g) =>
+    g.lines.map((line, i) => ({
+      date: g.date,
+      weekday: weekday(g.date),
+      line,
+      head: i === 0,
+      n: g.lines.length,
+    })),
+  );
+  const sessPg = usePager(sessionLines, PAGE, "");
+  const recvPg = usePager(recvList, PAGE, "");
+  const closedPg = usePager(closed, PAGE, "");
+
   return (
     <div>
       <div className="sectitle">
@@ -432,6 +446,7 @@ export default function ExpensesView() {
           </div>
         </div>
       ) : (
+        <>
         <div className="panel-card" style={{ marginTop: 16 }}>
           <div className="pc-head" style={{ justifyContent: "space-between" }}>
             <span>Current session · {list.length} entries</span>
@@ -454,16 +469,19 @@ export default function ExpensesView() {
               <b>₹ {inr(carryIn)}</b>
             </div>
           )}
-          {dayGroups.map((g) => (
-            <div className="db-day" key={g.date}>
+          {sessPg.view.map((row, i) => {
+            const { e, cin, cout, bal } = row.line;
+            return (
+            <div className="db-day" key={e.id}>
+              {(row.head || i === 0) && (
               <div className="db-day-head">
                 <span className="db-day-date">
-                  {g.date} <small>· {weekday(g.date)}</small>
+                  {row.date} <small>· {row.weekday}</small>
                 </span>
-                <span className="db-day-mini">{g.lines.length} entr{g.lines.length === 1 ? "y" : "ies"}</span>
+                <span className="db-day-mini">{row.n} entr{row.n === 1 ? "y" : "ies"}</span>
               </div>
-              {g.lines.map(({ e, cin, cout, bal }) => (
-                <div className="db-srow" key={e.id}>
+              )}
+                <div className="db-srow">
                   <span className={"exptag " + (cin > 0 ? "in" : "out")}>{spendCategoryOf(e).split(" ")[0]}</span>
                   <span className="expnote">
                     {spendDetailOf(e) || spendCategoryOf(e)}
@@ -481,19 +499,12 @@ export default function ExpensesView() {
                     </button>
                   )}
                 </div>
-              ))}
-              {/* day close line: subtotals + the cash balance AFTER this day */}
-              <div className="db-day-sum">
-                <span className="in">In ₹{inr(g.recv)}</span>
-                <span className="out">Out ₹{inr(g.paid)}</span>
-                <span className={g.recv - g.paid < 0 ? "out" : "in"}>
-                  Day {g.recv - g.paid < 0 ? "−" : "+"}₹{inr(Math.abs(r2(g.recv - g.paid)))}
-                </span>
-                <b className={g.bal < 0 ? "out" : ""}>Balance ₹{inr(g.bal)}</b>
-              </div>
             </div>
-          ))}
+            );
+          })}
         </div>
+        <Pager page={sessPg.page} pages={sessPg.pages} total={sessPg.total} onPage={sessPg.setPage} />
+        </>
       )}
 
       {!isOwner && !pending && (list.length > 0 || carryIn > 0) && (
@@ -519,7 +530,7 @@ export default function ExpensesView() {
                 Total ₹{inr(recvTotal)}
               </span>
             </div>
-            {recvList.map((e) => {
+            {recvPg.view.map((e) => {
               const party = e.sourceId ? partyBySource.get(e.sourceId) : undefined;
               const phone = party?.phone || "";
               return (
@@ -543,6 +554,7 @@ export default function ExpensesView() {
               );
             })}
           </div>
+          <Pager page={recvPg.page} pages={recvPg.pages} total={recvPg.total} onPage={recvPg.setPage} />
         </>
       )}
 
@@ -552,7 +564,7 @@ export default function ExpensesView() {
             Session history <small>— {closed.length}</small>
           </div>
           <p className="note" style={{ marginTop: -6 }}>Tap a day to see every transaction in it.</p>
-          {closed.map((s) => {
+          {closedPg.view.map((s) => {
             const open = openSes === s.id;
             const entries = open
               ? sessionEntries(s.id).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))
@@ -638,6 +650,7 @@ export default function ExpensesView() {
               </div>
             );
           })}
+          <Pager page={closedPg.page} pages={closedPg.pages} total={closedPg.total} onPage={closedPg.setPage} />
         </>
       )}
     </div>

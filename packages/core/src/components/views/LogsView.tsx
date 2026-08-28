@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { useApp } from "@/store/useApp";
+import Pager, { PAGE, usePager } from "@/components/Pager";
 import type { Activity } from "@/lib/types";
 
 type Act = Activity["action"];
@@ -68,6 +69,8 @@ export default function LogsView() {
       })
       .sort((a, b) => (b.at || b.createdAt || "").localeCompare(a.at || a.createdAt || ""));
   }, [rows, q, actionF, whoF]);
+
+  const logPg = usePager(shown, PAGE, q + "\0" + actionF + "\0" + whoF);
 
   if (user && user.role !== "owner") {
     return (
@@ -133,7 +136,7 @@ export default function LogsView() {
                 </tr>
               </thead>
               <tbody>
-                {shown.map((r) => {
+                {logPg.view.map((r) => {
                   const when = fmtWhen(r.at || r.createdAt);
                   const open = openId === r.id;
                   return (
@@ -251,6 +254,7 @@ export default function LogsView() {
           </div>
         )}
       </div>
+      <Pager page={logPg.page} pages={logPg.pages} total={logPg.total} onPage={logPg.setPage} />
     </div>
   );
 }

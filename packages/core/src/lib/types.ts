@@ -225,6 +225,10 @@ export interface Carpenter {
   notes?: string;
   /** Compressed JPEG data URL from the phone camera or gallery. */
   photo?: string;
+  /** Cut Size: they rent place in the yard — Rent tab + Against rent on quotations. */
+  placeRent?: boolean;
+  /** Default monthly place rent ₹ (Charge can still type a different figure). */
+  monthlyRent?: number;
   createdAt: string;
   updatedAt?: string;
 }
@@ -350,6 +354,10 @@ export interface Expense {
   rounds?: number;
   /** Carpenter name on a commission payout (from customer/quote). */
   carpenter?: string;
+  /** Carpenter directory id when this row is place rent or a payout for a tenant. */
+  carpenterId?: string;
+  /** Place rent passbook: charge (this month) / opening (old debt) / cash received / commission set-off. */
+  placeRentKind?: "charge" | "opening" | "received" | "setoff";
   /** Quotation linked for logging only (not cascade-deleted with the quote — unlike sourceId). */
   refQuoteId?: string;
   /** Snapshot of quotation number at save time (survives quote delete). */

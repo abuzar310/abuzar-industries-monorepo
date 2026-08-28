@@ -15,6 +15,7 @@ export const TABS: Tab[] = [
   { label: "Quotations", href: "/quotations" },
   { label: "Customers", href: "/customers" },
   { label: "Carpenters", href: "/carpenters" },
+  { label: "Rent", href: "/rent" },
   { label: "Suppliers", href: "/buys", owner: true, badge: "buys" },
   { label: "Contacts", href: "/contacts", owner: true, icon: "customers" },
   { label: "Daybook", href: "/expenses", badge: true },

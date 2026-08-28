@@ -15,6 +15,7 @@ import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { Doc } from "@/lib/types";
 import { StatusBadge } from "./DocList";
+import Pager, { PAGE, usePager } from "../Pager";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -68,8 +69,6 @@ interface Props {
   showNew?: boolean;
 }
 
-const PAGE = 15;
-
 function applySearch(arr: Doc[], q: string) {
   q = (q || "").trim().toLowerCase();
   if (!q) return arr;
@@ -88,7 +87,6 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
   const router = useRouter();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [q, setQ] = useState("");
-  const [page, setPage] = useState(0);
   const [sel, setSel] = useState<Set<string>>(new Set());
   // invoices only: All / Sales / Purchases / Rented — rented invoices are their own
   // series (R-1, R-2, …), so they get their own tab and stay out of "Sales"
@@ -150,13 +148,10 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       setPdfBusy(false);
     }
   }
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
-  const pageN = Math.min(page, pages - 1);
-  const view = filtered.slice(pageN * PAGE, pageN * PAGE + PAGE);
+  const { page: pageN, pages, view, setPage } = usePager(filtered, PAGE, q + "\0" + searchTerm + "\0" + trade);
   const allOnPage = view.length > 0 && view.every((d) => sel.has(d.id));
 
   useEffect(() => {
-    setPage(0);
     setSel(new Set()); // a search / filter change hides rows; don't keep them silently selected
   }, [q, searchTerm, trade]);
 
@@ -379,13 +374,15 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
         )}
       </div>
 
-      {pages > 1 && (
-        <div className="pager">
-          <button className="btn sm" disabled={pageN === 0} onClick={() => { setPage(pageN - 1); setSel(new Set()); }}>‹ Prev</button>
-          <span>Page {pageN + 1} of {pages}</span>
-          <button className="btn sm" disabled={pageN >= pages - 1} onClick={() => { setPage(pageN + 1); setSel(new Set()); }}>Next ›</button>
-        </div>
-      )}
+      <Pager
+        page={pageN}
+        pages={pages}
+        total={filtered.length}
+        onPage={(n) => {
+          setPage(n);
+          setSel(new Set());
+        }}
+      />
     </div>
 
     {/* quotations report — laid out off-screen, exported as a PDF download.
