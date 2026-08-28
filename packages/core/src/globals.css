@@ -1238,7 +1238,28 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   display:block; font-family:var(--mono); font-size:11px; color:#c4b39a; margin-top:2px;
 }
 .pdf-preview-acts{display:flex; gap:8px; flex-wrap:wrap; margin-left:auto}
-.pdf-preview-acts .btn{background:#FCFAF4}
+/* Cream chips on the walnut bar. Primary (Download) keeps brass + white type —
+ * a blanket cream background made .btn.primary's white label vanish. */
+.pdf-preview-acts .btn{
+  background:#FCFAF4;
+  color:#2a2118;
+  border-color:#c9b89a;
+}
+.pdf-preview-acts .btn:hover{
+  background:#fff;
+  color:#2a2118;
+  border-color:#a89070;
+}
+.pdf-preview-acts .btn.primary{
+  background:linear-gradient(180deg,var(--brass),var(--ochre));
+  color:#fff;
+  border-color:var(--ochre-deep);
+}
+.pdf-preview-acts .btn.primary:hover{
+  background:linear-gradient(180deg,var(--ochre),var(--ochre-deep));
+  color:#fff;
+  border-color:var(--ochre-deep);
+}
 .pdf-preview-wait{
   flex:1; display:flex; align-items:center; justify-content:center;
   font-family:var(--serif); font-size:20px; color:#F4E9D8;
