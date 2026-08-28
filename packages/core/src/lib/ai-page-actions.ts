@@ -105,7 +105,7 @@ function accountsActions(): AiQuickAction[] {
     how("Add holder / UPI account", "Accounts → + Account holder → + Account under holder → optional opening balance."),
     draft("Holder balance WhatsApp", "WhatsApp summary for an account holder: Received / Collected / Balance still to collect — [Holder] with ₹ blanks"),
     how("Move a mis-filed UPI line", "Accounts → find the UPI payment line → move to the correct account. Or delete and re-enter in Receipts if needed."),
-    how("PDF / Send holder statement", "Accounts → open holder → PDF or Send (WhatsApp summary)."),
+    how("Download holder PDF", "Accounts → open holder → PDF. File is the same Date / Particulars / Dr / Cr / Balance passbook as on screen. Send is a WhatsApp totals text."),
     explain("Accounts vs Daybook vs Receipts", "Receipts = customer money in. Daybook = manager till session. Accounts = which UPI pocket holds money before Collect to owner."),
   ];
 }
@@ -349,18 +349,20 @@ export function resolveAiPageActions(pathname: string, doc: Doc | null): AiPageB
         actions: customersActions(),
       };
     }
-    case "rent":
+    case "rent": {
+      const onPerson = /\/rent\/[^/]+/.test(pathname);
       return {
-        title: "Rent",
+        title: onPerson ? "Tenant" : "Rent",
         actions: [
-          explain("What is Rent?", "Cut Size place rent for two people (Ismail and Suresha). Two cards on top. Tap a card for that person's section: what they owe, rent history, and commission converted into rent."),
-          how("Set monthly rent", "Rent → tap the person → Monthly rent ₹ → Save monthly ₹. Charge still lets you type a different amount for an odd month."),
-          how("Add old debt", "Rent → tap the person → Record → Old debt. Type what they already owe from before. This raises place rent due. It is not this month's charge and not Daybook cash."),
-          how("Charge this month", "Rent → tap the person → Record dropdown → Charge this month. Type ₹. Does not put cash in Daybook."),
-          how("Record cash received", "Rent → tap the person → Record → Cash received. Cash goes to Daybook and Receipts."),
-          how("Convert commission into rent", "Rent → tap the person → Record → Convert commission → rent. Or on a locked quotation: Commission lock → Against rent. Against rent is not cash; cash commission goes to Daybook."),
+          explain("What is Rent?", "Cut Size place rent for two people (Ismail and Suresha). Two cards on top. Tap a card to open that person, the same way you open a carpenter or a customer. History for both sits under the cards."),
+          how("Set monthly rent", "Rent → tap the person → Monthly rent and old balance → Save monthly ₹."),
+          how("Set old balance", "Rent → tap the person → Monthly rent and old balance → Save old balance. This replaces what they already owe."),
+          how("Charge this month", "Rent → tap the person → Add this month under They owe. Type ₹. Does not put cash in Daybook."),
+          how("Record rent they paid", "Rent → tap the person → 2 They paid rent. Full, Part, or type an amount (₹5,000 of what they owe). Cash goes to Daybook and Receipts."),
+          how("Put commission towards rent", "Rent → tap the person → 1 Commission towards rent. On a locked quotation for Ismail or Suresha the same card appears under Commission lock. Towards rent is not cash; leftover cash commission goes to Daybook."),
         ],
       };
+    }
     case "carpenters": {
       const m = pathname.match(/^\/carpenters\/([^/]+)/);
       return {

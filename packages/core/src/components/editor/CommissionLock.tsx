@@ -54,7 +54,6 @@ export default function CommissionLock({
   const [partyId, setPartyId] = useState("");
   const [editing, setEditing] = useState(false);
   const [tenants, setTenants] = useState<Carpenter[]>([]);
-  const [splitting, setSplitting] = useState(false);
   const [against, setAgainst] = useState("");
   const [cash, setCash] = useState("");
 
@@ -64,7 +63,6 @@ export default function CommissionLock({
 
   useEffect(() => {
     setEditing(false);
-    setSplitting(false);
     const L = doc.commLock;
     if (L && +(L.amount || 0) > 0) {
       setAmt(String(L.amount));
@@ -103,6 +101,15 @@ export default function CommissionLock({
     tenants,
   );
   const due = tenant ? placeRentDue(tenant, expenses) : 0;
+  const towards = r2(+against || 0);
+  const afterComm = r2(Math.max(0, due - towards));
+
+  useEffect(() => {
+    if (!tenant || pending <= 0) return;
+    const against0 = r2(Math.min(pending, due));
+    setAgainst(against0 ? String(against0) : "0");
+    setCash("0");
+  }, [doc.id, lockKey, tenant?.id, pending, due]);
 
   function fillFromDoc() {
     const L = doc.commLock;
@@ -160,14 +167,7 @@ export default function CommissionLock({
     );
   }
 
-  function startSplit() {
-    if (!tenant || pending <= 0) return;
-    setAgainst(String(r2(Math.min(pending, due)) || 0));
-    setCash("0");
-    setSplitting(true);
-  }
-
-  async function applySplit() {
+  async function putTowardsRent() {
     if (!tenant) return;
     try {
       await applyAgainstRent({
@@ -180,50 +180,54 @@ export default function CommissionLock({
       });
       bumpData();
       onApplied?.();
-      setSplitting(false);
-      toast("Applied against rent");
+      toast("Commission put towards rent");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not apply");
     }
   }
 
-  const againstBtns =
-    tenant && pending > 0 ? (
-      splitting ? (
-        <div style={{ width: "100%", marginTop: 8 }}>
-          <small style={{ display: "block", color: "var(--ink-faint)", marginBottom: 8, lineHeight: 1.45 }}>
-            Place rent due ₹{inr(due)}. Against rent is not cash. Cash commission goes to Daybook. Sum cannot exceed
-            pending ₹{inr(pending)}.
-          </small>
-          <div className="rec-grid rec-grid-due">
-            <label className="modal-field">
-              <span>Against rent ₹</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                value={against}
-                onChange={(e) => setAgainst(e.target.value)}
-              />
-            </label>
-            <label className="modal-field">
-              <span>Cash commission ₹</span>
-              <input type="number" inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} />
-            </label>
-          </div>
-          <div className="rowbtns" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-            <button className="btn primary" type="button" onClick={() => void applySplit()}>
-              Apply
-            </button>
-            <button className="btn" type="button" onClick={() => setSplitting(false)}>
-              Cancel
-            </button>
+  const towardsRentCard =
+    tenant && isLocked && !editing && pending > 0 ? (
+      <div className="rent-act" style={{ marginTop: 14 }}>
+        <div className="rent-act-h">
+          <span className="rent-act-n">1</span>
+          <div>
+            <b>Commission towards rent</b>
+            <p>We owe them commission. Put it on this rent instead of paying cash.</p>
           </div>
         </div>
-      ) : (
-        <button className="btn" type="button" onClick={startSplit}>
-          Against rent
-        </button>
-      )
+        <div className="rent-qrow" style={{ cursor: "default" }}>
+          <span>
+            #{doc.displayNumber || doc.number}
+            <small>
+              {(partyLabel || "—") + " · pending ₹" + inr(pending)}
+              {tenant.name ? " · " + tenant.name : ""}
+            </small>
+          </span>
+        </div>
+        <div className="rec-grid rec-grid-due">
+          <label className="modal-field">
+            <span>Towards rent ₹</span>
+            <input type="number" inputMode="decimal" value={against} onChange={(e) => setAgainst(e.target.value)} />
+          </label>
+          <label className="modal-field">
+            <span>Cash to them ₹</span>
+            <input type="number" inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} />
+          </label>
+        </div>
+        <p className="rent-of">
+          Pending ₹{inr(pending)}. Rent due ₹{inr(due)}.
+          {towards > 0.5 ? " After this they owe ₹" + inr(afterComm) + "." : ""}
+        </p>
+        <div className="rowbtns">
+          <button className="btn primary" type="button" onClick={() => void putTowardsRent()}>
+            Put towards rent
+          </button>
+          <button className="btn sm" type="button" onClick={() => router.push("/rent/" + encodeURIComponent(tenant.id))}>
+            Open rent
+          </button>
+        </div>
+      </div>
     ) : null;
 
   return (
@@ -256,12 +260,12 @@ export default function CommissionLock({
               Delete
             </button>
             {pending > 0 && (
-              <button className="btn primary" type="button" onClick={payNow}>
+              <button className={"btn" + (tenant ? "" : " primary")} type="button" onClick={payNow}>
                 Pay ₹{inr(pending)}
               </button>
             )}
-            {againstBtns}
           </div>
+          {towardsRentCard}
         </>
       ) : (
         <>
@@ -280,7 +284,7 @@ export default function CommissionLock({
               : ""}
             .
             {isLocked && doc.commLock?.lockedBy ? ` Locked by ${userName(doc.commLock.lockedBy)}.` : ""}
-            {tenant ? " This person is on Rent — Against rent can set off commission without cash." : ""}
+            {tenant ? " This person is on Rent — after Lock, put commission towards their rent." : ""}
           </small>
           <div className="pb-comm" style={{ padding: 0, borderBottom: 0 }}>
             <div className="rec-grid rec-grid-due">
@@ -333,7 +337,6 @@ export default function CommissionLock({
                   onClick={() => {
                     fillFromDoc();
                     setEditing(false);
-                    setSplitting(false);
                   }}
                 >
                   Cancel
@@ -349,7 +352,6 @@ export default function CommissionLock({
                   Pay ₹{inr(pending)}
                 </button>
               )}
-              {againstBtns}
             </div>
           </div>
         </>

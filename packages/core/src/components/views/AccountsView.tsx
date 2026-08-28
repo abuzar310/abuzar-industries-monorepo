@@ -36,7 +36,7 @@ import {
 } from "@/lib/accounts";
 import { brandFor } from "@/lib/brand";
 import { addExpense, PAID_TO_MANAGER_LABEL } from "@/lib/expenses";
-import { printOrSavePdf } from "@/lib/pdf";
+import { generatePdf } from "@/lib/pdf";
 import { waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -71,18 +71,23 @@ const genDate = () => {
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`;
 };
 
-interface PrintRow {
+interface AcctLedgerRow {
   date: string;
   at: string;
+  particulars: string;
+  detail: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  l: AcctStmtLine;
   kind: "in" | "collect";
-  label: string;
-  amount: number;
+  isOpen?: boolean;
+  isClose?: boolean;
 }
 interface PrintDoc {
   title: string;
-  sub: string;
   summary: { k: string; v: string }[];
-  rows: PrintRow[];
+  rows: AcctLedgerRow[];
 }
 
 export default function AccountsView() {
@@ -179,16 +184,34 @@ export default function AccountsView() {
     if (ready) load();
   }, [ready, dataVersion, load]);
 
-  // print the on-screen statement once the print doc has rendered, then clear it
-  // (Android/installed-app: the print dialog doesn't exist — download a PDF instead)
+  // Download the same passbook as on screen (Date / Particulars / Dr / Cr / Balance).
   useEffect(() => {
     if (!printDoc) return;
+    let cancelled = false;
     const t = setTimeout(async () => {
-      const how = await printOrSavePdf(printRef.current, (printDoc.title || "statement").replace(/\s+/g, "-").toLowerCase());
-      if (how === "pdf") toast("Statement PDF downloaded \u2713");
+      const el = printRef.current;
+      if (!el) {
+        setPrintDoc(null);
+        return;
+      }
+      try {
+        toast("Preparing PDF…");
+        await generatePdf(el, (printDoc.title || "statement").replace(/\s+/g, "-").toLowerCase(), {
+          pageBreak: ".bank-row,.acct-print-sum,.acct-print-hdr",
+          width: 700,
+          title: (brand.name || "Accounts") + " — " + printDoc.title,
+          marginMm: 8,
+        });
+        if (!cancelled) toast("Statement PDF downloaded \u2713");
+      } catch {
+        if (!cancelled) toast("Could not create the PDF");
+      }
       setPrintDoc(null);
     }, 80);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [printDoc]);
 
   const ledger = useMemo(
@@ -543,93 +566,12 @@ export default function AccountsView() {
     toast("Removed “" + a.name + "”");
   }
 
-  // ── statement PDF / WhatsApp send (per holder or per account) ──────────────
-  function stmtRows(subs: AcctBalance[]): PrintRow[] {
-    const rows: PrintRow[] = [];
-    const multi = subs.length > 1;
-    for (const a of subs) {
-      for (const l of a.lines) {
-        if (l.kind === "in")
-          rows.push({
-            date: l.date,
-            at: l.at || "",
-            kind: "in",
-            label: (multi ? a.name + " · " : "") + (l.customer || "—") + (l.quoteNo ? " · #" + l.quoteNo : ""),
-            amount: l.amount,
-          });
-        else
-          rows.push({
-            date: l.date,
-            at: l.at || "",
-            kind: "collect",
-            label:
-              "Collected → " +
-              (l.toManager ? "Manager Daybook" : "Owner") +
-              (l.note ? " · " + l.note : ""),
-            amount: l.amount,
-          });
-      }
-    }
-    return rows;
-  }
-  function pdfHolder(h: PayHolder) {
-    const v = holderView(h);
-    const rows = stmtRows(v.subs);
-    for (const c of v.cols)
-      rows.push({
-        date: c.date,
-        at: c.createdAt || "",
-        kind: "collect",
-        label:
-          "Collected → " +
-          (c.toManager ? "Manager Daybook" : "Owner") +
-          (c.note ? " · " + c.note : ""),
-        amount: +c.amount || 0,
-      });
-    rows.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
-    setPrintDoc({
-      title: h.name,
-      sub: brand.name + " · UPI account statement · " + genDate(),
-      summary: [
-        ...(v.opening > 0 ? [{ k: "Opening", v: "₹ " + inr(v.opening) }] : []),
-        { k: "Received", v: "₹ " + inr(v.received) },
-        { k: "Collected", v: "₹ " + inr(v.collected) },
-        { k: "Balance", v: "₹ " + inr(v.balance) },
-      ],
-      rows,
-    });
-  }
-  function pdfAccount(a: AcctBalance) {
-    setPrintDoc({
-      title: a.name,
-      sub: brand.name + " · UPI account statement · " + genDate(),
-      summary: [
-        { k: "Received", v: "₹ " + inr(a.received) },
-        { k: "Collected", v: "₹ " + inr(a.collected) },
-        { k: "Balance", v: "₹ " + inr(a.balance) },
-      ],
-      rows: stmtRows([a]).sort((x, y) => (y.at || "").localeCompare(x.at || "")),
-    });
-  }
   function sendSummary(title: string, summary: { k: string; v: string }[]) {
     const text = [brand.name + " — " + title, ...summary.map((s) => s.k + ": " + s.v), "(as on " + genDate() + ")"].join("\n");
     window.open(waLink("", text), "_blank");
   }
 
   // ── build bank-format ledger rows for one account ────────────────────────
-  interface AcctLedgerRow {
-    date: string;
-    at: string;
-    particulars: string;
-    detail: string;
-    debit: number;  // collections / hand-overs
-    credit: number; // UPI payments in
-    balance: number;
-    l: AcctStmtLine;
-    kind: "in" | "collect";
-    isOpen?: boolean;
-    isClose?: boolean;
-  }
   function buildAcctLedger(a: AcctBalance, parentOpening = 0): AcctLedgerRow[] {
     const rows: Omit<AcctLedgerRow, "balance">[] = [];
     let bal = parentOpening;
@@ -694,6 +636,42 @@ export default function AccountsView() {
     const t = hhmm(row.l.at);
     if (t) bits.push(t);
     return bits.join(" · ");
+  }
+
+  function pdfHolder(h: PayHolder) {
+    const v = holderView(h);
+    const book: AcctBalance =
+      v.subs.length === 1
+        ? { ...v.subs[0], lines: holderPassbookLines(v.subs, v.cols) }
+        : {
+            name: h.name,
+            received: v.received,
+            ownerReceived: v.owner,
+            collected: v.collected,
+            balance: v.balance,
+            lines: holderPassbookLines(v.subs, v.cols),
+          };
+    setPrintDoc({
+      title: h.name,
+      summary: [
+        ...(v.opening > 0 ? [{ k: "Opening", v: "₹ " + inr(v.opening) }] : []),
+        { k: "Received", v: "₹ " + inr(v.received) },
+        { k: "Collected", v: "₹ " + inr(v.collected) },
+        { k: "Balance", v: "₹ " + inr(v.balance) },
+      ],
+      rows: buildAcctLedger(book, v.opening),
+    });
+  }
+  function pdfAccount(a: AcctBalance) {
+    setPrintDoc({
+      title: a.name,
+      summary: [
+        { k: "Received", v: "₹ " + inr(a.received) },
+        { k: "Collected", v: "₹ " + inr(a.collected) },
+        { k: "Balance", v: "₹ " + inr(a.balance) },
+      ],
+      rows: buildAcctLedger(a, 0),
+    });
   }
 
   // ── render an account's full bank-ledger table ──────────────────────────
@@ -874,7 +852,7 @@ export default function AccountsView() {
           )}
           {!grouped && (a.received > 0 || a.lines.length > 0) && (
             <>
-              <button className="btn sm" type="button" title="Download PDF statement" onClick={() => pdfAccount(a)}>
+              <button className="btn sm" type="button" title="Download the same passbook as on screen" onClick={() => pdfAccount(a)}>
                 PDF
               </button>
               <button
@@ -1218,7 +1196,7 @@ export default function AccountsView() {
                     <button className="btn sm primary" type="button" onClick={() => { setAddAcctFor(h.id); setNewAcct(""); }}>
                       + Account
                     </button>
-                    <button className="btn sm" type="button" onClick={() => pdfHolder(h)}>
+                    <button className="btn sm" type="button" title="Download the same passbook as on screen" onClick={() => pdfHolder(h)}>
                       PDF
                     </button>
                     <button className="btn sm wa" type="button" onClick={() => sendSummary(h.name, [
@@ -1294,61 +1272,53 @@ export default function AccountsView() {
       </div>
 
       {printDoc && (
-        <div className="cd-print rep-doc" ref={printRef}>
-          <div className="rep-head">
-            <div className="rep-brand">
-              <h1>{brand.name || "Statement"}</h1>
-              {brand.addr && <div>{brand.addr}</div>}
-            </div>
-            <div className="rep-meta">
-              <div className="rep-title">{printDoc.title}</div>
-              <div className="rep-period">{printDoc.sub}</div>
-            </div>
-          </div>
-          <div className={"rep-summary " + (printDoc.summary.length === 4 ? "cols4" : "cols3")}>
+        <div className="cd-print acct-print acct-page" ref={printRef}>
+          <div className={"acct-print-sum" + (printDoc.summary.length === 4 ? " cols4" : " cols3")}>
             {printDoc.summary.map((s) => (
               <div key={s.k}>
-                <b>{s.v}</b>
                 <span>{s.k}</span>
+                <b>{s.v}</b>
               </div>
             ))}
           </div>
-          <table className="rep-table">
-            <colgroup>
-              <col style={{ width: "6%" }} />
-              <col style={{ width: "16%" }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "42%" }} />
-              <col style={{ width: "18%" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className="c-n">#</th>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Detail</th>
-                <th className="amt">Amount ₹</th>
-              </tr>
-            </thead>
-            <tbody>
-              {printDoc.rows.length ? (
-                printDoc.rows.map((r, i) => (
-                  <tr key={i}>
-                    <td className="c-n">{i + 1}</td>
-                    <td className="c-date">{r.date}</td>
-                    <td>{r.kind === "in" ? "Received" : "Handed over"}</td>
-                    <td className="c-cust">{r.label}</td>
-                    <td className="amt">{r.kind === "in" ? "+" : "−"}{inr(r.amount)}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="rep-empty">No entries.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          <div className="rep-foot">Generated {genDate()} · {brand.name}</div>
+          <div className="bank-ledger acct-book">
+            <div className="bank-hdr acct-print-hdr">
+              <span>Date</span>
+              <span>Particulars</span>
+              <span className="bank-amt">Dr</span>
+              <span className="bank-amt">Cr</span>
+              <span className="bank-amt">Balance</span>
+            </div>
+            {printDoc.rows.map((row, i) => {
+              const isTxn = !row.isOpen && !row.isClose;
+              const meta = txnMeta(row);
+              const closeDue = !!(row.isClose && row.balance > 0.5);
+              return (
+                <div
+                  key={row.l.id || row.date + "-" + i}
+                  className={
+                    "bank-row acct-txn" +
+                    (row.isOpen ? " bank-open" : "") +
+                    (row.isClose ? " bank-total" : "")
+                  }
+                >
+                  <span className="bank-date">{isTxn ? row.date : ""}</span>
+                  <span className="bank-parts">
+                    <span className="acct-txn-who">{row.particulars}</span>
+                    {meta ? <small>{meta}</small> : null}
+                  </span>
+                  <span className={"bank-amt" + (row.debit > 0 ? " dr" : "")}>{row.debit > 0 ? "₹" + inr(row.debit) : ""}</span>
+                  <span className={"bank-amt" + (row.credit > 0 ? " cr" : "")}>{row.credit > 0 ? "₹" + inr(row.credit) : ""}</span>
+                  <span className={"bank-amt bal" + (row.isClose ? (closeDue ? " due" : " ok") : "")}>
+                    ₹{inr(Math.abs(row.balance))}
+                    {!row.isOpen && (
+                      <span className={"bal-tag " + (row.balance > 0.5 ? "dr" : "cr")}>{row.balance > 0.5 ? "Dr" : "Cr"}</span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

@@ -3,13 +3,16 @@ import type { Carpenter, Doc, Expense } from "./types";
 import { inDaybook, isPlaceRentSetoff } from "./expenses";
 import {
   belongsToTenant,
+  isSeedStub,
   matchPlaceRentTenant,
   monthCharged,
   monthKey,
   nameHitsSeed,
   phonesMatch,
+  pickPlaceRentForSeed,
   placeRentDue,
   placeRentStatement,
+  rentOpeningOf,
 } from "./place-rent";
 
 let n = 0;
@@ -98,6 +101,38 @@ const debt = exp({ id: "o1", amount: 12000, placeRentKind: "opening", carpenterI
 ok(placeRentDue(ismail, [debt]) === 12000, "old debt is rent due");
 ok(!monthCharged(ismail, [debt], "15-08-26"), "old debt does not mark the month charged");
 ok(!inDaybook(debt), "old debt is not till money");
-ok(placeRentStatement(ismail, [debt])[0].label === "Old debt", "statement names old debt");
+ok(placeRentStatement(ismail, [debt])[0].label === "Old balance", "statement names old balance");
+
+const stub = carp("CARP-STUB", "Suresha");
+const real = carp("CARP-REAL", "SURESHA CARPENTER PLYNING WORK", "9880919422");
+ok(isSeedStub(stub, "Suresha"), "empty Suresha is a stub");
+ok(!isSeedStub(real, "Suresha"), "plyning-work Suresha is not a stub");
+ok(pickPlaceRentForSeed([stub, real], "Suresha")?.id === "CARP-REAL", "picks plyning-work Suresha over empty stub");
+
+const profiled = { ...ismail, rentOpening: 5000 };
+ok(rentOpeningOf(profiled, [debt]) === 5000, "saved profile opening wins over recorded old debt");
+ok(placeRentDue(profiled, [debt]) === 5000, "due uses profile opening, not the old one-time row");
+
+const ismailLive = carp("CARP-IS", "ISMAIL Planning Work", "9591152679");
+const ismailRows = [
+  exp({ id: "i1", amount: 100000, placeRentKind: "opening", carpenterId: "CARP-IS" }),
+  exp({ id: "i2", amount: 82612, placeRentKind: "opening", carpenterId: "CARP-IS" }),
+];
+ok(rentOpeningOf(ismailLive, ismailRows) === 182612, "Ismail two old-debt rows sum to 182612");
+ok(placeRentDue(ismailLive, ismailRows) === 182612, "due is 182612 until a profile figure is saved");
+ok(rentOpeningOf({ ...ismailLive, rentOpening: 90000 }, ismailRows) === 90000, "typed old balance replaces 182612");
+ok(placeRentDue({ ...ismailLive, rentOpening: 90000 }, ismailRows) === 90000, "due follows the typed figure, not the old rows");
+ok(rentOpeningOf({ ...ismailLive, rentOpening: 0 }, ismailRows) === 0, "zero old balance is a saved figure, not a missing one");
+ok(placeRentDue({ ...ismailLive, rentOpening: 0 }, ismailRows) === 0, "due is settled when old balance is saved as 0");
+
+const afterSave = { ...ismailLive, rentOpening: 182000 };
+const leftoverPlusNew = [
+  ...ismailRows,
+  exp({ id: "i3", amount: 182000, placeRentKind: "opening", carpenterId: "CARP-IS" }),
+];
+ok(rentOpeningOf(afterSave, leftoverPlusNew) === 182000, "saved 182000 wins even if the old 182612 rows are still there");
+ok(placeRentDue(afterSave, leftoverPlusNew) === 182000, "due does not add leftover old-debt on top of the saved figure");
+ok(placeRentStatement(afterSave, leftoverPlusNew).filter((r) => r.kind === "opening").length === 1, "history shows one old-balance line, not every leftover row");
+ok(placeRentStatement(afterSave, leftoverPlusNew)[0].signed === 182000, "history old-balance line is the saved figure");
 
 console.log("place-rent.check: " + n + " ok");

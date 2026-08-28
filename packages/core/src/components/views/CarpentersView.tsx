@@ -11,7 +11,7 @@ import {
   rollupCarpenters,
   type CarpenterRollup,
 } from "@/lib/carpenter-financials";
-import { editCarpenterDialog, listCarpenters, setCarpenterPhoto } from "@/lib/carpenters";
+import { editCarpenterDialog, listCarpenters, resolveCarpenterRecord, setCarpenterPhoto } from "@/lib/carpenters";
 import { partyMatches } from "@/lib/party-search";
 import { dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
@@ -105,8 +105,9 @@ export default function CarpentersView() {
   }
   async function edit(e: React.MouseEvent, r: CarpenterRollup) {
     e.stopPropagation();
+    const rec = resolveCarpenterRecord(r, directory);
     const next = await editCarpenterDialog(
-      r.record ||
+      rec ||
         ({
           name: r.name,
           phone: r.phone,
@@ -116,6 +117,7 @@ export default function CarpentersView() {
           notes: r.notes,
           photo: r.photo,
         } as Carpenter),
+      r.name,
     );
     if (!next) return;
     load();
@@ -123,7 +125,13 @@ export default function CarpentersView() {
   }
 
   async function savePhoto(r: CarpenterRollup, photo: string) {
-    await setCarpenterPhoto(r, photo);
+    const rec = resolveCarpenterRecord(r, directory);
+    await setCarpenterPhoto(
+      rec
+        ? { record: rec, name: rec.name, phone: rec.phone, phoneAlt: rec.phoneAlt, village: rec.village || "", city: rec.city || "", notes: rec.notes || "" }
+        : r,
+      photo,
+    );
     bumpData();
     toast(photo ? "Photo saved" : "Photo removed");
   }
