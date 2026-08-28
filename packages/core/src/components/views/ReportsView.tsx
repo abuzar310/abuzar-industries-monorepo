@@ -7,6 +7,7 @@ import { brandFor } from "@/lib/brand";
 import { generatePdf } from "@/lib/pdf";
 import { toast } from "@/store/app-store";
 import { useApp } from "@/store/useApp";
+import PdfButtons from "@/components/PdfButtons";
 import type { Doc } from "@/lib/types";
 
 const num = (n: number) =>
@@ -310,16 +311,19 @@ export default function ReportsView() {
           <button className="btn primary sm rep-print" onClick={() => window.print()}>
             Print
           </button>
-          <button
-            className="btn sm rep-print"
-            onClick={async () => {
+          <PdfButtons
+            onPreview={() =>
+              void generatePdf(printRef.current!, "report-" + fmtISO(from || "start") + "-to-" + fmtISO(to || "now"), {
+                preview: true,
+              }).catch(() => toast("Could not create the PDF"))
+            }
+            onDownload={async () => {
               toast("Preparing PDF…");
               await generatePdf(printRef.current!, "report-" + fmtISO(from || "start") + "-to-" + fmtISO(to || "now"));
               toast("Report PDF downloaded \u2713");
             }}
-          >
-            Save PDF
-          </button>
+            downloadLabel="Save PDF"
+          />
         </div>
       </div>
 

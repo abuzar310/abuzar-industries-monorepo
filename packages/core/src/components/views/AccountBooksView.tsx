@@ -13,6 +13,7 @@ import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { toast } from "@/store/app-store";
 import Pager, { PAGE, usePager } from "@/components/Pager";
+import PdfButtons from "@/components/PdfButtons";
 import type { Doc, Expense } from "@/lib/types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -147,16 +148,19 @@ export default function AccountBooksView() {
           >
             Print
           </button>
-          <button
-            className="btn sm"
-            onClick={async () => {
+          <PdfButtons
+            onPreview={() =>
+              void generatePdf(printRef.current!, bookName.replace(/\s+/g, "-").toLowerCase() + "-" + genOn, {
+                preview: true,
+              }).catch(() => toast("Could not create the PDF"))
+            }
+            onDownload={async () => {
               toast("Preparing PDF…");
               await generatePdf(printRef.current!, bookName.replace(/\s+/g, "-").toLowerCase() + "-" + genOn);
               toast("PDF downloaded ✓");
             }}
-          >
-            Save PDF
-          </button>
+            downloadLabel="Save PDF"
+          />
         </div>
       </div>
 

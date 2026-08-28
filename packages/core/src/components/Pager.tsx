@@ -67,7 +67,7 @@ export default function Pager({
     (list || nav)?.scrollIntoView({ block: "start", behavior: "smooth" });
   };
   return (
-    <nav className="pager" aria-label="Pages">
+    <nav className="pager no-print" aria-label="Pages">
       <button type="button" className="btn sm" disabled={page === 0} onClick={() => go(page - 1)}>
         ‹ Prev
       </button>

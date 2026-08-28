@@ -42,6 +42,7 @@ import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import { Paged } from "@/components/Pager";
+import PdfButtons from "@/components/PdfButtons";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
 const hhmm = (iso: string) => {
@@ -88,6 +89,7 @@ interface PrintDoc {
   title: string;
   summary: { k: string; v: string }[];
   rows: AcctLedgerRow[];
+  preview?: boolean;
 }
 
 export default function AccountsView() {
@@ -195,14 +197,15 @@ export default function AccountsView() {
         return;
       }
       try {
-        toast("Preparing PDF…");
+        if (!printDoc.preview) toast("Preparing PDF…");
         await generatePdf(el, (printDoc.title || "statement").replace(/\s+/g, "-").toLowerCase(), {
           pageBreak: ".bank-row,.acct-print-sum,.acct-print-hdr",
           width: 700,
           title: (brand.name || "Accounts") + " — " + printDoc.title,
           marginMm: 8,
+          preview: printDoc.preview,
         });
-        if (!cancelled) toast("Statement PDF downloaded \u2713");
+        if (!cancelled && !printDoc.preview) toast("Statement PDF downloaded \u2713");
       } catch {
         if (!cancelled) toast("Could not create the PDF");
       }
@@ -638,7 +641,7 @@ export default function AccountsView() {
     return bits.join(" · ");
   }
 
-  function pdfHolder(h: PayHolder) {
+  function pdfHolder(h: PayHolder, preview = false) {
     const v = holderView(h);
     const book: AcctBalance =
       v.subs.length === 1
@@ -653,6 +656,7 @@ export default function AccountsView() {
           };
     setPrintDoc({
       title: h.name,
+      preview,
       summary: [
         ...(v.opening > 0 ? [{ k: "Opening", v: "₹ " + inr(v.opening) }] : []),
         { k: "Received", v: "₹ " + inr(v.received) },
@@ -662,9 +666,10 @@ export default function AccountsView() {
       rows: buildAcctLedger(book, v.opening),
     });
   }
-  function pdfAccount(a: AcctBalance) {
+  function pdfAccount(a: AcctBalance, preview = false) {
     setPrintDoc({
       title: a.name,
+      preview,
       summary: [
         { k: "Received", v: "₹ " + inr(a.received) },
         { k: "Collected", v: "₹ " + inr(a.collected) },
@@ -852,9 +857,7 @@ export default function AccountsView() {
           )}
           {!grouped && (a.received > 0 || a.lines.length > 0) && (
             <>
-              <button className="btn sm" type="button" title="Download the same passbook as on screen" onClick={() => pdfAccount(a)}>
-                PDF
-              </button>
+              <PdfButtons onPreview={() => pdfAccount(a, true)} onDownload={() => pdfAccount(a)} />
               <button
                 className="btn wa sm"
                 type="button"
@@ -1196,9 +1199,7 @@ export default function AccountsView() {
                     <button className="btn sm primary" type="button" onClick={() => { setAddAcctFor(h.id); setNewAcct(""); }}>
                       + Account
                     </button>
-                    <button className="btn sm" type="button" title="Download the same passbook as on screen" onClick={() => pdfHolder(h)}>
-                      PDF
-                    </button>
+                    <PdfButtons onPreview={() => pdfHolder(h, true)} onDownload={() => pdfHolder(h)} />
                     <button className="btn sm wa" type="button" onClick={() => sendSummary(h.name, [
                       ...(opening > 0 ? [{ k: "Opening", v: "₹" + inr(opening) }] : []),
                       { k: "Received", v: "₹" + inr(received) },

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { allRec, delRec, getRec } from "@/lib/data";
 import { computeDoc, inr } from "@/lib/calc";
 import { brandFor } from "@/lib/brand";
-import { printOrSavePdf } from "@/lib/pdf";
+import { generatePdf } from "@/lib/pdf";
 import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/create";
 import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
@@ -16,6 +16,8 @@ import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { Customer, Doc, Expense } from "@/lib/types";
 import { Paged } from "../Pager";
+import PassbookPrint, { type PassbookLine } from "../PassbookPrint";
+import PdfButtons from "../PdfButtons";
 import DocList from "./DocList";
 
 export default function CustomerDetail({ id }: { id: string }) {
@@ -153,9 +155,46 @@ export default function CustomerDetail({ id }: { id: string }) {
     { rows: [], bal: opening },
   ).rows;
   const canPrint = quotes.length > 0 || opening > 0;
-  const today = new Date();
-  const pad2 = (n: number) => String(n).padStart(2, "0");
-  const genOn = `${pad2(today.getDate())}-${pad2(today.getMonth() + 1)}-${today.getFullYear()}`;
+  const stmtPdfRows: PassbookLine[] = [
+    ...(opening > 0
+      ? [{ key: "open", date: "", who: "Opening Balance", debit: 0, credit: 0, balance: opening, open: true }]
+      : []),
+    ...stmtRows.map((ev) => ({
+      key: ev.kind + ev.id,
+      date: ev.date,
+      who: ev.kind === "quote" ? "To " + ev.label : "By " + ev.label,
+      detail: ev.sub || "",
+      debit: ev.kind === "quote" ? ev.amount : 0,
+      credit: ev.kind === "pay" ? ev.amount : 0,
+      balance: ev.bal,
+    })),
+    {
+      key: "close",
+      date: "",
+      who: balanceDue > 0.5 ? "Balance due" : balanceDue < -0.5 ? "Advance held" : "Settled",
+      debit: 0,
+      credit: 0,
+      balance: balanceDue,
+      close: true,
+    },
+  ];
+
+  async function runStmtPdf(preview: boolean) {
+    if (!printRef.current) return;
+    if (!preview) toast("Preparing PDF…");
+    try {
+      await generatePdf(printRef.current, (cust.name || "customer") + "-statement", {
+        pageBreak: ".bank-row,.acct-print-sum,.acct-print-hdr",
+        width: 700,
+        title: (brand.name || "Statement") + " — " + cust.name,
+        marginMm: 8,
+        preview,
+      });
+      if (!preview) toast("Statement PDF downloaded \u2713");
+    } catch {
+      toast("Could not create the PDF");
+    }
+  }
 
   async function edit() {
     const c = await editCustomerDialog(cust!);
@@ -260,15 +299,12 @@ export default function CustomerDetail({ id }: { id: string }) {
           <div className="sectitle" style={{ marginTop: 24, fontSize: 22, display: "flex", alignItems: "center", gap: 12 }}>
             <span>Account statement <small>— every bill &amp; payment, running balance</small></span>
             {canPrint && (
-              <button
-                className="btn sm"
-                style={{ marginLeft: "auto" }}
-                onClick={async () => {
-                  if ((await printOrSavePdf(printRef.current, (cust!.name || "customer") + "-statement")) === "pdf") toast("Statement PDF downloaded \u2713");
-                }}
-              >
-                Print / Save PDF
-              </button>
+              <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8 }}>
+                <PdfButtons
+                  onPreview={() => void runStmtPdf(true)}
+                  onDownload={() => void runStmtPdf(false)}
+                />
+              </span>
             )}
           </div>
           <Paged items={stmtRows} resetKey={id}>
@@ -343,84 +379,16 @@ export default function CustomerDetail({ id }: { id: string }) {
       </div>
 
       {canPrint && (
-        <div className="cd-print rep-doc cd-qreport" ref={printRef}>
-          <div className="rep-head">
-            <div className="rep-brand">
-              <h1>{brand.name || "Quotations"}</h1>
-              {brand.addr && <div>{brand.addr}</div>}
-              {brand.gstin && <div>GSTIN: {brand.gstin}</div>}
-            </div>
-            <div className="rep-meta">
-              <div className="rep-title">Account Statement</div>
-              <div className="rep-period">{cust.name}{cust.phone ? " · " + cust.phone : ""}</div>
-            </div>
-          </div>
-
-          <div className="rep-summary cols4">
-            <div><b>{qreport.length}</b><span>Quotations</span></div>
-            <div><b>₹{inr(grandTotal)}</b><span>Billed{opening > 0 ? " (incl. opening)" : ""}</span></div>
-            <div><b>₹{inr(paidTotal)}</b><span>Received</span></div>
-            <div><b>₹{inr(balanceDue)}</b><span>Balance due</span></div>
-          </div>
-
-          {/* the SAME statement as on screen: opening → every bill & payment, running balance */}
-          <table className="rep-table">
-            <colgroup>
-              <col style={{ width: "5%" }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "34%" }} />
-              <col style={{ width: "16%" }} />
-              <col style={{ width: "16%" }} />
-              <col style={{ width: "16%" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className="c-n">#</th>
-                <th>Date</th>
-                <th>Entry</th>
-                <th className="amt">Billed ₹</th>
-                <th className="amt">Received ₹</th>
-                <th className="amt">Balance ₹</th>
-              </tr>
-            </thead>
-            <tbody>
-              {opening > 0 && (
-                <tr className="rep-op">
-                  <td className="c-n">—</td>
-                  <td className="c-date">—</td>
-                  <td className="c-no">Opening Balance</td>
-                  <td className="amt">{inr(opening)}</td>
-                  <td className="amt">—</td>
-                  <td className="amt">{inr(opening)}</td>
-                </tr>
-              )}
-              {stmtRows.map((ev, i) => (
-                <tr key={ev.kind + ev.id}>
-                  <td className="c-n">{i + 1}</td>
-                  <td className="c-date">{ev.date}</td>
-                  <td className="c-cust">
-                    {ev.kind === "quote" ? ev.label + (ev.sub ? " · " + ev.sub : "") : "Received · " + [ev.label, ev.sub].filter(Boolean).join(" · ")}
-                  </td>
-                  <td className="amt">{ev.kind === "quote" ? inr(ev.amount) : ""}</td>
-                  <td className="amt">{ev.kind === "pay" ? inr(ev.amount) : ""}</td>
-                  <td className="amt">{inr(ev.bal)}</td>
-                </tr>
-              ))}
-              <tr className="rep-tot">
-                <td colSpan={3}>Total</td>
-                <td className="amt">{inr(grandTotal)}</td>
-                <td className="amt">{inr(paidTotal)}</td>
-                <td className="amt">{inr(balanceDue)}</td>
-              </tr>
-              <tr className="rep-tot">
-                <td colSpan={5}>{balanceDue > 0.5 ? "Balance due" : balanceDue < -0.5 ? "Advance held" : "Settled"}</td>
-                <td className="amt">{inr(Math.abs(balanceDue))}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div className="rep-foot">Generated {genOn} · {brand.name}</div>
-        </div>
+        <PassbookPrint
+          printRef={printRef}
+          summary={[
+            { k: "Quotations", v: String(qreport.length) },
+            { k: "Billed", v: "₹ " + inr(grandTotal) },
+            { k: "Received", v: "₹ " + inr(paidTotal) },
+            { k: "Balance", v: "₹ " + inr(balanceDue) },
+          ]}
+          rows={stmtPdfRows}
+        />
       )}
     </div>
   );

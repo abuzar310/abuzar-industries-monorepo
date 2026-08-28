@@ -42,6 +42,7 @@ import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import CustomerPicker from "@/components/editor/CustomerPicker";
+import PdfButtons from "@/components/PdfButtons";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -699,16 +700,19 @@ export default function VouchersView() {
           >
             Print
           </button>
-          <button
-            className="btn sm"
-            onClick={async () => {
+          <PdfButtons
+            onPreview={() =>
+              void generatePdf(printRef.current!, seg + "-vouchers-" + genOn, { preview: true }).catch(() =>
+                toast("Could not create the PDF"),
+              )
+            }
+            onDownload={async () => {
               toast("Preparing PDF…");
               await generatePdf(printRef.current!, seg + "-vouchers-" + genOn);
               toast("PDF downloaded ✓");
             }}
-          >
-            Save PDF
-          </button>
+            downloadLabel="Save PDF"
+          />
         </div>
       </div>
 
