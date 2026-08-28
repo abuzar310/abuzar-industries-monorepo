@@ -8,7 +8,7 @@ import {
   carpenterHref,
   findCarpenterRollup,
 } from "@/lib/carpenter-financials";
-import { editCarpenterDialog, listCarpenters, setCarpenterPhoto } from "@/lib/carpenters";
+import { editCarpenterDialog, listCarpenters, resolveCarpenterRecord, setCarpenterPhoto } from "@/lib/carpenters";
 import { dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -61,8 +61,9 @@ export default function CarpenterDetail({ id }: { id: string }) {
   const history = carpenterCommissionHistory([rollup]);
 
   async function saveContact() {
+    const existing = resolveCarpenterRecord(rollup!, directory);
     const next = await editCarpenterDialog(
-      rollup!.record ||
+      existing ||
         ({
           name: rollup!.name,
           phone: rollup!.phone,
@@ -72,6 +73,7 @@ export default function CarpenterDetail({ id }: { id: string }) {
           notes: rollup!.notes,
           photo: rollup!.photo,
         } as Carpenter),
+      rollup!.name,
     );
     if (!next) return;
     if (next === "deleted") {
@@ -80,14 +82,28 @@ export default function CarpenterDetail({ id }: { id: string }) {
     }
     load();
     bumpData();
-    if (!rollup!.record) router.replace(carpenterHref(rollup!.key, next.id));
+    router.replace(carpenterHref(rollup!.key, next.id));
   }
   async function savePhoto(photo: string) {
-    const next = await setCarpenterPhoto(rollup!, photo);
+    const rec = resolveCarpenterRecord(rollup!, directory);
+    const next = await setCarpenterPhoto(
+      rec
+        ? {
+            record: rec,
+            name: rec.name,
+            phone: rec.phone,
+            phoneAlt: rec.phoneAlt,
+            village: rec.village || "",
+            city: rec.city || "",
+            notes: rec.notes || "",
+          }
+        : rollup!,
+      photo,
+    );
     load();
     bumpData();
     toast(photo ? "Photo saved" : "Photo removed");
-    if (!rollup!.record) router.replace(carpenterHref(rollup!.key, next.id));
+    router.replace(carpenterHref(rollup!.key, next.id));
   }
   function whatsapp(phone?: string) {
     const n = (phone || "").trim();
