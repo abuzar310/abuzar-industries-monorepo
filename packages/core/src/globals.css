@@ -2042,7 +2042,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .acct-date-pick{flex:0 1 auto; min-width:0}
 .acct-date-pick span{font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint)}
 .acct-date-pick input{padding:9px 12px; border:1px solid var(--line-2); border-radius:9px; background:var(--panel-2); font:inherit; color:var(--ink)}
-.acct-collect-btn{flex:0 0 auto; white-space:nowrap}
+.acct-collect-btn,.acct-pay-btn{flex:0 0 auto; white-space:nowrap}
 .acct-collected-badge{margin-left:8px; font-family:var(--mono); font-size:11px; font-weight:700; color:var(--green); letter-spacing:0; text-transform:none}
 .acct-collected-badge.sm{margin-left:4px; font-size:10px}
 .acct-tag.pending{background:rgba(176,64,64,.12); color:var(--danger)}
@@ -2056,6 +2056,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .acct-overall{padding:14px 16px; margin-top:12px}
 .acct-overall-h{font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:10px}
 .acct-overall-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px}
+.acct-overall-grid.has-transport{grid-template-columns:repeat(4,1fr)}
 .acct-stat{background:var(--panel-2); border-radius:10px; padding:10px 12px}
 .acct-stat .k{display:block; font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-faint)}
 .acct-stat .v{display:block; font-family:var(--mono); font-size:18px; font-weight:700; color:var(--ink); margin-top:3px}
@@ -2082,6 +2083,9 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .acct-day-label{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:18px; margin-bottom:4px}
 .acct-day-label>span{flex:1 1 auto; font-family:var(--disp); font-size:18px; font-weight:700; color:var(--walnut)}
 .acct-overall-hint{font-family:var(--mono); font-size:11px; font-weight:600; color:var(--ochre-deep); margin-left:4px}
+@media(max-width:900px){
+  .acct-overall-grid.has-transport{grid-template-columns:repeat(2,1fr)}
+}
 @media(max-width:640px){
   .acct-overall-grid{grid-template-columns:1fr}
   .acct-date-center{flex-direction:column}
@@ -2090,7 +2094,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 @media(max-width:560px){
   .acct-head-totals{width:100%; margin-top:4px}
   .acct-add-row .btn{width:100%; justify-content:center}
-  .acct-collect-btn{width:100%; justify-content:center; margin-top:6px}
+  .acct-collect-btn,.acct-pay-btn{width:100%; justify-content:center; margin-top:6px}
   .acct-filters .btn.primary.sm{flex:1 1 100%}
 }
 
@@ -3618,6 +3622,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   border-bottom:1px solid var(--line);
 }
 .acct-print .acct-print-sum.cols4, .pdf-book .acct-print-sum.cols4{grid-template-columns:repeat(4, minmax(0,1fr))}
+.acct-print .acct-print-sum.cols5, .pdf-book .acct-print-sum.cols5{grid-template-columns:repeat(5, minmax(0,1fr))}
 .acct-print .acct-print-sum span, .pdf-book .acct-print-sum span{
   display:block;
   font-family:var(--disp);
