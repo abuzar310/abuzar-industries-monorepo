@@ -18,6 +18,7 @@ export const SPEND_CATEGORIES: SpendCategory[] = [
   { id: "carpenter", label: "Carpenter commission", type: "custom" },
   { id: "truck", label: "Heavy truck", type: "custom" },
   { id: "minitruck", label: "Mini truck", type: "custom" },
+  { id: "transport", label: "Transport", type: "custom" },
   { id: "bills", label: "Bills", type: "custom" },
   { id: "tea", label: "Tea bill", type: "custom" },
   { id: "pigmy", label: "Pignee", type: "custom" },

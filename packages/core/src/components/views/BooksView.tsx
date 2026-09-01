@@ -344,7 +344,10 @@ export default function BooksView() {
     const acctBal = ledger.accounts.reduce((s, a) => s + a.balance, 0);
     const holderOpen = holders.reduce((s, h) => s + (+(h.opening || 0) || 0), 0);
     const holderCols = collections.filter((c) => !!c.holderId).reduce((s, c) => s + (+c.amount || 0), 0);
-    const upiWithHolders = r2(acctBal + holderOpen - holderCols);
+    const holderPays = expenses
+      .filter((e) => e.pocketSpend === "transport" && !!e.holderId)
+      .reduce((s, e) => s + (+e.amount || 0), 0);
+    const upiWithHolders = r2(acctBal + holderOpen - holderCols - holderPays);
 
     // receivables & customer advances (Balances tab rule)
     const { parties, totalPending } = partyLedger(quotes, expenses, customers);
@@ -836,7 +839,7 @@ export default function BooksView() {
             <span></span>
             <span><Name id="bank.acct" /></span>
             <span className="bank-amt">Received ₹</span>
-            <span className="bank-amt">Handed ₹</span>
+            <span className="bank-amt">Out ₹</span>
             <span className="bank-amt">Balance</span>
           </div>
           {bankLedger.accounts.map((a) => {
@@ -849,10 +852,11 @@ export default function BooksView() {
                   <small>
                     {a.lines.length} {a.lines.length === 1 ? "entry" : "entries"}
                     {a.ownerReceived > 0.5 ? " · owner ₹" + inr(a.ownerReceived) + " (not on hand)" : ""}
+                    {a.spent > 0.5 ? " · transport ₹" + inr(a.spent) : ""}
                   </small>
                 </span>
                 <span className="bank-amt cr">₹{inr(a.received)}</span>
-                <span className="bank-amt dr">₹{inr(a.collected)}</span>
+                <span className="bank-amt dr">₹{inr(a.collected + (a.spent || 0))}</span>
                 <span className={"bank-amt bal" + (balDr ? " dr" : " cr")}>
                   ₹{inr(Math.abs(a.balance))}
                   <span className={"bal-tag " + (balDr ? "dr" : "cr")}>{balDr ? "Dr" : "Cr"}</span>
@@ -864,7 +868,7 @@ export default function BooksView() {
             <span className="bank-date"></span>
             <span className="bank-parts"><Name id="bank.total" /></span>
             <span className="bank-amt cr">₹{inr(bankLedger.totalReceived)}</span>
-            <span className="bank-amt dr">₹{inr(bankLedger.totalCollected)}</span>
+            <span className="bank-amt dr">₹{inr(bankLedger.totalCollected + (bankLedger.totalSpent || 0))}</span>
             <span className={"bank-amt bal" + (bankLedger.totalBalance < -0.005 ? " dr" : " cr")}>
               ₹{inr(Math.abs(bankLedger.totalBalance))}
               <span className={"bal-tag " + (bankLedger.totalBalance < -0.005 ? "dr" : "cr")}>

@@ -2,6 +2,7 @@
 import { allRec, delRec, getRec, metaGet, metaSet, put } from "./data";
 import { nowIso, todayStr, uid } from "./calc";
 import { quoteBill, quotePaid } from "./payments";
+import { isAccountTransportPay, TRANSPORT_LABEL } from "./pocket-spend";
 import type { Customer, Doc, Expense } from "./types";
 
 const isUpi = (e: Expense) => e.type === "sale" && e.mode === "upi";
@@ -164,9 +165,12 @@ export function balanceAfter(a: AcctBalance, cutIso?: string): AcctBalance {
   let received = 0;
   let ownerReceived = 0;
   let collected = 0;
+  let spent = 0;
   for (const l of lines) {
     if (l.kind === "collect") {
       collected += l.amount;
+    } else if (l.kind === "transport") {
+      spent += l.amount;
     } else if (l.toOwner) {
       ownerReceived += l.amount;
     } else {
@@ -179,7 +183,8 @@ export function balanceAfter(a: AcctBalance, cutIso?: string): AcctBalance {
     received: r2(received),
     ownerReceived: r2(ownerReceived),
     collected: r2(collected),
-    balance: r2(received - collected),
+    spent: r2(spent),
+    balance: r2(received - collected - spent),
     lines,
   };
 }
@@ -603,6 +608,56 @@ export async function deleteCollection(id: string): Promise<void> {
   await delRec("collections", id);
 }
 
+export { isAccountTransportPay, TRANSPORT_LABEL } from "./pocket-spend";
+
+export function stmtFromTransport(e: Expense): AcctStmtLine {
+  return {
+    id: e.id,
+    kind: "transport",
+    amount: +e.amount || 0,
+    date: e.date,
+    at: e.createdAt || "",
+    by: e.enteredBy,
+    customer: (e.party || "").trim() || undefined,
+    note: e.note,
+  };
+}
+
+/** Pay a transporter from a UPI pocket. Drops the account/holder balance and posts Transport in Books. */
+export async function addPayTransport(fields: {
+  account: string;
+  holderId?: string;
+  amount: number;
+  party: string;
+  date?: string;
+  by: string;
+  note?: string;
+}): Promise<Expense | null> {
+  const account = (fields.account || "").trim();
+  const party = (fields.party || "").trim();
+  const amount = r2(Math.max(0, +fields.amount || 0));
+  if (!account || !party || amount <= 0) return null;
+  const now = nowIso();
+  const e: Expense = {
+    id: "EXP-" + uid(),
+    date: fields.date || todayStr(),
+    type: "custom",
+    label: TRANSPORT_LABEL,
+    mode: "",
+    amount,
+    note: (fields.note || "").trim(),
+    party,
+    account,
+    holderId: fields.holderId || undefined,
+    pocketSpend: "transport",
+    enteredBy: fields.by,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await put("expenses", e);
+  return e;
+}
+
 /** Delete a UPI credit shown under an account. If it's a quote payment (sourceId), the amount is
  *  rolled back off that quotation's paid total so nothing desyncs; account receipts just delete. */
 export async function deleteAccountEntry(id: string): Promise<void> {
@@ -629,7 +684,7 @@ export async function deleteAccountEntry(id: string): Promise<void> {
   await delRec("expenses", id);
 }
 
-export type AcctLineKind = "in" | "collect";
+export type AcctLineKind = "in" | "collect" | "transport";
 export interface AcctStmtLine {
   id: string;
   kind: AcctLineKind;
@@ -657,7 +712,9 @@ export interface AcctBalance {
   ownerReceived: number;
   /** total handed over: new collections + legacy per-entry collected. */
   collected: number;
-  /** received − collected. */
+  /** paid from this pocket as transport (Books expense, not an owner hand-over). */
+  spent: number;
+  /** received − collected − spent. */
   balance: number;
   lines: AcctStmtLine[]; // newest first
 }
@@ -667,6 +724,7 @@ export interface AcctLedger {
   totalReceived: number;
   totalOwner: number;
   totalCollected: number;
+  totalSpent: number;
   totalBalance: number;
 }
 
@@ -697,16 +755,26 @@ export function sortPassbookLines(lines: AcctStmtLine[]): AcctStmtLine[] {
   });
 }
 
-/** One holder passbook: every sub-account UPI line + holder-level hand-overs. */
-export function holderPassbookLines(subs: AcctBalance[], cols: AccountCollection[]): AcctStmtLine[] {
+/** One holder passbook: every sub-account UPI line + holder-level hand-overs + holder-level transport. */
+export function holderPassbookLines(
+  subs: AcctBalance[],
+  cols: AccountCollection[],
+  transports: Expense[] = [],
+): AcctStmtLine[] {
   const multi = subs.length > 1;
   const lines: AcctStmtLine[] = [];
   for (const a of subs) {
     for (const l of a.lines) {
-      lines.push(multi && l.kind === "in" ? { ...l, customer: (l.customer || "—") + " · " + a.name } : l);
+      lines.push(
+        multi && l.kind !== "collect" ? { ...l, customer: (l.customer || "—") + " · " + a.name } : l,
+      );
     }
   }
   for (const c of cols) lines.push(stmtFromCollection(c));
+  for (const e of transports) {
+    if (!isAccountTransportPay(e) || !e.holderId) continue;
+    lines.push(stmtFromTransport(e));
+  }
   return lines;
 }
 
@@ -718,7 +786,7 @@ export function passbookRunning(
   let bal = opening;
   const after: { id: string; balance: number }[] = [];
   for (const l of sortPassbookLines(lines)) {
-    bal = r2(bal + (l.kind === "collect" ? -l.amount : l.amount));
+    bal = r2(bal + (l.kind === "in" ? l.amount : -l.amount));
     after.push({ id: l.id, balance: bal });
   }
   return { closing: r2(bal), after };
@@ -735,7 +803,7 @@ export function acctLedger(
   const get = (name: string) => {
     let a = map.get(name);
     if (!a) {
-      a = { name, received: 0, ownerReceived: 0, collected: 0, balance: 0, lines: [] };
+      a = { name, received: 0, ownerReceived: 0, collected: 0, spent: 0, balance: 0, lines: [] };
       map.set(name, a);
     }
     return a;
@@ -785,13 +853,24 @@ export function acctLedger(
     });
   }
 
+  for (const e of expenses) {
+    if (!isAccountTransportPay(e) || e.holderId) continue; // holder-level — handled per-holder
+    const name = (e.account || "").trim();
+    if (!name) continue;
+    const a = get(name);
+    const amt = +e.amount || 0;
+    a.spent += amt;
+    a.lines.push(stmtFromTransport(e));
+  }
+
   const accounts = [...map.values()]
     .map((a) => ({
       ...a,
       received: r2(a.received),
       ownerReceived: r2(a.ownerReceived),
       collected: r2(a.collected),
-      balance: r2(a.received - a.collected),
+      spent: r2(a.spent),
+      balance: r2(a.received - a.collected - a.spent),
       lines: a.lines.sort((x, y) => (y.at || "").localeCompare(x.at || "")),
     }))
     .sort((a, b) => b.balance - a.balance || b.received - a.received);
@@ -801,6 +880,7 @@ export function acctLedger(
     totalReceived: r2(accounts.reduce((s, a) => s + a.received, 0)),
     totalOwner: r2(accounts.reduce((s, a) => s + a.ownerReceived, 0)),
     totalCollected: r2(accounts.reduce((s, a) => s + a.collected, 0)),
+    totalSpent: r2(accounts.reduce((s, a) => s + a.spent, 0)),
     totalBalance: r2(accounts.reduce((s, a) => s + a.balance, 0)),
   };
 }
