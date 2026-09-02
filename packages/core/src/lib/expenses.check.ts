@@ -1,8 +1,8 @@
 // Self-check for the cash/UPI split in the daybook (pure, no DB).
 // Run: npx tsx packages/core/src/lib/expenses.check.ts
 import type { Expense } from "./types";
-import { dayTotals, inDaybook, isUpi } from "./expenses";
-import { isAccountTransportPay } from "./pocket-spend";
+import { dayTotals, inBooks, inDaybook, isUpi } from "./expenses";
+import { isAccountTransportPay, isPendingTransport } from "./pocket-spend";
 
 let n = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -38,6 +38,8 @@ export function demo() {
     pocketSpend: "transport" as const,
   };
   ok(isAccountTransportPay(fromPocket) && !inDaybook(fromPocket), "UPI-pocket transport is not till cash");
+  const due = { ...fromPocket, account: "" };
+  ok(isPendingTransport(due) && !inBooks(due) && !inDaybook(due), "transport due is off Books and till");
 
   console.log(`expenses.check OK (${n} assertions)`);
 }

@@ -2,7 +2,7 @@ import { allRec, delRec, put } from "./data";
 import { nowIso, splitHandover, todayStr, uid } from "./calc";
 import type { DaybookSession, EntryType, Expense, PayMode } from "./types";
 import { liveSpendCategories, SPEND_CATEGORIES, type SpendCategory } from "./book-catalog";
-import { isAccountTransportPay } from "./pocket-spend";
+import { isAccountTransportPay, isPendingTransport } from "./pocket-spend";
 
 export type { SpendCategory };
 export { SPEND_CATEGORIES, liveSpendCategories };
@@ -37,6 +37,7 @@ export function spendLabels(): Set<string> {
 export function inBooks(e: Expense): boolean {
   if (e.charge) return false;
   if (e.skipBooks) return false;
+  if (isPendingTransport(e)) return false;
   const lab = (e.label || "").trim();
   if (lab === PAID_TO_MANAGER_LABEL) return false;
   const match = cats().find((c) => c.label === lab || c.id === catAlias(lab));
@@ -80,6 +81,8 @@ export function spendDetailOf(e: Expense): string {
   const bits: string[] = [];
   const party = (e.party || "").trim();
   if (party) bits.push(party);
+  const bought = (e.boughtFrom || "").trim();
+  if (bought) bits.push("from " + bought);
   const carpenter = (e.carpenter || "").trim();
   if (carpenter) bits.push("Carpenter " + carpenter);
   const qNo = (e.quoteNo || "").trim();
@@ -129,7 +132,8 @@ export const inDaybook = (e: Expense) =>
   !isPlaceRentSetoff(e) &&
   !(e.mode === "cash" && !!(e.account || "").trim()) &&
   !isQuoteCommissionPay(e) &&
-  !isAccountTransportPay(e);
+  !isAccountTransportPay(e) &&
+  !isPendingTransport(e);
 
 export interface DayTotals {
   cashIn: number;

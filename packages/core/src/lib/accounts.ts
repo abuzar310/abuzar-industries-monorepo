@@ -2,7 +2,7 @@
 import { allRec, delRec, getRec, metaGet, metaSet, put } from "./data";
 import { nowIso, todayStr, uid } from "./calc";
 import { quoteBill, quotePaid } from "./payments";
-import { isAccountTransportPay, TRANSPORT_LABEL } from "./pocket-spend";
+import { isAccountTransportPay, isPendingTransport, isTransportPocketName, TRANSPORT_LABEL } from "./pocket-spend";
 import type { Customer, Doc, Expense } from "./types";
 
 const isUpi = (e: Expense) => e.type === "sale" && e.mode === "upi";
@@ -27,6 +27,8 @@ export interface PayHolder {
   name: string;
   accounts: string[]; // sub-account names belonging to this holder
   opening?: number; // opening balance already held by this person before tracking began (₹) — adds to the amount to collect
+  /** transport = Pay transport is the main action; collect = Collect stays first (overrides a "transport" in the name). */
+  kind?: "transport" | "collect";
   createdAt: string;
   updatedAt: string;
   synced?: boolean;
@@ -286,13 +288,22 @@ async function saveHolder(h: PayHolder): Promise<PayHolder> {
   return h;
 }
 
-export async function addHolder(name: string): Promise<PayHolder | null> {
+export async function addHolder(name: string, kind?: PayHolder["kind"]): Promise<PayHolder | null> {
   const n = normName(name);
   if (!n) return null;
   const list = await listHolders();
   if (list.some((h) => sameName(h.name, n))) return null;
   const now = nowIso();
-  return saveHolder({ id: "HLD-" + uid(), name: n, accounts: [], createdAt: now, updatedAt: now });
+  const inferred = kind ?? (isTransportPocketName(n) ? "transport" : undefined);
+  return saveHolder({ id: "HLD-" + uid(), name: n, accounts: [], kind: inferred, createdAt: now, updatedAt: now });
+}
+
+export async function setHolderKind(id: string, kind?: PayHolder["kind"]): Promise<PayHolder | null> {
+  const h = (await listHolders()).find((x) => x.id === id);
+  if (!h) return null;
+  if (kind) h.kind = kind;
+  else delete h.kind;
+  return saveHolder(h);
 }
 
 export async function renameHolder(id: string, name: string): Promise<PayHolder | null> {
@@ -608,9 +619,21 @@ export async function deleteCollection(id: string): Promise<void> {
   await delRec("collections", id);
 }
 
-export { isAccountTransportPay, TRANSPORT_LABEL } from "./pocket-spend";
+export { isAccountTransportPay, isPendingTransport, isTransportPocketName, TRANSPORT_LABEL } from "./pocket-spend";
+
+/** Pay transport is the main button on this pocket (name heuristic, unless kind overrides). */
+export function isTransportPocket(
+  h?: Pick<PayHolder, "kind" | "name" | "accounts">,
+  accountName?: string,
+): boolean {
+  if (h?.kind === "transport") return true;
+  if (h?.kind === "collect") return false;
+  return isTransportPocketName(h?.name, ...(h?.accounts ?? []), accountName);
+}
 
 export function stmtFromTransport(e: Expense): AcctStmtLine {
+  const from = (e.boughtFrom || "").trim();
+  const note = [from ? "from " + from : "", (e.note || "").trim()].filter(Boolean).join(" · ");
   return {
     id: e.id,
     kind: "transport",
@@ -619,24 +642,22 @@ export function stmtFromTransport(e: Expense): AcctStmtLine {
     at: e.createdAt || "",
     by: e.enteredBy,
     customer: (e.party || "").trim() || undefined,
-    note: e.note,
+    note: note || undefined,
   };
 }
 
-/** Pay a transporter from a UPI pocket. Drops the account/holder balance and posts Transport in Books. */
-export async function addPayTransport(fields: {
-  account: string;
-  holderId?: string;
-  amount: number;
+/** Lock a lorry bill. Not in Books and does not drop a UPI pocket until settleTransportDue. */
+export async function addTransportDue(fields: {
   party: string;
+  amount: number;
+  boughtFrom?: string;
   date?: string;
   by: string;
   note?: string;
 }): Promise<Expense | null> {
-  const account = (fields.account || "").trim();
   const party = (fields.party || "").trim();
   const amount = r2(Math.max(0, +fields.amount || 0));
-  if (!account || !party || amount <= 0) return null;
+  if (!party || amount <= 0) return null;
   const now = nowIso();
   const e: Expense = {
     id: "EXP-" + uid(),
@@ -647,8 +668,7 @@ export async function addPayTransport(fields: {
     amount,
     note: (fields.note || "").trim(),
     party,
-    account,
-    holderId: fields.holderId || undefined,
+    boughtFrom: (fields.boughtFrom || "").trim() || undefined,
     pocketSpend: "transport",
     enteredBy: fields.by,
     createdAt: now,
@@ -656,6 +676,48 @@ export async function addPayTransport(fields: {
   };
   await put("expenses", e);
   return e;
+}
+
+/** Pay a locked transport due from a UPI pocket. Books + pocket drop happen here. */
+export async function settleTransportDue(fields: {
+  id: string;
+  account: string;
+  holderId?: string;
+  date?: string;
+  by: string;
+}): Promise<Expense | null> {
+  const account = (fields.account || "").trim();
+  if (!account) return null;
+  const e = await getRec<Expense>("expenses", fields.id);
+  if (!e || !isPendingTransport(e)) return null;
+  e.account = account;
+  e.holderId = fields.holderId || undefined;
+  e.date = fields.date || todayStr();
+  e.enteredBy = fields.by || e.enteredBy;
+  e.updatedAt = nowIso();
+  await put("expenses", e);
+  return e;
+}
+
+export async function addPayTransport(fields: {
+  account: string;
+  holderId?: string;
+  amount: number;
+  party: string;
+  date?: string;
+  by: string;
+  note?: string;
+  boughtFrom?: string;
+}): Promise<Expense | null> {
+  const due = await addTransportDue(fields);
+  if (!due) return null;
+  return settleTransportDue({
+    id: due.id,
+    account: fields.account,
+    holderId: fields.holderId,
+    date: fields.date,
+    by: fields.by,
+  });
 }
 
 /** Delete a UPI credit shown under an account. If it's a quote payment (sourceId), the amount is
