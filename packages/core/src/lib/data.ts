@@ -55,17 +55,22 @@ export class ApiError extends Error {
 
 /** A request that hangs forever (phone switching Wi-Fi↔mobile data mid-flight) must
  *  eventually FAIL — otherwise the poll/outbox in-flight guards never release and the
- *  device silently stops syncing until the app is killed. 20s is generous for any payload. */
-const callTimeout = () =>
-  typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(20000) : undefined;
+ *  device silently stops syncing until the app is killed. 20s is generous for any payload.
+ *  Bootstrap is allowed longer: Vercel cold-start + loading the whole yard can exceed 20s,
+ *  which used to flip the top bar to "Offline" even though the server was still working. */
+const callTimeout = (ms: number) =>
+  typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(ms) : undefined;
 
-async function call<T = unknown>(path: string, init?: RequestInit): Promise<T> {
+type CallInit = RequestInit & { timeoutMs?: number };
+
+async function call<T = unknown>(path: string, init: CallInit = {}): Promise<T> {
+  const { timeoutMs = 20000, ...rest } = init;
   const r = await fetch(API + path, {
     credentials: "same-origin",
     cache: "no-store", // always the live server state — never a browser-cached copy
-    signal: callTimeout(),
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+    ...rest,
+    signal: rest.signal ?? callTimeout(timeoutMs),
+    headers: { "Content-Type": "application/json", ...(rest.headers || {}) },
   });
   if (!r.ok) {
     const body = await r.json().catch(() => ({} as { error?: string }));
@@ -130,7 +135,7 @@ export async function bootData(): Promise<void> {
   let last: unknown;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const b = await call<Bootstrap>("/bootstrap");
+      const b = await call<Bootstrap>("/bootstrap", { timeoutMs: 55000 });
       for (const s of DATA_STORES) {
         const m = new Map<string, unknown>();
         for (const rec of b.stores[s] || []) {
@@ -147,7 +152,8 @@ export async function bootData(): Promise<void> {
       return;
     } catch (e) {
       last = e;
-      setSyncState("off");
+      // First misses after a deploy are slow, not offline. Only show Offline if all tries fail.
+      setSyncState(attempt === 3 ? "off" : "queue");
     }
   }
   throw last instanceof Error ? last : new Error("bootstrap failed");

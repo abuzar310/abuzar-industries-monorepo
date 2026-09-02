@@ -2,6 +2,7 @@ import { allRec, delRec, put } from "./data";
 import { nowIso, splitHandover, todayStr, uid } from "./calc";
 import type { DaybookSession, EntryType, Expense, PayMode } from "./types";
 import { liveSpendCategories, SPEND_CATEGORIES, type SpendCategory } from "./book-catalog";
+import { isAccountTransportPay } from "./pocket-spend";
 
 export type { SpendCategory };
 export { SPEND_CATEGORIES, liveSpendCategories };
@@ -114,7 +115,8 @@ export function isQuoteCommissionPay(e: Expense): boolean {
 }
 
 /** Does this entry belong in the manager's cash daybook? Excludes UPI, cash sent straight to owner,
- *  cash assigned to a named account, customer dues/charges, and wood-against-commission. */
+ *  cash assigned to a named account, customer dues/charges, wood-against-commission,
+ *  and UPI-pocket transport (paid from an Accounts balance, not the till). */
 /** Place-rent set-off: commission given without cash — not till money. */
 export function isPlaceRentSetoff(e: Expense): boolean {
   return e.placeRentKind === "setoff";
@@ -126,7 +128,8 @@ export const inDaybook = (e: Expense) =>
   !e.charge &&
   !isPlaceRentSetoff(e) &&
   !(e.mode === "cash" && !!(e.account || "").trim()) &&
-  !isQuoteCommissionPay(e);
+  !isQuoteCommissionPay(e) &&
+  !isAccountTransportPay(e);
 
 export interface DayTotals {
   cashIn: number;

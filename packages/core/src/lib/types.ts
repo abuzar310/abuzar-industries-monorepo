@@ -423,6 +423,10 @@ export interface Expense {
   charge?: boolean;
   /** Internal cash move (Paid to owner / Paid to manager): hits Daybook cash, never Books. */
   skipBooks?: boolean;
+  /** UPI-pocket spend from Accounts (Cut Size). Not till cash; Books still records it. */
+  pocketSpend?: "transport";
+  /** Holder-level pocket spend — not tied to one sub-account (same idea as collection.holderId). */
+  holderId?: string;
   /** set once the entry is archived into a closed session; falsy = current open session */
   sessionId?: string;
   /** Accounts tab: when this payment was physically collected from the account holder. */
