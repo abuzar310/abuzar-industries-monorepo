@@ -70,7 +70,7 @@ const isoToday = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 const r2 = (n: number) => Math.round(n * 100) / 100;
-const lc = (s: string) => (s || "").trim().toLowerCase();
+const lc = (s?: string) => (s || "").trim().toLowerCase();
 
 const emptyBal = (name: string): AcctBalance => ({
   name,

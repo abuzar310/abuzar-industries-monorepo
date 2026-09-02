@@ -216,8 +216,45 @@ export type StoreName =
   | "attendance"
   | "activity"
   | "purchases"
+  | "websiteQuotations"
   | "carpenters"
   | "chat";
+
+/** Landing-site timber quote submission — isolated until Import to Quotation. */
+export interface WebsiteQuoteRow {
+  l: number;
+  w: number;
+  t: number;
+  pcs: number;
+  cft: number;
+}
+
+export interface WebsiteQuoteSection {
+  woodType: string;
+  rate?: number;
+  rows: WebsiteQuoteRow[];
+  totalCft: number;
+}
+
+export interface WebsiteQuotation {
+  id: string;
+  source: "website";
+  status: "Pending" | "Imported";
+  customerName: string;
+  phone: string;
+  /** Display label — single wood, or "Teak · White Teak" for multi-wood calculator */
+  woodType: string;
+  rows: WebsiteQuoteRow[];
+  /** Multi-wood payload from /calculator (optional on older rows) */
+  sections?: WebsiteQuoteSection[];
+  totalCft: number;
+  estimate: number;
+  /** set after Import to Quotation */
+  importedQuotationId?: string;
+  importedNumber?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /** Standalone carpenter contact (Cut Size) — not a customer / ledger party. */
 export interface Carpenter {
@@ -320,8 +357,8 @@ export interface Tab {
   label: string;
   href: string;
   icon?: string;
-  /** true = Daybook unseen; "buys" = due purchase reminders; "chat" = unread staff messages */
-  badge?: boolean | "buys" | "chat";
+  /** true = Daybook unseen; "buys" = due reminders; "website" = pending site quotes; "chat" = unread */
+  badge?: boolean | "buys" | "website" | "chat";
   owner?: boolean;
 }
 
