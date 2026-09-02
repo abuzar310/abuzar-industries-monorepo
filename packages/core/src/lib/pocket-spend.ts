@@ -19,3 +19,19 @@ export function isAccountTransportPay(e: TransportRow): boolean {
 export function isTransportPocketName(...names: (string | undefined)[]): boolean {
   return names.some((n) => /transport/i.test(n || ""));
 }
+
+export function transportPlaceOf(e: Pick<Expense, "placeOfSupply" | "boughtFrom">): string {
+  return (e.placeOfSupply || e.boughtFrom || "").trim();
+}
+
+/** Transporter · vehicle · place — chips, Transport tab, Books detail. */
+export function transportDueLabel(
+  e: Pick<Expense, "party" | "vehicleNo" | "placeOfSupply" | "boughtFrom">,
+): string {
+  const bits = [(e.party || "").trim() || "—"];
+  const veh = (e.vehicleNo || "").trim();
+  if (veh) bits.push(veh);
+  const place = transportPlaceOf(e);
+  if (place) bits.push(place);
+  return bits.join(" · ");
+}

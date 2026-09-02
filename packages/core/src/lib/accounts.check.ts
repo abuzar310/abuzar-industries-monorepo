@@ -7,17 +7,20 @@ import {
   accountOverview,
   acctLedger,
   holderPassbookLines,
+  settleFoldIndexes,
+  settleFoldChildren,
   isAccountTransportPay,
   isPendingTransport,
   isTransportPocket,
   isTransportPocketName,
   passbookRunning,
   stmtFromTransport,
+  transportDueLabel,
   type AccountCollection,
   type AcctBalance,
   type AcctStmtLine,
 } from "./accounts";
-import { inBooks, inDaybook, spendCatKey } from "./expenses";
+import { inBooks, inDaybook, spendCatKey, spendDetailOf } from "./expenses";
 
 let n = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -175,10 +178,27 @@ export function demo() {
   const hRun = passbookRunning(hBook, 0);
   ok(hRun.closing === 7500, "holder running balance drops after transport");
   ok(stmtFromTransport(pocket).kind === "transport", "transport statement line");
+  const detailed = { ...pocket, vehicleNo: "KA01AB1234", placeOfSupply: "Dhannaram" } as unknown as Expense;
+  ok(transportDueLabel(detailed) === "Raju lorry · KA01AB1234 · Dhannaram", "due label has vehicle and place");
+  ok((stmtFromTransport(detailed).note || "").includes("KA01AB1234"), "passbook note has vehicle");
+  ok(spendDetailOf(detailed).includes("from Dhannaram"), "Books detail has place of supply");
   ok(isTransportPocketName("CS KUMAR(SVT TRANSPORT CHENNAI)"), "name with Transport is a transport pocket");
   ok(!isTransportPocketName("Tabrez GT Trader"), "ordinary UPI is not a transport pocket");
   ok(isTransportPocket({ kind: "transport", name: "CS Kumar", accounts: [] }), "kind=transport wins");
   ok(!isTransportPocket({ kind: "collect", name: "SVT Transport", accounts: [] }), "kind=collect overrides the name");
+  const folds = settleFoldIndexes([
+    { kind: "in" },
+    { debit: 100000, kind: "collect" },
+    { kind: "in" },
+    { debit: 150000, kind: "collect" },
+    { kind: "in" },
+    { debit: 97200, kind: "collect" },
+    { kind: "in" },
+  ]);
+  ok(folds.join(",") === "1,3,5", "every To is a fold");
+  ok(settleFoldChildren(folds, 5).join(",") === "4", "28-08 To only opens after the 20-08 To");
+  ok(settleFoldChildren(folds, 3).join(",") === "2", "20-08 To only opens after the previous To");
+  ok(settleFoldIndexes([{ kind: "in" }, { kind: "in" }]).length === 0, "UPI-only book has no To fold");
 
   console.log(`accounts.check OK (${n} assertions)`);
 }

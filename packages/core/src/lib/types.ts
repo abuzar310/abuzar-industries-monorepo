@@ -390,8 +390,12 @@ export interface Expense {
   pocketSpend?: "transport";
   /** Holder-level pocket spend — not tied to one sub-account (same idea as collection.holderId). */
   holderId?: string;
-  /** Who we bought the wood from (pending/paid transport due). */
+  /** Who we bought the wood from / place of supply (pending/paid transport due). */
   boughtFrom?: string;
+  /** Place of supply on a transport due (shown as-is; boughtFrom is the older alias). */
+  placeOfSupply?: string;
+  /** Lorry vehicle number on a transport due. */
+  vehicleNo?: string;
   /** set once the entry is archived into a closed session; falsy = current open session */
   sessionId?: string;
   /** Accounts tab: when this payment was physically collected from the account holder. */
