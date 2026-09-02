@@ -16,6 +16,8 @@ import {
   getClearMarks,
   holderClearKey,
   holderPassbookLines,
+  settleFoldIndexes,
+  settleFoldChildren,
   isAccountTransportPay,
   isPendingTransport,
   isTransportPocket,
@@ -33,6 +35,7 @@ import {
   setHolderOpening,
   settleTransportDue,
   stashHolderOpening,
+  transportDueLabel,
   unmarkCleared,
   type AccountCollection,
   type AcctBalance,
@@ -48,7 +51,6 @@ import { waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
-import { Paged } from "@/components/Pager";
 import PdfButtons from "@/components/PdfButtons";
 import type { Customer, Doc, Expense, Purchase, Supplier } from "@/lib/types";
 
@@ -60,6 +62,10 @@ const hhmm = (iso: string) => {
 const toDmy = (v: string) => {
   const [y, m, d] = (v || "").split("-");
   return d && m && y ? `${d}-${m}-${y.slice(2)}` : "";
+};
+const isoToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const lc = (s: string) => (s || "").trim().toLowerCase();
@@ -130,6 +136,8 @@ export default function AccountsView() {
   // ledger is visible at a glance without clicking into each holder/account.
   const [collapsedHolders, setCollapsedHolders] = useState<Set<string>>(new Set());
   const [collapsedAccts, setCollapsedAccts] = useState<Set<string>>(new Set());
+  /** Opened To rows (each To has its own stretch back to the previous To). */
+  const [openTos, setOpenTos] = useState<Set<string>>(new Set());
 
   // collect form — either a holder (holderId) or an ungrouped account (name)
   const [collectHolder, setCollectHolder] = useState<string | null>(null);
@@ -145,11 +153,13 @@ export default function AccountsView() {
   const [payFor, setPayFor] = useState<string | null>(null);
   const [payDueId, setPayDueId] = useState<string | null>(null);
   const [tDate, setTDate] = useState("");
-  const [showAddDue, setShowAddDue] = useState(false);
+  const [acctTab, setAcctTab] = useState<"holders" | "transport">("holders");
   const [dueParty, setDueParty] = useState("");
   const [dueAmt, setDueAmt] = useState("");
+  const [dueVehicle, setDueVehicle] = useState("");
   const [dueFrom, setDueFrom] = useState("");
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState(isoToday);
+  const [lockOpen, setLockOpen] = useState(false);
   const canPayTransport = !!getFeatures().acceptPayment;
 
   // move a payment to another account
@@ -363,6 +373,13 @@ export default function AccountsView() {
     () => r2(pendingDues.reduce((s, e) => s + (+e.amount || 0), 0)),
     [pendingDues],
   );
+  const paidTransports = useMemo(
+    () =>
+      expenses
+        .filter(isAccountTransportPay)
+        .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")),
+    [expenses],
+  );
   const boughtHints = useMemo(() => {
     const s = new Set<string>();
     for (const x of suppliers) if (x.name.trim()) s.add(x.name.trim());
@@ -425,11 +442,57 @@ export default function AccountsView() {
     setPayDueId(null);
     setTDate("");
   }
+  function listPaySources() {
+    const srcs = [
+      ...holders.map((h) => {
+        const { balance } = holderView(h);
+        return { holderId: h.id as string | undefined, account: h.name, balance, transport: isTransportPocket(h) };
+      }),
+      ...ungrouped.map((a) => ({
+        holderId: undefined as string | undefined,
+        account: a.name,
+        balance: a.balance,
+        transport: isTransportPocket(undefined, a.name),
+      })),
+    ];
+    srcs.sort((a, b) => Number(b.transport) - Number(a.transport) || b.balance - a.balance);
+    return srcs;
+  }
+  function samePaySrc(
+    s: { holderId?: string; account: string },
+    holderId: string | null,
+    account: string | null,
+  ) {
+    return (s.holderId || "") === (holderId || "") && lc(s.account) === lc(account || "");
+  }
+  function pickPaySource(amt: number) {
+    const srcs = listPaySources();
+    return (
+      srcs.find((s) => s.transport && s.balance + 0.5 >= amt) ||
+      srcs.find((s) => s.balance + 0.5 >= amt) ||
+      srcs.find((s) => s.transport) ||
+      srcs[0]
+    );
+  }
+  function startPayDue(dueId: string) {
+    cancelCollect();
+    if (payDueId === dueId) {
+      cancelPay();
+      return;
+    }
+    const due = pendingDues.find((e) => e.id === dueId);
+    const pick = pickPaySource(+(due?.amount || 0));
+    setPayDueId(dueId);
+    setPayHolder(pick?.holderId || null);
+    setPayFor(pick?.account || null);
+    setTDate(isoToday());
+  }
   function startPay(opts: { holderId?: string; account?: string }, _balance: number, openKey: string) {
     cancelCollect();
     if (!pendingDues.length) {
-      setShowAddDue(true);
-      toast("Add a transport due first, then pay it from this account");
+      setAcctTab("transport");
+      setLockOpen(true);
+      toast("Lock a transport due first, then Pay on that row");
       return;
     }
     setPayHolder(opts.holderId || null);
@@ -464,27 +527,29 @@ export default function AccountsView() {
     const e = await addTransportDue({
       party,
       amount: a,
-      boughtFrom: dueFrom.trim(),
+      vehicleNo: dueVehicle.trim(),
+      placeOfSupply: dueFrom.trim(),
       date: dueDate ? toDmy(dueDate) : undefined,
       by: user?.id || "unknown",
     });
     if (!e) return toast("Could not record");
     setDueParty("");
     setDueAmt("");
+    setDueVehicle("");
     setDueFrom("");
-    setDueDate("");
-    setShowAddDue(false);
+    setDueDate(isoToday());
+    setLockOpen(false);
     load();
     bumpData();
     toast("Transport due · " + party + " · ₹" + inr(a));
   }
   async function delTransport(id: string, pending = false) {
     const ok = await confirmDialog({
-      title: pending ? "Delete this transport due?" : "Delete this transport payment?",
+      title: pending ? "Delete this transport due?" : "Undo this transport pay?",
       message: pending
         ? "Removes the locked bill. Nothing was paid from a UPI account."
-        : "Removes it from this account and from Books — the amount goes back into the balance.",
-      confirmLabel: "Delete",
+        : "Takes it out of Books. The amount goes back into the UPI pocket.",
+      confirmLabel: pending ? "Delete" : "Undo pay",
       danger: true,
     });
     if (!ok) return;
@@ -492,7 +557,7 @@ export default function AccountsView() {
     if (payDueId === id) setPayDueId(null);
     load();
     bumpData();
-    toast(pending ? "Transport due removed" : "Transport payment removed");
+    toast(pending ? "Transport due removed" : "Transport pay undone");
   }
 
   function renderPayForm(opts: { holderId?: string; account: string }, maxBal: number) {
@@ -504,7 +569,6 @@ export default function AccountsView() {
         </small>
         {pendingDues.map((e) => {
           const on = e.id === payDueId;
-          const from = (e.boughtFrom || "").trim();
           return (
             <button
               key={e.id}
@@ -513,9 +577,7 @@ export default function AccountsView() {
               style={{ display: "flex", width: "100%", justifyContent: "space-between", marginBottom: 6, textAlign: "left" }}
               onClick={() => setPayDueId(e.id)}
             >
-              <span>
-                {(e.party || "—") + (from ? " · from " + from : "")}
-              </span>
+              <span>{transportDueLabel(e)}</span>
               <b>₹{inr(+e.amount || 0)}</b>
             </button>
           );
@@ -534,6 +596,63 @@ export default function AccountsView() {
         <div className="rowbtns" style={{ marginTop: 10 }}>
           <button className="btn primary sm" type="button" onClick={() => submitPay(opts, maxBal)} disabled={!picked}>
             {picked ? "Pay ₹" + inr(+picked.amount) : "Pick a due"}
+          </button>
+          <button className="btn sm" type="button" onClick={cancelPay}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+  function renderDuePayForm(due: Expense) {
+    const srcs = listPaySources();
+    const amt = +due.amount || 0;
+    const picked = srcs.find((s) => samePaySrc(s, payHolder, payFor));
+    const short = !!(picked && amt > picked.balance + 0.5);
+    return (
+      <div className="acct-form acct-due-pay">
+        <small className="acct-hint">Pay from a UPI. Pocket drops. Daybook cash does not.</small>
+        {srcs.length === 0 ? (
+          <div className="acct-empty">Add a UPI holder first, then pay this due.</div>
+        ) : (
+          <div className="acct-pay-src">
+            {srcs.map((s) => {
+              const on = samePaySrc(s, payHolder, payFor);
+              const tight = amt > s.balance + 0.5;
+              return (
+                <button
+                  key={(s.holderId || "") + ":" + s.account}
+                  type="button"
+                  className={"acct-chip" + (on ? " on" : "")}
+                  onClick={() => {
+                    setPayHolder(s.holderId || null);
+                    setPayFor(s.account);
+                  }}
+                >
+                  {s.account}
+                  <span className="acct-chip-bal">{tight ? "need ₹" + inr(amt) : "₹" + inr(s.balance)}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {short && picked ? (
+          <small className="acct-warn">Need ₹{inr(amt)} — {picked.account} has ₹{inr(picked.balance)}.</small>
+        ) : null}
+        <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
+          <label className="modal-field" style={{ flex: "1 1 120px", minWidth: 0 }}>
+            <span>Pay date</span>
+            <input type="date" value={tDate} onChange={(e) => setTDate(e.target.value)} />
+          </label>
+        </div>
+        <div className="rowbtns" style={{ marginTop: 10 }}>
+          <button
+            className="btn primary sm"
+            type="button"
+            disabled={!picked || short}
+            onClick={() => picked && submitPay({ holderId: picked.holderId, account: picked.account }, picked.balance)}
+          >
+            Pay ₹{inr(amt)}
           </button>
           <button className="btn sm" type="button" onClick={cancelPay}>
             Cancel
@@ -892,14 +1011,30 @@ export default function AccountsView() {
     });
   }
 
+  function toggleToFold(id: string) {
+    if (!id) return;
+    setOpenTos((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
   // ── render an account's full bank-ledger table ──────────────────────────
   function renderAccountLedger(a: AcctBalance, parentOpening = 0) {
     const ledgerRows = buildAcctLedger(a, parentOpening);
     const due = ledgerRows.length > 0 ? ledgerRows[ledgerRows.length - 1].balance > 0.5 : false;
     const moveTargets = allNames.filter((n) => lc(n) !== lc(a.name));
+    const folds = settleFoldIndexes(ledgerRows);
+    const hidden = new Set<number>();
+    for (const f of folds) {
+      const id = ledgerRows[f].l.id || "";
+      if (id && openTos.has(id)) continue;
+      for (const i of settleFoldChildren(folds, f)) hidden.add(i);
+    }
+    const liveRows = ledgerRows.filter((r, i) => r.isClose || !hidden.has(i));
     return (
-      <Paged items={ledgerRows} resetKey={a.name + "\0" + parentOpening}>
-        {(view) => (
       <div className="bank-ledger acct-book">
         <div className="bank-hdr">
           <span>Date</span>
@@ -909,7 +1044,7 @@ export default function AccountsView() {
           <span className="bank-amt">Balance</span>
           <span className="acct-txn-more-slot" aria-hidden="true" />
         </div>
-        {view.map((row, i) => {
+        {liveRows.map((row, i) => {
           const isUpi = row.kind === "in" && !row.isOpen && !row.isClose;
           const isTxn = !row.isOpen && !row.isClose;
           const menuId = row.l.id || "";
@@ -918,20 +1053,45 @@ export default function AccountsView() {
           const canView = isUpi && !!(row.l.quoteNo || row.l.custId);
           const canEdit = isUpi && !!row.l.quoteNo;
           const meta = txnMeta(row);
+          const foldAt = ledgerRows.indexOf(row);
+          const isFold = folds.includes(foldAt);
+          const foldOpen = !!(menuId && openTos.has(menuId));
           const rowCls = [
             "bank-row",
             "acct-txn",
             row.isOpen ? "bank-open" : "",
             row.isClose ? "bank-total" : "",
             menuOpen || moving ? "on" : "",
+            isFold ? "acct-fold" : "",
+            isFold && foldOpen ? "on" : "",
           ]
             .filter(Boolean)
             .join(" ");
           return (
-            <div key={row.l.id || row.date + "-" + i} className={rowCls}>
+            <div
+              key={row.l.id || row.date + "-" + i}
+              className={rowCls}
+              role={isFold ? "button" : undefined}
+              tabIndex={isFold ? 0 : undefined}
+              title={isFold ? (foldOpen ? "Hide this To" : "Show this To") : undefined}
+              onClick={isFold ? () => toggleToFold(menuId) : undefined}
+              onKeyDown={
+                isFold
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleToFold(menuId);
+                      }
+                    }
+                  : undefined
+              }
+            >
               <span className="bank-date">{isTxn ? row.date : ""}</span>
               <span className="bank-parts">
-                <span className="acct-txn-who">{row.particulars}</span>
+                <span className="acct-txn-who">
+                  {isFold ? <span className="um-caret" aria-hidden="true">{foldOpen ? "▾" : "▸"}</span> : null}
+                  {row.particulars}
+                </span>
                 {meta ? <small>{meta}</small> : null}
               </span>
               <span className={"bank-amt" + (row.debit > 0 ? " dr" : "")}>{row.debit > 0 ? "₹" + inr(row.debit) : ""}</span>
@@ -950,7 +1110,8 @@ export default function AccountsView() {
                     aria-label="Transaction actions"
                     aria-haspopup="menu"
                     aria-expanded={menuOpen}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setRowMenu(menuOpen ? null : menuId);
                       if (moveFor && moveFor !== menuId) setMoveFor(null);
                     }}
@@ -958,7 +1119,7 @@ export default function AccountsView() {
                     ⋮
                   </button>
                   {menuOpen && (
-                    <div className="acct-row-menu" role="menu">
+                    <div className="acct-row-menu" role="menu" onClick={(e) => e.stopPropagation()}>
                       {canView && (
                         <button type="button" role="menuitem" onClick={() => { setRowMenu(null); viewLine(row); }}>
                           View
@@ -1027,7 +1188,7 @@ export default function AccountsView() {
                 <span className="acct-txn-more-slot" aria-hidden="true" />
               )}
               {moving && (
-                <div className="acct-move" data-acct-row-ui>
+                <div className="acct-move" data-acct-row-ui onClick={(e) => e.stopPropagation()}>
                   <span className="acct-move-lbl">Move to</span>
                   {moveTargets.length ? (
                     moveTargets.map((n) => (
@@ -1044,8 +1205,6 @@ export default function AccountsView() {
           );
         })}
       </div>
-        )}
-      </Paged>
     );
   }
 
@@ -1217,7 +1376,12 @@ export default function AccountsView() {
     <div className="ledger-page acct-page">
       <div className="cd-screen">
       <div className="sectitle">
-        Accounts <small>— holders, their UPI accounts &amp; hand-overs</small>
+        Accounts{" "}
+        <small>
+          {canPayTransport && acctTab === "transport"
+            ? "— lock the lorry, then Pay from a UPI"
+            : "— holders, their UPI accounts & hand-overs"}
+        </small>
       </div>
 
       {/* overall */}
@@ -1240,37 +1404,62 @@ export default function AccountsView() {
             <span className="sub">handed over</span>
           </div>
           {canPayTransport && (
-            <div className="acct-stat">
+            <button type="button" className="acct-stat acct-stat-btn" onClick={() => setAcctTab("transport")}>
               <span className="k">Transport</span>
-              <span className="v">₹ {inr(totalSpent)}</span>
-              <span className="sub">
-                {pendingDues.length
-                  ? pendingDues.length + " due · ₹" + inr(pendingDueTotal)
-                  : "paid from UPI"}
-              </span>
-            </div>
+              {acctTab === "transport" && pendingDues.length ? (
+                <>
+                  <span className="v due">₹ {inr(pendingDueTotal)}</span>
+                  <span className="sub">{pendingDues.length} due · paid ₹{inr(totalSpent)}</span>
+                </>
+              ) : (
+                <>
+                  <span className="v">₹ {inr(totalSpent)}</span>
+                  <span className="sub">
+                    {pendingDues.length
+                      ? pendingDues.length + " due · ₹" + inr(pendingDueTotal)
+                      : "paid from UPI"}
+                  </span>
+                </>
+              )}
+            </button>
           )}
         </div>
       </div>
 
       {canPayTransport && (
+        <div className="db-seg sm acct-tabs" role="tablist" aria-label="Accounts">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={acctTab === "holders"}
+            className={"seg-btn" + (acctTab === "holders" ? " on" : "")}
+            onClick={() => setAcctTab("holders")}
+          >
+            Holders
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={acctTab === "transport"}
+            className={"seg-btn" + (acctTab === "transport" ? " on" : "")}
+            onClick={() => setAcctTab("transport")}
+          >
+            Transport{pendingDues.length ? " · " + pendingDues.length : ""}
+          </button>
+        </div>
+      )}
+
+      {canPayTransport && acctTab === "transport" && (
         <>
-          <div className="acct-day-label">
-            <span>Transport due · {pendingDues.length}</span>
-            <button
-              className="btn sm"
-              type="button"
-              style={{ marginLeft: "auto" }}
-              onClick={() => setShowAddDue((v) => !v)}
+          {lockOpen || pendingDues.length === 0 ? (
+            <form
+              className="acct-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitDue();
+              }}
             >
-              {showAddDue ? "Done" : "+ Transport due"}
-            </button>
-          </div>
-          {showAddDue && (
-            <div className="acct-form">
-              <small style={{ display: "block", color: "var(--ink-faint)", marginBottom: 8 }}>
-                Lock the lorry bill now. Pay it later from a UPI account — nothing leaves CS Kumar until then.
-              </small>
+              <small className="acct-hint">Due is not in Books yet. Pay from a UPI on the row — then the pocket drops.</small>
               <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
                 <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
                   <span>Transporter</span>
@@ -1279,7 +1468,15 @@ export default function AccountsView() {
                     placeholder="e.g. Raju lorry"
                     value={dueParty}
                     onChange={(e) => setDueParty(e.target.value)}
-                    autoFocus
+                  />
+                </label>
+                <label className="modal-field" style={{ flex: "1 1 130px", minWidth: 0 }}>
+                  <span>Vehicle number</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. KA01AB1234"
+                    value={dueVehicle}
+                    onChange={(e) => setDueVehicle(e.target.value)}
                   />
                 </label>
                 <label className="modal-field" style={{ flex: "1 1 110px", minWidth: 0 }}>
@@ -1287,11 +1484,11 @@ export default function AccountsView() {
                   <input type="number" inputMode="decimal" placeholder="0" value={dueAmt} onChange={(e) => setDueAmt(e.target.value)} />
                 </label>
                 <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
-                  <span>Purchased from</span>
+                  <span>From</span>
                   <input
                     type="text"
                     list="acct-bought-from"
-                    placeholder="e.g. Dhannaram"
+                    placeholder="e.g. Chennai"
                     value={dueFrom}
                     onChange={(e) => setDueFrom(e.target.value)}
                   />
@@ -1302,42 +1499,87 @@ export default function AccountsView() {
                   </datalist>
                 </label>
                 <label className="modal-field" style={{ flex: "1 1 120px", minWidth: 0 }}>
-                  <span>Date (optional)</span>
+                  <span>Date</span>
                   <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                 </label>
               </div>
               <div className="rowbtns" style={{ marginTop: 10 }}>
-                <button className="btn primary sm" type="button" onClick={submitDue}>
+                <button className="btn primary sm" type="submit">
                   Lock due
                 </button>
-                <button className="btn sm" type="button" onClick={() => setShowAddDue(false)}>
-                  Cancel
-                </button>
+                {pendingDues.length > 0 && (
+                  <button className="btn sm" type="button" onClick={() => setLockOpen(false)}>
+                    Done
+                  </button>
+                )}
               </div>
+            </form>
+          ) : (
+            <div className="acct-day-label acct-lock-toggle">
+              <button className="btn sm" type="button" onClick={() => setLockOpen(true)}>
+                + Lock a bill
+              </button>
             </div>
           )}
-          {pendingDues.length > 0 && (
-            <div className="acct-form" style={{ paddingTop: 8 }}>
-              {pendingDues.map((e) => {
-                const from = (e.boughtFrom || "").trim();
-                return (
-                  <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <b>{e.party || "—"}</b>
-                      {" · ₹" + inr(+e.amount || 0)}
-                      {from ? " · from " + from : ""}
-                    </span>
+
+          <div className="acct-day-label">
+            <span>Due · {pendingDues.length}</span>
+            {pendingDueTotal > 0.5 && <span className="acct-count">₹{inr(pendingDueTotal)}</span>}
+          </div>
+          {pendingDues.length === 0 ? (
+            <div className="acct-empty">Nothing due. Lock a bill, then Pay on the row.</div>
+          ) : (
+            pendingDues.map((e) => (
+              <div key={e.id} className={"acct-due-block" + (payDueId === e.id ? " on" : "")}>
+                <div className="acct-trow">
+                  <span className="who">{transportDueLabel(e)}</span>
+                  <span className="meta">
+                    ₹{inr(+e.amount || 0)}
+                    {e.date ? " · " + e.date : ""}
+                  </span>
+                  <span className="acct-tag pending">Due</span>
+                  <span className="acts">
+                    <button className="btn primary sm" type="button" onClick={() => startPayDue(e.id)}>
+                      {payDueId === e.id ? "Close" : "Pay"}
+                    </button>
                     <button className="btn sm danger" type="button" onClick={() => delTransport(e.id, true)}>
                       Delete
                     </button>
-                  </div>
-                );
-              })}
-            </div>
+                  </span>
+                </div>
+                {payDueId === e.id ? renderDuePayForm(e) : null}
+              </div>
+            ))
+          )}
+
+          <div className="acct-day-label" style={{ marginTop: 18 }}>
+            <span>Paid · {paidTransports.length}</span>
+          </div>
+          {paidTransports.length === 0 ? (
+            <div className="acct-empty">Pays show here and in Books.</div>
+          ) : (
+            paidTransports.map((e) => (
+              <div className="acct-trow" key={e.id}>
+                <span className="who">{transportDueLabel(e)}</span>
+                <span className="meta">
+                  ₹{inr(+e.amount || 0)}
+                  {(e.account || "").trim() ? " · " + e.account : ""}
+                  {e.date ? " · " + e.date : ""}
+                </span>
+                <span className="acct-tag ok">Paid</span>
+                <span className="acts">
+                  <button className="btn sm" type="button" onClick={() => delTransport(e.id, false)}>
+                    Undo pay
+                  </button>
+                </span>
+              </div>
+            ))
           )}
         </>
       )}
 
+      {(!canPayTransport || acctTab === "holders") && (
+      <>
       <div className="acct-day-label">
         <span>Account holders · {holders.length}</span>
         <button className="btn sm" type="button" style={{ marginLeft: "auto" }} onClick={() => setShowAddHolder((v) => !v)}>
@@ -1646,6 +1888,8 @@ export default function AccountsView() {
             No account holders yet. Add one (e.g. Tabrez), then add their UPI accounts inside.
           </div>
         </div>
+      )}
+      </>
       )}
       </div>
 

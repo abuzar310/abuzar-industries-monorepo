@@ -2,7 +2,13 @@
 import { allRec, delRec, getRec, metaGet, metaSet, put } from "./data";
 import { nowIso, todayStr, uid } from "./calc";
 import { quoteBill, quotePaid } from "./payments";
-import { isAccountTransportPay, isPendingTransport, isTransportPocketName, TRANSPORT_LABEL } from "./pocket-spend";
+import {
+  isAccountTransportPay,
+  isPendingTransport,
+  isTransportPocketName,
+  TRANSPORT_LABEL,
+  transportPlaceOf,
+} from "./pocket-spend";
 import type { Customer, Doc, Expense } from "./types";
 
 const isUpi = (e: Expense) => e.type === "sale" && e.mode === "upi";
@@ -619,7 +625,14 @@ export async function deleteCollection(id: string): Promise<void> {
   await delRec("collections", id);
 }
 
-export { isAccountTransportPay, isPendingTransport, isTransportPocketName, TRANSPORT_LABEL } from "./pocket-spend";
+export {
+  isAccountTransportPay,
+  isPendingTransport,
+  isTransportPocketName,
+  TRANSPORT_LABEL,
+  transportDueLabel,
+  transportPlaceOf,
+} from "./pocket-spend";
 
 /** Pay transport is the main button on this pocket (name heuristic, unless kind overrides). */
 export function isTransportPocket(
@@ -632,8 +645,9 @@ export function isTransportPocket(
 }
 
 export function stmtFromTransport(e: Expense): AcctStmtLine {
-  const from = (e.boughtFrom || "").trim();
-  const note = [from ? "from " + from : "", (e.note || "").trim()].filter(Boolean).join(" · ");
+  const veh = (e.vehicleNo || "").trim();
+  const from = transportPlaceOf(e);
+  const note = [veh, from ? "from " + from : "", (e.note || "").trim()].filter(Boolean).join(" · ");
   return {
     id: e.id,
     kind: "transport",
@@ -651,6 +665,8 @@ export async function addTransportDue(fields: {
   party: string;
   amount: number;
   boughtFrom?: string;
+  placeOfSupply?: string;
+  vehicleNo?: string;
   date?: string;
   by: string;
   note?: string;
@@ -659,6 +675,8 @@ export async function addTransportDue(fields: {
   const amount = r2(Math.max(0, +fields.amount || 0));
   if (!party || amount <= 0) return null;
   const now = nowIso();
+  const place = (fields.placeOfSupply || fields.boughtFrom || "").trim();
+  const vehicle = (fields.vehicleNo || "").trim();
   const e: Expense = {
     id: "EXP-" + uid(),
     date: fields.date || todayStr(),
@@ -668,7 +686,9 @@ export async function addTransportDue(fields: {
     amount,
     note: (fields.note || "").trim(),
     party,
-    boughtFrom: (fields.boughtFrom || "").trim() || undefined,
+    boughtFrom: place || undefined,
+    placeOfSupply: place || undefined,
+    vehicleNo: vehicle || undefined,
     pocketSpend: "transport",
     enteredBy: fields.by,
     createdAt: now,
@@ -708,6 +728,8 @@ export async function addPayTransport(fields: {
   by: string;
   note?: string;
   boughtFrom?: string;
+  placeOfSupply?: string;
+  vehicleNo?: string;
 }): Promise<Expense | null> {
   const due = await addTransportDue(fields);
   if (!due) return null;
@@ -852,6 +874,29 @@ export function passbookRunning(
     after.push({ id: l.id, balance: bal });
   }
   return { closing: r2(bal), after };
+}
+
+/** Every To/debit line is a fold. Click it to see only the stretch since the previous To. */
+export function settleFoldIndexes(
+  rows: { debit?: number; kind?: string; isOpen?: boolean; isClose?: boolean }[],
+): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (r.isOpen || r.isClose) continue;
+    if (+(r.debit || 0) > 0 || r.kind === "collect" || r.kind === "transport") out.push(i);
+  }
+  return out;
+}
+
+/** Rows that belong to one To fold: after the previous settle, before this To. */
+export function settleFoldChildren(folds: number[], foldAt: number): number[] {
+  const k = folds.indexOf(foldAt);
+  if (k < 0) return [];
+  const start = (k > 0 ? folds[k - 1] : -1) + 1;
+  const kids: number[] = [];
+  for (let i = start; i < foldAt; i++) kids.push(i);
+  return kids;
 }
 
 /** Per-UPI-account balances + a merged (credits + collections) statement, newest first. */

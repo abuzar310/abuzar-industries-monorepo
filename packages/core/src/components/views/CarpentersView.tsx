@@ -19,7 +19,6 @@ import { bumpData, setSearch, toast } from "@/store/app-store";
 import CarpenterHistory, { CarpenterPendingList } from "./CarpenterHistory";
 import PartySearchBar from "../PartySearchBar";
 import PhotoField from "../PhotoField";
-import Pager, { PAGE, usePager } from "../Pager";
 import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 
 type PageTab = "who" | "commission";
@@ -163,10 +162,6 @@ export default function CarpentersView() {
     [all, query],
   );
 
-  const whoPg = usePager(rows, PAGE, query + "\0" + sortBy + "\0" + tab);
-  const pendPg = usePager(pending, PAGE, query + "\0" + tab);
-  const histPg = usePager(history, PAGE, query + "\0" + tab);
-
   return (
     <div>
       <div className="sectitle">
@@ -221,7 +216,7 @@ export default function CarpentersView() {
         <>
         <div className="custgrid">
           {rows.length ? (
-            whoPg.view.map((r) => (
+            rows.map((r) => (
               <div
                 className="custcard"
                 key={r.record?.id || r.key}
@@ -306,7 +301,6 @@ export default function CarpentersView() {
             </div>
           )}
         </div>
-        <Pager page={whoPg.page} pages={whoPg.pages} total={whoPg.total} onPage={whoPg.setPage} />
         </>
       ) : (
         <>
@@ -338,8 +332,7 @@ export default function CarpentersView() {
             Pending
             <span>· locked, not yet given</span>
           </div>
-          <CarpenterPendingList lines={pendPg.view} showCarpenter />
-          <Pager page={pendPg.page} pages={pendPg.pages} total={pendPg.total} onPage={pendPg.setPage} />
+          <CarpenterPendingList lines={pending} showCarpenter />
 
           <div className="dash-section" style={{ marginTop: 22 }}>
             Who
@@ -359,7 +352,7 @@ export default function CarpentersView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {whoPg.view.map((r) => (
+                  {rows.map((r) => (
                     <tr
                       key={r.record?.id || r.key}
                       onClick={() => router.push(carpenterHref(r.key, r.record?.id))}
@@ -390,14 +383,11 @@ export default function CarpentersView() {
               </div>
             </div>
           )}
-          <Pager page={whoPg.page} pages={whoPg.pages} total={whoPg.total} onPage={whoPg.setPage} />
-
           <div className="dash-section" style={{ marginTop: 22 }}>
             Transaction history
             <span>· commission we paid</span>
           </div>
-          <CarpenterHistory lines={histPg.view} showCarpenter />
-          <Pager page={histPg.page} pages={histPg.pages} total={histPg.total} onPage={histPg.setPage} />
+          <CarpenterHistory lines={history} showCarpenter />
         </>
       )}
     </div>

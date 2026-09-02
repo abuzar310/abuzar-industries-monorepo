@@ -2,7 +2,7 @@ import { allRec, delRec, put } from "./data";
 import { nowIso, splitHandover, todayStr, uid } from "./calc";
 import type { DaybookSession, EntryType, Expense, PayMode } from "./types";
 import { liveSpendCategories, SPEND_CATEGORIES, type SpendCategory } from "./book-catalog";
-import { isAccountTransportPay, isPendingTransport } from "./pocket-spend";
+import { isAccountTransportPay, isPendingTransport, transportPlaceOf } from "./pocket-spend";
 
 export type { SpendCategory };
 export { SPEND_CATEGORIES, liveSpendCategories };
@@ -81,8 +81,10 @@ export function spendDetailOf(e: Expense): string {
   const bits: string[] = [];
   const party = (e.party || "").trim();
   if (party) bits.push(party);
-  const bought = (e.boughtFrom || "").trim();
-  if (bought) bits.push("from " + bought);
+  const veh = (e.vehicleNo || "").trim();
+  if (veh) bits.push(veh);
+  const place = transportPlaceOf(e);
+  if (place) bits.push("from " + place);
   const carpenter = (e.carpenter || "").trim();
   if (carpenter) bits.push("Carpenter " + carpenter);
   const qNo = (e.quoteNo || "").trim();

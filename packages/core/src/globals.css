@@ -3402,6 +3402,27 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .acct-page .acct-overall-h{margin-bottom:10px}
 .acct-page .acct-overall-grid{gap:28px}
 .acct-page .acct-stat{background:transparent; border-radius:0; padding:0}
+.acct-page .acct-stat-btn{
+  appearance:none; border:0; background:transparent; padding:0; margin:0;
+  text-align:left; cursor:pointer; font:inherit; color:inherit;
+}
+.acct-page .acct-stat-btn:focus-visible{outline:2px solid var(--ochre); outline-offset:4px}
+.acct-page .acct-tabs{margin:14px 0 8px}
+.acct-page .acct-trow{
+  display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px;
+  padding:12px 0; border-bottom:1px solid var(--line);
+}
+.acct-page .acct-trow .who{flex:1 1 180px; min-width:0; font-weight:600}
+.acct-page .acct-trow .meta{font-family:var(--mono); font-size:12px; color:var(--ink-soft)}
+.acct-page .acct-trow .acts{display:flex; flex-wrap:wrap; gap:6px}
+.acct-page .acct-due-block.on .acct-trow{border-bottom-color:transparent}
+.acct-page .acct-due-pay{margin:0 0 8px}
+.acct-page .acct-hint{display:block; color:var(--ink-soft); margin-bottom:8px}
+.acct-page .acct-warn{display:block; color:var(--danger); margin-bottom:8px}
+.acct-page .acct-pay-src{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 8px}
+.acct-page .acct-chip-bal{margin-left:8px; font-family:var(--mono); font-size:11px; opacity:.88}
+.acct-page .acct-lock-toggle{margin:4px 0 8px}
+.acct-page .acct-lock-toggle .btn{margin-left:0}
 .acct-page .acct-stat .v{font-size:22px; letter-spacing:-.02em}
 
 .acct-page .acct-holder{
@@ -3511,6 +3532,9 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   background:none; padding:0; margin-left:6px; border-radius:0;
   font-size:10px; font-weight:600; letter-spacing:.04em; vertical-align:baseline;
 }
+.acct-page .acct-book .bank-row.acct-fold{cursor:pointer}
+.acct-page .acct-book .bank-row.acct-fold:hover{background:rgba(36,27,18,.04)}
+.acct-page .acct-book .bank-row.acct-fold .um-caret{margin-right:6px; color:var(--ink-faint)}
 .acct-page .acct-txn-more{position:relative; display:flex; justify-content:flex-end; align-items:flex-start}
 .acct-page .acct-more-btn{
   appearance:none; -webkit-appearance:none; border:0; background:transparent;
@@ -3542,6 +3566,8 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .acct-page .acct-move .acct-chip{font-size:12px; padding:5px 10px}
 
 @media(max-width:640px){
+  .acct-page .acct-trow .acts{flex:1 1 100%}
+  .acct-page .acct-trow .acts .btn{flex:1; justify-content:center}
   .acct-page .acct-overall-grid{grid-template-columns:1fr 1fr; gap:14px 18px}
   .acct-page .acct-sub-fig{font-size:18px}
   .acct-page .acct-book .bank-hdr{display:none}
