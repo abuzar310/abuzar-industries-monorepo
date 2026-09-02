@@ -1,7 +1,7 @@
 import { activeBrand } from "./brand";
 import { cftOf, computeDoc, inr, quoteBill } from "./calc";
 import { isCloaked } from "./cloak";
-import { generatePdfFile } from "./pdf";
+import { generatePdfFile, type PdfOpts } from "./pdf";
 import type { Doc } from "./types";
 
 export function phoneDigits(phone: string): string {
@@ -122,32 +122,27 @@ export function customerFollowupMessage(name: string): string {
  *  - DESKTOP → save the PDF (a real download) and open the chat with the message,
  *    so the file is ready to drop in ("direct").
  */
-export async function sendDocOnWhatsApp(
-  sheet: HTMLElement,
-  doc: Doc,
-): Promise<"direct" | "shared" | "cancelled" | "fallback"> {
-  const text = quoteMessage(doc);
+export async function sendPdfOnWhatsApp(opts: {
+  sheet: HTMLElement;
+  fileBase: string;
+  phone: string;
+  text: string;
+  title?: string;
+  pdfOpts?: PdfOpts;
+}): Promise<"direct" | "shared" | "cancelled" | "fallback"> {
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
   const mobile = !!nav && /Android|iPhone|iPad|iPod/i.test(nav.userAgent);
-
-  const file = await generatePdfFile(sheet, doc.number || doc.id);
+  const file = await generatePdfFile(opts.sheet, opts.fileBase, opts.pdfOpts);
 
   if (mobile && nav?.canShare?.({ files: [file] })) {
     try {
-      await nav.share({
-        files: [file],
-        title: activeBrand().name + " " + (doc.kind === "invoice" ? "Invoice" : "Quotation") + " " + doc.number,
-        text,
-      });
+      await nav.share({ files: [file], title: opts.title || file.name, text: opts.text });
       return "shared";
     } catch (e) {
-      // user closed the share sheet — do nothing (no duplicate sends)
       if ((e as Error)?.name === "AbortError") return "cancelled";
-      // share blocked (e.g. the tap "expired" while the PDF rendered) — fall through
     }
   }
 
-  // save the PDF (lands in Downloads), then open the chat with the message prefilled
   const url = URL.createObjectURL(file);
   const a = document.createElement("a");
   a.href = url;
@@ -156,6 +151,19 @@ export async function sendDocOnWhatsApp(
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
-  window.open(waLink(doc.phone, text), "_blank");
+  window.open(waLink(opts.phone, opts.text), "_blank");
   return mobile ? "fallback" : "direct";
+}
+
+export async function sendDocOnWhatsApp(
+  sheet: HTMLElement,
+  doc: Doc,
+): Promise<"direct" | "shared" | "cancelled" | "fallback"> {
+  return sendPdfOnWhatsApp({
+    sheet,
+    fileBase: doc.number || doc.id,
+    phone: doc.phone,
+    text: quoteMessage(doc),
+    title: activeBrand().name + " " + (doc.kind === "invoice" ? "Invoice" : "Quotation") + " " + doc.number,
+  });
 }

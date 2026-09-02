@@ -1,6 +1,6 @@
 // Self-check for the money / CFT / words logic. Run: node src/lib/calc.check.ts
 import assert from "node:assert/strict";
-import { cftOf, cbmToCft, computeDoc, docVolumeCft, quoteBill, rupeesInWords, inr, splitHandover } from "./calc.ts";
+import { cftOf, cbmToCft, computeDoc, docVolumeCft, quoteBill, quoteOwnBill, rupeesInWords, inr, splitHandover } from "./calc.ts";
 import type { Doc } from "./types.ts";
 
 // CFT = (L × W × T × Pcs) ÷ 144
@@ -63,6 +63,11 @@ assert.equal(quoteBill(d), 1416);
 assert.equal(quoteBill(dp), 1616);
 assert.equal(quoteBill({ ...d, finalPrice: 1400 } as unknown as Doc), 1400);
 assert.equal(quoteBill({ ...d, finalPrice: 1400, permitFee: 200 } as unknown as Doc), 1600);
+// old balance sits on the paper total; own bill stays wood+GST (+ permit), no double-count
+assert.equal(quoteBill({ ...d, oldBalance: 10000 } as unknown as Doc), 11416);
+assert.equal(quoteOwnBill({ ...d, oldBalance: 10000 } as unknown as Doc), 1416);
+assert.equal(quoteBill({ ...d, finalPrice: 1400, permitFee: 200, oldBalance: 10000 } as unknown as Doc), 11600);
+assert.equal(quoteOwnBill({ ...d, finalPrice: 1400, permitFee: 200, oldBalance: 10000 } as unknown as Doc), 1600);
 
 // session handover split: 5500 in hand, give 5000 → 500 carries forward
 assert.deepEqual(splitHandover(0, 5500, 5000), { inHand: 5500, given: 5000, carried: 500 });

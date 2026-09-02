@@ -1,6 +1,6 @@
 import { allRec, getRec, put } from "./data";
 import { computeDoc, nowIso, uid } from "./calc";
-import { quoteBill, quoteReceived } from "./payments";
+import { quoteBill, quoteOwnBill, quoteReceived } from "./payments";
 import type { Customer, Doc, Expense } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -79,7 +79,7 @@ export function customerFinancials(
         (+(d.payCommission || 0)) > 0 ||
         (+(d.amountPaid || 0)) > 0,
     ).forEach((d) => {
-      billedQ += quoteBill(d);
+      billedQ += quoteOwnBill(d);
       paidQ += quoteReceived(d, expenses);
     });
     const billed = r2(op + billedQ + charges);

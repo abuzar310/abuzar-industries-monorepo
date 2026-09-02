@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, fetchAllTransactions, type AllTransaction } from "@/lib/data";
 import { computeDoc, inr, qty } from "@/lib/calc";
-import { partyLedger, quoteBill, quoteLedger } from "@/lib/payments";
+import { partyLedger, quoteLedger, quoteOwnBill } from "@/lib/payments";
 import { computeTrading, docTrade, getStockConfig, type StockConfig } from "@/lib/trading";
 import { getFeatures } from "@/lib/features";
 import { useApp } from "@/store/useApp";
@@ -141,7 +141,7 @@ export default function DashboardView() {
         (+(qd.payCommission || 0)) > 0 ||
         (+(qd.amountPaid || 0)) > 0;
       if (!billable) return;
-      periodRev += quoteBill(qd);
+      periodRev += quoteOwnBill(qd);
       periodCft += computeDoc(qd).secCft.reduce((s, c) => s + c, 0);
       periodSaleCount++;
     });
@@ -217,7 +217,7 @@ export default function DashboardView() {
           (+(qd.payUpi || 0)) > 0 ||
           (+(qd.payCommission || 0)) > 0 ||
           (+(qd.amountPaid || 0)) > 0;
-        return billable ? s + quoteBill(qd) : s;
+        return billable ? s + quoteOwnBill(qd) : s;
       }, 0)
     : 0;
   const oldDues = ledger ? Math.round((ledger.totalBilled - allTimeQuotesBilled) * 100) / 100 : 0;

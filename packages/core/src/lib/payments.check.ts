@@ -1,7 +1,7 @@
 // Self-check for the party-balance rollup (pure, no DB).
 // Run: npx tsx packages/core/src/lib/payments.check.ts
 import type { Doc, Expense } from "./types";
-import { floorQuotePaidFromExpenses, partyLedger, quoteLedger } from "./payments";
+import { floorQuotePaidFromExpenses, partyLedger, priorDueOf, quoteLedger } from "./payments";
 
 let n = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -211,6 +211,25 @@ export function demoPaidFloor() {
   console.log(`payments.check paid-floor OK (${n} assertions)`);
 }
 
+/** Carrying old dues onto a new quote must not inflate party billed (those rupees are already on the old quote). */
+export function demoOldBalance() {
+  const oldQ = Q("q1", "Annu", "SF-1", 10000, 0, 0, 0);
+  const next = Q("q2", "Annu", "SF-2", 5000, 0, 0, 0);
+  (next as { oldBalance?: number }).oldBalance = 10000;
+  const p = partyLedger([oldQ, next], []).parties.find((x) => x.name === "Annu")!;
+  ok(p.billed === 15000, "old balance on the new quote is not billed twice");
+  ok(p.balance === 15000, "they still owe old 10k + new 5k");
+  ok(priorDueOf([oldQ, next], [], [], next) === 10000, "prior due on the new quote is the old 10k");
+  ok(priorDueOf([oldQ, next], [], [], oldQ) === 5000, "prior due on the old quote is the new 5k");
+  const paidNext = Q("q2p", "Annu", "SF-2", 5000, 15000, 15000, 0);
+  (paidNext as { oldBalance?: number }).oldBalance = 10000;
+  const pay = E("e1", "q2p", 15000, "cash");
+  const after = partyLedger([oldQ, paidNext], [pay]).parties.find((x) => x.name === "Annu")!;
+  ok(after.billed === 15000, "billed stays own sales after they pay the paper");
+  ok(after.paid === 15000 && after.balance === 0, "paying the paper (5k + 10k old) clears the party");
+  console.log(`payments.check old-balance OK (${n} assertions)`);
+}
+
 demo();
 demoQuotes();
 demoReconcile();
@@ -221,3 +240,4 @@ demoPaidDraft();
 demoCommission();
 demoExpenseWithoutQuoteTotals();
 demoPaidFloor();
+demoOldBalance();

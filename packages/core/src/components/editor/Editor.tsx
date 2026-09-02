@@ -15,7 +15,7 @@ import { findLiveByNumber } from "@/lib/durability";
 import { trashDoc } from "@/lib/trash";
 import { getFeatures } from "@/lib/features";
 import { allExpenses, deleteExpensesBySource, upiAccounts } from "@/lib/expenses";
-import { floorQuotePaidFromExpenses, quoteBill, quotePaid, statementsForQuote } from "@/lib/payments";
+import { floorQuotePaidFromExpenses, partyLedger, quoteBill, quotePaid, statementsForQuote } from "@/lib/payments";
 import { lockAmount } from "@/lib/carpenter-financials";
 import { postInvoice } from "@/lib/ledger-autopost";
 import { balanceReminderMessage, reminderMessage, sendDocOnWhatsApp, waLink } from "@/lib/whatsapp";
@@ -157,7 +157,7 @@ export default function Editor({
   const totalPcs = isRent
     ? 0
     : doc.sections.reduce((s, sec) => s + sec.rows.reduce((p, r) => p + (Math.round(+r.pcs) || 0), 0), 0);
-  const { brandMode, user, cloakMoney } = useApp();
+  const { brandMode, user, cloakMoney, dataVersion } = useApp();
   const brand = brandFor(brandMode);
   const invBank = brand.banks?.[doc.bankIdx ?? 0] || brand.bank; // chosen bank for this invoice
 
@@ -179,7 +179,7 @@ export default function Editor({
     allRec<Customer>("customers").then(setCustomers);
     allRec<Doc>("quotations").then(setQuoteDocs);
     allRec<Carpenter>("carpenters").then(setCarpenterDir);
-  }, []);
+  }, [dataVersion]);
 
   const carpenters = useMemo(
     () => knownCarpenters(customers, quoteDocs, carpenterDir),
@@ -350,6 +350,7 @@ export default function Editor({
     update((d) => {
       d.customerName = v;
       d.customerId = "";
+      d.oldBalance = undefined;
     });
   const pickCustomer = (c: Customer) =>
     update((d) => {
@@ -361,6 +362,7 @@ export default function Editor({
       d.address = c.address || "";
       d.custGstin = c.gstin || "";
       d.custPincode = c.pincode || extractPincode(c.address) || d.custPincode || "";
+      d.oldBalance = undefined;
     });
   // carpenter: typing an exact known name (or picking from list) fills carpenter phone when available
   const onCarpenterType = (v: string) =>
@@ -1037,6 +1039,37 @@ export default function Editor({
         ) / 100,
       )
     : 0;
+  const priorById = useMemo(() => {
+    const m = new Map<string, number>();
+    if (isInv) return m;
+    const others = quoteDocs.filter((d) => d.id !== doc.id);
+    const rest = expenses.filter((e) => e.sourceId !== doc.id);
+    for (const p of partyLedger(others, rest, customers).parties) {
+      if (p.balance <= 0.5) continue;
+      if (p.custId) m.set(p.custId, p.balance);
+      const n = (p.name || "").trim().toLowerCase();
+      if (n) m.set("n:" + n, p.balance);
+    }
+    return m;
+  }, [isInv, quoteDocs, expenses, customers, doc.id]);
+  const priorDue =
+    priorById.get(doc.customerId) || priorById.get("n:" + (doc.customerName || "").trim().toLowerCase()) || 0;
+  const dueOf = (c: Customer) =>
+    priorById.get(c.id) || priorById.get("n:" + (c.name || "").trim().toLowerCase()) || 0;
+  const totalsExtra = !isInv
+    ? {
+        priorDue,
+        onPermitFee: (v: string) =>
+          update((d) => {
+            d.permitFee = v.trim() === "" ? undefined : Math.max(0, +v || 0);
+          }),
+        onPermitLabel: (v: string) => update((d) => (d.permitLabel = v)),
+        onOldBalance: (n: number) =>
+          update((d) => {
+            d.oldBalance = n > 0.005 ? Math.round(n * 100) / 100 : undefined;
+          }),
+      }
+    : {};
   const billNode = (
     <Totals
       doc={doc}
@@ -1050,6 +1083,7 @@ export default function Editor({
       advanceAmt={advanceAmt}
       onGst={(v) => setField("gst", v)}
       onGstMode={(m) => setField("gstMode", m)}
+      {...totalsExtra}
     />
   );
   const quotePartyFields = feat.simpleQuote && !isInv && (
@@ -1094,7 +1128,7 @@ export default function Editor({
         <div className="cust-block c4">
           <div className="f">
             <label>Customer Name</label>
-            <CustomerPicker value={doc.customerName} customers={customers} onType={onCustomerType} onPick={pickCustomer} />
+            <CustomerPicker value={doc.customerName} customers={customers} dueOf={dueOf} onType={onCustomerType} onPick={pickCustomer} />
           </div>
           <div className="f">
             <label>Phone</label>
@@ -1578,6 +1612,7 @@ export default function Editor({
             advanceAmt={advanceAmt}
             onGst={(v) => setField("gst", v)}
             onGstMode={(m) => setField("gstMode", m)}
+            {...totalsExtra}
           />
         )}
 
