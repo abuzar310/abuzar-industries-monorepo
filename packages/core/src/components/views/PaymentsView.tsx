@@ -1,15 +1,17 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
 import { inr, qty } from "@/lib/calc";
+import { brandFor } from "@/lib/brand";
+import { generatePdf } from "@/lib/pdf";
 import { partyLedger, type Party, type PartyStatement } from "@/lib/payments";
-import { unwindReceiptPieces } from "@/lib/receipts";
 import { useFocusFlash } from "@/lib/use-focus-flash";
+import { balanceReminderMessage, sendPdfOnWhatsApp } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
-import { bumpData, toast } from "@/store/app-store";
-import { confirmDialog } from "@/store/dialog-store";
-import Pager, { PAGE, Paged, usePager } from "@/components/Pager";
+import { toast } from "@/store/app-store";
+import PdfButtons from "@/components/PdfButtons";
+import PassbookPrint, { type PassbookLine } from "@/components/PassbookPrint";
 import type { Customer, Doc, Expense } from "@/lib/types";
 
 // dd-mm-yy → yyyy-mm-dd for chronological sorting
@@ -133,14 +135,41 @@ function buildBankLedger(p: Party, expenses: Expense[], customers: Customer[]): 
   return result;
 }
 
+const STMT_PDF = {
+  pageBreak: ".bank-row,.acct-print-sum,.acct-print-hdr",
+  width: 700,
+  marginMm: 8,
+} as const;
+
+function ledgerToPassbook(rows: LedgerRow[]): PassbookLine[] {
+  return rows.map((r, i) => ({
+    key: String(i) + r.particulars,
+    date: r.date,
+    who: r.particulars,
+    detail: r.detail,
+    debit: r.debit,
+    credit: r.credit,
+    balance: r.balance,
+    open: r.isOpening,
+    close: r.isClosing,
+  }));
+}
+
+type PdfAct = "preview" | "download" | "forward";
+
 export default function PaymentsView() {
-  const { ready, dataVersion, cloakMoney } = useApp();
+  const { ready, dataVersion, cloakMoney, brandMode } = useApp();
   const router = useRouter();
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [pdfParty, setPdfParty] = useState<Party | null>(null);
+  const [pdfTick, setPdfTick] = useState(0);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const pdfAct = useRef<PdfAct | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+  const brand = brandFor(brandMode);
 
   const load = useCallback(() => {
     Promise.all([allRec<Doc>("quotations"), allRec<Expense>("expenses"), allRec<Customer>("customers")]).then(([qs, es, cs]) => {
@@ -150,7 +179,7 @@ export default function PaymentsView() {
     });
   }, []);
   useEffect(() => {
-    if (ready) load();
+    load();
   }, [ready, dataVersion, load]);
 
   const flash = useFocusFlash();
@@ -165,11 +194,71 @@ export default function PaymentsView() {
   const shown = parties
     .filter((p) => p.balance > 0.5)
     .filter((p) => (term ? p.name.toLowerCase().includes(term) || p.phone.includes(term) : true));
-  const balPg = usePager(shown, PAGE, term);
 
   const balClass = (b: number) => (cloakMoney || b <= 0.5 ? "ok" : b < -0.5 ? "adv" : "due");
   const balText = (b: number) =>
     cloakMoney || b <= 0.5 ? "Settled" : b < -0.5 ? "₹" + inr(-b) : "₹" + inr(b);
+
+  const printRows = useMemo(
+    () => (pdfParty ? ledgerToPassbook(buildBankLedger(pdfParty, expenses, customers)) : []),
+    [pdfParty, expenses, customers],
+  );
+
+  function requestPdf(p: Party, act: PdfAct) {
+    if (act === "forward" && !(p.phone || "").trim()) {
+      toast("No phone on this card — add it on the customer first");
+      return;
+    }
+    pdfAct.current = act;
+    setPdfBusy(true);
+    setPdfParty(p);
+    setPdfTick((n) => n + 1);
+  }
+
+  useEffect(() => {
+    if (!pdfParty || !pdfAct.current) return;
+    const act = pdfAct.current;
+    pdfAct.current = null;
+    const el = printRef.current;
+    const who = pdfParty;
+    if (!el) {
+      setPdfBusy(false);
+      return;
+    }
+    const fileBase = (who.name || "customer").replace(/\s+/g, "-").toLowerCase() + "-statement";
+    const title = (brand.name || "Statement") + " — " + (who.name || "customer");
+    void (async () => {
+      try {
+        if (act === "forward") {
+          toast("Preparing PDF…");
+          const how = await sendPdfOnWhatsApp({
+            sheet: el,
+            fileBase,
+            phone: who.phone,
+            text: balanceReminderMessage({
+              name: who.name,
+              total: who.billed,
+              received: who.paid,
+              balance: who.balance,
+            }),
+            title,
+            pdfOpts: { ...STMT_PDF, title },
+          });
+          if (how === "shared") toast("Forwarded — pick their WhatsApp chat");
+          else if (how === "direct") toast("PDF downloaded — drop it in their WhatsApp chat");
+          else if (how === "fallback") toast("PDF saved — attach it in the chat that opened");
+        } else {
+          if (act === "download") toast("Preparing PDF…");
+          await generatePdf(el, fileBase, { ...STMT_PDF, title, preview: act === "preview" });
+          if (act === "download") toast("Statement PDF downloaded \u2713");
+        }
+      } catch {
+        toast("Could not create the PDF");
+      } finally {
+        setPdfBusy(false);
+      }
+    })();
+  }, [pdfParty, pdfTick, brand.name]);
 
   return (
     <div className="ledger-page">
@@ -228,23 +317,37 @@ export default function PaymentsView() {
           </div>
         </div>
       ) : (
-        <>
-        {balPg.view.map((p) => (
-          <PartyCard
-            key={p.custId || p.name}
-            p={p}
-            open={open}
-            setOpen={setOpen}
-            router={router}
-            balClass={balClass}
-            balText={balText}
-            expenses={expenses}
-            customers={customers}
-            reload={load}
-          />
-        ))}
-        <Pager page={balPg.page} pages={balPg.pages} total={balPg.total} onPage={balPg.setPage} />
-        </>
+        <div className="custgrid">
+          {shown.map((p) => (
+            <PartyCard
+              key={p.custId || p.name}
+              p={p}
+              router={router}
+              balClass={balClass}
+              balText={balText}
+              expenses={expenses}
+              customers={customers}
+              reload={load}
+              busy={pdfBusy && (pdfParty?.custId || pdfParty?.name) === (p.custId || p.name)}
+              onPreview={() => requestPdf(p, "preview")}
+              onDownload={() => requestPdf(p, "download")}
+              onForward={() => requestPdf(p, "forward")}
+            />
+          ))}
+        </div>
+      )}
+
+      {pdfParty && (
+        <PassbookPrint
+          printRef={printRef}
+          summary={[
+            { k: "Quotes", v: String(pdfParty.quoteCount) },
+            { k: "Billed", v: "₹ " + inr(pdfParty.billed) },
+            { k: "Received", v: "₹ " + inr(pdfParty.paid) },
+            { k: "Balance", v: "₹ " + inr(pdfParty.balance) },
+          ]}
+          rows={printRows}
+        />
       )}
     </div>
   );
@@ -252,197 +355,63 @@ export default function PaymentsView() {
 
 function PartyCard({
   p,
-  open,
-  setOpen,
   router,
   balClass,
   balText,
-  expenses,
-  customers,
-  reload,
+  busy,
+  onPreview,
+  onDownload,
+  onForward,
 }: {
   p: Party;
-  open: string | null;
-  setOpen: (v: string | null) => void;
   router: ReturnType<typeof useRouter>;
   balClass: (b: number) => string;
   balText: (b: number) => string;
   expenses: Expense[];
   customers: Customer[];
   reload: () => void;
+  busy: boolean;
+  onPreview: () => void;
+  onDownload: () => void;
+  onForward: () => void;
 }) {
-  const pid = p.custId || p.name;
-  const isOpen = open === pid;
   const settled = p.balance <= 0.5;
   const bc = balClass(p.balance);
-
-  const ledgerRows = useMemo(() => buildBankLedger(p, expenses, customers), [p, expenses, customers]);
-
-  const piecesOf = (s: PartyStatement): Expense[] =>
-    s.pieces ? expenses.filter((e) => e.rcptId === s.id) : expenses.filter((e) => e.id === s.id);
-
-  function editStatement(s: PartyStatement) {
-    const rid = s.pieces ? s.id : s.rcptId;
-    if (rid) return router.push("/receipts?edit=" + encodeURIComponent(rid));
-    const exp = expenses.find((e) => e.id === s.id);
-    if (exp?.custId) return router.push("/receipts?edit=" + encodeURIComponent(exp.id));
-    if (exp?.sourceId) return router.push("/editor/" + exp.sourceId + "?pay=" + encodeURIComponent(s.id));
-  }
-
-  async function deleteStatement(s: PartyStatement) {
-    const pieces = piecesOf(s);
-    if (!pieces.length) return toast("This line comes from the quote's own record — open the quote to change it");
-    const nQuotes = pieces.filter((x) => !!x.sourceId).length;
-    const ok = await confirmDialog({
-      title: "Delete payment?",
-      message:
-        p.name +
-        " — ₹" +
-        inr(s.amount) +
-        (nQuotes > 0 ? "\nIt was applied on " + nQuotes + " quotation" + (nQuotes === 1 ? "" : "s") + " — they go back to due." : ""),
-      confirmLabel: "Delete",
-      danger: true,
-    });
-    if (!ok) return;
-    await unwindReceiptPieces(pieces);
-    reload();
-    bumpData();
-    toast("Payment removed — balances updated");
-  }
-
-  const closingBalanceClass = ledgerRows.length > 0 ? (ledgerRows[ledgerRows.length - 1].balance <= 0.5 ? "ok" : "due") : "";
-
   return (
-    <div className="ledger-card">
-      <button className={"ledger-card-header" + (isOpen ? " on" : "")} onClick={() => setOpen(isOpen ? null : pid)}>
-        <div className={"pty-av" + (settled ? " ok" : "")}>{(p.name || "?").charAt(0).toUpperCase()}</div>
-        <div className="lch-main">
-          <div className="lch-name">
-            {p.name}
-            {p.phone && <small>{p.phone}</small>}
-          </div>
-          <div className="lch-meta">
-            Paid ₹{inr(p.paid)} of ₹{inr(p.billed)} · {qty(p.quoteCount)} {p.quoteCount === 1 ? "quote" : "quotes"}
-          </div>
-        </div>
-        <div className={"lch-bal " + bc}>
-          {balText(p.balance)}
-          <small>{settled ? "✓ clear" : "due"}</small>
-        </div>
-      </button>
-
-      {isOpen && (
-        <div className="ledger-card-body">
-          <div className="party-stats">
-            <div className="party-stat">
-              <div className="party-stat-label">Billed</div>
-              <div className="party-stat-value">₹{inr(p.billed)}</div>
-            </div>
-            <div className="party-stat">
-              <div className="party-stat-label">Paid</div>
-              <div className="party-stat-value rec">₹{inr(p.paid)}</div>
-              <div className="party-stat-sub">Cash ₹{inr(p.cashPaid)} · UPI ₹{inr(p.upiPaid)}</div>
-            </div>
-            <div className="party-stat">
-              <div className="party-stat-label">Balance</div>
-              <div className={"party-stat-value " + (settled ? "ok" : "due")}>₹{inr(p.balance)}</div>
-            </div>
-          </div>
-
-          {/* ── Bank-format ledger ── */}
-          <Paged items={ledgerRows} resetKey={pid}>
-            {(view) => (
-          <div className="bank-ledger">
-            <div className="bank-hdr">
-              <span>Date</span>
-              <span>Particulars</span>
-              <span className="bank-amt">Dr ₹</span>
-              <span className="bank-amt">Cr ₹</span>
-              <span className="bank-amt">Balance</span>
-            </div>
-
-            {view.map((row, i) => {
-              const isPayment = !row.isOpening && !row.isClosing && row.refType === "payment";
-              const rowClass = [
-                "bank-row",
-                row.isOpening ? "bank-open" : "",
-                row.isClosing ? "bank-total" : "",
-              ]
-                .filter(Boolean)
-                .join(" ");
-
-              return (
-                <div
-                  key={i}
-                  className={rowClass}
-                  onClick={() => {
-                    if (row.isOpening || row.isClosing) return;
-                    if (row.refType === "quote" && row.refId) router.push("/editor/" + row.refId);
-                    if (row.refType === "payment" && row.stmt) editStatement(row.stmt);
-                  }}
-                  style={{ cursor: row.isOpening || row.isClosing ? "default" : "pointer" }}
-                >
-                  <span className="bank-date">{row.date}</span>
-                  <span className="bank-parts">
-                    {row.particulars}
-                    {row.detail && <small>{row.detail}</small>}
-                    {isPayment && row.stmt && row.stmt.synthetic && (
-                      <small style={{ fontStyle: "italic" }}>from quote record</small>
-                    )}
-                    {isPayment && row.stmt && !row.stmt.synthetic && (
-                      <span className="bl-acts">
-                        <button
-                          className="bl-btn"
-                          title="Edit"
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            editStatement(row.stmt!);
-                          }}
-                        >
-                          ✎
-                        </button>
-                        <button
-                          className="bl-btn danger"
-                          title="Delete"
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteStatement(row.stmt!);
-                          }}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    )}
-                  </span>
-                  <span className={"bank-amt" + (row.debit > 0 ? " dr" : "")}>
-                    {row.debit > 0 ? "₹" + inr(row.debit) : ""}
-                  </span>
-                  <span className={"bank-amt" + (row.credit > 0 ? " cr" : "")}>
-                    {row.credit > 0 ? "₹" + inr(row.credit) : ""}
-                  </span>
-                  <span
-                    className={
-                      "bank-amt bal" +
-                      (row.isClosing ? (closingBalanceClass === "due" ? " due" : " ok") : "")
-                    }
-                  >
-                    ₹{inr(Math.abs(row.balance))}
-                    {!row.isOpening && (
-                      <span className={"bal-tag " + (row.balance > 0.5 ? "dr" : "cr")}>
-                        {row.balance > 0.5 ? "Dr" : "Cr"}
-                      </span>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-            )}
-          </Paged>
-        </div>
-      )}
+    <div
+      className="custcard"
+      onClick={() => p.custId && router.push("/customers/" + p.custId)}
+      style={{ cursor: p.custId ? "pointer" : "default" }}
+    >
+      <h3>{p.name}</h3>
+      <div className="ph">{p.phone || "—"}</div>
+      <div className="meta2">
+        Paid ₹ {inr(p.paid)} of ₹ {inr(p.billed)}
+        <br />
+        <b>{qty(p.quoteCount)}</b> quote{p.quoteCount === 1 ? "" : "s"}
+        {!settled && (
+          <>
+            <br />
+            <span style={{ color: "var(--danger)" }}>₹ {inr(p.balance)} outstanding</span>
+          </>
+        )}
+      </div>
+      <div className={"lch-bal " + bc} style={{ marginTop: 8 }}>
+        {balText(p.balance)}
+        <small>{settled ? "clear" : "due"}</small>
+      </div>
+      <div className="links" onClick={(e) => e.stopPropagation()}>
+        <PdfButtons onPreview={onPreview} onDownload={onDownload} busy={busy} />
+        <button
+          className="btn wa sm"
+          type="button"
+          disabled={busy || !(p.phone || "").trim()}
+          title={p.phone ? "WhatsApp this person their due statement" : "No phone on this card"}
+          onClick={onForward}
+        >
+          Forward
+        </button>
+      </div>
     </div>
   );
 }

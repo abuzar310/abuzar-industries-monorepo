@@ -1024,7 +1024,8 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 }
 
 /* customer cards */
-.custgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-top:8px}
+.custgrid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-top:8px}
+@media(max-width:1100px){.custgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.custgrid{grid-template-columns:1fr}}
 .custcard{border:1px solid var(--line-2); border-radius:var(--radius-md); background:var(--panel-2); padding:16px 17px;
   box-shadow:var(--shadow-card); transition:transform var(--t-med),box-shadow var(--t-med); cursor:default}
@@ -1265,11 +1266,11 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   font-family:var(--serif); font-size:20px; color:#F4E9D8;
 }
 .pdf-preview-pages{
-  flex:1; overflow:auto; padding:18px 12px 32px;
-  display:flex; flex-direction:column; align-items:center; gap:18px;
+  flex:1; overflow:auto; padding:32px 28px 56px;
+  display:flex; flex-direction:column; align-items:center; gap:22px;
 }
 .pdf-preview-page{
-  width:min(720px, 100%);
+  width:min(620px, calc(100% - 16px));
   height:auto;
   background:#FAF6EF;
   box-shadow:0 16px 40px rgba(0,0,0,.4);
@@ -2235,7 +2236,11 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .t-row.advance{background:rgba(176,124,40,.08); border-bottom:none}
 .t-row.advance .lab{color:var(--ochre-deep)}
 .t-row.advance .val{color:var(--ochre-deep); font-weight:700}
-.t-row.permit .gst-lab input{width:88px}
+.t-row.permit .gst-lab input.addon-name{width:110px}
+.t-row.permit .val input,.t-row.oldbal .val input{
+  width:88px; border:1px solid var(--line); border-radius:6px; padding:2px 6px; font:inherit; text-align:right; background:transparent
+}
+.t-row.oldbal .gst-lab{flex-wrap:wrap}
 /* the settlement box printed below the totals when "Show final price & payments" is on:
    every payment + total received + balance / Settled — the on-screen card, on paper */
 .pay-sheet{width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; margin-top:10px; background:var(--paper-2, #fff)}
@@ -3609,7 +3614,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 /* Accounts PDF: same passbook as on screen. html2canvas captures at ~700px, which
    would otherwise trigger the stacked phone layout — lock the 5-column ledger. */
 .acct-print, .pdf-book{
-  padding:4px 2px 12px;
+  padding:16px 20px 24px;
   background:#FAF6EF;
   color:var(--ink);
 }
@@ -3684,8 +3689,8 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .custgrid{grid-template-columns:1fr}
 }
 
-@media(orientation:landscape) and (min-width:680px){
-  .custgrid{grid-template-columns:repeat(2,1fr)}
+@media(orientation:landscape) and (min-width:680px) and (max-width:1100px){
+  .custgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
 @media(orientation:landscape) and (max-height:500px){
