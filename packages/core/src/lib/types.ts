@@ -79,8 +79,12 @@ export interface Doc {
   rentAmount?: number;
   /** rented invoice: description of the rent line (default "Rent"). */
   rentDesc?: string;
-  /** unofficial quote: optional permit fee charged to the customer. Unset / 0 = not on the bill or print. */
+  /** unofficial quote: optional add-on (permit, loading, …) charged after GST. Unset / 0 = not on the bill or print. */
   permitFee?: number;
+  /** printed name of permitFee. Empty → "Permit". */
+  permitLabel?: string;
+  /** unofficial quote: old dues carried onto this paper. Unset / 0 = not on the bill or print. */
+  oldBalance?: number;
   /** accepted round-figure price override; falls back to the computed grand total. */
   finalPrice?: number;
   /** print the agreed final price on the sheet (default OFF — clean quote format). */
@@ -396,6 +400,8 @@ export interface Expense {
   placeOfSupply?: string;
   /** Lorry vehicle number on a transport due. */
   vehicleNo?: string;
+  /** Holder id or UPI account this locked due is collected against (not a pay). */
+  transportPocket?: string;
   /** set once the entry is archived into a closed session; falsy = current open session */
   sessionId?: string;
   /** Accounts tab: when this payment was physically collected from the account holder. */

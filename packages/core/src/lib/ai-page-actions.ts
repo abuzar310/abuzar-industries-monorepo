@@ -76,8 +76,9 @@ function balancesActions(): AiQuickAction[] {
     explain("What is Balances?", "the Balances tab: who still owes after Created quotes / quote money, opening dues, and payments — settled parties drop off"),
     draft("Balance reminder", "Polite WhatsApp payment reminder for a customer with outstanding timber balance. Use [Name] and [Amount]"),
     draft("Soft chase over ₹5,000", "Softer follow-up WhatsApp for parties owing more than ₹5,000 — fill [Name] [Amount]"),
-    how("Check one party's due", "Balances → search name/phone → expand the party → read the running due and ledger rows. Open a quote from a row if needed."),
-    how("Edit a wrong payment", "From Balances expand the party → tap the payment → edit in Receipts (?edit=) or on the quotation Payment block. Warn not to double-enter."),
+    how("Check one party's due", "Balances → search name/phone → read the card (due on the card). Tap the card to open the customer page for the full ledger."),
+    how("Send their statement", "Balances → that person's card → Preview, PDF, or Forward. Forward WhatsApps them their due + the statement PDF (needs their phone)."),
+    how("Edit a wrong payment", "Open the customer from the Balances card → statement PDF / quotes, or Receipts / the quotation Payment block. Warn not to double-enter."),
     explain("Why Balances ≠ one quote", "Balances is the whole party (all Created quotes + dues − payments). One quotation Payment only updates that quote's paid/due."),
     draft("List chase for today", "WhatsApp note to myself / manager: top overdue parties to call today — leave blanks for names and amounts"),
   ];
@@ -119,6 +120,8 @@ function quotationHubActions(): AiQuickAction[] {
     draft("Ask customer for sizes", "WhatsApp asking customer/carpenter for sizes (L×W×T×Pcs) and wood type before making the quote"),
     how("Mark Created (billable)", "In the editor set status to Created (not only Draft) so it appears in Balances / billed totals. Payment on a Draft also makes it count."),
     how("Accept payment on a quote", "Open quotation → Payment / Accept payment → Cash and/or UPI → save. Part payments allowed."),
+    how("Add old balance on a new quote", "Pick a customer who already owes → under totals, Add old balance (optional). It goes on the printed amount due. They can pay this paper now or later. Leave it off if they will settle old dues separately."),
+    how("Permit / extra charge", "On the quotation totals, name the line (Permit, loading, …) and type the ₹. It prints only when an amount is set. Unset / 0 stays off the paper."),
     draft("Send quote intro", "WhatsApp: we prepared your timber quotation — please check PDF / visit yard. [Name] [Quote no]"),
   ];
 }

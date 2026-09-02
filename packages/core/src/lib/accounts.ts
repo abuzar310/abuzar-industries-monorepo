@@ -631,6 +631,8 @@ export {
   isTransportPocketName,
   TRANSPORT_LABEL,
   transportDueLabel,
+  transportNeedToCollect,
+  dueOnTransportPocket,
   transportPlaceOf,
 } from "./pocket-spend";
 
@@ -667,6 +669,8 @@ export async function addTransportDue(fields: {
   boughtFrom?: string;
   placeOfSupply?: string;
   vehicleNo?: string;
+  /** Holder id or UPI name this due is collected against (CS Kumar). */
+  transportPocket?: string;
   date?: string;
   by: string;
   note?: string;
@@ -689,6 +693,7 @@ export async function addTransportDue(fields: {
     boughtFrom: place || undefined,
     placeOfSupply: place || undefined,
     vehicleNo: vehicle || undefined,
+    transportPocket: (fields.transportPocket || "").trim() || undefined,
     pocketSpend: "transport",
     enteredBy: fields.by,
     createdAt: now,

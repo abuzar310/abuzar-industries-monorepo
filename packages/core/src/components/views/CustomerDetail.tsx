@@ -9,7 +9,7 @@ import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/crea
 import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
-import { mergeReceiptPieces, quoteBill, type PartyStatement } from "@/lib/payments";
+import { mergeReceiptPieces, quoteOwnBill, type PartyStatement } from "@/lib/payments";
 import { balanceReminderMessage, customerFollowupMessage, dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -83,7 +83,7 @@ export default function CustomerDetail({ id }: { id: string }) {
       cft: t.secCft.reduce((s, c) => s + c, 0),
       // the SETTLED figure: the agreed final price when one was fixed, else the computed
       // total — same rule as Balances (quoteBill), so the statement matches what's owed
-      total: quoteBill(d),
+      total: quoteOwnBill(d),
     };
   });
   const qtot = qreport.reduce(
@@ -133,7 +133,7 @@ export default function CustomerDetail({ id }: { id: string }) {
       date: d.date,
       label: "Quotation #" + (d.number || d.id),
       sub: d.site ? "Carpenter: " + d.site : "",
-      amount: quoteBill(d),
+      amount: quoteOwnBill(d),
       id: d.id,
     })),
     ...payLines.map((l): StmtEv => ({

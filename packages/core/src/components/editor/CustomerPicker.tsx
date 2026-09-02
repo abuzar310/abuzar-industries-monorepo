@@ -12,6 +12,7 @@ export default function CustomerPicker({
   onType,
   onPick,
   placeholder,
+  dueOf,
   /** Max suggestions; omit / 0 = show the full list (useful for suppliers). */
   maxResults = 8,
 }: {
@@ -20,6 +21,8 @@ export default function CustomerPicker({
   onType: (v: string) => void;
   onPick: (c: Customer) => void;
   placeholder?: string;
+  /** Outstanding besides the open quote — shown as "owes ₹". */
+  dueOf?: (c: Customer) => number;
   maxResults?: number;
 }) {
   const [open, setOpen] = useState(false);
@@ -54,7 +57,9 @@ export default function CustomerPicker({
             className="custpick-list no-print"
             style={{ position: "fixed", top: r.bottom + 3, left: r.left, width: r.width }}
           >
-            {matches.map((c) => (
+            {matches.map((c) => {
+              const due = dueOf ? dueOf(c) : +(c.opening || 0);
+              return (
               <button
                 key={c.id}
                 type="button"
@@ -68,9 +73,10 @@ export default function CustomerPicker({
                 <b>{c.name}</b>
                 {c.phone ? <small> · {c.phone}</small> : null}
                 {c.gstin ? <small> · {c.gstin}</small> : null}
-                {c.opening ? <span className="cp-due">dues ₹{Math.round(c.opening)}</span> : null}
+                {due > 0.5 ? <span className="cp-due">owes ₹{Math.round(due)}</span> : null}
               </button>
-            ))}
+              );
+            })}
           </div>,
           document.body,
         )}

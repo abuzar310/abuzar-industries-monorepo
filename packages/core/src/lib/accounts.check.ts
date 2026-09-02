@@ -16,6 +16,8 @@ import {
   passbookRunning,
   stmtFromTransport,
   transportDueLabel,
+  transportNeedToCollect,
+  dueOnTransportPocket,
   type AccountCollection,
   type AcctBalance,
   type AcctStmtLine,
@@ -199,6 +201,14 @@ export function demo() {
   ok(settleFoldChildren(folds, 5).join(",") === "4", "28-08 To only opens after the 20-08 To");
   ok(settleFoldChildren(folds, 3).join(",") === "2", "20-08 To only opens after the previous To");
   ok(settleFoldIndexes([{ kind: "in" }, { kind: "in" }]).length === 0, "UPI-only book has no To fold");
+
+  ok(transportNeedToCollect(100000, 0) === 100000, "100k due on empty CS Kumar → need 100k");
+  ok(transportNeedToCollect(100000, 50000) === 50000, "50k already on CS Kumar → still need 50k");
+  ok(transportNeedToCollect(100000, 100000) === 0, "pocket covers the due → need 0");
+  ok(transportNeedToCollect(100000, 120000) === 0, "extra in pocket is not a negative need");
+  ok(dueOnTransportPocket({ transportPocket: "h-cs" }, { id: "h-cs", name: "CS Kumar" }, true), "due pinned to CS Kumar id");
+  ok(!dueOnTransportPocket({ transportPocket: "h-cs" }, { id: "h-tab", name: "Tabrez" }, false), "other holder is not that due");
+  ok(dueOnTransportPocket({ transportPocket: "" }, { id: "h-cs", name: "CS Kumar" }, true), "old unassigned due falls on the transport pocket");
 
   console.log(`accounts.check OK (${n} assertions)`);
 }

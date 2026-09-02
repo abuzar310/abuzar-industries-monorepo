@@ -1,5 +1,5 @@
 "use client";
-import { inr, rupeesInWords } from "@/lib/calc";
+import { inr, oldBalanceOf, permitLabelOf, rupeesInWords } from "@/lib/calc";
 import { useApp } from "@/store/useApp";
 import type { PartyStatement } from "@/lib/payments";
 import type { Doc } from "@/lib/types";
@@ -16,21 +16,44 @@ interface Props {
   payLines?: PartyStatement[];
   /** ₹ held as “Advance for next quote” from this quotation — always prints when set */
   advanceAmt?: number;
+  /** older unpaid bills for this name — optional carry onto this paper */
+  priorDue?: number;
   onGst: (v: string) => void;
   onGstMode: (m: "percent" | "flat") => void;
+  onPermitFee?: (v: string) => void;
+  onPermitLabel?: (v: string) => void;
+  onOldBalance?: (n: number) => void;
 }
 
-export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, totalPcs, payLines, advanceAmt, onGst, onGstMode }: Props) {
+export default function Totals({
+  doc,
+  sub,
+  gstAmt,
+  grand,
+  totalCft,
+  totalCbm,
+  totalPcs,
+  payLines,
+  advanceAmt,
+  priorDue = 0,
+  onGst,
+  onGstMode,
+  onPermitFee,
+  onPermitLabel,
+  onOldBalance,
+}: Props) {
   const { cloakMoney } = useApp();
   const isInv = doc.kind === "invoice";
   const r2 = (n: number) => Math.round(n * 100) / 100;
   const permit = !isInv ? r2(Math.max(0, +(doc.permitFee ?? 0) || 0)) : 0;
   const showPermit = permit > 0.005;
+  const old = !isInv ? oldBalanceOf(doc) : 0;
+  const showOld = old > 0.005;
   const finalPrice = !isInv && (doc.finalPrice || 0) > 0 ? r2(doc.finalPrice!) : 0;
   const hasFinal = finalPrice > 0;
-  /** wood+GST only — permit sits on top of the rounded Final price, not inside the discount */
+  /** wood+GST only — permit and old balance sit on top of the rounded Final price */
   const wood = r2(grand - permit);
-  const billed = hasFinal ? r2(finalPrice + permit) : grand;
+  const billed = hasFinal ? r2(finalPrice + permit + old) : r2(grand + old);
   /** print toggle — when off, discount/final still show on screen but stay off the paper */
   const printFinal = hasFinal && !!doc.showFinalOnPrint;
   const discAmt = hasFinal ? r2(wood - finalPrice) : 0;
@@ -109,19 +132,97 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
           <span className="val">{inr(gstAmt)}</span>
         </div>
       )}
-      {/* unofficial: optional permit fee — prints only when an amount is set */}
-      {/* old unofficial quotes that already have a permit fee still print it */}
-      {showPermit && (
+      {/* unofficial: name + amount — paper only when an amount is set */}
+      {!isInv && onPermitFee && (
+        <div className={"t-row permit" + (showPermit ? "" : " no-print")}>
+          <span className="lab gst-lab">
+            <input
+              className="addon-name"
+              value={doc.permitLabel ?? "Permit"}
+              onChange={(e) => onPermitLabel?.(e.target.value)}
+              aria-label="Add-on name"
+            />
+          </span>
+          <span className="val">
+            {cloakMoney ? (
+              inr(0)
+            ) : (
+              <>
+                ₹{" "}
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={doc.permitFee != null && doc.permitFee > 0 ? doc.permitFee : ""}
+                  onChange={(e) => onPermitFee(e.target.value)}
+                  aria-label="Add-on amount"
+                />
+              </>
+            )}
+          </span>
+        </div>
+      )}
+      {!isInv && !onPermitFee && showPermit && (
         <div className="t-row permit">
-          <span className="lab">Permit fee</span>
+          <span className="lab">{permitLabelOf(doc)}</span>
           <span className="val">₹ {inr(permit)}</span>
         </div>
       )}
-      {/* dark bar stays on Grand total unless Final is also going on the printed sheet */}
-      <div className={"t-row" + (printFinal ? "" : " grand")}>
+      {/* dark bar stays on Grand total unless Final / amount due is going on the printed sheet */}
+      <div className={"t-row" + (printFinal || (showOld && !hasFinal) ? "" : " grand")}>
         <span className="lab">Grand total</span>
-        <span className="val">{printFinal ? inr(grand) : <>₹ {inr(grand)}</>}</span>
+        <span className="val">{printFinal || showOld ? inr(grand) : <>₹ {inr(grand)}</>}</span>
       </div>
+      {(priorDue > 0.5 || showOld) && onOldBalance && (
+        <div className={"t-row oldbal" + (showOld ? "" : " no-print")}>
+          <span className="lab gst-lab">
+            {showOld ? (
+              <>
+                Old balance
+                <button type="button" className="gst-toggle no-print" title="Leave old dues off this paper" onClick={() => onOldBalance(0)}>
+                  ×
+                </button>
+              </>
+            ) : (
+              <button type="button" className="gst-toggle" onClick={() => onOldBalance(priorDue)}>
+                Add old balance
+              </button>
+            )}
+          </span>
+          <span className="val">
+            {showOld ? (
+              cloakMoney ? (
+                inr(0)
+              ) : (
+                <>
+                  ₹{" "}
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={old || ""}
+                    onChange={(e) => onOldBalance(Math.max(0, +e.target.value || 0))}
+                    aria-label="Old balance"
+                  />
+                </>
+              )
+            ) : (
+              <>₹ {inr(priorDue)}</>
+            )}
+          </span>
+        </div>
+      )}
+      {showOld && !onOldBalance && (
+        <div className="t-row oldbal">
+          <span className="lab">Old balance</span>
+          <span className="val">₹ {inr(old)}</span>
+        </div>
+      )}
+      {showOld && !hasFinal && (
+        <div className="t-row grand">
+          <span className="lab">Amount due</span>
+          <span className="val">₹ {inr(billed)}</span>
+        </div>
+      )}
       {/* final ≠ computed → Discount (or Round off if higher) */}
       {hasDiscount && (
         <div className={"t-row discount" + screenOnly}>
@@ -186,11 +287,11 @@ export default function Totals({ doc, sub, gstAmt, grand, totalCft, totalCbm, to
       )}
       {/* amount-in-words lives OUTSIDE the totals box (which clips overflow) so it can never be cut off */}
       <div className={"words" + (hasFinal && !printFinal ? " no-print" : "")}>
-        Amount in words: <b>{rupeesInWords(hasFinal ? billed : grand)}</b>
+        Amount in words: <b>{rupeesInWords(hasFinal || showOld ? billed : grand)}</b>
       </div>
       {hasFinal && !printFinal && (
         <div className="words print-only">
-          Amount in words: <b>{rupeesInWords(grand)}</b>
+          Amount in words: <b>{rupeesInWords(r2(grand + old))}</b>
         </div>
       )}
     </>
