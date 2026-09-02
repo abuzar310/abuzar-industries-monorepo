@@ -3,6 +3,7 @@
 // direct html2canvas + manual pagination renders exactly what you see/print.
 // Loaded dynamically so it stays out of the server bundle.
 import { toast } from "@/store/app-store";
+import { beginPdfPreview, failPdfPreview, finishPdfPreview } from "@/store/pdf-preview-store";
 
 /** Optional capture tuning. Without these, generatePdf behaves exactly as before
  *  (blind fixed-height A4 slicing) — so invoices/quotes and the report sheets are
@@ -18,6 +19,8 @@ export interface PdfOpts {
   title?: string;
   /** Printable inset on each A4 page in mm (0 = edge-to-edge, default). Suppliers PDFs use ~8. */
   marginMm?: number;
+  /** Open the in-app preview instead of downloading. Quote/invoice Print never sets this. */
+  preview?: boolean;
 }
 
 /** Card/dashboard captures wider than this make body text too small on A4. */
@@ -26,8 +29,19 @@ const CARD_CAPTURE_MAX = 700;
 const TRAILING_STUB_PX = 48;
 
 export async function generatePdf(sheet: HTMLElement, fileBase: string, opts?: PdfOpts) {
-  const pdf = await renderPdf(sheet, opts);
-  pdf.save((fileBase || "document") + ".pdf");
+  const preview = !!opts?.preview;
+  if (preview) beginPdfPreview(fileBase || "document");
+  try {
+    const { pdf, pages } = await renderPdf(sheet, opts);
+    if (preview) {
+      finishPdfPreview(pdf.output("blob"), fileBase || "document", pages);
+      return;
+    }
+    pdf.save((fileBase || "document") + ".pdf");
+  } catch (e) {
+    if (preview) failPdfPreview();
+    throw e;
+  }
 }
 
 /** Print — or, on Android / installed-app mode where the browser print dialog doesn't
@@ -79,9 +93,28 @@ export async function printOrSavePdf(
 /** The document as a shareable File — used to attach the PDF straight into WhatsApp
  *  via the system share sheet (navigator.share), instead of download-then-attach. */
 export async function generatePdfFile(sheet: HTMLElement, fileBase: string, opts?: PdfOpts): Promise<File> {
-  const pdf = await renderPdf(sheet, opts);
+  const { pdf } = await renderPdf(sheet, opts);
   const blob = pdf.output("blob");
   return new File([blob], (fileBase || "document") + ".pdf", { type: "application/pdf" });
+}
+
+function jpegPages(canvas: HTMLCanvasElement, pagePx: number, quality: number): string[] {
+  const out: string[] = [];
+  const c = document.createElement("canvas");
+  const ctx = c.getContext("2d")!;
+  let y = 0;
+  while (y < canvas.height - 0.5) {
+    const h = Math.min(pagePx, canvas.height - y);
+    if (h < TRAILING_STUB_PX && y > 0) break;
+    c.width = canvas.width;
+    c.height = h;
+    ctx.fillStyle = "#FAF6EF";
+    ctx.fillRect(0, 0, c.width, h);
+    ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
+    out.push(c.toDataURL("image/jpeg", quality));
+    y += h;
+  }
+  return out.length ? out : [canvas.toDataURL("image/jpeg", quality)];
 }
 
 async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
@@ -94,7 +127,7 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
   // same set hidden by `@media print` in globals.css, plus the on-screen-only editing controls
   clone
     .querySelectorAll(
-      ".no-print,.doctool,.add-row,.add-sec,.x-row,.x-sec,.ic-row,.sec-tools,.mode-seg,.mode-btn,.formula,.hint,.btn,.iconbtn,.sec-name-caret,.sec-name-menu",
+      ".no-print,.pager,.doctool,.add-row,.add-sec,.x-row,.x-sec,.ic-row,.sec-tools,.mode-seg,.mode-btn,.formula,.hint,.btn,.iconbtn,.sec-name-caret,.sec-name-menu",
     )
     .forEach((el) => el.remove());
   // "Hide prices" on quotations — drop rates, section totals, and the bill box from PDF too
@@ -131,6 +164,7 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
   // downscale, not the oversized 18px bump. Also darken muted inks so labels on cream /
   // brown washes (KPI cards, table headers) stay readable in the JPEG capture.
   if (opts?.pageBreak) {
+    clone.classList.add("pdf-capture");
     clone.style.fontSize = "14px";
     clone.style.lineHeight = "1.4";
     clone.style.setProperty("--ink-faint", "#5c4e3c");
@@ -197,7 +231,7 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     // Short captures (one supplier card, a thin books tab) — one page, no trailing blank.
     if (imgH <= contentH + 0.8) {
       pdf.addImage(img, "JPEG", margin, margin, contentW, imgH);
-      return pdf;
+      return { pdf, pages: [img] };
     }
 
     // Card-aware pagination: slice ONLY between whole cards/rows so nothing is cut
@@ -240,6 +274,7 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
       let start = 0;
       let first = true;
       let guard = 0;
+      const pageImgs: string[] = [];
       while (start < canvas.height - 0.5 && guard++ < 500) {
         const limit = start + pagePx;
         let cut = start;
@@ -285,12 +320,14 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
         pctx.fillRect(0, 0, canvas.width, sliceH);
         pctx.drawImage(canvas, 0, startPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
         const pageImg = pageCanvas.toDataURL("image/jpeg", 0.92);
+        pageImgs.push(pageImg);
         const hmm = Math.min((sliceH * contentW) / canvas.width, contentH);
         if (!first) pdf.addPage();
         pdf.addImage(pageImg, "JPEG", margin, margin, contentW, hmm);
         start = cutPx;
         first = false;
       }
+      return { pdf, pages: pageImgs };
     } else {
       // Place the single tall image once per page, shifting it up by one content area each time.
       // Ignore a trailing stub (< ~2mm) — that was producing an empty page 2 on quotes/PDFs.
@@ -305,8 +342,8 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
         pdf.addImage(img, "JPEG", margin, position, contentW, imgH);
         heightLeft -= contentH;
       }
+      return { pdf, pages: jpegPages(canvas, pagePx, 0.92) };
     }
-    return pdf;
   } finally {
     if (holder.parentNode) holder.parentNode.removeChild(holder);
   }

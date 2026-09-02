@@ -14,8 +14,10 @@ import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import type { Doc } from "@/lib/types";
+import { generatePdf } from "@/lib/pdf";
 import { StatusBadge } from "./DocList";
 import Pager, { PAGE, usePager } from "../Pager";
+import PassbookPrint, { type PassbookGroup } from "../PassbookPrint";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -35,9 +37,10 @@ function monthlyReport(docs: Doc[]) {
   interface MGroup { key: string; label: string; docs: Doc[]; count: number; billedCount: number; billed: number; paid: number }
   const map = new Map<string, MGroup>();
   for (const d of docs) {
-    const [, mm = "", yy = ""] = (d.date || "").split("-");
-    const key = yy && mm ? `20${yy}-${mm}` : "0000-00";
-    const label = yy && mm ? `${MONTH_NAMES[parseInt(mm, 10)] || mm} 20${yy}` : "No date";
+    const iso = dateSortKey(d.date);
+    const [yyyy = "", mm = ""] = iso.split("-");
+    const key = yyyy && mm ? `${yyyy}-${mm}` : "0000-00";
+    const label = yyyy && mm ? `${MONTH_NAMES[parseInt(mm, 10)] || mm} ${yyyy}` : "No date";
     let g = map.get(key);
     if (!g) {
       g = { key, label, docs: [], count: 0, billedCount: 0, billed: 0, paid: 0 };
@@ -51,8 +54,12 @@ function monthlyReport(docs: Doc[]) {
       g.paid += +d.amountPaid || 0;
     }
   }
-  const groups = [...map.values()].sort((a, b) => b.key.localeCompare(a.key));
-  for (const g of groups) g.docs.sort((a, b) => (b.number || "").localeCompare(a.number || ""));
+  const groups = [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
+  for (const g of groups) {
+    g.docs.sort(
+      (a, b) => dateSortKey(a.date).localeCompare(dateSortKey(b.date)) || (a.number || "").localeCompare(b.number || ""),
+    );
+  }
   const total = groups.reduce(
     (t, g) => ({ count: t.count + g.count, billedCount: t.billedCount + g.billedCount, billed: t.billed + g.billed, paid: t.paid + g.paid }),
     { count: 0, billedCount: 0, billed: 0, paid: 0 },
@@ -131,16 +138,60 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
   }, [docs, q, searchTerm, isInv, trade, cloakMoney]);
   // report follows the active search, so what you export is what you see
   const report = useMemo(() => (canReport ? monthlyReport(filtered) : null), [canReport, filtered]);
+  const reportGroups: PassbookGroup[] = useMemo(() => {
+    if (!report) return [];
+    return report.groups.map((g) => ({
+      label:
+        g.label +
+        " — " +
+        g.billedCount +
+        " billed" +
+        (g.count > g.billedCount ? " + " + (g.count - g.billedCount) + " draft" : ""),
+      rows: [
+        ...g.docs.map((d) => {
+          const billed = isBillable(d);
+          const bill = quoteBill(d);
+          const paid = +d.amountPaid || 0;
+          return {
+            key: d.id,
+            date: d.date,
+            who: d.customerName || "Walk-in",
+            detail:
+              (d.displayNumber || d.number || "") +
+              (d.site ? " · " + d.site : "") +
+              (billed ? "" : " · Draft — not counted"),
+            debit: billed ? bill : 0,
+            credit: paid,
+            balance: billed ? bill - paid : 0,
+          };
+        }),
+        {
+          key: g.key + "-tot",
+          date: "",
+          who: g.label + " total",
+          debit: g.billed,
+          credit: g.paid,
+          balance: g.billed - g.paid,
+          close: true,
+        },
+      ],
+    }));
+  }, [report]);
   const reportRef = useRef<HTMLDivElement>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   async function downloadReport() {
     if (!reportRef.current || pdfBusy) return;
     setPdfBusy(true);
+    toast("Preparing PDF…");
     try {
-      const { generatePdf } = await import("@/lib/pdf");
       const d = new Date();
       const stamp = `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
-      await generatePdf(reportRef.current, "quotations-report-" + stamp);
+      await generatePdf(reportRef.current, "quotations-report-" + stamp, {
+        pageBreak: ".bank-row,.acct-print-sum,.acct-print-hdr",
+        width: 700,
+        title: (brand.name || "Quotations") + " — month report",
+        marginMm: 8,
+      });
       toast("Report PDF downloaded ✓");
     } catch (e) {
       toast("PDF error: " + ((e as Error)?.message || e));
@@ -385,100 +436,18 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
       />
     </div>
 
-    {/* quotations report — laid out off-screen, exported as a PDF download.
-        Every quotation is listed under its month with per-month subtotals. */}
     {canReport && report && (
-      <div style={{ position: "fixed", left: -10000, top: 0, width: 900, pointerEvents: "none" }} aria-hidden="true">
-        <div ref={reportRef} className="rep-doc" style={{ display: "block", background: "#FAF6EF", padding: 24 }}>
-          <div className="rep-head">
-            <div className="rep-brand">
-              <h1>{brand.name || "Quotations"}</h1>
-              {brand.addr && <div>{brand.addr}</div>}
-            </div>
-            <div className="rep-meta">
-              <div className="rep-title">Quotations report</div>
-              <div className="rep-period">{q || searchTerm ? `Search: “${(q || searchTerm).trim()}”` : "All time · month-wise"}</div>
-            </div>
-          </div>
-
-          <div className="rep-summary cols3">
-            <div><b>{qty(report.total.count)}</b><span>Quotations</span></div>
-            <div><b>₹{inr(report.total.billed)}</b><span>Billed amount</span></div>
-            <div><b>₹{inr(report.total.paid)}</b><span>Received</span></div>
-          </div>
-          {report.total.count > report.total.billedCount && (
-            <div style={{ fontSize: 12, color: "#8a7f6d", marginTop: 6 }}>
-              Draft quotations with no payment are listed in (brackets) but never counted in any total.
-            </div>
-          )}
-
-          {report.groups.map((g) => (
-            <div key={g.key} style={{ marginTop: 14 }}>
-              <div className="rep-title" style={{ marginBottom: 6 }}>
-                {g.label} — {g.count} quotation{g.count === 1 ? "" : "s"} · ₹{inr(g.billed)}
-              </div>
-              <table className="rep-table">
-                <colgroup>
-                  <col style={{ width: "5%" }} />
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "15%" }} />
-                  <col style={{ width: "28%" }} />
-                  <col style={{ width: "14%" }} />
-                  <col style={{ width: "13%" }} />
-                  <col style={{ width: "13%" }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className="c-n">#</th>
-                    <th>Date</th>
-                    <th>Quote No</th>
-                    <th>Customer</th>
-                    <th>Status</th>
-                    <th className="amt">Amount ₹</th>
-                    <th className="amt">Paid ₹</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {g.docs.map((d, i) => (
-                    <tr key={d.id} style={isBillable(d) ? undefined : { color: "#8a7f6d" }}>
-                      <td className="c-n">{i + 1}</td>
-                      <td className="c-date">{d.date}</td>
-                      <td className="c-no">{d.displayNumber || d.number}</td>
-                      <td className="c-cust">{d.customerName || "Walk-in"}</td>
-                      <td>{isBillable(d) ? d.status : "Draft — not counted"}</td>
-                      <td className="amt">{isBillable(d) ? inr(quoteBill(d)) : "(" + inr(quoteBill(d)) + ")"}</td>
-                      <td className="amt">{inr(+d.amountPaid || 0)}</td>
-                    </tr>
-                  ))}
-                  <tr className="rep-tot">
-                    <td colSpan={5}>
-                      {g.label} total — {g.billedCount} billed quotation{g.billedCount === 1 ? "" : "s"}
-                      {g.count > g.billedCount ? ` (+ ${g.count - g.billedCount} draft${g.count - g.billedCount === 1 ? "" : "s"} not counted)` : ""}
-                    </td>
-                    <td className="amt">{inr(g.billed)}</td>
-                    <td className="amt">{inr(g.paid)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          ))}
-
-          <table className="rep-table" style={{ marginTop: 14 }}>
-            <tbody>
-              <tr className="rep-tot">
-                <td style={{ width: "74%" }}>
-                  Grand total — {report.total.billedCount} billed quotation{report.total.billedCount === 1 ? "" : "s"} across {report.groups.length} month{report.groups.length === 1 ? "" : "s"}
-                  {report.total.count > report.total.billedCount ? ` (+ ${report.total.count - report.total.billedCount} drafts not counted)` : ""}
-                </td>
-                <td className="amt" style={{ width: "13%" }}>{inr(report.total.billed)}</td>
-                <td className="amt" style={{ width: "13%" }}>{inr(report.total.paid)}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div className="rep-foot">Generated {new Date().toLocaleDateString("en-GB")} · {brand.name}</div>
-        </div>
-      </div>
+      <PassbookPrint
+        printRef={reportRef}
+        summary={[
+          { k: "Quotations", v: qty(report.total.count) },
+          { k: "Billed", v: "₹ " + inr(report.total.billed) },
+          { k: "Received", v: "₹ " + inr(report.total.paid) },
+        ]}
+        groups={reportGroups}
+        dr="Billed"
+        cr="Received"
+      />
     )}
     </>
   );

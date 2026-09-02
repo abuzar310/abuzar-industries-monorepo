@@ -2,6 +2,7 @@ import { allRec, delRec, put } from "./data";
 import { nowIso, splitHandover, todayStr, uid } from "./calc";
 import type { DaybookSession, EntryType, Expense, PayMode } from "./types";
 import { liveSpendCategories, SPEND_CATEGORIES, type SpendCategory } from "./book-catalog";
+import { isAccountTransportPay, isPendingTransport, transportPlaceOf } from "./pocket-spend";
 
 export type { SpendCategory };
 export { SPEND_CATEGORIES, liveSpendCategories };
@@ -36,6 +37,7 @@ export function spendLabels(): Set<string> {
 export function inBooks(e: Expense): boolean {
   if (e.charge) return false;
   if (e.skipBooks) return false;
+  if (isPendingTransport(e)) return false;
   const lab = (e.label || "").trim();
   if (lab === PAID_TO_MANAGER_LABEL) return false;
   const match = cats().find((c) => c.label === lab || c.id === catAlias(lab));
@@ -79,6 +81,10 @@ export function spendDetailOf(e: Expense): string {
   const bits: string[] = [];
   const party = (e.party || "").trim();
   if (party) bits.push(party);
+  const veh = (e.vehicleNo || "").trim();
+  if (veh) bits.push(veh);
+  const place = transportPlaceOf(e);
+  if (place) bits.push("from " + place);
   const carpenter = (e.carpenter || "").trim();
   if (carpenter) bits.push("Carpenter " + carpenter);
   const qNo = (e.quoteNo || "").trim();
@@ -114,7 +120,8 @@ export function isQuoteCommissionPay(e: Expense): boolean {
 }
 
 /** Does this entry belong in the manager's cash daybook? Excludes UPI, cash sent straight to owner,
- *  cash assigned to a named account, customer dues/charges, and wood-against-commission. */
+ *  cash assigned to a named account, customer dues/charges, wood-against-commission,
+ *  and UPI-pocket transport (paid from an Accounts balance, not the till). */
 /** Place-rent set-off: commission given without cash — not till money. */
 export function isPlaceRentSetoff(e: Expense): boolean {
   return e.placeRentKind === "setoff";
@@ -126,7 +133,9 @@ export const inDaybook = (e: Expense) =>
   !e.charge &&
   !isPlaceRentSetoff(e) &&
   !(e.mode === "cash" && !!(e.account || "").trim()) &&
-  !isQuoteCommissionPay(e);
+  !isQuoteCommissionPay(e) &&
+  !isAccountTransportPay(e) &&
+  !isPendingTransport(e);
 
 export interface DayTotals {
   cashIn: number;

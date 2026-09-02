@@ -5,12 +5,22 @@ import {
   accountDayLedger,
   accountLedger,
   accountOverview,
+  acctLedger,
   holderPassbookLines,
+  settleFoldIndexes,
+  settleFoldChildren,
+  isAccountTransportPay,
+  isPendingTransport,
+  isTransportPocket,
+  isTransportPocketName,
   passbookRunning,
+  stmtFromTransport,
+  transportDueLabel,
   type AccountCollection,
   type AcctBalance,
   type AcctStmtLine,
 } from "./accounts";
+import { inBooks, inDaybook, spendCatKey, spendDetailOf } from "./expenses";
 
 let n = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -56,6 +66,7 @@ export function demo() {
     received: 276200,
     ownerReceived: 0,
     collected: 0,
+    spent: 0,
     balance: 276200,
     lines: [
       { id: "u-naik", kind: "in", amount: 6000, date: "19-08-26", at: "2026-08-19T10:00:00.000Z", by: "ajju", customer: "Naik" },
@@ -95,6 +106,99 @@ export function demo() {
   ok(run.after[2].id === "u-manju" && run.after[2].balance === 176200, "Manjunath 50k continues from the new balance → 1,76,200");
   ok(run.after[3].id === "COL-tabrez" && run.after[3].balance === 26200, "next-day collect 1,50,000 → 26,200");
   ok(run.closing === 26200, "closing follows the last collect, not the old 2,76,200");
+
+  // Pay transport from a UPI pocket: balance drops, Collected stays a hand-over, Books gets Transport, till does not.
+  const pocket = {
+    id: "tr1",
+    type: "custom",
+    label: "Transport",
+    mode: "",
+    amount: 2500,
+    account: "CS Kumar",
+    party: "Raju lorry",
+    pocketSpend: "transport",
+    date: "21-08-26",
+    createdAt: "2026-08-21T09:00:00.000Z",
+    enteredBy: "ajju",
+  } as unknown as Expense;
+  const due = { ...pocket, account: "", holderId: undefined } as unknown as Expense;
+  ok(isPendingTransport(due) && !isAccountTransportPay(due), "due is locked, not paid");
+  ok(!inBooks(due) && !inDaybook(due), "due stays off Books and the till until paid");
+  ok(isAccountTransportPay(pocket), "flagged UPI-pocket transport");
+  ok(!isPendingTransport(pocket), "paid row is not still due");
+  ok(!inDaybook(pocket), "transport from a UPI pocket stays out of the cash till");
+  ok(inBooks(pocket), "transport from a UPI pocket lands in Books");
+  ok(spendCatKey(pocket) === "transport", "Books bucket is Transport");
+
+  const tillTransport = { ...pocket, pocketSpend: undefined, account: "" } as unknown as Expense;
+  ok(!isAccountTransportPay(tillTransport), "Daybook Transport without the pocket flag is not a pocket pay");
+  ok(inDaybook(tillTransport), "ordinary Transport spend still hits the till");
+
+  const led = acctLedger(
+    [
+      {
+        id: "u-cs",
+        type: "sale",
+        mode: "upi",
+        amount: 10000,
+        account: "CS Kumar",
+        date: "20-08-26",
+        createdAt: "2026-08-20T10:00:00.000Z",
+        enteredBy: "ajju",
+      } as unknown as Expense,
+      pocket,
+    ],
+    [],
+  );
+  const cs = led.accounts.find((a) => a.name === "CS Kumar")!;
+  ok(cs.received === 10000 && cs.collected === 0 && cs.spent === 2500, "transport is spent, not collected");
+  ok(cs.balance === 7500, "pocket balance drops by the lorry pay");
+  ok(cs.lines.some((l) => l.kind === "transport" && l.customer === "Raju lorry"), "passbook names the transporter");
+
+  const holderPay = { ...pocket, id: "tr-h", holderId: "h-cs", account: "CS Kumar" } as unknown as Expense;
+  const holderLed = acctLedger(
+    [
+      {
+        id: "u-cs2",
+        type: "sale",
+        mode: "upi",
+        amount: 10000,
+        account: "CS Kumar",
+        date: "20-08-26",
+        createdAt: "2026-08-20T10:00:00.000Z",
+        enteredBy: "ajju",
+      } as unknown as Expense,
+      holderPay,
+    ],
+    [],
+  );
+  ok(holderLed.accounts.find((a) => a.name === "CS Kumar")!.spent === 0, "holder-level transport is not a sub-account debit");
+  const hBook = holderPassbookLines(holderLed.accounts, [], [holderPay]);
+  ok(hBook.some((l) => l.kind === "transport"), "holder passbook includes holder-level transport");
+  const hRun = passbookRunning(hBook, 0);
+  ok(hRun.closing === 7500, "holder running balance drops after transport");
+  ok(stmtFromTransport(pocket).kind === "transport", "transport statement line");
+  const detailed = { ...pocket, vehicleNo: "KA01AB1234", placeOfSupply: "Dhannaram" } as unknown as Expense;
+  ok(transportDueLabel(detailed) === "Raju lorry · KA01AB1234 · Dhannaram", "due label has vehicle and place");
+  ok((stmtFromTransport(detailed).note || "").includes("KA01AB1234"), "passbook note has vehicle");
+  ok(spendDetailOf(detailed).includes("from Dhannaram"), "Books detail has place of supply");
+  ok(isTransportPocketName("CS KUMAR(SVT TRANSPORT CHENNAI)"), "name with Transport is a transport pocket");
+  ok(!isTransportPocketName("Tabrez GT Trader"), "ordinary UPI is not a transport pocket");
+  ok(isTransportPocket({ kind: "transport", name: "CS Kumar", accounts: [] }), "kind=transport wins");
+  ok(!isTransportPocket({ kind: "collect", name: "SVT Transport", accounts: [] }), "kind=collect overrides the name");
+  const folds = settleFoldIndexes([
+    { kind: "in" },
+    { debit: 100000, kind: "collect" },
+    { kind: "in" },
+    { debit: 150000, kind: "collect" },
+    { kind: "in" },
+    { debit: 97200, kind: "collect" },
+    { kind: "in" },
+  ]);
+  ok(folds.join(",") === "1,3,5", "every To is a fold");
+  ok(settleFoldChildren(folds, 5).join(",") === "4", "28-08 To only opens after the 20-08 To");
+  ok(settleFoldChildren(folds, 3).join(",") === "2", "20-08 To only opens after the previous To");
+  ok(settleFoldIndexes([{ kind: "in" }, { kind: "in" }]).length === 0, "UPI-only book has no To fold");
 
   console.log(`accounts.check OK (${n} assertions)`);
 }

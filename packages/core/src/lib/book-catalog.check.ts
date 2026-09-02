@@ -28,6 +28,7 @@ ok(!spendLocked("truck"), "truck can be removed");
 ok(bookLabel("inc.cash") === "Cash received", "default income name");
 ok(bookLabel("bal.cash") === "Cash in hand", "default cash-in-hand name");
 ok(spendCatKey(e({ label: "Truck rent" })) === "truck", "old truck rent name still maps");
+ok(spendCatKey(e({ label: "Transport" })) === "transport", "pocket transport maps to Transport");
 ok(spendCategoryOf(e({ label: "Truck rent" })) === "Heavy truck", "truck rent shows as heavy truck");
 ok(spendCatKey(e({ type: "food", label: "" })) === "food", "food is type not label");
 ok(spendCategoryOf(e({ label: "Pigmy" })) === "Pignee", "old Pigmy name still maps");

@@ -105,7 +105,7 @@ function accountsActions(): AiQuickAction[] {
     how("Add holder / UPI account", "Accounts → + Account holder → + Account under holder → optional opening balance."),
     draft("Holder balance WhatsApp", "WhatsApp summary for an account holder: Received / Collected / Balance still to collect — [Holder] with ₹ blanks"),
     how("Move a mis-filed UPI line", "Accounts → find the UPI payment line → move to the correct account. Or delete and re-enter in Receipts if needed."),
-    how("Download holder PDF", "Accounts → open holder → PDF. File is the same Date / Particulars / Dr / Cr / Balance passbook as on screen. Send is a WhatsApp totals text."),
+    how("Download holder PDF", "Accounts → open holder → Preview (look first) or PDF (download). File is the same Date / Particulars / Dr / Cr / Balance passbook as on screen. Send is a WhatsApp totals text."),
     explain("Accounts vs Daybook vs Receipts", "Receipts = customer money in. Daybook = manager till session. Accounts = which UPI pocket holds money before Collect to owner."),
   ];
 }
@@ -113,7 +113,8 @@ function accountsActions(): AiQuickAction[] {
 /** Quotation hub `/editor` without a loaded doc */
 function quotationHubActions(): AiQuickAction[] {
   return [
-    how("Start a new quotation", "Quotation tab / + Create a quotation (or Quotations → + New). Fill customer, sizes/CFT lines, rates → Save. Draft vs Created: Created counts as billable in Balances."),
+    how("Start a new quotation", "Quotation tab / + Create a quotation (or Quotations → + New). Fill customer (or turn on Carpenter mode), sizes/CFT lines, rates → Save. Draft vs Created: Created counts as billable in Balances."),
+    how("Carpenter came to buy", "Quotation → Carpenter mode on → pick the carpenter. Customer is hidden; the bill is still under that name. House owner with a carpenter? Leave Carpenter mode off: Customer = owner, Carpenter = who brought them."),
     how("Open last quotation", "Quotation tab resumes the last open quote, or pick from Quotations list."),
     draft("Ask customer for sizes", "WhatsApp asking customer/carpenter for sizes (L×W×T×Pcs) and wood type before making the quote"),
     how("Mark Created (billable)", "In the editor set status to Created (not only Draft) so it appears in Balances / billed totals. Payment on a Draft also makes it count."),
@@ -129,7 +130,7 @@ function quotationsListActions(): AiQuickAction[] {
     how("Find a customer's quotes", "Quotations → use search (name/phone/number) or TopNav search. Open the row to edit."),
     how("WhatsApp a quote PDF", "Quotations row → WhatsApp (or open quote → WhatsApp). PDF goes via share sheet on phone; wa.me is text-only."),
     draft("Remind unpaid quote", "WhatsApp reminder for unpaid quotation [Quote no] to [Name] for ₹[Balance]"),
-    how("Month report PDF", "Quotations → Download report PDF — groups by month with count, billed, paid."),
+    how("Month report PDF", "Quotations → Download report PDF. Same cream passbook as Accounts: Date / Particulars / Billed / Received / Balance, oldest month first, every quote not just the list page."),
     how("New quotation from list", "Quotations → + New Quotation → editor."),
     how("Recycle bin quotes", "Multi-select rows → Recycle bin. Restore later from Settings."),
     draft("Follow up old draft", "WhatsApp to customer about an old draft quotation still pending approval — [Name] [Quote no]"),
@@ -157,6 +158,7 @@ function customersActions(detailName?: string): AiQuickAction[] {
     draft("Balance statement msg", `WhatsApp sharing outstanding for ${name} — leave ₹ blanks if unknown; ask them to check statement`),
     how("Sort by outstanding", "Customers → sort Outstanding first to chase dues."),
     how("Opening dues", "On customer detail/edit, opening dues add to Balances outstanding. Explain briefly when to use opening dues vs a Created quote."),
+    how("Statement PDF", "Customer page → Preview or PDF. Same Date / Particulars / Dr / Cr / Balance passbook as Accounts — every bill and payment, not the 15-row screen page."),
     draft("Ask carpenter site phone", "WhatsApp asking for carpenter name and site phone to save on the customer card"),
   ];
   return base;
@@ -178,7 +180,7 @@ function suppliersActions(): AiQuickAction[] {
     how("Pay a supplier", "Suppliers → Payments → + Payment → amount, mode → apply to supplier dues."),
     draft("Payment note to supplier", "WhatsApp to supplier confirming payment sent — [Supplier] ₹[Amount] Cash/UPI/NEFT"),
     how("Due reminders", "Suppliers badge / unpaid filter — set or clear reminders on purchases due."),
-    how("Supplier PDF register", "Expand supplier → Save PDF of their purchase/payment register."),
+    how("Supplier PDF register", "Expand supplier → Preview or Save PDF of their purchase/payment register."),
     explain("Cash vs invoice outstanding", "Supplier KPIs split what you still owe as cash purchases vs invoice/credit purchases."),
     draft("Ask for bill/CFT", "WhatsApp asking supplier to send bill number and CFT for today's load"),
   ];
@@ -221,7 +223,7 @@ function booksActions(): AiQuickAction[] {
     draft("Month summary for owner", "Plain-language WhatsApp P&L style summary for the owner — [Month] with blanks for income, expense, net"),
     how("Balance sheet view", "Books → Balance sheet — receivables vs cash/UPI style snapshot for the period."),
     how("Biggest expense category", "Books → Income & Expense / ledger filters — find the largest expense category this month."),
-    how("Save PDF of a section", "Books → choose view → Save PDF."),
+    how("Save PDF of a section", "Books → choose view → Preview or Save PDF. Month ledger and Cash book dump the full book (oldest first), not the 15 rows on screen."),
   ];
 }
 

@@ -1,7 +1,8 @@
 // Self-check for the cash/UPI split in the daybook (pure, no DB).
 // Run: npx tsx packages/core/src/lib/expenses.check.ts
 import type { Expense } from "./types";
-import { dayTotals, isUpi } from "./expenses";
+import { dayTotals, inBooks, inDaybook, isUpi, spendDetailOf } from "./expenses";
+import { isAccountTransportPay, isPendingTransport } from "./pocket-spend";
 
 let n = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -29,6 +30,22 @@ export function demo() {
   ok(t.cashIn === 5000, "cashIn counts only cash sales");
   ok(t.upiIn === 0, "upiIn is zero in the cash book (UPI lives in its own section)");
   ok(t.net === 4000, "in-hand = cash 5000 − spent 1000, UPI never touches it");
+
+  const fromPocket = {
+    ...E("custom", 800, ""),
+    label: "Transport",
+    account: "CS Kumar",
+    pocketSpend: "transport" as const,
+  };
+  ok(isAccountTransportPay(fromPocket) && !inDaybook(fromPocket), "UPI-pocket transport is not till cash");
+  const due = { ...fromPocket, account: "" };
+  ok(isPendingTransport(due) && !inBooks(due) && !inDaybook(due), "transport due is off Books and till");
+  ok(
+    spendDetailOf({ ...fromPocket, party: "Raju lorry", vehicleNo: "KA01AB1234", placeOfSupply: "Dhannaram" }).includes(
+      "KA01AB1234",
+    ),
+    "Books line names the vehicle",
+  );
 
   console.log(`expenses.check OK (${n} assertions)`);
 }

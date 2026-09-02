@@ -9,12 +9,18 @@ import {
   addCollection,
   addHolder,
   addHolderAccount,
+  addTransportDue,
   balanceAfter,
   deleteAccountEntry,
   deleteCollection,
   getClearMarks,
   holderClearKey,
   holderPassbookLines,
+  settleFoldIndexes,
+  settleFoldChildren,
+  isAccountTransportPay,
+  isPendingTransport,
+  isTransportPocket,
   listCollections,
   listHolders,
   listPayAccounts,
@@ -25,8 +31,11 @@ import {
   removeHolderAccount,
   removePayAccount,
   renameHolder,
+  setHolderKind,
   setHolderOpening,
+  settleTransportDue,
   stashHolderOpening,
+  transportDueLabel,
   unmarkCleared,
   type AccountCollection,
   type AcctBalance,
@@ -36,13 +45,14 @@ import {
 } from "@/lib/accounts";
 import { brandFor } from "@/lib/brand";
 import { addExpense, PAID_TO_MANAGER_LABEL } from "@/lib/expenses";
+import { getFeatures } from "@/lib/features";
 import { generatePdf } from "@/lib/pdf";
 import { waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
-import { Paged } from "@/components/Pager";
-import type { Customer, Doc, Expense } from "@/lib/types";
+import PdfButtons from "@/components/PdfButtons";
+import type { Customer, Doc, Expense, Purchase, Supplier } from "@/lib/types";
 
 const hhmm = (iso: string) => {
   if (!iso) return "";
@@ -53,6 +63,10 @@ const toDmy = (v: string) => {
   const [y, m, d] = (v || "").split("-");
   return d && m && y ? `${d}-${m}-${y.slice(2)}` : "";
 };
+const isoToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const lc = (s: string) => (s || "").trim().toLowerCase();
 
@@ -61,6 +75,7 @@ const emptyBal = (name: string): AcctBalance => ({
   received: 0,
   ownerReceived: 0,
   collected: 0,
+  spent: 0,
   balance: 0,
   lines: [],
 });
@@ -80,7 +95,7 @@ interface AcctLedgerRow {
   credit: number;
   balance: number;
   l: AcctStmtLine;
-  kind: "in" | "collect";
+  kind: "in" | "collect" | "transport";
   isOpen?: boolean;
   isClose?: boolean;
 }
@@ -88,6 +103,7 @@ interface PrintDoc {
   title: string;
   summary: { k: string; v: string }[];
   rows: AcctLedgerRow[];
+  preview?: boolean;
 }
 
 export default function AccountsView() {
@@ -102,12 +118,16 @@ export default function AccountsView() {
   const [collectionsRaw, setCollections] = useState<AccountCollection[]>([]);
   const [registryRaw, setRegistry] = useState<PayAccount[]>([]);
   const [holdersRaw, setHolders] = useState<PayHolder[]>([]);
+  const [suppliersRaw, setSuppliers] = useState<Supplier[]>([]);
+  const [purchasesRaw, setPurchases] = useState<Purchase[]>([]);
   const quotes = cloakMoney ? [] : quotesRaw;
   const expenses = cloakMoney ? [] : expensesRaw;
   const customers = cloakMoney ? [] : customersRaw;
   const collections = cloakMoney ? [] : collectionsRaw;
   const registry = cloakMoney ? [] : registryRaw;
   const holders = cloakMoney ? [] : holdersRaw;
+  const suppliers = cloakMoney ? [] : suppliersRaw;
+  const purchases = cloakMoney ? [] : purchasesRaw;
   // "cleared log" watermarks — everything at/before a mark is hidden HERE only
   // (never deleted; quotations / Statements / Balances / Daybook keep it all)
   const [clearMarks, setClearMarks] = useState<Record<string, string>>({});
@@ -116,6 +136,8 @@ export default function AccountsView() {
   // ledger is visible at a glance without clicking into each holder/account.
   const [collapsedHolders, setCollapsedHolders] = useState<Set<string>>(new Set());
   const [collapsedAccts, setCollapsedAccts] = useState<Set<string>>(new Set());
+  /** Opened To rows (each To has its own stretch back to the previous To). */
+  const [openTos, setOpenTos] = useState<Set<string>>(new Set());
 
   // collect form — either a holder (holderId) or an ungrouped account (name)
   const [collectHolder, setCollectHolder] = useState<string | null>(null);
@@ -125,6 +147,20 @@ export default function AccountsView() {
   const [cNote, setCNote] = useState("");
   /** Who receives the collected cash — Owner pocket vs Manager Daybook */
   const [cBy, setCBy] = useState<"owner" | "manager">("owner");
+
+  // pay transport from a UPI pocket (Cut Size) — settles a locked due, does not create one
+  const [payHolder, setPayHolder] = useState<string | null>(null);
+  const [payFor, setPayFor] = useState<string | null>(null);
+  const [payDueId, setPayDueId] = useState<string | null>(null);
+  const [tDate, setTDate] = useState("");
+  const [acctTab, setAcctTab] = useState<"holders" | "transport">("holders");
+  const [dueParty, setDueParty] = useState("");
+  const [dueAmt, setDueAmt] = useState("");
+  const [dueVehicle, setDueVehicle] = useState("");
+  const [dueFrom, setDueFrom] = useState("");
+  const [dueDate, setDueDate] = useState(isoToday);
+  const [lockOpen, setLockOpen] = useState(false);
+  const canPayTransport = !!getFeatures().acceptPayment;
 
   // move a payment to another account
   const [moveFor, setMoveFor] = useState<string | null>(null);
@@ -154,6 +190,7 @@ export default function AccountsView() {
   // holder create / edit
   const [showAddHolder, setShowAddHolder] = useState(false);
   const [newHolder, setNewHolder] = useState("");
+  const [newHolderTransport, setNewHolderTransport] = useState(false);
   const [renameForId, setRenameForId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [addAcctFor, setAddAcctFor] = useState<string | null>(null); // holderId
@@ -166,14 +203,18 @@ export default function AccountsView() {
       allRec<Doc>("quotations"),
       allRec<Expense>("expenses"),
       allRec<Customer>("customers"),
+      allRec<Supplier>("suppliers"),
+      allRec<Purchase>("purchases"),
       listCollections(),
       listPayAccounts(),
       listHolders(),
       getClearMarks(),
-    ]).then(([qs, es, cs, cols, reg, hs, marks]) => {
+    ]).then(([qs, es, cs, sups, buys, cols, reg, hs, marks]) => {
       setQuotes(qs);
       setExpenses(es);
       setCustomers(cs);
+      setSuppliers(sups);
+      setPurchases(buys);
       setCollections(cols);
       setRegistry(reg);
       setHolders(hs);
@@ -195,14 +236,15 @@ export default function AccountsView() {
         return;
       }
       try {
-        toast("Preparing PDF…");
+        if (!printDoc.preview) toast("Preparing PDF…");
         await generatePdf(el, (printDoc.title || "statement").replace(/\s+/g, "-").toLowerCase(), {
           pageBreak: ".bank-row,.acct-print-sum,.acct-print-hdr",
           width: 700,
           title: (brand.name || "Accounts") + " — " + printDoc.title,
           marginMm: 8,
+          preview: printDoc.preview,
         });
-        if (!cancelled) toast("Statement PDF downloaded \u2713");
+        if (!cancelled && !printDoc.preview) toast("Statement PDF downloaded \u2713");
       } catch {
         if (!cancelled) toast("Could not create the PDF");
       }
@@ -298,6 +340,55 @@ export default function AccountsView() {
       ),
     [collections, clearMarks],
   );
+  const holderPays = useCallback(
+    (id: string) => {
+      const cut = clearMarks[holderClearKey(id)] || "";
+      return expenses.filter(
+        (e) => isAccountTransportPay(e) && e.holderId === id && (!cut || (e.createdAt || "") > cut),
+      );
+    },
+    [expenses, clearMarks],
+  );
+  const holderPayTotal = useMemo(
+    () =>
+      r2(
+        expenses
+          .filter((e) => {
+            if (!isAccountTransportPay(e) || !e.holderId) return false;
+            const cut = clearMarks[holderClearKey(e.holderId)] || "";
+            return !cut || (e.createdAt || "") > cut;
+          })
+          .reduce((s, e) => s + (+e.amount || 0), 0),
+      ),
+    [expenses, clearMarks],
+  );
+  const pendingDues = useMemo(
+    () =>
+      expenses
+        .filter(isPendingTransport)
+        .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")),
+    [expenses],
+  );
+  const pendingDueTotal = useMemo(
+    () => r2(pendingDues.reduce((s, e) => s + (+e.amount || 0), 0)),
+    [pendingDues],
+  );
+  const paidTransports = useMemo(
+    () =>
+      expenses
+        .filter(isAccountTransportPay)
+        .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")),
+    [expenses],
+  );
+  const boughtHints = useMemo(() => {
+    const s = new Set<string>();
+    for (const x of suppliers) if (x.name.trim()) s.add(x.name.trim());
+    for (const p of purchases) {
+      if ((p.buyerName || "").trim()) s.add(p.buyerName!.trim());
+      if ((p.fromName || "").trim()) s.add(p.fromName.trim());
+    }
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [suppliers, purchases]);
 
   const holderAccounts = (h: PayHolder) =>
     h.accounts.map((n) => byName.get(lc(n))).filter(Boolean) as AcctBalance[];
@@ -310,9 +401,11 @@ export default function AccountsView() {
     const owner = r2(subs.reduce((s, a) => s + a.ownerReceived, 0));
     const subCollected = r2(subs.reduce((s, a) => s + a.collected, 0)); // legacy per-entry
     const cols = holderCols(h.id);
+    const pays = holderPays(h.id);
     const collected = r2(subCollected + cols.reduce((s, c) => s + (+c.amount || 0), 0));
-    const balance = r2(opening + received - collected);
-    return { subs, opening, received, owner, collected, balance, cols };
+    const spent = r2(subs.reduce((s, a) => s + (a.spent || 0), 0) + pays.reduce((s, e) => s + (+e.amount || 0), 0));
+    const balance = r2(opening + received - collected - spent);
+    return { subs, opening, received, owner, collected, spent, balance, cols, pays };
   };
 
   // overall totals include holder opening balances + holder-level hand-overs
@@ -321,10 +414,12 @@ export default function AccountsView() {
   const sumReceived = r2(accounts.reduce((s, a) => s + a.received, 0));
   const sumOwner = r2(accounts.reduce((s, a) => s + a.ownerReceived, 0));
   const totalCollected = r2(accounts.reduce((s, a) => s + a.collected, 0) + holderColTotal);
-  const totalBalance = r2(sumReceived + totalOpening - totalCollected);
+  const totalSpent = r2(accounts.reduce((s, a) => s + (a.spent || 0), 0) + holderPayTotal);
+  const totalBalance = r2(sumReceived + totalOpening - totalCollected - totalSpent);
 
   // ── collect flow ──────────────────────────────────────────────────────────
   function startCollect(opts: { holderId?: string; account?: string }, balance: number, openKey: string) {
+    cancelPay();
     setCollectHolder(opts.holderId || null);
     setCollectFor(opts.account || null);
     setCAmt(balance > 0 ? String(r2(balance)) : "");
@@ -340,6 +435,231 @@ export default function AccountsView() {
     setCDate("");
     setCNote("");
     setCBy("owner");
+  }
+  function cancelPay() {
+    setPayHolder(null);
+    setPayFor(null);
+    setPayDueId(null);
+    setTDate("");
+  }
+  function listPaySources() {
+    const srcs = [
+      ...holders.map((h) => {
+        const { balance } = holderView(h);
+        return { holderId: h.id as string | undefined, account: h.name, balance, transport: isTransportPocket(h) };
+      }),
+      ...ungrouped.map((a) => ({
+        holderId: undefined as string | undefined,
+        account: a.name,
+        balance: a.balance,
+        transport: isTransportPocket(undefined, a.name),
+      })),
+    ];
+    srcs.sort((a, b) => Number(b.transport) - Number(a.transport) || b.balance - a.balance);
+    return srcs;
+  }
+  function samePaySrc(
+    s: { holderId?: string; account: string },
+    holderId: string | null,
+    account: string | null,
+  ) {
+    return (s.holderId || "") === (holderId || "") && lc(s.account) === lc(account || "");
+  }
+  function pickPaySource(amt: number) {
+    const srcs = listPaySources();
+    return (
+      srcs.find((s) => s.transport && s.balance + 0.5 >= amt) ||
+      srcs.find((s) => s.balance + 0.5 >= amt) ||
+      srcs.find((s) => s.transport) ||
+      srcs[0]
+    );
+  }
+  function startPayDue(dueId: string) {
+    cancelCollect();
+    if (payDueId === dueId) {
+      cancelPay();
+      return;
+    }
+    const due = pendingDues.find((e) => e.id === dueId);
+    const pick = pickPaySource(+(due?.amount || 0));
+    setPayDueId(dueId);
+    setPayHolder(pick?.holderId || null);
+    setPayFor(pick?.account || null);
+    setTDate(isoToday());
+  }
+  function startPay(opts: { holderId?: string; account?: string }, _balance: number, openKey: string) {
+    cancelCollect();
+    if (!pendingDues.length) {
+      setAcctTab("transport");
+      setLockOpen(true);
+      toast("Lock a transport due first, then Pay on that row");
+      return;
+    }
+    setPayHolder(opts.holderId || null);
+    setPayFor(opts.account || null);
+    setPayDueId(pendingDues.length === 1 ? pendingDues[0].id : null);
+    setTDate("");
+    if (opts.account) setCollapsedAccts((s) => { const n = new Set(s); n.delete(openKey); return n; });
+  }
+  async function submitPay(opts: { holderId?: string; account: string }, maxBal: number) {
+    const due = pendingDues.find((e) => e.id === payDueId);
+    if (!due) return toast("Pick which transport due to pay");
+    const a = +due.amount || 0;
+    if (a > maxBal + 0.5) return toast("Need ₹" + inr(a) + " in this account (bal ₹" + inr(maxBal) + ")");
+    const e = await settleTransportDue({
+      id: due.id,
+      account: opts.account,
+      holderId: opts.holderId,
+      date: tDate ? toDmy(tDate) : undefined,
+      by: user?.id || "unknown",
+    });
+    if (!e) return toast("Could not record");
+    cancelPay();
+    load();
+    bumpData();
+    toast("₹" + inr(a) + " transport — " + (due.party || ""));
+  }
+  async function submitDue() {
+    const party = dueParty.trim();
+    if (!party) return toast("Enter the transporter name");
+    const a = Math.max(0, +dueAmt || 0);
+    if (a <= 0) return toast("Enter an amount");
+    const e = await addTransportDue({
+      party,
+      amount: a,
+      vehicleNo: dueVehicle.trim(),
+      placeOfSupply: dueFrom.trim(),
+      date: dueDate ? toDmy(dueDate) : undefined,
+      by: user?.id || "unknown",
+    });
+    if (!e) return toast("Could not record");
+    setDueParty("");
+    setDueAmt("");
+    setDueVehicle("");
+    setDueFrom("");
+    setDueDate(isoToday());
+    setLockOpen(false);
+    load();
+    bumpData();
+    toast("Transport due · " + party + " · ₹" + inr(a));
+  }
+  async function delTransport(id: string, pending = false) {
+    const ok = await confirmDialog({
+      title: pending ? "Delete this transport due?" : "Undo this transport pay?",
+      message: pending
+        ? "Removes the locked bill. Nothing was paid from a UPI account."
+        : "Takes it out of Books. The amount goes back into the UPI pocket.",
+      confirmLabel: pending ? "Delete" : "Undo pay",
+      danger: true,
+    });
+    if (!ok) return;
+    await deleteAccountEntry(id);
+    if (payDueId === id) setPayDueId(null);
+    load();
+    bumpData();
+    toast(pending ? "Transport due removed" : "Transport pay undone");
+  }
+
+  function renderPayForm(opts: { holderId?: string; account: string }, maxBal: number) {
+    const picked = pendingDues.find((e) => e.id === payDueId);
+    return (
+      <div className="acct-form">
+        <small style={{ display: "block", color: "var(--ink-faint)", marginBottom: 8 }}>
+          Pay a locked due from this UPI — Books records Transport. Daybook cash is unchanged.
+        </small>
+        {pendingDues.map((e) => {
+          const on = e.id === payDueId;
+          return (
+            <button
+              key={e.id}
+              type="button"
+              className={"acct-chip" + (on ? " on" : "")}
+              style={{ display: "flex", width: "100%", justifyContent: "space-between", marginBottom: 6, textAlign: "left" }}
+              onClick={() => setPayDueId(e.id)}
+            >
+              <span>{transportDueLabel(e)}</span>
+              <b>₹{inr(+e.amount || 0)}</b>
+            </button>
+          );
+        })}
+        {picked && +picked.amount > maxBal + 0.5 && (
+          <small style={{ display: "block", color: "var(--danger)", marginBottom: 8 }}>
+            This due is ₹{inr(+picked.amount)} — account has ₹{inr(maxBal)}.
+          </small>
+        )}
+        <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
+          <label className="modal-field" style={{ flex: "1 1 120px", minWidth: 0 }}>
+            <span>Pay date (optional)</span>
+            <input type="date" value={tDate} onChange={(e) => setTDate(e.target.value)} />
+          </label>
+        </div>
+        <div className="rowbtns" style={{ marginTop: 10 }}>
+          <button className="btn primary sm" type="button" onClick={() => submitPay(opts, maxBal)} disabled={!picked}>
+            {picked ? "Pay ₹" + inr(+picked.amount) : "Pick a due"}
+          </button>
+          <button className="btn sm" type="button" onClick={cancelPay}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+  function renderDuePayForm(due: Expense) {
+    const srcs = listPaySources();
+    const amt = +due.amount || 0;
+    const picked = srcs.find((s) => samePaySrc(s, payHolder, payFor));
+    const short = !!(picked && amt > picked.balance + 0.5);
+    return (
+      <div className="acct-form acct-due-pay">
+        <small className="acct-hint">Pay from a UPI. Pocket drops. Daybook cash does not.</small>
+        {srcs.length === 0 ? (
+          <div className="acct-empty">Add a UPI holder first, then pay this due.</div>
+        ) : (
+          <div className="acct-pay-src">
+            {srcs.map((s) => {
+              const on = samePaySrc(s, payHolder, payFor);
+              const tight = amt > s.balance + 0.5;
+              return (
+                <button
+                  key={(s.holderId || "") + ":" + s.account}
+                  type="button"
+                  className={"acct-chip" + (on ? " on" : "")}
+                  onClick={() => {
+                    setPayHolder(s.holderId || null);
+                    setPayFor(s.account);
+                  }}
+                >
+                  {s.account}
+                  <span className="acct-chip-bal">{tight ? "need ₹" + inr(amt) : "₹" + inr(s.balance)}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {short && picked ? (
+          <small className="acct-warn">Need ₹{inr(amt)} — {picked.account} has ₹{inr(picked.balance)}.</small>
+        ) : null}
+        <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
+          <label className="modal-field" style={{ flex: "1 1 120px", minWidth: 0 }}>
+            <span>Pay date</span>
+            <input type="date" value={tDate} onChange={(e) => setTDate(e.target.value)} />
+          </label>
+        </div>
+        <div className="rowbtns" style={{ marginTop: 10 }}>
+          <button
+            className="btn primary sm"
+            type="button"
+            disabled={!picked || short}
+            onClick={() => picked && submitPay({ holderId: picked.holderId, account: picked.account }, picked.balance)}
+          >
+            Pay ₹{inr(amt)}
+          </button>
+          <button className="btn sm" type="button" onClick={cancelPay}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
   }
   async function submitCollect(opts: { holderId?: string; account: string }, maxBal: number) {
     const a = Math.max(0, +cAmt || 0);
@@ -496,9 +816,10 @@ export default function AccountsView() {
   async function createHolder() {
     const n = newHolder.trim();
     if (!n) return toast("Enter a holder name");
-    const h = await addHolder(n);
+    const h = await addHolder(n, newHolderTransport ? "transport" : undefined);
     if (!h) return toast("That holder already exists");
     setNewHolder("");
+    setNewHolderTransport(false);
     setShowAddHolder(false);
     load();
     bumpData();
@@ -590,6 +911,17 @@ export default function AccountsView() {
           l: line,
           kind: "in",
         });
+      } else if (line.kind === "transport") {
+        rows.push({
+          date: line.date,
+          at: line.at,
+          particulars: `To Transport — ${line.customer || "—"}`,
+          detail: line.note || "",
+          debit: line.amount,
+          credit: 0,
+          l: line,
+          kind: "transport",
+        });
       } else {
         rows.push({
           date: line.date,
@@ -638,39 +970,54 @@ export default function AccountsView() {
     return bits.join(" · ");
   }
 
-  function pdfHolder(h: PayHolder) {
+  function pdfHolder(h: PayHolder, preview = false) {
     const v = holderView(h);
     const book: AcctBalance =
       v.subs.length === 1
-        ? { ...v.subs[0], lines: holderPassbookLines(v.subs, v.cols) }
+        ? { ...v.subs[0], spent: v.spent, lines: holderPassbookLines(v.subs, v.cols, v.pays) }
         : {
             name: h.name,
             received: v.received,
             ownerReceived: v.owner,
             collected: v.collected,
+            spent: v.spent,
             balance: v.balance,
-            lines: holderPassbookLines(v.subs, v.cols),
+            lines: holderPassbookLines(v.subs, v.cols, v.pays),
           };
     setPrintDoc({
       title: h.name,
+      preview,
       summary: [
         ...(v.opening > 0 ? [{ k: "Opening", v: "₹ " + inr(v.opening) }] : []),
         { k: "Received", v: "₹ " + inr(v.received) },
         { k: "Collected", v: "₹ " + inr(v.collected) },
+        ...(v.spent > 0.5 ? [{ k: "Transport", v: "₹ " + inr(v.spent) }] : []),
         { k: "Balance", v: "₹ " + inr(v.balance) },
       ],
       rows: buildAcctLedger(book, v.opening),
     });
   }
-  function pdfAccount(a: AcctBalance) {
+  function pdfAccount(a: AcctBalance, preview = false) {
     setPrintDoc({
       title: a.name,
+      preview,
       summary: [
         { k: "Received", v: "₹ " + inr(a.received) },
         { k: "Collected", v: "₹ " + inr(a.collected) },
+        ...(a.spent > 0.5 ? [{ k: "Transport", v: "₹ " + inr(a.spent) }] : []),
         { k: "Balance", v: "₹ " + inr(a.balance) },
       ],
       rows: buildAcctLedger(a, 0),
+    });
+  }
+
+  function toggleToFold(id: string) {
+    if (!id) return;
+    setOpenTos((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
     });
   }
 
@@ -679,9 +1026,15 @@ export default function AccountsView() {
     const ledgerRows = buildAcctLedger(a, parentOpening);
     const due = ledgerRows.length > 0 ? ledgerRows[ledgerRows.length - 1].balance > 0.5 : false;
     const moveTargets = allNames.filter((n) => lc(n) !== lc(a.name));
+    const folds = settleFoldIndexes(ledgerRows);
+    const hidden = new Set<number>();
+    for (const f of folds) {
+      const id = ledgerRows[f].l.id || "";
+      if (id && openTos.has(id)) continue;
+      for (const i of settleFoldChildren(folds, f)) hidden.add(i);
+    }
+    const liveRows = ledgerRows.filter((r, i) => r.isClose || !hidden.has(i));
     return (
-      <Paged items={ledgerRows} resetKey={a.name + "\0" + parentOpening}>
-        {(view) => (
       <div className="bank-ledger acct-book">
         <div className="bank-hdr">
           <span>Date</span>
@@ -691,7 +1044,7 @@ export default function AccountsView() {
           <span className="bank-amt">Balance</span>
           <span className="acct-txn-more-slot" aria-hidden="true" />
         </div>
-        {view.map((row, i) => {
+        {liveRows.map((row, i) => {
           const isUpi = row.kind === "in" && !row.isOpen && !row.isClose;
           const isTxn = !row.isOpen && !row.isClose;
           const menuId = row.l.id || "";
@@ -700,20 +1053,45 @@ export default function AccountsView() {
           const canView = isUpi && !!(row.l.quoteNo || row.l.custId);
           const canEdit = isUpi && !!row.l.quoteNo;
           const meta = txnMeta(row);
+          const foldAt = ledgerRows.indexOf(row);
+          const isFold = folds.includes(foldAt);
+          const foldOpen = !!(menuId && openTos.has(menuId));
           const rowCls = [
             "bank-row",
             "acct-txn",
             row.isOpen ? "bank-open" : "",
             row.isClose ? "bank-total" : "",
             menuOpen || moving ? "on" : "",
+            isFold ? "acct-fold" : "",
+            isFold && foldOpen ? "on" : "",
           ]
             .filter(Boolean)
             .join(" ");
           return (
-            <div key={row.l.id || row.date + "-" + i} className={rowCls}>
+            <div
+              key={row.l.id || row.date + "-" + i}
+              className={rowCls}
+              role={isFold ? "button" : undefined}
+              tabIndex={isFold ? 0 : undefined}
+              title={isFold ? (foldOpen ? "Hide this To" : "Show this To") : undefined}
+              onClick={isFold ? () => toggleToFold(menuId) : undefined}
+              onKeyDown={
+                isFold
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleToFold(menuId);
+                      }
+                    }
+                  : undefined
+              }
+            >
               <span className="bank-date">{isTxn ? row.date : ""}</span>
               <span className="bank-parts">
-                <span className="acct-txn-who">{row.particulars}</span>
+                <span className="acct-txn-who">
+                  {isFold ? <span className="um-caret" aria-hidden="true">{foldOpen ? "▾" : "▸"}</span> : null}
+                  {row.particulars}
+                </span>
                 {meta ? <small>{meta}</small> : null}
               </span>
               <span className={"bank-amt" + (row.debit > 0 ? " dr" : "")}>{row.debit > 0 ? "₹" + inr(row.debit) : ""}</span>
@@ -732,7 +1110,8 @@ export default function AccountsView() {
                     aria-label="Transaction actions"
                     aria-haspopup="menu"
                     aria-expanded={menuOpen}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setRowMenu(menuOpen ? null : menuId);
                       if (moveFor && moveFor !== menuId) setMoveFor(null);
                     }}
@@ -740,7 +1119,7 @@ export default function AccountsView() {
                     ⋮
                   </button>
                   {menuOpen && (
-                    <div className="acct-row-menu" role="menu">
+                    <div className="acct-row-menu" role="menu" onClick={(e) => e.stopPropagation()}>
                       {canView && (
                         <button type="button" role="menuitem" onClick={() => { setRowMenu(null); viewLine(row); }}>
                           View
@@ -789,6 +1168,19 @@ export default function AccountsView() {
                           Delete
                         </button>
                       )}
+                      {row.kind === "transport" && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="danger"
+                          onClick={() => {
+                            setRowMenu(null);
+                            delTransport(row.l.id);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   )}
                 </span>
@@ -796,7 +1188,7 @@ export default function AccountsView() {
                 <span className="acct-txn-more-slot" aria-hidden="true" />
               )}
               {moving && (
-                <div className="acct-move" data-acct-row-ui>
+                <div className="acct-move" data-acct-row-ui onClick={(e) => e.stopPropagation()}>
                   <span className="acct-move-lbl">Move to</span>
                   {moveTargets.length ? (
                     moveTargets.map((n) => (
@@ -813,9 +1205,34 @@ export default function AccountsView() {
           );
         })}
       </div>
-        )}
-      </Paged>
     );
+  }
+
+  function pocketActions(opts: {
+    transport: boolean;
+    onCollect: () => void;
+    onPay: () => void;
+  }) {
+    const collect = (
+      <button
+        className={(opts.transport ? "btn sm" : "btn primary sm") + " acct-collect-btn"}
+        type="button"
+        title={opts.transport ? "Hand leftover to owner — not a lorry pay" : undefined}
+        onClick={opts.onCollect}
+      >
+        {opts.transport ? "Collect leftover" : "Collect"}
+      </button>
+    );
+    const pay = canPayTransport ? (
+      <button
+        className={(opts.transport ? "btn primary sm" : "btn sm") + " acct-pay-btn"}
+        type="button"
+        onClick={opts.onPay}
+      >
+        Pay transport
+      </button>
+    ) : null;
+    return opts.transport ? <>{pay}{collect}</> : <>{collect}{pay}</>;
   }
 
   // ── one sub-account (bank-format ledger + collect form + actions) ────────
@@ -823,6 +1240,7 @@ export default function AccountsView() {
     const isOpen = !collapsedAccts.has(a.name);
     const due = a.balance > 0.5;
     const collecting = collectFor === a.name;
+    const paying = payFor === a.name;
     const cleared = !due && a.received > 0;
     const grouped = !!holderId;
     const holder = grouped ? holders.find((h) => h.id === holderId) : undefined;
@@ -830,7 +1248,7 @@ export default function AccountsView() {
     const soleSub = grouped && holderSubs.length === 1;
     const parentOpening = soleSub ? holder!.opening || 0 : 0;
     const book: AcctBalance = soleSub
-      ? { ...a, lines: holderPassbookLines([a], holderCols(holder!.id)) }
+      ? { ...a, lines: holderPassbookLines([a], holderCols(holder!.id), holderPays(holder!.id)) }
       : a;
     const showLedger = !grouped || soleSub;
     return (
@@ -845,16 +1263,14 @@ export default function AccountsView() {
           {a.ownerReceived > 0 && <span className="acct-sub-note">Owner ₹{inr(a.ownerReceived)}</span>}
           {!grouped && due && <span className="acct-sub-note due">Bal ₹{inr(a.balance)}</span>}
           {!grouped && !due && a.collected > 0 && <span className="acct-sub-note ok">₹{inr(a.collected)}</span>}
-          {!grouped && due && !collecting && (
-            <button className="btn primary sm acct-collect-btn" type="button" onClick={() => startCollect({ account: a.name }, a.balance, a.name)}>
-              Collect
-            </button>
-          )}
+          {!grouped && due && !collecting && !paying && pocketActions({
+            transport: isTransportPocket(undefined, a.name),
+            onCollect: () => startCollect({ account: a.name }, a.balance, a.name),
+            onPay: () => startPay({ account: a.name }, a.balance, a.name),
+          })}
           {!grouped && (a.received > 0 || a.lines.length > 0) && (
             <>
-              <button className="btn sm" type="button" title="Download the same passbook as on screen" onClick={() => pdfAccount(a)}>
-                PDF
-              </button>
+              <PdfButtons onPreview={() => pdfAccount(a, true)} onDownload={() => pdfAccount(a)} />
               <button
                 className="btn wa sm"
                 type="button"
@@ -862,6 +1278,7 @@ export default function AccountsView() {
                 onClick={() => sendSummary(a.name, [
                   { k: "Received", v: "₹" + inr(a.received) },
                   { k: "Collected", v: "₹" + inr(a.collected) },
+                  ...(a.spent > 0.5 ? [{ k: "Transport", v: "₹" + inr(a.spent) }] : []),
                   { k: "Balance", v: "₹" + inr(a.balance) },
                 ])}
               >
@@ -932,6 +1349,8 @@ export default function AccountsView() {
           </div>
         )}
 
+        {!grouped && paying && renderPayForm({ account: a.name }, a.balance)}
+
         {isOpen && showLedger &&
           (book.lines.length || parentOpening > 0 ? (
             <>{renderAccountLedger(book, parentOpening)}</>
@@ -957,13 +1376,18 @@ export default function AccountsView() {
     <div className="ledger-page acct-page">
       <div className="cd-screen">
       <div className="sectitle">
-        Accounts <small>— holders, their UPI accounts &amp; hand-overs</small>
+        Accounts{" "}
+        <small>
+          {canPayTransport && acctTab === "transport"
+            ? "— lock the lorry, then Pay from a UPI"
+            : "— holders, their UPI accounts & hand-overs"}
+        </small>
       </div>
 
       {/* overall */}
       <div className="acct-overall">
         <div className="acct-overall-h">Overall</div>
-        <div className="acct-overall-grid">
+        <div className={"acct-overall-grid" + (canPayTransport ? " has-transport" : "")}>
           <div className="acct-stat">
             <span className="k">To collect</span>
             <span className={"v" + (totalBalance <= 0.5 ? " ok" : " due")}>₹ {inr(totalBalance)}</span>
@@ -979,9 +1403,183 @@ export default function AccountsView() {
             <span className="v ok">₹ {inr(totalCollected)}</span>
             <span className="sub">handed over</span>
           </div>
+          {canPayTransport && (
+            <button type="button" className="acct-stat acct-stat-btn" onClick={() => setAcctTab("transport")}>
+              <span className="k">Transport</span>
+              {acctTab === "transport" && pendingDues.length ? (
+                <>
+                  <span className="v due">₹ {inr(pendingDueTotal)}</span>
+                  <span className="sub">{pendingDues.length} due · paid ₹{inr(totalSpent)}</span>
+                </>
+              ) : (
+                <>
+                  <span className="v">₹ {inr(totalSpent)}</span>
+                  <span className="sub">
+                    {pendingDues.length
+                      ? pendingDues.length + " due · ₹" + inr(pendingDueTotal)
+                      : "paid from UPI"}
+                  </span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
+      {canPayTransport && (
+        <div className="db-seg sm acct-tabs" role="tablist" aria-label="Accounts">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={acctTab === "holders"}
+            className={"seg-btn" + (acctTab === "holders" ? " on" : "")}
+            onClick={() => setAcctTab("holders")}
+          >
+            Holders
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={acctTab === "transport"}
+            className={"seg-btn" + (acctTab === "transport" ? " on" : "")}
+            onClick={() => setAcctTab("transport")}
+          >
+            Transport{pendingDues.length ? " · " + pendingDues.length : ""}
+          </button>
+        </div>
+      )}
+
+      {canPayTransport && acctTab === "transport" && (
+        <>
+          {lockOpen || pendingDues.length === 0 ? (
+            <form
+              className="acct-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitDue();
+              }}
+            >
+              <small className="acct-hint">Due is not in Books yet. Pay from a UPI on the row — then the pocket drops.</small>
+              <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+                <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
+                  <span>Transporter</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. Raju lorry"
+                    value={dueParty}
+                    onChange={(e) => setDueParty(e.target.value)}
+                  />
+                </label>
+                <label className="modal-field" style={{ flex: "1 1 130px", minWidth: 0 }}>
+                  <span>Vehicle number</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. KA01AB1234"
+                    value={dueVehicle}
+                    onChange={(e) => setDueVehicle(e.target.value)}
+                  />
+                </label>
+                <label className="modal-field" style={{ flex: "1 1 110px", minWidth: 0 }}>
+                  <span>Amount ₹</span>
+                  <input type="number" inputMode="decimal" placeholder="0" value={dueAmt} onChange={(e) => setDueAmt(e.target.value)} />
+                </label>
+                <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
+                  <span>From</span>
+                  <input
+                    type="text"
+                    list="acct-bought-from"
+                    placeholder="e.g. Chennai"
+                    value={dueFrom}
+                    onChange={(e) => setDueFrom(e.target.value)}
+                  />
+                  <datalist id="acct-bought-from">
+                    {boughtHints.map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
+                </label>
+                <label className="modal-field" style={{ flex: "1 1 120px", minWidth: 0 }}>
+                  <span>Date</span>
+                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                </label>
+              </div>
+              <div className="rowbtns" style={{ marginTop: 10 }}>
+                <button className="btn primary sm" type="submit">
+                  Lock due
+                </button>
+                {pendingDues.length > 0 && (
+                  <button className="btn sm" type="button" onClick={() => setLockOpen(false)}>
+                    Done
+                  </button>
+                )}
+              </div>
+            </form>
+          ) : (
+            <div className="acct-day-label acct-lock-toggle">
+              <button className="btn sm" type="button" onClick={() => setLockOpen(true)}>
+                + Lock a bill
+              </button>
+            </div>
+          )}
+
+          <div className="acct-day-label">
+            <span>Due · {pendingDues.length}</span>
+            {pendingDueTotal > 0.5 && <span className="acct-count">₹{inr(pendingDueTotal)}</span>}
+          </div>
+          {pendingDues.length === 0 ? (
+            <div className="acct-empty">Nothing due. Lock a bill, then Pay on the row.</div>
+          ) : (
+            pendingDues.map((e) => (
+              <div key={e.id} className={"acct-due-block" + (payDueId === e.id ? " on" : "")}>
+                <div className="acct-trow">
+                  <span className="who">{transportDueLabel(e)}</span>
+                  <span className="meta">
+                    ₹{inr(+e.amount || 0)}
+                    {e.date ? " · " + e.date : ""}
+                  </span>
+                  <span className="acct-tag pending">Due</span>
+                  <span className="acts">
+                    <button className="btn primary sm" type="button" onClick={() => startPayDue(e.id)}>
+                      {payDueId === e.id ? "Close" : "Pay"}
+                    </button>
+                    <button className="btn sm danger" type="button" onClick={() => delTransport(e.id, true)}>
+                      Delete
+                    </button>
+                  </span>
+                </div>
+                {payDueId === e.id ? renderDuePayForm(e) : null}
+              </div>
+            ))
+          )}
+
+          <div className="acct-day-label" style={{ marginTop: 18 }}>
+            <span>Paid · {paidTransports.length}</span>
+          </div>
+          {paidTransports.length === 0 ? (
+            <div className="acct-empty">Pays show here and in Books.</div>
+          ) : (
+            paidTransports.map((e) => (
+              <div className="acct-trow" key={e.id}>
+                <span className="who">{transportDueLabel(e)}</span>
+                <span className="meta">
+                  ₹{inr(+e.amount || 0)}
+                  {(e.account || "").trim() ? " · " + e.account : ""}
+                  {e.date ? " · " + e.date : ""}
+                </span>
+                <span className="acct-tag ok">Paid</span>
+                <span className="acts">
+                  <button className="btn sm" type="button" onClick={() => delTransport(e.id, false)}>
+                    Undo pay
+                  </button>
+                </span>
+              </div>
+            ))
+          )}
+        </>
+      )}
+
+      {(!canPayTransport || acctTab === "holders") && (
+      <>
       <div className="acct-day-label">
         <span>Account holders · {holders.length}</span>
         <button className="btn sm" type="button" style={{ marginLeft: "auto" }} onClick={() => setShowAddHolder((v) => !v)}>
@@ -1007,6 +1605,10 @@ export default function AccountsView() {
               Add
             </button>
           </div>
+          <label className="note" style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, opacity: 0.85 }}>
+            <input type="checkbox" checked={newHolderTransport} onChange={(e) => setNewHolderTransport(e.target.checked)} />
+            Transport pocket — Pay transport is the main button (lorry from this UPI)
+          </label>
           <p className="note" style={{ marginTop: 8, opacity: 0.75 }}>
             A holder is a person who receives UPI on your behalf. Add their accounts inside — you collect from the holder, and the running total is what matters.
           </p>
@@ -1015,12 +1617,13 @@ export default function AccountsView() {
 
       {/* holders */}
       {holders.map((h) => {
-        const { subs, opening, received, owner, collected, balance, cols } = holderView(h);
+        const { subs, opening, received, owner, collected, spent, balance, cols, pays } = holderView(h);
         const isOpen = !collapsedHolders.has(h.id);
         const due = balance > 0.5;
         const renaming = renameForId === h.id;
         const adding = addAcctFor === h.id;
         const collecting = collectHolder === h.id;
+        const paying = payHolder === h.id;
         const editingOpening = openingForId === h.id;
         return (
           <div className="acct-holder" key={h.id}>
@@ -1050,11 +1653,11 @@ export default function AccountsView() {
                     {owner > 0 && <span>Owner ₹{inr(owner)}</span>}
                     {due ? <span className="due">Bal ₹{inr(balance)}</span> : received > 0 ? <span className="ok">Cleared</span> : null}
                   </span>
-                  {due && !collecting && (
-                    <button className="btn primary sm acct-collect-btn" type="button" onClick={() => startCollect({ holderId: h.id }, balance, h.id)}>
-                      Collect
-                    </button>
-                  )}
+                  {due && !collecting && !paying && pocketActions({
+                    transport: isTransportPocket(h),
+                    onCollect: () => startCollect({ holderId: h.id }, balance, h.id),
+                    onPay: () => startPay({ holderId: h.id }, balance, h.id),
+                  })}
                 </>
               )}
             </div>
@@ -1100,20 +1703,23 @@ export default function AccountsView() {
               </div>
             )}
 
+            {paying && renderPayForm({ holderId: h.id, account: h.name }, balance)}
+
             {isOpen && (
               <div className="acct-holder-body">
                 {subs.length ? (
                   <>
                     {subs.map((a) => renderAccount(a, h.id))}
-                    {subs.length > 1 && (holderPassbookLines(subs, cols).length > 0 || opening > 0) &&
+                    {subs.length > 1 && (holderPassbookLines(subs, cols, pays).length > 0 || opening > 0) &&
                       renderAccountLedger(
                         {
                           name: h.name,
                           received,
                           ownerReceived: owner,
                           collected,
+                          spent,
                           balance,
-                          lines: holderPassbookLines(subs, cols),
+                          lines: holderPassbookLines(subs, cols, pays),
                         },
                         opening,
                       )}
@@ -1121,15 +1727,16 @@ export default function AccountsView() {
                 ) : (
                   <>
                     <div className="stmt-sub" style={{ padding: "6px 4px", opacity: 0.7 }}>No accounts yet — add one below.</div>
-                    {(cols.length > 0 || opening > 0) &&
+                    {(cols.length > 0 || pays.length > 0 || opening > 0) &&
                       renderAccountLedger(
                         {
                           name: h.name,
                           received,
                           ownerReceived: owner,
                           collected,
+                          spent,
                           balance,
-                          lines: holderPassbookLines([], cols),
+                          lines: holderPassbookLines([], cols, pays),
                         },
                         opening,
                       )}
@@ -1196,13 +1803,12 @@ export default function AccountsView() {
                     <button className="btn sm primary" type="button" onClick={() => { setAddAcctFor(h.id); setNewAcct(""); }}>
                       + Account
                     </button>
-                    <button className="btn sm" type="button" title="Download the same passbook as on screen" onClick={() => pdfHolder(h)}>
-                      PDF
-                    </button>
+                    <PdfButtons onPreview={() => pdfHolder(h, true)} onDownload={() => pdfHolder(h)} />
                     <button className="btn sm wa" type="button" onClick={() => sendSummary(h.name, [
                       ...(opening > 0 ? [{ k: "Opening", v: "₹" + inr(opening) }] : []),
                       { k: "Received", v: "₹" + inr(received) },
                       { k: "Collected", v: "₹" + inr(collected) },
+                      ...(spent > 0.5 ? [{ k: "Transport", v: "₹" + inr(spent) }] : []),
                       { k: "Balance", v: "₹" + inr(balance) },
                     ])}>
                       Send
@@ -1213,12 +1819,26 @@ export default function AccountsView() {
                     <button className="btn sm" type="button" onClick={() => { setRenameForId(h.id); setRenameVal(h.name); }}>
                       Rename
                     </button>
-                    {isOwner && !due && (received > 0 || collected > 0) && (
+                    {canPayTransport && (
+                      <button
+                        className={"btn sm" + (isTransportPocket(h) ? " primary" : "")}
+                        type="button"
+                        title={isTransportPocket(h) ? "Switch back to Collect as the main button" : "Pay lorries from this UPI — Collect stays for leftover"}
+                        onClick={async () => {
+                          await setHolderKind(h.id, isTransportPocket(h) ? "collect" : "transport");
+                          load();
+                          bumpData();
+                        }}
+                      >
+                        {isTransportPocket(h) ? "Transport pocket ✓" : "Mark transport"}
+                      </button>
+                    )}
+                    {isOwner && !due && (received > 0 || collected > 0 || spent > 0) && (
                       <button
                         className="btn sm"
                         type="button"
                         title="All settled — hide this holder's log here and start from ₹0 (nothing is deleted, undo anytime)"
-                        onClick={() => clearHolderLog(h, { subs, opening, received, owner, collected, balance, cols })}
+                        onClick={() => clearHolderLog(h, { subs, opening, received, owner, collected, spent, balance, cols, pays })}
                       >
                         Clear log
                       </button>
@@ -1228,7 +1848,7 @@ export default function AccountsView() {
                     </button>
                   </div>
                 )}
-                {clearMarks[holderClearKey(h.id)] && received === 0 && cols.length === 0 && (
+                {clearMarks[holderClearKey(h.id)] && received === 0 && cols.length === 0 && pays.length === 0 && (
                   <div className="stmt-sub" style={{ padding: "6px 4px", opacity: 0.7 }}>
                     Log cleared on {clearedOn(holderClearKey(h.id))} — fresh start. History is kept everywhere else.
                     {isOwner && (
@@ -1269,11 +1889,13 @@ export default function AccountsView() {
           </div>
         </div>
       )}
+      </>
+      )}
       </div>
 
       {printDoc && (
         <div className="cd-print acct-print acct-page" ref={printRef}>
-          <div className={"acct-print-sum" + (printDoc.summary.length === 4 ? " cols4" : " cols3")}>
+          <div className={"acct-print-sum" + (printDoc.summary.length >= 5 ? " cols5" : printDoc.summary.length === 4 ? " cols4" : " cols3")}>
             {printDoc.summary.map((s) => (
               <div key={s.k}>
                 <span>{s.k}</span>
