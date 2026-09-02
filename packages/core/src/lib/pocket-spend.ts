@@ -24,6 +24,24 @@ export function transportPlaceOf(e: Pick<Expense, "placeOfSupply" | "boughtFrom"
   return (e.placeOfSupply || e.boughtFrom || "").trim();
 }
 
+/** Still needed on the UPI pocket: locked dues minus what is already sitting there. */
+export function transportNeedToCollect(dueTotal: number, pocketBal: number): number {
+  const due = Math.round((+dueTotal || 0) * 100) / 100;
+  const bal = Math.round((+pocketBal || 0) * 100) / 100;
+  return Math.round(Math.max(0, due - bal) * 100) / 100;
+}
+
+/** Locked due belongs on this holder/account (unassigned dues fall to transport pockets). */
+export function dueOnTransportPocket(
+  e: Pick<Expense, "transportPocket">,
+  pocket: { id?: string; name?: string },
+  pocketIsTransport: boolean,
+): boolean {
+  const p = (e.transportPocket || "").trim().toLowerCase();
+  if (p) return p === (pocket.id || "").trim().toLowerCase() || p === (pocket.name || "").trim().toLowerCase();
+  return pocketIsTransport;
+}
+
 /** Transporter · vehicle · place — chips, Transport tab, Books detail. */
 export function transportDueLabel(
   e: Pick<Expense, "party" | "vehicleNo" | "placeOfSupply" | "boughtFrom">,

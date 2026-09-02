@@ -36,6 +36,8 @@ import {
   settleTransportDue,
   stashHolderOpening,
   transportDueLabel,
+  transportNeedToCollect,
+  dueOnTransportPocket,
   unmarkCleared,
   type AccountCollection,
   type AcctBalance,
@@ -159,6 +161,7 @@ export default function AccountsView() {
   const [dueVehicle, setDueVehicle] = useState("");
   const [dueFrom, setDueFrom] = useState("");
   const [dueDate, setDueDate] = useState(isoToday);
+  const [duePocket, setDuePocket] = useState("");
   const [lockOpen, setLockOpen] = useState(false);
   const canPayTransport = !!getFeatures().acceptPayment;
 
@@ -295,6 +298,20 @@ export default function AccountsView() {
     () => accounts.filter((a) => !grouped.has(lc(a.name))),
     [accounts, grouped],
   );
+  const transportPockets = useMemo(() => {
+    const hs = holders
+      .map((h) => ({ key: h.id, name: h.name, transport: isTransportPocket(h) }))
+      .sort((a, b) => Number(b.transport) - Number(a.transport) || a.name.localeCompare(b.name));
+    const extras = ungrouped
+      .filter((a) => !hs.some((h) => lc(h.name) === lc(a.name)))
+      .map((a) => ({ key: a.name, name: a.name, transport: isTransportPocket(undefined, a.name) }))
+      .sort((a, b) => Number(b.transport) - Number(a.transport) || a.name.localeCompare(b.name));
+    return [...hs, ...extras];
+  }, [holders, ungrouped]);
+  useEffect(() => {
+    if (duePocket || !transportPockets.length) return;
+    setDuePocket(transportPockets[0].key);
+  }, [transportPockets, duePocket]);
 
   const allNames = useMemo(() => accounts.map((a) => a.name), [accounts]);
 
@@ -407,6 +424,14 @@ export default function AccountsView() {
     const balance = r2(opening + received - collected - spent);
     return { subs, opening, received, owner, collected, spent, balance, cols, pays };
   };
+  function needOnPocket(pocket: { id?: string; name?: string }, isTransport: boolean, balance: number) {
+    const due = r2(
+      pendingDues
+        .filter((e) => dueOnTransportPocket(e, pocket, isTransport))
+        .reduce((s, e) => s + (+e.amount || 0), 0),
+    );
+    return transportNeedToCollect(due, balance);
+  }
 
   // overall totals include holder opening balances + holder-level hand-overs
   // (computed over the CUT accounts, so cleared history stays out of the tiles too)
@@ -529,6 +554,7 @@ export default function AccountsView() {
       amount: a,
       vehicleNo: dueVehicle.trim(),
       placeOfSupply: dueFrom.trim(),
+      transportPocket: duePocket.trim() || undefined,
       date: dueDate ? toDmy(dueDate) : undefined,
       by: user?.id || "unknown",
     });
@@ -1239,10 +1265,13 @@ export default function AccountsView() {
   function renderAccount(a: AcctBalance, holderId?: string) {
     const isOpen = !collapsedAccts.has(a.name);
     const due = a.balance > 0.5;
+    const grouped = !!holderId;
+    const need = !grouped
+      ? needOnPocket({ name: a.name }, isTransportPocket(undefined, a.name), a.balance)
+      : 0;
     const collecting = collectFor === a.name;
     const paying = payFor === a.name;
     const cleared = !due && a.received > 0;
-    const grouped = !!holderId;
     const holder = grouped ? holders.find((h) => h.id === holderId) : undefined;
     const holderSubs = holder ? holderAccounts(holder) : [];
     const soleSub = grouped && holderSubs.length === 1;
@@ -1261,6 +1290,9 @@ export default function AccountsView() {
           </span>
           {a.received > 0 && <span className="acct-sub-fig">₹{inr(a.received)}</span>}
           {a.ownerReceived > 0 && <span className="acct-sub-note">Owner ₹{inr(a.ownerReceived)}</span>}
+          {!grouped && need > 0.5 && (
+            <span className="acct-sub-note due">Need to collect ₹{inr(need)}</span>
+          )}
           {!grouped && due && <span className="acct-sub-note due">Bal ₹{inr(a.balance)}</span>}
           {!grouped && !due && a.collected > 0 && <span className="acct-sub-note ok">₹{inr(a.collected)}</span>}
           {!grouped && due && !collecting && !paying && pocketActions({
@@ -1459,7 +1491,9 @@ export default function AccountsView() {
                 submitDue();
               }}
             >
-              <small className="acct-hint">Due is not in Books yet. Pay from a UPI on the row — then the pocket drops.</small>
+              <small className="acct-hint">
+                Locking a due shows Need to collect on that UPI (CS Kumar). As money comes in, the need drops. Pay the lorry when the pocket has enough.
+              </small>
               <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
                 <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
                   <span>Transporter</span>
@@ -1483,6 +1517,18 @@ export default function AccountsView() {
                   <span>Amount ₹</span>
                   <input type="number" inputMode="decimal" placeholder="0" value={dueAmt} onChange={(e) => setDueAmt(e.target.value)} />
                 </label>
+                {transportPockets.length > 0 && (
+                  <label className="modal-field" style={{ flex: "1 1 160px", minWidth: 0 }}>
+                    <span>Collect on</span>
+                    <select value={duePocket} onChange={(e) => setDuePocket(e.target.value)}>
+                      {transportPockets.map((p) => (
+                        <option key={p.key} value={p.key}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
                   <span>From</span>
                   <input
@@ -1536,6 +1582,9 @@ export default function AccountsView() {
                   <span className="meta">
                     ₹{inr(+e.amount || 0)}
                     {e.date ? " · " + e.date : ""}
+                    {e.transportPocket
+                      ? " · " + (transportPockets.find((p) => p.key === e.transportPocket || lc(p.name) === lc(e.transportPocket))?.name || e.transportPocket)
+                      : ""}
                   </span>
                   <span className="acct-tag pending">Due</span>
                   <span className="acts">
@@ -1620,6 +1669,7 @@ export default function AccountsView() {
         const { subs, opening, received, owner, collected, spent, balance, cols, pays } = holderView(h);
         const isOpen = !collapsedHolders.has(h.id);
         const due = balance > 0.5;
+        const need = needOnPocket({ id: h.id, name: h.name }, isTransportPocket(h), balance);
         const renaming = renameForId === h.id;
         const adding = addAcctFor === h.id;
         const collecting = collectHolder === h.id;
@@ -1651,6 +1701,7 @@ export default function AccountsView() {
                   <span className="acct-holder-meta">
                     {opening > 0 && <span>Opening ₹{inr(opening)}</span>}
                     {owner > 0 && <span>Owner ₹{inr(owner)}</span>}
+                    {need > 0.5 ? <span className="due">Need to collect ₹{inr(need)}</span> : null}
                     {due ? <span className="due">Bal ₹{inr(balance)}</span> : received > 0 ? <span className="ok">Cleared</span> : null}
                   </span>
                   {due && !collecting && !paying && pocketActions({

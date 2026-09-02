@@ -400,6 +400,8 @@ export interface Expense {
   placeOfSupply?: string;
   /** Lorry vehicle number on a transport due. */
   vehicleNo?: string;
+  /** Holder id or UPI account this locked due is collected against (not a pay). */
+  transportPocket?: string;
   /** set once the entry is archived into a closed session; falsy = current open session */
   sessionId?: string;
   /** Accounts tab: when this payment was physically collected from the account holder. */
