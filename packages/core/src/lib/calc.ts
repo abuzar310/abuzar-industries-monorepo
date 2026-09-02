@@ -179,13 +179,29 @@ export function permitOf(d: Pick<Doc, "permitFee">): number {
   return Math.round(Math.max(0, +(d.permitFee ?? 0) || 0) * 100) / 100;
 }
 
-/** What the customer is charged: accepted Final price (else wood+GST) plus any permit fee.
- *  Permit is never folded into the rounded Final price — it sits on top. */
+/** Printed add-on name. Empty → "Permit". */
+export function permitLabelOf(d: Pick<Doc, "permitLabel">): string {
+  return (d.permitLabel || "").trim() || "Permit";
+}
+
+/** Old dues carried onto this quotation. Unset / 0 / negative → 0. */
+export function oldBalanceOf(d: Pick<Doc, "oldBalance">): number {
+  return Math.round(Math.max(0, +(d.oldBalance ?? 0) || 0) * 100) / 100;
+}
+
+/** What the customer is charged on this paper: Final (else wood+GST) + permit + old balance.
+ *  Permit and old balance sit on top of the rounded Final price — never folded into it. */
 export function quoteBill(d: Doc): number {
   const permit = permitOf(d);
+  const old = oldBalanceOf(d);
   const wood = Math.round((computeDoc(d).grand - permit) * 100) / 100;
   const base = d.finalPrice != null && +d.finalPrice > 0 ? +d.finalPrice : wood;
-  return Math.round((base + permit) * 100) / 100;
+  return Math.round((base + permit + old) * 100) / 100;
+}
+
+/** This quote's own sale — quoteBill minus carried old dues (those rupees already live on older bills). */
+export function quoteOwnBill(d: Doc): number {
+  return Math.round((quoteBill(d) - oldBalanceOf(d)) * 100) / 100;
 }
 
 /** Split the cash in hand at session close into given vs carried-forward.

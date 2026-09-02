@@ -4,6 +4,8 @@
 // Loaded dynamically so it stays out of the server bundle.
 import { toast } from "@/store/app-store";
 import { beginPdfPreview, failPdfPreview, finishPdfPreview } from "@/store/pdf-preview-store";
+import { activeBrand } from "./brand";
+import { asOfLabel, frameLetterheadPage, letterheadFooter } from "./pdf-letterhead";
 
 /** Optional capture tuning. Without these, generatePdf behaves exactly as before
  *  (blind fixed-height A4 slicing) — so invoices/quotes and the report sheets are
@@ -117,6 +119,27 @@ function jpegPages(canvas: HTMLCanvasElement, pagePx: number, quality: number): 
   return out.length ? out : [canvas.toDataURL("image/jpeg", quality)];
 }
 
+async function letterheadPdf(
+  JsPDF: typeof import("jspdf").jsPDF,
+  pages: string[],
+  title: string,
+) {
+  const brand = activeBrand();
+  const date = asOfLabel();
+  const framed = await Promise.all(
+    pages.map((src, i) => {
+      const foot = letterheadFooter(brand, i + 1, pages.length);
+      return frameLetterheadPage(src, { title, date, left: foot.left, right: foot.right });
+    }),
+  );
+  const pdf = new JsPDF({ unit: "mm", format: "a4", compress: true });
+  framed.forEach((src, i) => {
+    if (i) pdf.addPage();
+    pdf.addImage(src, "JPEG", 0, 0, 210, 297);
+  });
+  return { pdf, pages: framed };
+}
+
 async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
   const [{ jsPDF }, h2c] = await Promise.all([import("jspdf"), import("html2canvas")]);
   const html2canvas = h2c.default;
@@ -163,16 +186,20 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
   // Card UI (Suppliers Register/Payments, Books…): medium type — large enough after A4
   // downscale, not the oversized 18px bump. Also darken muted inks so labels on cream /
   // brown washes (KPI cards, table headers) stay readable in the JPEG capture.
+  const letterhead = !!(opts?.title && opts?.pageBreak);
   if (opts?.pageBreak) {
     clone.classList.add("pdf-capture");
     clone.style.fontSize = "14px";
     clone.style.lineHeight = "1.4";
+    clone.style.boxSizing = "border-box";
+    clone.style.padding = "18px 22px 28px";
     clone.style.setProperty("--ink-faint", "#5c4e3c");
     clone.style.setProperty("--ink-soft", "#3f3428");
   }
-  // Dated header so the PDF carries a title/branding (the on-screen topnav is never captured).
+  // Letterhead frames every page (preview + file). Only inject a title into the
+  // capture when we are NOT framing — otherwise page 1 would show the name twice.
   // Hex colours only — html2canvas does not reliably resolve CSS variables.
-  if (opts?.title) {
+  if (opts?.title && !letterhead) {
     const brand = document.createElement("div");
     brand.style.cssText = "padding:0 0 12px;margin:0 0 14px;border-bottom:2px solid #e2d6c2";
     const bt = document.createElement("div");
@@ -180,8 +207,7 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     bt.style.cssText =
       "font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:600;color:#2a2118;letter-spacing:-.015em";
     const bs = document.createElement("div");
-    bs.textContent =
-      "as of " + new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    bs.textContent = asOfLabel();
     bs.style.cssText =
       "font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#5c4e3c;margin-top:4px";
     brand.appendChild(bt);
@@ -231,6 +257,7 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     // Short captures (one supplier card, a thin books tab) — one page, no trailing blank.
     if (imgH <= contentH + 0.8) {
       pdf.addImage(img, "JPEG", margin, margin, contentW, imgH);
+      if (letterhead) return letterheadPdf(jsPDF, [img], opts.title!);
       return { pdf, pages: [img] };
     }
 
@@ -327,6 +354,7 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
         start = cutPx;
         first = false;
       }
+      if (letterhead) return letterheadPdf(jsPDF, pageImgs, opts.title!);
       return { pdf, pages: pageImgs };
     } else {
       // Place the single tall image once per page, shifting it up by one content area each time.
@@ -342,7 +370,9 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
         pdf.addImage(img, "JPEG", margin, position, contentW, imgH);
         heightLeft -= contentH;
       }
-      return { pdf, pages: jpegPages(canvas, pagePx, 0.92) };
+      const sliced = jpegPages(canvas, pagePx, 0.92);
+      if (letterhead) return letterheadPdf(jsPDF, sliced, opts.title!);
+      return { pdf, pages: sliced };
     }
   } finally {
     if (holder.parentNode) holder.parentNode.removeChild(holder);

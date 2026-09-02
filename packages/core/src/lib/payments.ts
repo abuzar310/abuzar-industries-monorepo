@@ -1,10 +1,12 @@
-import { quoteBill as quoteBillOf } from "./calc";
+import { quoteBill as quoteBillOf, quoteOwnBill as quoteOwnBillOf } from "./calc";
 import { isQuoteCommissionPay } from "./expenses";
 import type { Customer, Doc, Expense, PayMode } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-/** the effective bill of a quote: accepted Final price (else wood+GST) plus any permit fee. */
+/** the effective bill of a quote: accepted Final price (else wood+GST) plus permit and old balance. */
 export const quoteBill = (d: Doc) => quoteBillOf(d);
+/** this quote's own sale — excludes old dues carried onto the paper (already on older bills). */
+export const quoteOwnBill = (d: Doc) => quoteOwnBillOf(d);
 
 /** Cash + UPI + wood-against-commission recorded on the quote. */
 export const quotePaid = (d: Pick<Doc, "payCash" | "payUpi" | "payCommission">) =>
@@ -241,7 +243,7 @@ export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Custo
       };
       map.set(k, p);
     }
-    const b = quoteBill(d);
+    const b = quoteOwnBill(d);
     const stmts = statementsForQuote(d, expenses);
     const pd = r2(stmts.reduce((s, l) => s + l.amount, 0));
     p.billed += b;
@@ -307,6 +309,25 @@ export function partyLedger(quotes: Doc[], expenses: Expense[], customers: Custo
     totalPaid: r2(parties.reduce((s, p) => s + p.paid, 0)),
     totalPending: r2(parties.reduce((s, p) => s + Math.max(0, p.balance), 0)),
   };
+}
+
+/** What they still owe on older bills — this quote is left out so carrying dues onto it cannot loop. */
+export function priorDueOf(
+  quotes: Doc[],
+  expenses: Expense[],
+  customers: Customer[],
+  doc: Pick<Doc, "id" | "customerId" | "customerName" | "phone">,
+): number {
+  const id = (doc.customerId || "").trim();
+  const name = (doc.customerName || "").trim().toLowerCase();
+  if (!id && !name) return 0;
+  const others = quotes.filter((d) => d.id !== doc.id);
+  const rest = expenses.filter((e) => e.sourceId !== doc.id);
+  const p = partyLedger(others, rest, customers).parties.find((x) => {
+    if (id && x.custId === id) return true;
+    return (x.name || "").trim().toLowerCase() === name && (!doc.phone || !x.phone || x.phone === doc.phone);
+  });
+  return p && p.balance > 0.5 ? r2(p.balance) : 0;
 }
 
 /** One created quotation with its full payment history (every statement's metadata). */
