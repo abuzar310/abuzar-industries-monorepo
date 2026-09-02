@@ -8,6 +8,9 @@ import {
   acctLedger,
   holderPassbookLines,
   isAccountTransportPay,
+  isPendingTransport,
+  isTransportPocket,
+  isTransportPocketName,
   passbookRunning,
   stmtFromTransport,
   type AccountCollection,
@@ -115,7 +118,11 @@ export function demo() {
     createdAt: "2026-08-21T09:00:00.000Z",
     enteredBy: "ajju",
   } as unknown as Expense;
+  const due = { ...pocket, account: "", holderId: undefined } as unknown as Expense;
+  ok(isPendingTransport(due) && !isAccountTransportPay(due), "due is locked, not paid");
+  ok(!inBooks(due) && !inDaybook(due), "due stays off Books and the till until paid");
   ok(isAccountTransportPay(pocket), "flagged UPI-pocket transport");
+  ok(!isPendingTransport(pocket), "paid row is not still due");
   ok(!inDaybook(pocket), "transport from a UPI pocket stays out of the cash till");
   ok(inBooks(pocket), "transport from a UPI pocket lands in Books");
   ok(spendCatKey(pocket) === "transport", "Books bucket is Transport");
@@ -168,6 +175,10 @@ export function demo() {
   const hRun = passbookRunning(hBook, 0);
   ok(hRun.closing === 7500, "holder running balance drops after transport");
   ok(stmtFromTransport(pocket).kind === "transport", "transport statement line");
+  ok(isTransportPocketName("CS KUMAR(SVT TRANSPORT CHENNAI)"), "name with Transport is a transport pocket");
+  ok(!isTransportPocketName("Tabrez GT Trader"), "ordinary UPI is not a transport pocket");
+  ok(isTransportPocket({ kind: "transport", name: "CS Kumar", accounts: [] }), "kind=transport wins");
+  ok(!isTransportPocket({ kind: "collect", name: "SVT Transport", accounts: [] }), "kind=collect overrides the name");
 
   console.log(`accounts.check OK (${n} assertions)`);
 }
