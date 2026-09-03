@@ -156,7 +156,7 @@ export default function SettingsView() {
       <div className="setbox">
         <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>AI assistant</div>
         <p className="note">
-          Owner only. Any OpenAI-compatible chat API (OpenAI, Groq, OpenRouter, a local server). The key is stored
+          Owner only. OpenAI-compatible hosts, or Kintio (Anthropic /v1/messages). The key is stored
           in this app&apos;s cloud and is never shown again.
         </p>
         <label>

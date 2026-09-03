@@ -2,7 +2,15 @@
 // OpenAI-compatible Chat Completions (OpenAI, Groq, OpenRouter, local, …).
 import { readSessionToken, SESSION_COOKIE } from "@/server/auth";
 import { metaGetAll, metaSet, type AppSchema } from "@/server/db";
-import { chatCompletionsUrl, DEFAULT_AI_HOST, normalizeAiHost, normalizeAiModel } from "@/lib/ai-host";
+import {
+  chatCompletionsUrl,
+  DEFAULT_AI_HOST,
+  isKintio,
+  kintioMessagesUrl,
+  normalizeAiHost,
+  normalizeAiModel,
+  textFromAnthropicSse,
+} from "@/lib/ai-host";
 
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
@@ -143,6 +151,38 @@ export async function handleAiChat(req: Request, appLabel: string, schema: AppSc
     typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(60000) : undefined;
 
   try {
+    if (isKintio(host, key)) {
+      const upstream = await fetch(kintioMessagesUrl(host), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1200,
+          stream: true,
+          system: sys,
+          messages: cleaned,
+        }),
+        signal: abort,
+      });
+      const raw = await upstream.text();
+      if (!upstream.ok) {
+        let data: unknown = null;
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          data = { message: raw.slice(0, 200) };
+        }
+        return json({ error: upstreamErrorMessage(data, upstream.status).slice(0, 400) }, 502);
+      }
+      const text = textFromAnthropicSse(raw).trim();
+      if (!text) return json({ error: "Empty reply from the AI host" }, 502);
+      return json({ reply: text, model });
+    }
+
     const url = chatCompletionsUrl(host);
     const upstream = await fetch(url, {
       method: "POST",
