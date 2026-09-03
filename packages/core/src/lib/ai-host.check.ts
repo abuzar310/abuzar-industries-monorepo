@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { chatCompletionsUrl, DEFAULT_AI_HOST, normalizeAiHost, normalizeAiModel } from "./ai-host.ts";
+import {
+  chatCompletionsUrl,
+  DEFAULT_AI_HOST,
+  isKintio,
+  kintioMessagesUrl,
+  normalizeAiHost,
+  normalizeAiModel,
+  textFromAnthropicSse,
+} from "./ai-host.ts";
 
 assert.equal(normalizeAiHost(""), DEFAULT_AI_HOST);
 assert.equal(normalizeAiHost("   "), DEFAULT_AI_HOST);
@@ -15,4 +23,13 @@ assert.equal(
 );
 assert.equal(normalizeAiModel(""), "gpt-4o-mini");
 assert.equal(normalizeAiModel(" llama-3.1-8b-instant "), "llama-3.1-8b-instant");
+assert.equal(isKintio("https://api.kintio.com"), true);
+assert.equal(isKintio("https://api.openai.com/v1", "sf_abc"), true);
+assert.equal(isKintio("https://api.openai.com/v1", "sk-x"), false);
+assert.equal(kintioMessagesUrl("https://api.kintio.com"), "https://api.kintio.com/v1/messages");
+assert.equal(kintioMessagesUrl("https://api.openai.com/v1"), "https://api.kintio.com/v1/messages");
+assert.equal(
+  textFromAnthropicSse('event: ping\ndata: {"type":"content_block_delta","delta":{"text":"PO"}}\ndata: {"delta":{"text":"NG"}}\n'),
+  "PONG",
+);
 console.log("ai-host.check ok");
