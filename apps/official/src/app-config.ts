@@ -12,6 +12,7 @@ export const TABS: Tab[] = [
   { label: "Quotation", href: "/editor" },
   { label: "Quotations", href: "/quotations" },
   { label: "Invoices", href: "/invoices" },
+  { label: "Tally", href: "/tally" },
   // Vouchers + Accounts hidden for now — pages still at /vouchers and /accounts
   { label: "Customers", href: "/customers" },
   { label: "Suppliers", href: "/suppliers" },

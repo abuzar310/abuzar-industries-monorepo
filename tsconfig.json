@@ -36,6 +36,7 @@
     "packages/core/src/lib/carpenter-financials.check.ts",
     "packages/core/src/lib/book-catalog.check.ts",
     "packages/core/src/lib/permit-letter.check.ts",
-    "packages/core/src/lib/ai-host.check.ts"
+    "packages/core/src/lib/ai-host.check.ts",
+    "packages/core/src/tally-sandbox/tally-sandbox.check.ts"
   ]
 }

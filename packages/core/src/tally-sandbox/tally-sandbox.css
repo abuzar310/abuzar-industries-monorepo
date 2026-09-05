@@ -1,0 +1,286 @@
+/* Same Tally chrome, Heartwood light-warm colors only. */
+.tally-sb{
+  --t-chrome:var(--paper);
+  --t-bar:var(--ochre-soft);
+  --t-bar-ink:var(--walnut);
+  --t-pick:var(--brass);
+  --t-paper:var(--panel-2);
+  --t-ink:var(--ink);
+  --t-menu:var(--panel-2);
+  --t-line:var(--line-2);
+  --t-warn:var(--danger);
+  --t-ok:var(--green);
+  min-height:calc(100dvh - 58px);
+  display:flex;
+  flex-direction:column;
+  background:var(--t-chrome);
+  color:var(--t-ink);
+  font-family:Tahoma, "Segoe UI", system-ui, sans-serif;
+  font-size:14px;
+  line-height:1.35;
+}
+.tally-sb *,.tally-sb *::before,.tally-sb *::after{box-sizing:border-box}
+.tally-sb button,.tally-sb input,.tally-sb select,.tally-sb textarea{
+  font:inherit; color:inherit;
+}
+.tally-sb :focus-visible{outline:2px solid var(--brass); outline-offset:2px}
+
+.tally-sb-banner{
+  flex:none;
+  background:var(--ochre-soft);
+  color:var(--walnut);
+  padding:7px 14px;
+  font-size:12px;
+  letter-spacing:.02em;
+  border-bottom:1px solid var(--line-2);
+}
+.tally-sb-banner strong{color:var(--ochre-deep); font-weight:700}
+
+.tally-sb-top{
+  flex:none;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:8px 14px;
+  background:var(--t-bar);
+  color:var(--t-bar-ink);
+  border-bottom:1px solid var(--line-2);
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.tally-sb-top small{font-weight:600; letter-spacing:0; text-transform:none}
+
+.tally-sb-body{
+  flex:1;
+  display:grid;
+  grid-template-columns:minmax(280px, 1fr) 280px;
+  min-height:0;
+}
+@media (max-width:760px){
+  .tally-sb-body{grid-template-columns:1fr}
+  .tally-sb-side{border-top:1px solid var(--t-line)}
+}
+
+.tally-sb-main{
+  padding:28px 18px 18px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  min-width:0;
+}
+.tally-sb-work{
+  width:min(920px, 100%);
+  background:var(--t-paper);
+  color:var(--t-ink);
+  border:1px solid var(--t-line);
+  min-height:420px;
+  display:flex;
+  flex-direction:column;
+}
+.tally-sb-work h2{
+  margin:0;
+  padding:8px 12px;
+  background:var(--t-bar);
+  color:var(--t-bar-ink);
+  font-size:14px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.tally-sb-work-in{padding:12px; flex:1}
+
+.tally-sb-menu{
+  width:min(360px, 100%);
+  background:var(--t-menu);
+  color:var(--t-ink);
+  border:1px solid var(--t-line);
+  box-shadow:var(--shadow-card);
+}
+.tally-sb-menu h2{
+  margin:0;
+  padding:8px 12px 6px;
+  font-size:15px;
+  text-align:center;
+  background:var(--t-bar);
+  color:var(--t-bar-ink);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.tally-sb-sec{
+  padding:8px 10px 2px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ochre-deep);
+}
+.tally-sb-item{
+  display:flex;
+  gap:10px;
+  width:100%;
+  text-align:left;
+  border:0;
+  background:transparent;
+  padding:7px 12px;
+  cursor:pointer;
+  color:var(--t-ink);
+}
+.tally-sb-item kbd{
+  flex:none;
+  min-width:1.2em;
+  font-family:inherit;
+  font-weight:700;
+}
+.tally-sb-item.is-on,
+.tally-sb-item:hover{
+  background:var(--t-pick);
+  color:var(--walnut);
+}
+
+.tally-sb-side{
+  background:var(--panel);
+  border-left:1px solid var(--t-line);
+  padding:18px 16px;
+  color:var(--t-ink);
+}
+.tally-sb-stat{margin:0 0 18px}
+.tally-sb-stat dt{
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ochre-deep);
+  margin:0 0 4px;
+}
+.tally-sb-stat dd{margin:0; font-weight:700}
+
+.tally-sb-fkeys{
+  flex:none;
+  display:flex;
+  flex-wrap:wrap;
+  gap:2px;
+  padding:6px;
+  background:var(--panel);
+  border-top:1px solid var(--t-line);
+}
+.tally-sb-fkeys button{
+  border:0;
+  background:var(--t-bar);
+  color:var(--t-bar-ink);
+  padding:6px 10px;
+  cursor:pointer;
+  font-weight:700;
+  font-size:12px;
+}
+.tally-sb-fkeys button:hover{background:var(--t-pick)}
+.tally-sb-fkeys button.is-on{background:#fff; box-shadow:inset 0 0 0 2px var(--ochre)}
+.tally-sb-fkeys button:disabled{opacity:.45; cursor:not-allowed}
+
+.tally-sb-table{
+  width:100%;
+  border-collapse:collapse;
+  font-variant-numeric:tabular-nums;
+}
+.tally-sb-table th,
+.tally-sb-table td{
+  padding:5px 8px;
+  border-bottom:1px solid var(--line);
+  text-align:left;
+}
+.tally-sb-table th{
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+}
+.tally-sb-table .num,
+.tally-sb-table th.num{text-align:right}
+.tally-sb-table tfoot td{font-weight:700; border-top:2px solid var(--t-ink); border-bottom:2px solid var(--t-ink)}
+.tally-sb-table button.link{
+  border:0; background:none; padding:0; color:var(--ochre-deep);
+  cursor:pointer; text-decoration:underline; font-weight:700;
+}
+
+.tally-sb-form{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+  gap:10px;
+  margin-bottom:14px;
+}
+.tally-sb-form label,
+.tally-sb-field{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  font-size:12px;
+  font-weight:700;
+  color:var(--ink-soft);
+}
+.tally-sb-form input,
+.tally-sb-form select,
+.tally-sb-form textarea,
+.tally-sb-field input,
+.tally-sb-field select,
+.tally-sb-vch input,
+.tally-sb-vch select{
+  border:1px solid var(--line-2);
+  background:#fff;
+  color:var(--t-ink);
+  padding:6px 8px;
+}
+.tally-sb-form textarea{min-height:64px; resize:vertical; font-weight:400}
+.tally-sb-actions{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.tally-sb-actions button,
+.tally-sb-btn{
+  border:0;
+  background:var(--brass);
+  color:var(--walnut);
+  padding:7px 12px;
+  font-weight:700;
+  cursor:pointer;
+}
+.tally-sb-actions button:hover,
+.tally-sb-btn:hover{background:var(--ochre)}
+.tally-sb-actions button.ghost,
+.tally-sb-btn.ghost{background:transparent; color:var(--ochre-deep); box-shadow:inset 0 0 0 1px var(--line-2)}
+.tally-sb-actions button.danger{background:var(--t-warn)}
+
+.tally-sb-status{
+  margin:10px 0 0;
+  min-height:1.3em;
+  font-weight:700;
+}
+.tally-sb-status.is-bad{color:var(--t-warn)}
+.tally-sb-status.is-ok{color:var(--t-ok)}
+
+.tally-sb-vch .tally-sb-table input,
+.tally-sb-vch .tally-sb-table select{width:100%}
+.tally-sb-vch-head{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+  align-items:end;
+}
+.tally-sb-vch-type{
+  font-size:22px;
+  font-weight:700;
+  color:var(--ochre-deep);
+  letter-spacing:.04em;
+}
+
+.tally-sb-note{
+  margin:16px 0 0;
+  max-width:360px;
+  font-size:12px;
+  color:var(--ink-soft);
+}
+.tally-sb-note ul{margin:6px 0 0; padding-left:16px}
+
+.tally-sb-report-head{
+  text-align:center;
+  margin:0 0 12px;
+}
+.tally-sb-report-head strong{display:block; font-size:16px}
+.tally-sb-report-head span{display:block; font-size:12px; color:var(--ink-soft)}

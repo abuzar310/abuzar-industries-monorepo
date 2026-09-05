@@ -56,6 +56,7 @@ body{
 /* the editor keeps its original narrow canvas — the quotation/invoice sheet is an A4 page,
    stretching it would distort the document (every other view breathes wider) */
 .wrap:has(#sheet){max-width:1000px}
+.wrap:has(.tally-sb){max-width:none;padding:0}
 
 /* ---------- view transition ---------- */
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
