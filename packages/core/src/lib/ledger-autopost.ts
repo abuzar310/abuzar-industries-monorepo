@@ -2,7 +2,8 @@
 // vouchers. Off by default (a Settings toggle). Deterministic voucher ids keyed to
 // the invoice id make re-posting idempotent; deleting the invoice unposts them.
 import { allRec, getRec, put, delRec, metaGet, metaSet } from "./data";
-import { computeDoc, nowIso, uid } from "./calc";
+import { computeDoc, dateSortKey, nowIso, uid } from "./calc";
+import { isLiveDoc } from "./durability";
 import { getFeatures } from "./features";
 import { nextVoucherNo, PURCHASE_LEDGER, SALES_LEDGER, TAX_CGST, TAX_IGST, TAX_SGST } from "./ledger";
 import type { Doc, Ledger, LedgerGroup, VLeg, Voucher, VoucherType } from "./types";
@@ -12,6 +13,38 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export const autoPostEnabled = () => metaGet<boolean>(FLAG, false);
 export const setAutoPost = (b: boolean) => metaSet(FLAG, b);
+
+/** Turn auto-post on and write live invoices dated after the last manual Tally Sales/Purchase. */
+export async function backfillInvoices(): Promise<{ posted: number; skipped: number }> {
+  await setAutoPost(true);
+  const [docs, vouchers] = await Promise.all([
+    allRec<Doc>("invoices"),
+    allRec<Voucher>("vouchers"),
+  ]);
+  let lastManual = "";
+  for (const v of vouchers) {
+    if (String(v.id).startsWith("AV-")) continue;
+    if (v.type !== "Sales" && v.type !== "Purchase") continue;
+    const k = dateSortKey(v.date);
+    if (k > lastManual) lastManual = k;
+  }
+  let posted = 0;
+  let skipped = 0;
+  for (const d of docs) {
+    if (d.kind !== "invoice" || !isLiveDoc(d)) {
+      skipped++;
+      continue;
+    }
+    const k = dateSortKey(d.date);
+    if (lastManual && k && k <= lastManual) {
+      skipped++;
+      continue;
+    }
+    await postInvoice(d);
+    posted++;
+  }
+  return { posted, skipped };
+}
 
 async function findByName(name: string): Promise<Ledger | undefined> {
   const all = await allRec<Ledger>("ledgers");

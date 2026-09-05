@@ -2,27 +2,24 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./tally-sandbox.css";
-import { allRec } from "@/lib/data";
-import type { Ledger, Voucher } from "@/lib/types";
+import {
+  addVoucher as postVoucher,
+  deleteLedger as dropLedger,
+  saveLedger,
+} from "@/lib/ledger";
+import { allRec, bootData, isBooted } from "@/lib/data";
+import type { Ledger, LedgerGroup, Voucher } from "@/lib/types";
 import { useApp } from "@/store/useApp";
 import {
   GROUPS,
   VCH_TYPES,
-  addLedger,
-  addVoucher,
   balanceSheet,
   dayBook,
-  deleteLedger,
   fmtDate,
   fromCloudBooks,
   inr,
-  isErr,
   ledgerBalance,
-  loadState,
   profitAndLoss,
-  resetState,
-  saveState,
-  setDate,
   statement,
   trialBalance,
   voucherTotals,
@@ -65,8 +62,21 @@ function money(n: number) {
   return n ? inr(n) : "";
 }
 
+function toLedgerGroup(g: TGroup): LedgerGroup {
+  if (g === "Cash-in-Hand") return "Cash-in-hand";
+  if (g === "Stock-in-Hand") return "Current Assets";
+  if (g === "Direct Incomes") return "Indirect Incomes";
+  return g as LedgerGroup;
+}
+
+function isoToApp(iso: string) {
+  const [y, m, d] = (iso || "").split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}-${m}-${y.slice(2)}`;
+}
+
 const EMPTY: TState = {
-  company: "Abuzar Industries (trial)",
+  company: "Abuzar Industries",
   fyFrom: "2026-04-01",
   fyTo: "2027-03-31",
   date: "2026-09-05",
@@ -94,43 +104,33 @@ export default function TallySandboxView() {
   const [vDate, setVDate] = useState(EMPTY.date);
   const [vNarr, setVNarr] = useState("");
   const [vLegs, setVLegs] = useState<TLeg[]>(emptyLegs);
-  const { ready: appReady, user } = useApp();
+  const { ready: appReady, user, dataVersion } = useApp();
+
+  const reload = useCallback(async () => {
+    if (user && !isBooted()) await bootData().catch(() => {});
+    const [ledgers, vouchers] = await Promise.all([
+      allRec<Ledger>("ledgers"),
+      allRec<Voucher>("vouchers"),
+    ]);
+    const s = fromCloudBooks(ledgers, vouchers);
+    setState(s);
+    return s;
+  }, [user]);
 
   useEffect(() => {
     if (!appReady) return;
     let gone = false;
     (async () => {
       try {
-        const [ledgers, vouchers] = user
-          ? await Promise.all([allRec<Ledger>("ledgers"), allRec<Voucher>("vouchers")])
-          : [[], []];
+        const s = await reload();
         if (gone) return;
-        const saved = loadState();
-        if (ledgers.length >= 50 && saved.source !== "july") {
-          const s = fromCloudBooks(ledgers, vouchers);
-          saveState(s);
-          setState(s);
-          setVDate(s.date);
-        } else {
-          setState(saved);
-          setVDate(saved.date);
-        }
-      } catch {
-        if (gone) return;
-        const s = loadState();
-        setState(s);
         setVDate(s.date);
       } finally {
         if (!gone) setReady(true);
       }
     })();
     return () => { gone = true; };
-  }, [appReady, user]);
-
-  const persist = useCallback((s: TState) => {
-    setState(s);
-    saveState(s);
-  }, []);
+  }, [appReady, user, dataVersion, reload]);
 
   const go = useCallback((next: Screen, type?: TVch) => {
     setStatus("");
@@ -215,23 +215,42 @@ export default function TallySandboxView() {
     setBad(isBad);
   }
 
-  function onCreateLedger() {
+  async function onCreateLedger() {
+    if (!lName.trim()) return flash("Ledger name is empty", true);
     const opening = (Number(lOpen) || 0) * (lSide === "cr" ? -1 : 1);
-    const next = addLedger(state, { name: lName, group: lGroup, opening });
-    if (isErr(next)) return flash(next.error, true);
-    persist(next);
-    setLName("");
-    setLOpen("");
-    flash(`Ledger created: ${lName.trim()}`);
+    try {
+      await saveLedger({ name: lName, group: toLedgerGroup(lGroup), opening });
+      await reload();
+      setLName("");
+      setLOpen("");
+      flash(`Ledger created: ${lName.trim()}`);
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Could not save ledger", true);
+    }
   }
 
-  function onAcceptVoucher() {
-    const next = addVoucher(state, { type: vType, date: vDate, narration: vNarr, legs: vLegs });
-    if (isErr(next)) return flash(next.error, true);
-    persist(next);
-    setVLegs(emptyLegs());
-    setVNarr("");
-    flash(`Accepted ${vType} No. ${state.nextNo[vType]}`);
+  async function onAcceptVoucher() {
+    const legs = vLegs.filter((l) => l.ledgerId && (l.dr || l.cr));
+    if (legs.length < 2) return flash("Need at least two ledger lines", true);
+    const tot = voucherTotals(legs);
+    if (tot.dr !== tot.cr) {
+      return flash(`Out of balance by ${inr(Math.abs(tot.dr - tot.cr))} ${tot.dr > tot.cr ? "Dr" : "Cr"}`, true);
+    }
+    try {
+      const v = await postVoucher({
+        type: vType,
+        date: isoToApp(vDate),
+        narration: vNarr,
+        legs,
+        enteredBy: user?.name || "owner",
+      });
+      await reload();
+      setVLegs(emptyLegs());
+      setVNarr("");
+      flash(`Accepted ${v.type} No. ${v.no}`);
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Could not save voucher", true);
+    }
   }
 
   function setLeg(i: number, patch: Partial<TLeg>) {
@@ -244,34 +263,18 @@ export default function TallySandboxView() {
   }
 
   async function onReset() {
-    if (!confirm("Reload the July books copy? Trial edits on this browser will be wiped. Official invoices are not touched.")) return;
-    try {
-      const [ledgers, vouchers] = await Promise.all([
-        allRec<Ledger>("ledgers"),
-        allRec<Voucher>("vouchers"),
-      ]);
-      if (ledgers.length >= 50) {
-        persist(fromCloudBooks(ledgers, vouchers));
-        go("gateway");
-        flash("July books reloaded");
-        return;
-      }
-    } catch { /* fall through to demo */ }
-    persist(resetState());
+    await reload();
     go("gateway");
-    flash("Demo company restored");
+    flash("Books reloaded");
   }
 
   function onDate(iso: string) {
-    persist(setDate(state, iso));
     setVDate(iso);
+    setState((s) => ({ ...s, date: iso }));
   }
 
   return (
     <div className="tally-sb">
-      <div className="tally-sb-banner">
-        <strong>Trial only.</strong> July books are a copy on this browser. Edits stay here — they do not post to invoices or the cloud.
-      </div>
       <div className="tally-sb-top">
         <span>Gateway of Tally</span>
         <small>{state.company}</small>
@@ -304,7 +307,7 @@ export default function TallySandboxView() {
                 ))}
               </div>
               <div className="tally-sb-note">
-                Compare this to Tally before we touch the real books.
+                Official books on Safa. New ledgers and vouchers save to the cloud.
                 <ul>
                   <li>Here: ledgers, 6 voucher types, Day Book, TB, P&amp;L, Balance Sheet</li>
                   <li>Not here: bill-wise, GST returns, inventory, payroll, Tally XML</li>
@@ -356,10 +359,11 @@ export default function TallySandboxView() {
                                 <button
                                   type="button"
                                   className="ghost"
-                                  onClick={() => {
-                                    const next = deleteLedger(state, l.id);
-                                    if (isErr(next)) return flash(next.error, true);
-                                    persist(next);
+                                  onClick={async () => {
+                                    const r = await dropLedger(l.id);
+                                    if (!r.ok) return flash(`In use by ${r.count} voucher(s)`, true);
+                                    await reload();
+                                    flash("Ledger deleted");
                                   }}
                                 >Del</button>
                               </td>
@@ -567,10 +571,10 @@ export default function TallySandboxView() {
             <dd>{state.company}</dd>
           </dl>
           <dl className="tally-sb-stat">
-            <dt>Trial books</dt>
+            <dt>Books</dt>
             <dd>{state.ledgers.length} ledgers · {state.vouchers.length} vouchers</dd>
           </dl>
-          <button type="button" className="tally-sb-btn ghost" onClick={() => void onReset()}>Reload July books</button>
+          <button type="button" className="tally-sb-btn ghost" onClick={() => void onReset()}>Reload books</button>
         </aside>
       </div>
 

@@ -203,7 +203,7 @@ export type CloudVoucher = {
   narration?: string;
 };
 
-/** Read-only snapshot of July books. Does not write back to the cloud. */
+/** Live books snapshot for the Tally screen. */
 export function fromCloudBooks(ledgers: CloudLedger[], vouchers: CloudVoucher[]): TState {
   const nos = emptyNos();
   for (const v of vouchers) {
@@ -211,10 +211,13 @@ export function fromCloudBooks(ledgers: CloudLedger[], vouchers: CloudVoucher[])
     if (t in nos && v.no >= nos[t]) nos[t] = v.no + 1;
   }
   return {
-    company: "Abuzar Industries (July books)",
+    company: "Abuzar Industries",
     fyFrom: "2026-04-01",
     fyTo: "2027-03-31",
-    date: "2026-07-11",
+    date: vouchers.reduce((acc, v) => {
+      const iso = toIsoDate(v.date);
+      return iso > acc ? iso : acc;
+    }, "2026-04-01"),
     source: "july",
     ledgers: ledgers.map((l) => ({
       id: l.id,

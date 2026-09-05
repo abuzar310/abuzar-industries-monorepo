@@ -9,7 +9,7 @@ import { canInstall, promptInstall } from "@/lib/pwa";
 import { getFeatures } from "@/lib/features";
 import { inr } from "@/lib/calc";
 import { migrateAccountReceiptsToQuotes } from "@/lib/receipts";
-import { autoPostEnabled, setAutoPost } from "@/lib/ledger-autopost";
+import { autoPostEnabled, backfillInvoices, setAutoPost } from "@/lib/ledger-autopost";
 import { getBusinessPincode, isValidPincode, setBusinessPincode } from "@/lib/ewaybill";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
@@ -124,8 +124,15 @@ export default function SettingsView() {
 
   async function toggleAutoPost(v: boolean) {
     setAutoPostUI(v);
-    await setAutoPost(v);
-    toast(v ? "Invoices will now post to the Ledger" : "Auto-posting off");
+    if (!v) {
+      await setAutoPost(false);
+      toast("Auto-posting off");
+      return;
+    }
+    toast("Posting invoices to Tally…");
+    const r = await backfillInvoices();
+    bumpData();
+    toast(`Tally updated · ${r.posted} invoice${r.posted === 1 ? "" : "s"}`);
   }
 
   function importFile() {
