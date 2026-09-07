@@ -1166,7 +1166,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .lock-sub{font-size:13.5px; color:var(--ink-soft); margin:18px 0 14px; display:flex; align-items:center; justify-content:center; gap:6px}
 .lock-sub b{color:var(--ink)}
 .lock-users{display:grid; grid-template-columns:1fr 1fr; gap:12px}
-.lock-user{display:flex; flex-direction:column; align-items:center; gap:5px; padding:20px 12px; cursor:pointer;
+.lock-user{display:flex; flex-direction:column; align-items:center; gap:5px; padding:20px 12px; min-height:44px; cursor:pointer;
   background:#fff; border:1px solid var(--line-2); border-radius:var(--radius-md); transition:all var(--t-fast)}
 .lock-user:hover{border-color:var(--ochre); box-shadow:var(--shadow-md); transform:translateY(-2px)}
 .lock-user b{font-family:var(--disp); font-size:16px; font-weight:700; color:var(--ink)}
@@ -1199,6 +1199,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .um-item{width:100%; text-align:left; font-family:var(--body); font-weight:600; font-size:13.5px; padding:9px 10px; border:none;
   border-radius:8px; background:transparent; color:var(--ink); cursor:pointer}
 .um-item:hover{background:var(--panel)}
+.userchip-role{display:none}
 .userchip i{width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-style:normal;
   font-family:var(--serif); font-size:12px; color:#F4E9D8; background:linear-gradient(180deg,var(--walnut),var(--walnut-2))}
 
@@ -1317,27 +1318,48 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 /* ---------- mobile: nav + tap targets ---------- */
 .phone-home,.phone-chrome{display:none}
 @media(max-width:760px){
-  .topnav-in{padding:9px 14px; gap:8px 10px}
-  .nav-brand{font-size:18px}
-  .navsearch{flex:1 1 140px; min-width:110px}
-  .navsearch input{width:100%}
+  .topnav-in{padding:8px 12px; gap:8px; flex-wrap:nowrap}
+  .nav-brand{font-size:16px; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis}
+  .navsearch{flex:0 1 108px; min-width:72px}
+  .navsearch input{width:100%; font-size:16px; padding:8px 10px 8px 28px}
   .navsearch input:focus{width:100%}
-  /* phone: shelves live in More — hide the long tab strip */
+  .syncdot{padding:6px 8px; min-height:44px}
+  .syncdot span{display:none}
+  .userchip{min-height:44px; padding:4px 8px 4px 4px}
+  .userchip-name{display:none}
+  .userchip-role{display:inline}
+  .usermenu-pop .um-item,.usermenu-pop .um-logout{min-height:44px}
+  /* phone: shelves live in the bottom bar — hide the long tab strip */
   .tabs{display:none}
   .desk-dash{display:none}
   .phone-home{display:block}
   .phone-chrome{display:block}
   .ai-fab-root{display:none}
-  .wrap{padding-bottom:max(88px, calc(70px + env(safe-area-inset-bottom, 0px)))}
+  .wrap{padding:14px 14px max(108px, calc(88px + env(safe-area-inset-bottom, 0px)))}
   .doctool{padding:10px 12px}
   .rowbtns .btn{flex:1 1 auto; justify-content:center}
+  .lock-card input{font-size:16px}
 }
-.phone-pills{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 0 12px}
-.phone-pills button{
-  border:1px solid var(--line-2); background:var(--panel); color:var(--ink-soft);
-  border-radius:999px; padding:9px 6px; font-weight:700; font-size:13px; font-family:var(--disp);
+.phone-role{margin:0 0 10px; font-size:13px; color:var(--ink-soft)}
+.phone-kpis{
+  display:grid; grid-template-columns:1fr 1fr;
+  border:1px solid var(--line); background:var(--panel-2); margin:0 0 12px;
 }
-.phone-pills button.on{background:#f4d5da; color:#b4233a; border-color:#e8b4bc}
+.phone-kpi{
+  min-height:76px; padding:12px; text-align:left; color:inherit; font:inherit;
+  border:0; border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+  background:transparent;
+}
+.phone-kpi:nth-child(2n){border-right:none}
+.phone-kpi i{display:block; font-style:normal; font-size:12px; color:var(--ink-soft)}
+.phone-kpi strong{display:block; margin-top:6px; font-size:20px; font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.15}
+.phone-kpi small{display:block; margin-top:4px; font-size:11px; color:var(--ink-faint)}
+.phone-qa{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px}
+.phone-qa button{
+  min-height:44px; padding:0 14px; border:1px solid var(--line-2);
+  background:var(--panel); color:var(--ink); font:inherit; font-weight:700;
+}
+.phone-h{margin:4px 0 10px; font-size:16px; font-weight:700; color:var(--ink)}
 .phone-card{
   width:100%; text-align:left; border:1px solid var(--line); background:var(--panel);
   border-radius:12px; padding:12px 14px; margin:0 0 8px; color:inherit; font:inherit;
@@ -1363,11 +1385,12 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   height:calc(58px + env(safe-area-inset-bottom, 0px));
   padding-bottom:env(safe-area-inset-bottom, 0px);
   background:var(--panel); border-top:1px solid var(--line);
-  display:grid; grid-template-columns:1fr 1fr;
+  display:grid; grid-template-columns:repeat(4,1fr);
 }
+.phone-tabs-5{grid-template-columns:repeat(5,1fr)}
 .phone-tabs a,.phone-tabs button{
   border:0; background:transparent; color:var(--ink-faint);
-  display:grid; place-items:center; gap:2px; align-content:center;
+  min-height:44px; display:grid; place-items:center; gap:2px; align-content:center;
   font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.04em;
   text-decoration:none; text-transform:uppercase;
 }
@@ -1375,11 +1398,12 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .phone-more-ico{width:18px; height:12px; border-top:2px solid currentColor; border-bottom:2px solid currentColor; position:relative}
 .phone-more-ico::after{content:""; position:absolute; left:0; right:0; top:5px; height:2px; background:currentColor}
 .phone-fab{
-  position:fixed; left:50%; transform:translateX(-50%);
-  bottom:calc(68px + env(safe-area-inset-bottom, 0px)); z-index:47;
-  border:0; background:#e11d32; color:#fff; height:46px; padding:0 22px; border-radius:999px;
-  font-weight:700; font-size:15px; font-family:var(--disp);
-  box-shadow:0 8px 20px rgba(225,29,50,.35);
+  position:fixed; right:16px;
+  bottom:calc(72px + env(safe-area-inset-bottom, 0px)); z-index:47;
+  border:0; background:var(--walnut); color:#F4E9D8; width:52px; height:52px; border-radius:999px;
+  display:grid; place-items:center;
+  font-size:28px; font-weight:500; line-height:1;
+  box-shadow:0 8px 20px rgba(51,36,26,.28);
 }
 .phone-more{position:fixed; inset:0; z-index:48; background:rgba(40,28,16,.35); display:flex; align-items:flex-end}
 .phone-more-card{
@@ -1390,8 +1414,9 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .phone-shelf{background:var(--panel); border-radius:12px; margin-bottom:10px; overflow:hidden; border:1px solid var(--line)}
 .phone-shelf h3{margin:0; padding:8px 12px; background:rgba(51,36,26,.05); font-size:12px; color:var(--ink-soft); font-family:var(--disp)}
 .phone-shelf-item{
-  width:100%; display:flex; align-items:center; gap:10px;
-  padding:12px; border-top:1px solid var(--line); color:var(--ink); text-decoration:none; font-weight:600;
+  width:100%; display:flex; align-items:center; gap:10px; min-height:44px;
+  padding:12px; border:0; border-top:1px solid var(--line); background:transparent;
+  color:var(--ink); text-decoration:none; font:inherit; font-weight:600; text-align:left;
 }
 .phone-shelf-item em{margin-left:auto; font-style:normal; background:var(--walnut); color:#F4E9D8; font-size:11px; padding:1px 7px; border-radius:999px}
 
