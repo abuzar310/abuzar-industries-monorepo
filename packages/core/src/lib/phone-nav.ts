@@ -28,6 +28,10 @@ export function phoneBar(shelves: ReturnType<typeof phoneShelves>, isOwner: bool
 
 export function phoneSectionOf(tabs: Tab[], href: string): PhoneSection | "home" {
   if (!href || href === "/") return "home";
+  if (href === "/money" || href.startsWith("/money/")) return "money";
+  if (href === "/business" || href.startsWith("/business/")) return "business";
+  if (href === "/records" || href.startsWith("/records/")) return "records";
+  if (href === "/more" || href.startsWith("/more/")) return "more";
   const t = tabs.find((x) => x.href === href || (href.startsWith(x.href + "/") && x.href !== "/"));
   return (t?.group as PhoneSection) || "more";
 }

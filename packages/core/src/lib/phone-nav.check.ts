@@ -27,6 +27,8 @@ ok(mgr.money.length === 0, "manager has no money shelf");
 ok(mgr.business.some((t) => t.href === "/receipts") && !mgr.business.some((t) => t.href === "/books"), "manager money ops in business, no books");
 ok(phoneBar(mgr, false).map((t) => t.id).join() === "home,business,records,more", "manager bar");
 ok(phoneSectionOf(tabs, "/receipts") === "money", "section of receipts");
+ok(phoneSectionOf(tabs, "/money") === "money", "money page");
+ok(phoneSectionOf(tabs, "/business") === "business", "business page");
 ok(phoneQuickActions({ invoices: false, simpleQuote: true, acceptPayment: true }).length === 4, "cut-size quick actions");
 ok(phoneQuickActions({ invoices: true, simpleQuote: false, acceptPayment: false }).length === 2, "official quick actions");
 

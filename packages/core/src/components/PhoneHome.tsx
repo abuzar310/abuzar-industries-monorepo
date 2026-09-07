@@ -92,12 +92,13 @@ export default function PhoneHome({
     { k: "Pending payments", v: cloakMoney ? "0" : String(pendingN), href: "/payments", hide: !feat.acceptPayment },
   ];
 
+  const shown = tiles.filter((t) => !t.hide);
+
   return (
     <div className="phone-home">
-      <p className="phone-role">{isOwner ? "Owner" : "Manager"} · {user?.name || ""}</p>
       <div className="phone-kpis">
-        {tiles.filter((t) => !t.hide).map((t) => (
-          <button key={t.k} type="button" className="phone-kpi" onClick={() => router.push(t.href)}>
+        {shown.map((t, i) => (
+          <button key={t.k} type="button" className={"phone-kpi" + (i === 0 ? " phone-kpi-lead" : "")} onClick={() => router.push(t.href)}>
             <i>{t.k}</i>
             <strong>{t.v}</strong>
             {t.sub && <small>{t.sub}</small>}
@@ -112,27 +113,22 @@ export default function PhoneHome({
         ))}
       </div>
       <h2 className="phone-h">Recent</h2>
-      {recent.map((d) => {
-        const bill = feat.simpleQuote ? quoteOwnBill(d) : docTrade(d).grand;
-        const paid = paidOf(d);
-        return (
-          <button key={d.id} type="button" className="phone-card" onClick={() => router.push("/editor/" + d.id)}>
-            <div className="phone-card-top">
-              <div>
-                <b>{d.customerName || "Cash"}</b>
-                <span className="phone-stamp">{feat.simpleQuote ? "QUOTE" : docTrade(d).buy ? "BUY" : "SALE"}</span>
-              </div>
-              <small>#{d.displayNumber || d.number || "—"} · {d.date || ""}</small>
-            </div>
-            <div className="phone-card-nums">
-              <div><i>Total</i><strong>₹ {inr(bill)}</strong></div>
-              {feat.acceptPayment && (
-                <div><i>Balance</i><strong>₹ {inr(Math.max(0, bill - paid))}</strong></div>
-              )}
-            </div>
-          </button>
-        );
-      })}
+      <div className="listwrap">
+        {recent.map((d) => {
+          const bill = feat.simpleQuote ? quoteOwnBill(d) : docTrade(d).grand;
+          const paid = paidOf(d);
+          const due = feat.acceptPayment ? Math.max(0, bill - paid) : 0;
+          return (
+            <button key={d.id} type="button" className="lrow phone-sec-row" onClick={() => router.push("/editor/" + d.id)}>
+              <span>
+                <span className="nm">{d.customerName || "Cash"}</span>
+                <span className="mut">#{d.displayNumber || d.number || "—"} · {d.date || ""}</span>
+              </span>
+              <span className="amt">₹ {inr(feat.acceptPayment ? due : bill)}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
