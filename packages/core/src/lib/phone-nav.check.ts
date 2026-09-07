@@ -1,5 +1,5 @@
 // Run: npx tsx packages/core/src/lib/phone-nav.check.ts
-import { phoneBar, phoneQuickActions, phoneSectionOf, phoneShelves } from "./phone-nav";
+import { phoneBar, phoneQuickActions, phoneSectionOf, phoneShelves, phoneTabIcon } from "./phone-nav";
 import type { Tab } from "./types";
 
 let n = 0;
@@ -29,7 +29,9 @@ ok(phoneBar(mgr, false).map((t) => t.id).join() === "home,business,records,more"
 ok(phoneSectionOf(tabs, "/receipts") === "money", "section of receipts");
 ok(phoneSectionOf(tabs, "/money") === "money", "money page");
 ok(phoneSectionOf(tabs, "/business") === "business", "business page");
-ok(phoneQuickActions({ invoices: false, simpleQuote: true, acceptPayment: true }).length === 4, "cut-size quick actions");
+ok(phoneQuickActions({ invoices: false, simpleQuote: true, acceptPayment: true }).length === 5, "cut-size quick actions");
 ok(phoneQuickActions({ invoices: true, simpleQuote: false, acceptPayment: false }).length === 2, "official quick actions");
+ok(phoneQuickActions({ invoices: false, simpleQuote: true, acceptPayment: true })[0].href === "/editor", "quote is first quick action");
+ok(!!phoneTabIcon("/receipts") && !!phoneTabIcon("/stock"), "shelf icons");
 
 console.log(`phone-nav.check OK (${n} assertions)`);
