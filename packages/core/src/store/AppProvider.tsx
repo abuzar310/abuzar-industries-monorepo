@@ -12,6 +12,7 @@ import { loadLocalUser } from "@/lib/local-auth";
 import { checkOwnerNotifications, loadNotifyState } from "@/lib/notify";
 import { refreshChatUnseen } from "@/lib/staff-chat";
 import TopNav from "@/components/TopNav";
+import PhoneNav from "@/components/PhoneNav";
 import Toast from "@/components/Toast";
 import LockGate from "@/components/LockGate";
 import DialogHost from "@/components/DialogHost";
@@ -108,6 +109,7 @@ export default function AppProvider({
     <>
       <TopNav tabs={tabs} />
       <div className="wrap">{children}</div>
+      <PhoneNav tabs={tabs} />
       <Toast />
       <LockGate />
       <DialogHost />

@@ -1314,20 +1314,86 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 }
 
 /* ---------- mobile: nav + tap targets ---------- */
+.phone-home,.phone-chrome{display:none}
 @media(max-width:760px){
   .topnav-in{padding:9px 14px; gap:8px 10px}
   .nav-brand{font-size:18px}
   .navsearch{flex:1 1 140px; min-width:110px}
   .navsearch input{width:100%}
   .navsearch input:focus{width:100%}
-  /* tabs get their own full-width swipeable row */
-  .tabs{order:2; flex-basis:100%; flex-wrap:nowrap; overflow-x:auto; gap:4px; padding-bottom:2px;
-    scrollbar-width:none; -webkit-overflow-scrolling:touch}
-  .tabs::-webkit-scrollbar{display:none}
-  .tab{flex:0 0 auto; white-space:nowrap; font-size:12.5px; padding:7px 11px}
+  /* phone: shelves live in More — hide the long tab strip */
+  .tabs{display:none}
+  .desk-dash{display:none}
+  .phone-home{display:block}
+  .phone-chrome{display:block}
+  .ai-fab-root{display:none}
+  .wrap{padding-bottom:max(88px, calc(70px + env(safe-area-inset-bottom, 0px)))}
   .doctool{padding:10px 12px}
   .rowbtns .btn{flex:1 1 auto; justify-content:center}
 }
+.phone-pills{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 0 12px}
+.phone-pills button{
+  border:1px solid var(--line-2); background:var(--panel); color:var(--ink-soft);
+  border-radius:999px; padding:9px 6px; font-weight:700; font-size:13px; font-family:var(--disp);
+}
+.phone-pills button.on{background:#f4d5da; color:#b4233a; border-color:#e8b4bc}
+.phone-card{
+  width:100%; text-align:left; border:1px solid var(--line); background:var(--panel);
+  border-radius:12px; padding:12px 14px; margin:0 0 8px; color:inherit; font:inherit;
+  box-shadow:var(--shadow-card);
+}
+.phone-card-top{display:flex; justify-content:space-between; gap:8px; align-items:flex-start}
+.phone-card-top b{display:block; font-size:15px}
+.phone-card-top small,.phone-card-row small{display:block; color:var(--ink-faint); font-size:11px; margin-top:2px}
+.phone-stamp{
+  display:inline-block; margin-top:6px; background:#e7f6ec; color:#1a7f45;
+  font-size:10px; font-weight:800; letter-spacing:.06em; padding:2px 6px; border-radius:4px;
+}
+.phone-card-nums{display:flex; gap:22px; margin-top:10px}
+.phone-card-nums i{display:block; font-style:normal; font-size:11px; color:var(--ink-faint)}
+.phone-card-nums strong{font-size:14px}
+.phone-card-row{display:flex; justify-content:space-between; align-items:center}
+.phone-card-row .get,.phone-card-row .give{text-align:right; font-weight:700}
+.phone-card-row .get{color:#1a7f45}
+.phone-card-row .give{color:#c0362c}
+.phone-chrome{position:relative; z-index:45}
+.phone-tabs{
+  position:fixed; left:0; right:0; bottom:0; z-index:46;
+  height:calc(58px + env(safe-area-inset-bottom, 0px));
+  padding-bottom:env(safe-area-inset-bottom, 0px);
+  background:var(--panel); border-top:1px solid var(--line);
+  display:grid; grid-template-columns:1fr 1fr;
+}
+.phone-tabs a,.phone-tabs button{
+  border:0; background:transparent; color:var(--ink-faint);
+  display:grid; place-items:center; gap:2px; align-content:center;
+  font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.04em;
+  text-decoration:none; text-transform:uppercase;
+}
+.phone-tabs a.on,.phone-tabs button.on{color:#1f6feb}
+.phone-more-ico{width:18px; height:12px; border-top:2px solid currentColor; border-bottom:2px solid currentColor; position:relative}
+.phone-more-ico::after{content:""; position:absolute; left:0; right:0; top:5px; height:2px; background:currentColor}
+.phone-fab{
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:calc(68px + env(safe-area-inset-bottom, 0px)); z-index:47;
+  border:0; background:#e11d32; color:#fff; height:46px; padding:0 22px; border-radius:999px;
+  font-weight:700; font-size:15px; font-family:var(--disp);
+  box-shadow:0 8px 20px rgba(225,29,50,.35);
+}
+.phone-more{position:fixed; inset:0; z-index:48; background:rgba(40,28,16,.35); display:flex; align-items:flex-end}
+.phone-more-card{
+  width:100%; max-height:80dvh; overflow:auto; background:var(--paper);
+  border-radius:16px 16px 0 0; padding:10px 12px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+.phone-more-title{font-weight:800; font-size:16px; padding:6px 4px 10px}
+.phone-shelf{background:var(--panel); border-radius:12px; margin-bottom:10px; overflow:hidden; border:1px solid var(--line)}
+.phone-shelf h3{margin:0; padding:8px 12px; background:rgba(51,36,26,.05); font-size:12px; color:var(--ink-soft); font-family:var(--disp)}
+.phone-shelf-item{
+  width:100%; display:flex; align-items:center; gap:10px;
+  padding:12px; border-top:1px solid var(--line); color:var(--ink); text-decoration:none; font-weight:600;
+}
+.phone-shelf-item em{margin-left:auto; font-style:normal; background:var(--walnut); color:#F4E9D8; font-size:11px; padding:1px 7px; border-radius:999px}
+
 @media(max-width:480px){
   .custcard .links{gap:6px}
   .custcard .links .btn, .lrow .acts .btn{flex:1 1 auto; justify-content:center}
@@ -1469,7 +1535,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 @media print{
   body{background:#fff; background-image:none}
   .wrap{padding:0; max-width:none}
-  .topnav,#toast{display:none !important}
+  .topnav,#toast,.phone-chrome{display:none !important}
   .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint,.mode-btn,.mode-seg,.editor-tabs,.no-print{display:none !important}
   .print-only{display:block !important}
   /* line-selection highlight is a screen-only editing aid — never print it */
