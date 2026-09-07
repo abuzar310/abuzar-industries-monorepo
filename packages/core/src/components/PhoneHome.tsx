@@ -1,10 +1,16 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { quoteOwnBill } from "@/lib/calc";
-import { partyLedger } from "@/lib/payments";
+import { inr, quoteOwnBill, todayStr } from "@/lib/calc";
+import { allRec } from "@/lib/data";
+import { dayTotals, inDaybook } from "@/lib/expenses";
 import { getFeatures } from "@/lib/features";
-import type { Customer, Doc, Expense } from "@/lib/types";
+import { partyLedger } from "@/lib/payments";
+import { phoneQuickActions } from "@/lib/phone-nav";
+import { purchaseTotals } from "@/lib/purchases";
+import { docTrade } from "@/lib/trading";
+import { useApp } from "@/store/useApp";
+import type { Customer, Doc, Expense, Purchase } from "@/lib/types";
 
 function live(d: Doc) {
   return !d.deletedAt && !d.purgedAt;
@@ -28,67 +34,105 @@ export default function PhoneHome({
   expenses: Expense[];
 }) {
   const router = useRouter();
+  const { user, cloakMoney, dataVersion } = useApp();
   const feat = getFeatures();
-  const [home, setHome] = useState<"txn" | "party">("txn");
-  const invIds = new Set(invs.map((d) => d.id));
-  const sales = (feat.simpleQuote ? quotes : [...invs, ...quotes])
-    .filter(live)
+  const isOwner = user?.role === "owner";
+  const [buys, setBuys] = useState<Purchase[]>([]);
+  const quick = phoneQuickActions(feat);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    allRec<Purchase>("purchases").then(setBuys);
+  }, [isOwner, dataVersion]);
+
+  const salesDocs = (feat.simpleQuote ? quotes : invs).filter(live);
+  let sales = 0;
+  let officialBuy = 0;
+  if (feat.simpleQuote) {
+    for (const d of quotes) {
+      if (!live(d)) continue;
+      const billable =
+        d.status === "Created" ||
+        (+(d.payCash || 0)) > 0 ||
+        (+(d.payUpi || 0)) > 0 ||
+        (+(d.payCommission || 0)) > 0 ||
+        (+(d.amountPaid || 0)) > 0;
+      if (billable) sales += quoteOwnBill(d);
+    }
+  } else {
+    for (const d of invs) {
+      if (!live(d)) continue;
+      const t = docTrade(d);
+      if (t.buy) officialBuy += t.grand;
+      else sales += t.grand;
+    }
+  }
+
+  const ledger = feat.acceptPayment ? partyLedger(quotes, expenses, customers) : null;
+  const receivables = ledger ? ledger.totalPending : 0;
+  const pendingN = ledger ? ledger.parties.filter((p) => p.balance > 0.5).length : 0;
+  const payables = isOwner
+    ? (feat.simpleQuote ? purchaseTotals(buys).balance : officialBuy)
+    : 0;
+  const today = todayStr();
+  const cash = feat.acceptPayment
+    ? dayTotals(expenses.filter((e) => e.date === today && inDaybook(e))).net
+    : 0;
+
+  const recent = salesDocs
+    .slice()
     .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || "").localeCompare(a.createdAt || ""))
-    .slice(0, 40);
-  const parties = feat.acceptPayment
-    ? partyLedger(quotes, expenses, customers).parties
-        .filter((p) => Math.round(p.balance) !== 0)
-        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
-        .slice(0, 60)
-    : customers.slice(0, 60).map((c) => ({ custId: c.id, name: c.name, balance: 0, phone: c.phone || "" }));
+    .slice(0, 12);
+
+  const tiles: { k: string; v: string; sub?: string; href: string; hide?: boolean }[] = [
+    { k: "Total sales", v: "₹ " + inr(sales), href: feat.simpleQuote ? "/quotations" : "/invoices" },
+    { k: "Receivables", v: "₹ " + inr(receivables), sub: pendingN ? pendingN + " parties" : "all clear", href: "/payments", hide: !feat.acceptPayment },
+    { k: "Payables", v: "₹ " + inr(payables), href: feat.simpleQuote ? "/buys" : "/invoices", hide: !isOwner },
+    { k: "Cash today", v: "₹ " + inr(cash), href: "/expenses", hide: !feat.acceptPayment },
+    { k: "Pending payments", v: cloakMoney ? "0" : String(pendingN), href: "/payments", hide: !feat.acceptPayment },
+  ];
 
   return (
     <div className="phone-home">
-      <div className="phone-pills">
-        <button type="button" className={home === "txn" ? "on" : ""} onClick={() => setHome("txn")}>
-          Transaction Details
-        </button>
-        <button type="button" className={home === "party" ? "on" : ""} onClick={() => setHome("party")}>
-          Party Details
-        </button>
+      <p className="phone-role">{isOwner ? "Owner" : "Manager"} · {user?.name || ""}</p>
+      <div className="phone-kpis">
+        {tiles.filter((t) => !t.hide).map((t) => (
+          <button key={t.k} type="button" className="phone-kpi" onClick={() => router.push(t.href)}>
+            <i>{t.k}</i>
+            <strong>{t.v}</strong>
+            {t.sub && <small>{t.sub}</small>}
+          </button>
+        ))}
       </div>
-      {home === "txn" && sales.map((d) => {
-        const bill = quoteOwnBill(d);
+      <div className="phone-qa">
+        {quick.map((q) => (
+          <button key={q.href} type="button" onClick={() => router.push(q.href)}>
+            + {q.label}
+          </button>
+        ))}
+      </div>
+      <h2 className="phone-h">Recent</h2>
+      {recent.map((d) => {
+        const bill = feat.simpleQuote ? quoteOwnBill(d) : docTrade(d).grand;
         const paid = paidOf(d);
-        const sale = invIds.has(d.id);
         return (
           <button key={d.id} type="button" className="phone-card" onClick={() => router.push("/editor/" + d.id)}>
             <div className="phone-card-top">
               <div>
                 <b>{d.customerName || "Cash"}</b>
-                <span className="phone-stamp">{sale ? "SALE" : "QUOTE"}</span>
+                <span className="phone-stamp">{feat.simpleQuote ? "QUOTE" : docTrade(d).buy ? "BUY" : "SALE"}</span>
               </div>
               <small>#{d.displayNumber || d.number || "—"} · {d.date || ""}</small>
             </div>
             <div className="phone-card-nums">
-              <div><i>Total</i><strong>₹ {bill.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
-              <div><i>Balance</i><strong>₹ {Math.max(0, bill - paid).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+              <div><i>Total</i><strong>₹ {inr(bill)}</strong></div>
+              {feat.acceptPayment && (
+                <div><i>Balance</i><strong>₹ {inr(Math.max(0, bill - paid))}</strong></div>
+              )}
             </div>
           </button>
         );
       })}
-      {home === "party" && parties.map((p) => (
-        <button
-          key={p.custId || p.name}
-          type="button"
-          className="phone-card phone-card-row"
-          onClick={() => router.push(p.custId ? "/customers/" + p.custId : "/payments")}
-        >
-          <div>
-            <b>{p.name}</b>
-            <small>{p.phone || ""}</small>
-          </div>
-          <div className={p.balance >= 0 ? "get" : "give"}>
-            ₹ {Math.abs(p.balance).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-            <small>{p.balance >= 0 ? "You'll Get" : "You Give"}</small>
-          </div>
-        </button>
-      ))}
     </div>
   );
 }

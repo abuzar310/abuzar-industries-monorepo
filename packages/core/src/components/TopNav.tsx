@@ -120,7 +120,8 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
           <div className="usermenu" onClick={(e) => e.stopPropagation()}>
             <button className="userchip" title={user.name} onClick={() => setUserMenu((v) => !v)}>
               <i>{user.name.charAt(0)}</i>
-              {user.name}
+              <span className="userchip-name">{user.name}</span>
+              <span className="userchip-role">{user.role === "owner" ? "Owner" : "Manager"}</span>
               <span className="um-caret">▾</span>
             </button>
             {userMenu && (

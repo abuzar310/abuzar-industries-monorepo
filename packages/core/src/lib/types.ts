@@ -316,7 +316,7 @@ export interface Activity {
 }
 
 // ---- app navigation (each app supplies its own tab set) ----
-export type TabGroup = "today" | "paper" | "money" | "books" | "people" | "yard" | "owner";
+export type TabGroup = "money" | "business" | "records" | "more";
 
 export interface Tab {
   label: string;
