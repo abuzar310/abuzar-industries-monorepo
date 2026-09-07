@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TabIcon } from "@/components/Icons";
 import { lockApp } from "@/lib/local-auth";
-import { phoneShelves, type PhoneSection } from "@/lib/phone-nav";
+import { phoneShelves, phoneTabIcon, type PhoneSection } from "@/lib/phone-nav";
 import { useApp } from "@/store/useApp";
 import type { Tab } from "@/lib/types";
 
@@ -41,7 +41,7 @@ export default function PhoneSectionView({ section, tabs }: { section: PhoneSect
           const n = badge(t);
           return (
             <Link key={t.href} href={t.href} className="lrow phone-sec-row">
-              <TabIcon icon={t.icon} size={18} />
+              <span className="phone-ico"><TabIcon icon={t.icon || phoneTabIcon(t.href)} size={16} /></span>
               <span className="nm">{t.label}</span>
               {n > 0 && <em>{n}</em>}
             </Link>

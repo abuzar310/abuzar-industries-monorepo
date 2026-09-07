@@ -2,7 +2,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconBag, IconClipboardList, IconHome, IconWallet } from "@/components/Icons";
+import { IconNavBusiness, IconNavHome, IconNavMoney, IconNavMore, IconNavRecords } from "@/components/Icons";
 import { phoneBar, phoneSectionOf, phoneShelves, type PhoneSection } from "@/lib/phone-nav";
 import { useApp } from "@/store/useApp";
 import type { Tab } from "@/lib/types";
@@ -13,6 +13,14 @@ const HREF: Record<"home" | PhoneSection, string> = {
   business: "/business",
   records: "/records",
   more: "/more",
+};
+
+const ICO: Record<"home" | PhoneSection, typeof IconNavHome> = {
+  home: IconNavHome,
+  money: IconNavMoney,
+  business: IconNavBusiness,
+  records: IconNavRecords,
+  more: IconNavMore,
 };
 
 export default function PhoneNav({ tabs }: { tabs: Tab[] }) {
@@ -28,21 +36,13 @@ export default function PhoneNav({ tabs }: { tabs: Tab[] }) {
 
   return (
     <div className="phone-chrome no-print">
-      {path !== "/" && (
-        <Link className="phone-fab" href="/editor" aria-label="New quotation">+</Link>
-      )}
-      <nav className={"phone-tabs phone-tabs-" + bar.length} aria-label="Phone">
+      <nav className={"phone-tabs phone-tabs-" + bar.length} aria-label="Primary">
         {bar.map((t) => {
           const on = t.id === "home" ? path === "/" : here === t.id;
+          const Ico = ICO[t.id];
           return (
-            <Link key={t.id} href={HREF[t.id]} className={on ? "on" : ""}>
-              <span aria-hidden>
-                {t.id === "home" && <IconHome size={20} />}
-                {t.id === "money" && <IconWallet size={20} />}
-                {t.id === "business" && <IconBag size={20} />}
-                {t.id === "records" && <IconClipboardList size={20} />}
-                {t.id === "more" && <span className="phone-more-ico" />}
-              </span>
+            <Link key={t.id} href={HREF[t.id]} className={on ? "on" : ""} aria-current={on ? "page" : undefined}>
+              <Ico size={22} filled={on} />
               {t.label}
             </Link>
           );
