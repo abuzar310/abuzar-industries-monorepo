@@ -3,6 +3,7 @@
    Warm, premium editorial ledger. Fraunces (serif display) + Hanken Grotesk
    (UI) + Spline Sans Mono (data). Class hooks match the components exactly;
    restyling lives entirely here. Kept light so the editor sheet prints clean.
+   Icons: local SVG in Icons.tsx (one stroke family, currentColor).
    ============================================================================ */
 :root{
   /* surfaces */
@@ -1302,6 +1303,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .rowbtns{display:flex; gap:9px; flex-wrap:wrap; margin:16px 0 2px}
 .hint{font-size:12px; color:var(--ink-faint); text-align:center; margin:18px 4px 0; line-height:1.6}
 .hint b{color:var(--ink-soft)}
+.hint a{color:var(--ochre-deep)}
 
 @media (max-width:560px){
   .wrap{padding:18px 14px 120px}
@@ -1318,85 +1320,160 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 /* ---------- mobile: nav + tap targets ---------- */
 .phone-home,.phone-chrome{display:none}
 @media(max-width:760px){
+  .topnav{padding-top:env(safe-area-inset-top, 0px)}
   .topnav-in{padding:10px 14px; gap:10px; flex-wrap:nowrap}
-  .nav-brand{font-size:17px; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis}
+  .nav-brand{font-size:13px; letter-spacing:.04em; text-transform:uppercase; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:8px}
+  .phone-logo{display:block; width:22px; height:22px; object-fit:contain; flex:0 0 auto}
+  .um-caret{display:none}
   .navsearch{display:none}
-  .syncdot{padding:7px 10px; min-height:36px; gap:8px; font-size:12px; color:var(--ink); background:var(--panel-2); border-color:var(--line-2)}
+  .syncdot{padding:7px 10px; min-height:44px; gap:8px; font-size:12px; color:var(--ink); background:var(--panel-2); border-color:var(--line-2)}
   .syncdot span{display:inline}
   .syncdot i{width:9px; height:9px}
-  .userchip{min-height:36px; padding:4px 10px 4px 4px}
+  .userchip{min-height:44px; padding:4px 10px 4px 4px}
   .userchip-name{display:none}
   .userchip-role{display:inline}
+  .phone-bell{display:grid}
   .usermenu-pop .um-item,.usermenu-pop .um-logout{min-height:44px}
   .tabs{display:none}
   .desk-dash{display:none}
   .phone-home,.phone-chrome{display:block}
   .ai-fab-root{display:none}
-  .wrap{padding:16px 16px max(108px, calc(88px + env(safe-area-inset-bottom, 0px)))}
+  .wrap{padding:16px 16px max(92px, calc(72px + env(safe-area-inset-bottom, 0px)))}
   .phone-sec .sectitle{font-size:26px; margin:2px 0 14px}
   .doctool{padding:10px 12px}
   .rowbtns .btn{flex:1 1 auto; justify-content:center}
   .lock-card input{font-size:16px}
+  .phone-home button,.phone-home a,.phone-sec-row,.phone-qa button,.phone-eye,.phone-ov-range,.phone-bell{
+    cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+  }
+  .phone-home button,.phone-sec-row,.phone-att,.phone-act,.phone-ov-range,.phone-eye,.phone-bell{
+    transition:transform .1s ease, background-color .12s ease;
+  }
+  .phone-home button:active,.phone-sec-row:active,.phone-att:active,.phone-act:active,.phone-ov-range:active,.phone-eye:active,.phone-bell:active{
+    transform:scale(.97);
+  }
+  .phone-home button:focus-visible,.phone-sec-row:focus-visible,.phone-eye:focus-visible,.phone-ov-range:focus-visible,.phone-bell:focus-visible{
+    outline:none; box-shadow:var(--ring);
+  }
 }
-.phone-kpis{
-  display:grid; grid-template-columns:1fr 1fr;
-  border:1px solid var(--line-2); background:var(--panel-2); margin:0 0 16px;
-  border-radius:var(--radius-lg); overflow:hidden;
+.phone-logo{display:none}
+.phone-hello{margin:2px 0 16px; font-size:26px; font-weight:700; color:var(--ink); letter-spacing:-.03em; display:flex; align-items:center; gap:8px; text-wrap:balance}
+.phone-hello svg{color:var(--brass); flex:0 0 auto}
+.phone-sec-h{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:18px 0 8px}
+.phone-sec-h h2,.phone-h{margin:0; font-size:15px; font-weight:700; color:var(--ink)}
+.phone-h{margin:18px 0 8px}
+.phone-sec-h a{font-size:12px; font-weight:600; color:var(--ochre-deep); text-decoration:none}
+.phone-eye{border:0; background:transparent; color:var(--ink-soft); padding:4px; min-height:44px; min-width:44px}
+.phone-ov{
+  border:1px solid var(--line-2); background:var(--panel-2); margin:0 0 8px;
+  border-radius:18px; box-shadow:var(--shadow-card); padding:14px 14px 8px;
 }
-.phone-kpi{
-  min-height:72px; padding:16px; text-align:left; color:inherit; font:inherit;
-  border:0; border-right:1px solid var(--line); border-bottom:1px solid var(--line);
-  background:transparent;
+.phone-ov-top{display:flex; align-items:flex-start; justify-content:space-between; gap:10px}
+.phone-ov-sales{flex:1; min-width:0; padding:0; text-align:left; color:inherit; font:inherit; border:0; background:transparent}
+.phone-ov-sales i{display:block; font-style:normal; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); font-weight:700}
+.phone-ov-sales strong{display:block; margin-top:6px; font-size:28px; font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.1}
+.phone-ov-sales em{display:inline-block; margin-top:6px; font-style:normal; font-size:12px; font-weight:700}
+.phone-ov-sales em.up{color:var(--green)}
+.phone-ov-sales em.dn{color:var(--danger)}
+.phone-ov-range{
+  flex:0 0 auto; margin-top:2px; padding:6px 12px; border:1px solid var(--line-2);
+  background:var(--paper); color:var(--ink); font:inherit; font-size:12px; font-weight:700;
+  border-radius:999px; min-height:44px;
 }
-.phone-kpi-lead{grid-column:1 / -1; border-right:none}
-.phone-kpi:nth-child(2n+1):not(.phone-kpi-lead){border-right:1px solid var(--line)}
-.phone-kpi:nth-child(2n){border-right:none}
-.phone-kpi:last-child:nth-child(even){grid-column:1 / -1; border-right:none}
-.phone-kpi i{display:block; font-style:normal; font-size:12px; color:var(--ink-soft)}
-.phone-kpi strong{display:block; margin-top:8px; font-size:22px; font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.15}
-.phone-kpi-lead strong{font-size:26px}
-.phone-kpi small{display:block; margin-top:4px; font-size:12px; color:var(--ink-faint)}
-.phone-qa{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 24px}
+.phone-ov-minis{display:flex; gap:6px; margin-top:14px}
+.phone-ov-minis button{
+  flex:1; min-width:0; padding:10px 6px 12px; text-align:center; color:inherit; font:inherit;
+  border:0; background:transparent;
+}
+.phone-ov-minis i{display:block; font-style:normal; font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); font-weight:700; margin-top:6px}
+.phone-ov-minis b{display:block; margin-top:4px; font-size:12px; font-family:var(--mono); font-weight:700; font-variant-numeric:tabular-nums; color:var(--ink)}
+.phone-ov-minis small{display:inline-block; margin-top:5px; font-size:10px; font-family:var(--mono); font-weight:700; padding:2px 6px; border-radius:999px}
+.phone-ov-minis small.ok,.phone-att em.ok{color:var(--green); background:rgba(86,107,59,.12)}
+.phone-ov-minis small.warn,.phone-att em.warn{color:var(--danger); background:rgba(165,61,41,.1)}
+.phone-ico{
+  width:28px; height:28px; border-radius:999px; display:grid; place-items:center;
+  background:rgba(51,36,26,.06); color:var(--walnut); margin:0 auto;
+}
+.phone-ico.ok{background:rgba(86,107,59,.14); color:var(--green)}
+.phone-ico.warn{background:rgba(165,61,41,.12); color:var(--danger)}
+.phone-ico.gold{background:rgba(198,143,49,.16); color:var(--ochre-deep)}
+.phone-qa{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:0 0 8px}
 .phone-qa button{
-  min-height:44px; padding:0 14px; border:1px solid var(--line-2);
-  background:var(--panel); color:var(--ink); font:inherit; font-weight:600;
-  border-radius:var(--radius-sm);
+  min-height:78px; padding:10px 6px; border:1px solid var(--line-2);
+  background:var(--panel-2); color:var(--ink); font:inherit; font-size:11px; font-weight:700;
+  border-radius:14px; display:grid; place-items:center; gap:6px; align-content:center;
+  transition:transform .1s ease, border-color .15s ease, box-shadow .15s ease;
 }
-.phone-h{margin:0 0 8px; font-family:var(--serif); font-size:22px; font-weight:600; color:var(--ink)}
-.phone-home .listwrap{margin-top:0}
-.phone-home .phone-sec-row{justify-content:space-between}
-.phone-home .phone-sec-row .mut{display:block; margin-top:2px}
+.phone-qa button svg{color:var(--walnut)}
+.phone-qa button.on{border-color:var(--brass); box-shadow:inset 0 -2px 0 var(--brass); color:var(--walnut)}
+.phone-qa button.on svg{color:var(--ochre-deep)}
+.phone-qa button:active{transform:scale(.97)}
+.phone-list{border:1px solid var(--line-2); background:var(--panel-2); border-radius:16px; overflow:hidden}
+.phone-att,.phone-act{
+  display:flex; align-items:center; gap:10px; width:100%; padding:12px 12px;
+  text-align:left; border:0; border-bottom:1px solid var(--line); background:transparent;
+  color:inherit; font:inherit;
+}
+.phone-att:last-child,.phone-act:last-child{border-bottom:none}
+.phone-att .phone-ico,.phone-act .phone-ico{margin:0; flex:0 0 auto}
+.phone-att span:nth-child(2),.phone-act span:nth-child(2){flex:1; min-width:0}
+.phone-att .nm,.phone-act .nm{display:block; font-weight:700; font-size:13px}
+.phone-att .mut,.phone-act .mut{display:block; margin-top:2px; font-size:11px; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.phone-att em{flex:0 0 auto; font-style:normal; font-size:10px; font-weight:700; padding:3px 7px; border-radius:999px}
+.phone-att em.gold{color:var(--ochre-deep); background:rgba(198,143,49,.16)}
+.phone-act .amt{flex:0 0 auto; font-family:var(--mono); font-weight:700; font-size:12px; color:var(--ink)}
+.phone-act .amt.out{color:var(--danger)}
+.phone-bell{
+  display:none; position:relative; width:44px; height:44px; place-items:center;
+  border:1px solid var(--line-2); border-radius:999px; background:var(--panel-2);
+  color:var(--walnut); text-decoration:none; flex:0 0 auto;
+}
+.phone-bell b{
+  position:absolute; top:-3px; right:-3px; min-width:14px; height:14px; padding:0 3px;
+  border-radius:999px; background:var(--danger); color:#fff; font-size:9px; line-height:14px; text-align:center;
+}
 .phone-chrome{position:relative; z-index:45}
 .phone-tabs{
   position:fixed; left:0; right:0; bottom:0; z-index:46;
-  height:calc(58px + env(safe-area-inset-bottom, 0px));
-  padding-bottom:env(safe-area-inset-bottom, 0px);
-  background:var(--panel); border-top:1px solid var(--line);
-  display:grid; grid-template-columns:repeat(4,1fr);
+  height:calc(64px + env(safe-area-inset-bottom, 0px));
+  padding:4px 6px env(safe-area-inset-bottom, 0px);
+  background:var(--panel-2);
+  border-top:1px solid var(--line-2);
+  box-shadow:0 -8px 24px -18px rgba(40,28,16,.28);
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:2px;
 }
-.phone-tabs-5{grid-template-columns:repeat(5,1fr)}
-.phone-tabs a,.phone-tabs button{
-  border:0; background:transparent; color:var(--ink-faint);
-  min-height:44px; display:grid; place-items:center; gap:2px; align-content:center;
-  font-family:var(--disp); font-size:11px; font-weight:600; letter-spacing:.01em;
-  text-decoration:none;
+.phone-tabs-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.phone-tabs a{
+  position:relative;
+  border:0; background:transparent;
+  color:color-mix(in srgb, var(--ink) 58%, transparent);
+  min-height:48px; min-width:0; padding:6px 2px 9px;
+  display:grid; place-items:center; gap:3px; align-content:center;
+  font-family:var(--disp); font-size:12px; font-weight:700; letter-spacing:.01em;
+  text-decoration:none; border-radius:10px; cursor:pointer;
+  touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+  transition:color .12s ease, background-color .12s ease, transform .1s ease;
 }
-.phone-tabs a.on,.phone-tabs button.on{color:var(--walnut)}
-.phone-more-ico{width:18px; height:12px; border-top:2px solid currentColor; border-bottom:2px solid currentColor; position:relative}
-.phone-more-ico::after{content:""; position:absolute; left:0; right:0; top:5px; height:2px; background:currentColor}
-.phone-fab{
-  position:fixed; right:16px;
-  bottom:calc(72px + env(safe-area-inset-bottom, 0px)); z-index:47;
-  border:0; background:var(--walnut); color:#F4E9D8; width:52px; height:52px; border-radius:999px;
-  display:grid; place-items:center;
-  font-size:28px; font-weight:500; line-height:1;
-  box-shadow:0 8px 20px rgba(51,36,26,.28);
+.phone-tabs a svg{display:block}
+.phone-tabs a:hover:not(.on){color:var(--ink); background:rgba(51,36,26,.04)}
+.phone-tabs a:active{transform:scale(.97)}
+.phone-tabs a:focus-visible{outline:none; box-shadow:var(--ring)}
+.phone-tabs a.on{
+  color:var(--walnut);
+  background:rgba(51,36,26,.06);
+}
+.phone-tabs a.on::after{
+  content:"";
+  position:absolute; left:28%; right:28%; bottom:5px;
+  height:2px; border-radius:2px; background:var(--brass);
 }
 .phone-sec-row{
   display:flex; align-items:center; gap:12px; width:100%;
   min-height:52px; padding:14px 16px; text-align:left;
   border:0; background:transparent; color:inherit; font:inherit; text-decoration:none;
 }
+.phone-sec-row svg{color:var(--walnut); flex:0 0 auto}
 .phone-sec-row em{margin-left:auto; font-style:normal; background:var(--walnut); color:#F4E9D8; font-size:11px; padding:1px 7px; border-radius:999px}
 
 @media(max-width:480px){
@@ -3391,6 +3468,10 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .ai-fab-root{ right:12px; bottom:14px; }
   .ai-fab{ width:48px; height:48px; }
 }
+@media (max-width:760px){
+  /* later .ai-fab-root{display:flex} was beating the phone hide and sitting on the tab bar */
+  .ai-fab-root{display:none}
+}
 
 .chat-fab-root{
   position:fixed; z-index:81; right:16px; bottom:78px;
@@ -3414,6 +3495,9 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 @media (max-width:640px){
   .chat-fab-root{ right:12px; bottom:70px; }
   .chat-fab-root.low{ bottom:14px; }
+}
+@media (max-width:760px){
+  .chat-fab-root{ right:12px; bottom:calc(76px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* ── Owner / Manager yard chat ── */

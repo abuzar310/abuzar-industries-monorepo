@@ -37,9 +37,41 @@ export function phoneSectionOf(tabs: Tab[], href: string): PhoneSection | "home"
 }
 
 export function phoneQuickActions(feat: AppFeatures) {
-  const out: { href: string; label: string }[] = [{ href: "/editor", label: "New quotation" }];
-  if (feat.acceptPayment) out.push({ href: "/receipts", label: "Receipt" });
-  out.push({ href: "/customers", label: "Customer" });
-  if (feat.simpleQuote) out.push({ href: "/expenses", label: "Daybook" });
+  const out: { href: string; label: string; icon: string }[] = [{ href: "/editor", label: "New quotation", icon: "file-plus" }];
+  if (feat.acceptPayment) out.push({ href: "/receipts", label: "Receipt", icon: "receipt" });
+  out.push({ href: "/customers", label: "Customer", icon: "customers" });
+  if (feat.simpleQuote) {
+    out.push({ href: "/expenses", label: "Daybook", icon: "book" });
+    out.push({ href: "/quotations", label: "Cut Size", icon: "saw" });
+  }
   return out;
+}
+
+const TAB_ICO: Record<string, string> = {
+  "/payments": "scale",
+  "/receipts": "receipt",
+  "/accounts": "building",
+  "/books": "book",
+  "/editor": "file-plus",
+  "/quotations": "clipboard",
+  "/website-quotations": "file-text",
+  "/customers": "customers",
+  "/carpenters": "customers",
+  "/rent": "building",
+  "/buys": "bag",
+  "/suppliers": "truck",
+  "/invoices": "invoices",
+  "/tally": "ledger",
+  "/stock": "boxes",
+  "/expenses": "book",
+  "/attendance": "calendar",
+  "/logs": "clipboard",
+  "/contacts": "customers",
+  "/ai": "chart",
+  "/settings": "settings",
+  "/reports": "chart",
+};
+
+export function phoneTabIcon(href: string) {
+  return TAB_ICO[href];
 }
