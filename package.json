@@ -13,7 +13,7 @@
     "start:official": "next start apps/official -p 3020",
     "lint": "eslint apps packages",
     "typecheck": "tsc --noEmit",
-    "check": "node --no-warnings packages/core/src/lib/calc.check.ts && node --no-warnings packages/core/src/lib/ledger.check.ts && node --no-warnings packages/core/src/lib/trading.check.ts && node --no-warnings packages/core/src/lib/carpenter-financials.check.ts && node --no-warnings packages/core/src/lib/place-rent.check.ts && node --no-warnings packages/core/src/lib/book-catalog.check.ts && node --no-warnings packages/core/src/lib/permit-letter.check.ts && node --no-warnings packages/core/src/lib/ai-host.check.ts && node --no-warnings packages/core/src/lib/payments.check.ts && node --no-warnings packages/core/src/lib/accounts.check.ts && node --no-warnings packages/core/src/lib/party-search.check.ts",
+    "check": "node --no-warnings packages/core/src/lib/calc.check.ts && node --no-warnings packages/core/src/lib/ledger.check.ts && node --no-warnings packages/core/src/lib/trading.check.ts && node --no-warnings packages/core/src/lib/carpenter-financials.check.ts && node --no-warnings packages/core/src/lib/place-rent.check.ts && node --no-warnings packages/core/src/lib/book-catalog.check.ts && node --no-warnings packages/core/src/lib/permit-letter.check.ts && node --no-warnings packages/core/src/lib/ai-host.check.ts && node --no-warnings packages/core/src/lib/payments.check.ts && node --no-warnings packages/core/src/lib/accounts.check.ts && node --no-warnings packages/core/src/lib/party-search.check.ts && node --no-warnings packages/core/src/lib/phone-nav.check.ts",
     "check:review-qr": "node --no-warnings packages/core/src/lib/review-qr.check.ts",
     "bake:review-qr": "node scripts/bake-review-flyer-qr.mjs"
   },

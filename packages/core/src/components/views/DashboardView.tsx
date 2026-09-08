@@ -10,6 +10,7 @@ import { useApp } from "@/store/useApp";
 import Pager from "@/components/Pager";
 import type { Customer, Doc, Expense, Stock } from "@/lib/types";
 import { StatusBadge } from "./DocList";
+import PhoneHome from "@/components/PhoneHome";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -300,6 +301,8 @@ export default function DashboardView() {
   if (feat.simpleQuote && !isOwner) {
     return (
       <div>
+        <PhoneHome quotes={quotes} invs={invs} customers={custs} expenses={exp} />
+        <div className="desk-dash">
         <div className="sectitle">
           Dashboard <small>— welcome, {user?.name || "Manager"}</small>
         </div>
@@ -310,12 +313,15 @@ export default function DashboardView() {
             Analytics and Logs are for the owner.
           </div>
         </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div>
+      <PhoneHome quotes={quotes} invs={invs} customers={custs} expenses={exp} />
+      <div className="desk-dash">
       <div className="sectitle">
         Dashboard <small>{user ? `— welcome, ${user.name}` : "— business at a glance"}</small>
       </div>
@@ -533,6 +539,7 @@ export default function DashboardView() {
           />
         </div>
       )}
+      </div>
     </div>
   );
 }

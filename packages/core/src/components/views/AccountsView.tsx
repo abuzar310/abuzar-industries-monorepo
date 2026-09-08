@@ -34,6 +34,7 @@ import {
   setHolderKind,
   setHolderOpening,
   settleTransportDue,
+  updateTransportDue,
   stashHolderOpening,
   transportDueLabel,
   transportNeedToCollect,
@@ -68,6 +69,10 @@ const toDmy = (v: string) => {
 const isoToday = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const fromDmy = (v: string) => {
+  const [d, m, y] = (v || "").split("-");
+  return d && m && y ? `20${y}-${m}-${d}` : "";
 };
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const lc = (s?: string) => (s || "").trim().toLowerCase();
@@ -163,6 +168,7 @@ export default function AccountsView() {
   const [dueDate, setDueDate] = useState(isoToday);
   const [duePocket, setDuePocket] = useState("");
   const [lockOpen, setLockOpen] = useState(false);
+  const [editDueId, setEditDueId] = useState<string | null>(null);
   const canPayTransport = !!getFeatures().acceptPayment;
 
   // move a payment to another account
@@ -467,6 +473,46 @@ export default function AccountsView() {
     setPayDueId(null);
     setTDate("");
   }
+  function cancelEditDue() {
+    setEditDueId(null);
+    setDueParty("");
+    setDueAmt("");
+    setDueVehicle("");
+    setDueFrom("");
+    setDueDate(isoToday());
+  }
+  function startEditDue(e: Expense) {
+    cancelPay();
+    setLockOpen(false);
+    setEditDueId(e.id);
+    setDueParty(e.party || "");
+    setDueAmt(String(+e.amount || 0));
+    setDueVehicle(e.vehicleNo || "");
+    setDueFrom((e.placeOfSupply || e.boughtFrom || "").trim());
+    setDueDate(e.date ? fromDmy(e.date) : isoToday());
+    setDuePocket((e.transportPocket || "").trim());
+  }
+  async function submitEditDue() {
+    if (!editDueId) return;
+    const party = dueParty.trim();
+    if (!party) return toast("Enter the transporter name");
+    const a = Math.max(0, +dueAmt || 0);
+    if (a <= 0) return toast("Enter an amount");
+    const e = await updateTransportDue({
+      id: editDueId,
+      party,
+      amount: a,
+      vehicleNo: dueVehicle.trim(),
+      placeOfSupply: dueFrom.trim(),
+      transportPocket: duePocket.trim() || undefined,
+      date: dueDate ? toDmy(dueDate) : undefined,
+    });
+    if (!e) return toast("Could not update — pay first, or this due is gone");
+    cancelEditDue();
+    load();
+    bumpData();
+    toast("Transport due updated · " + party + " · ₹" + inr(a));
+  }
   function listPaySources() {
     const srcs = [
       ...holders.map((h) => {
@@ -501,6 +547,7 @@ export default function AccountsView() {
   }
   function startPayDue(dueId: string) {
     cancelCollect();
+    cancelEditDue();
     if (payDueId === dueId) {
       cancelPay();
       return;
@@ -581,6 +628,7 @@ export default function AccountsView() {
     if (!ok) return;
     await deleteAccountEntry(id);
     if (payDueId === id) setPayDueId(null);
+    if (editDueId === id) cancelEditDue();
     load();
     bumpData();
     toast(pending ? "Transport due removed" : "Transport pay undone");
@@ -628,6 +676,61 @@ export default function AccountsView() {
           </button>
         </div>
       </div>
+    );
+  }
+  function renderDueEditForm() {
+    return (
+      <form
+        className="acct-form acct-due-pay"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submitEditDue();
+        }}
+      >
+        <small className="acct-hint">Change name, amount, vehicle, place, or which UPI this due collects on. Still not paid.</small>
+        <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+          <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
+            <span>Transporter</span>
+            <input type="text" value={dueParty} onChange={(e) => setDueParty(e.target.value)} />
+          </label>
+          <label className="modal-field" style={{ flex: "1 1 130px", minWidth: 0 }}>
+            <span>Vehicle number</span>
+            <input type="text" value={dueVehicle} onChange={(e) => setDueVehicle(e.target.value)} />
+          </label>
+          <label className="modal-field" style={{ flex: "1 1 110px", minWidth: 0 }}>
+            <span>Amount ₹</span>
+            <input type="number" inputMode="decimal" value={dueAmt} onChange={(e) => setDueAmt(e.target.value)} />
+          </label>
+          {transportPockets.length > 0 && (
+            <label className="modal-field" style={{ flex: "1 1 160px", minWidth: 0 }}>
+              <span>Collect on</span>
+              <select value={duePocket} onChange={(e) => setDuePocket(e.target.value)}>
+                {transportPockets.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
+            <span>From</span>
+            <input type="text" list="acct-bought-from" value={dueFrom} onChange={(e) => setDueFrom(e.target.value)} />
+          </label>
+          <label className="modal-field" style={{ flex: "1 1 120px", minWidth: 0 }}>
+            <span>Date</span>
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </label>
+        </div>
+        <div className="rowbtns" style={{ marginTop: 10 }}>
+          <button className="btn primary sm" type="submit">
+            Save
+          </button>
+          <button className="btn sm" type="button" onClick={cancelEditDue}>
+            Cancel
+          </button>
+        </div>
+      </form>
     );
   }
   function renderDuePayForm(due: Expense) {
@@ -1562,7 +1665,14 @@ export default function AccountsView() {
             </form>
           ) : (
             <div className="acct-day-label acct-lock-toggle">
-              <button className="btn sm" type="button" onClick={() => setLockOpen(true)}>
+              <button
+                className="btn sm"
+                type="button"
+                onClick={() => {
+                  cancelEditDue();
+                  setLockOpen(true);
+                }}
+              >
                 + Lock a bill
               </button>
             </div>
@@ -1576,7 +1686,7 @@ export default function AccountsView() {
             <div className="acct-empty">Nothing due. Lock a bill, then Pay on the row.</div>
           ) : (
             pendingDues.map((e) => (
-              <div key={e.id} className={"acct-due-block" + (payDueId === e.id ? " on" : "")}>
+              <div key={e.id} className={"acct-due-block" + (payDueId === e.id || editDueId === e.id ? " on" : "")}>
                 <div className="acct-trow">
                   <span className="who">{transportDueLabel(e)}</span>
                   <span className="meta">
@@ -1591,12 +1701,19 @@ export default function AccountsView() {
                     <button className="btn primary sm" type="button" onClick={() => startPayDue(e.id)}>
                       {payDueId === e.id ? "Close" : "Pay"}
                     </button>
+                    <button
+                      className="btn sm"
+                      type="button"
+                      onClick={() => (editDueId === e.id ? cancelEditDue() : startEditDue(e))}
+                    >
+                      {editDueId === e.id ? "Cancel" : "Edit"}
+                    </button>
                     <button className="btn sm danger" type="button" onClick={() => delTransport(e.id, true)}>
                       Delete
                     </button>
                   </span>
                 </div>
-                {payDueId === e.id ? renderDuePayForm(e) : null}
+                {editDueId === e.id ? renderDueEditForm() : payDueId === e.id ? renderDuePayForm(e) : null}
               </div>
             ))
           )}

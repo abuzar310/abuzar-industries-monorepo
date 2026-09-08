@@ -3,6 +3,7 @@
    Warm, premium editorial ledger. Fraunces (serif display) + Hanken Grotesk
    (UI) + Spline Sans Mono (data). Class hooks match the components exactly;
    restyling lives entirely here. Kept light so the editor sheet prints clean.
+   Icons: local SVG in Icons.tsx (one stroke family, currentColor).
    ============================================================================ */
 :root{
   /* surfaces */
@@ -1010,9 +1011,23 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .empty .empty-note{color:var(--ink-faint); font-size:12.5px; max-width:300px}
 @media(max-width:760px){
   .lhead{display:none}
-  .lrow{grid-template-columns:1fr 1fr; gap:6px 12px; padding:14px 16px}
-  .lrow .acts{grid-column:span 2; justify-content:flex-start}
-  .lrow .col-date,.lrow .col-status{justify-self:end}
+  .lrow:not(.sup-lrow){
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:4px 12px;
+    padding:14px 14px;
+  }
+  .lrow:not(.sup-lrow) > .id{grid-column:1; grid-row:1}
+  .lrow:not(.sup-lrow) > .nm{grid-column:1; grid-row:2; min-width:0}
+  .lrow:not(.sup-lrow) > .mut:not(.col-date){grid-column:1; grid-row:3}
+  .lrow:not(.sup-lrow) > .col-date{grid-column:1; grid-row:4; justify-self:start}
+  .lrow:not(.sup-lrow) > .col-status{grid-column:2; grid-row:1; justify-self:end}
+  .lrow:not(.sup-lrow) > .col-amt,
+  .lrow:not(.sup-lrow) > .amt{
+    grid-column:1 / -1; grid-row:5;
+  }
+  .lrow .amt{text-align:left}
+  .lrow .acts{grid-column:span 2; justify-content:flex-start; margin-top:8px}
 }
 
 /* suppliers list (clean rows) */
@@ -1165,7 +1180,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .lock-sub{font-size:13.5px; color:var(--ink-soft); margin:18px 0 14px; display:flex; align-items:center; justify-content:center; gap:6px}
 .lock-sub b{color:var(--ink)}
 .lock-users{display:grid; grid-template-columns:1fr 1fr; gap:12px}
-.lock-user{display:flex; flex-direction:column; align-items:center; gap:5px; padding:20px 12px; cursor:pointer;
+.lock-user{display:flex; flex-direction:column; align-items:center; gap:5px; padding:20px 12px; min-height:44px; cursor:pointer;
   background:#fff; border:1px solid var(--line-2); border-radius:var(--radius-md); transition:all var(--t-fast)}
 .lock-user:hover{border-color:var(--ochre); box-shadow:var(--shadow-md); transform:translateY(-2px)}
 .lock-user b{font-family:var(--disp); font-size:16px; font-weight:700; color:var(--ink)}
@@ -1198,6 +1213,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .um-item{width:100%; text-align:left; font-family:var(--body); font-weight:600; font-size:13.5px; padding:9px 10px; border:none;
   border-radius:8px; background:transparent; color:var(--ink); cursor:pointer}
 .um-item:hover{background:var(--panel)}
+.userchip-role{display:none}
 .userchip i{width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-style:normal;
   font-family:var(--serif); font-size:12px; color:#F4E9D8; background:linear-gradient(180deg,var(--walnut),var(--walnut-2))}
 
@@ -1300,6 +1316,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .rowbtns{display:flex; gap:9px; flex-wrap:wrap; margin:16px 0 2px}
 .hint{font-size:12px; color:var(--ink-faint); text-align:center; margin:18px 4px 0; line-height:1.6}
 .hint b{color:var(--ink-soft)}
+.hint a{color:var(--ochre-deep)}
 
 @media (max-width:560px){
   .wrap{padding:18px 14px 120px}
@@ -1314,20 +1331,169 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 }
 
 /* ---------- mobile: nav + tap targets ---------- */
+.phone-home,.phone-chrome{display:none}
 @media(max-width:760px){
-  .topnav-in{padding:9px 14px; gap:8px 10px}
-  .nav-brand{font-size:18px}
-  .navsearch{flex:1 1 140px; min-width:110px}
-  .navsearch input{width:100%}
-  .navsearch input:focus{width:100%}
-  /* tabs get their own full-width swipeable row */
-  .tabs{order:2; flex-basis:100%; flex-wrap:nowrap; overflow-x:auto; gap:4px; padding-bottom:2px;
-    scrollbar-width:none; -webkit-overflow-scrolling:touch}
-  .tabs::-webkit-scrollbar{display:none}
-  .tab{flex:0 0 auto; white-space:nowrap; font-size:12.5px; padding:7px 11px}
+  .topnav{padding-top:env(safe-area-inset-top, 0px)}
+  .topnav-in{padding:10px 14px; gap:10px; flex-wrap:nowrap}
+  .nav-brand{font-size:13px; letter-spacing:.04em; text-transform:uppercase; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:8px}
+  .phone-logo{display:block; width:22px; height:22px; object-fit:contain; flex:0 0 auto}
+  .um-caret{display:none}
+  .navsearch{display:none}
+  .syncdot{padding:7px 10px; min-height:44px; gap:8px; font-size:12px; color:var(--ink); background:var(--panel-2); border-color:var(--line-2)}
+  .syncdot span{display:inline}
+  .syncdot i{width:9px; height:9px}
+  .userchip{min-height:44px; padding:4px 10px 4px 4px}
+  .userchip-name{display:none}
+  .userchip-role{display:inline}
+  .phone-bell{display:grid}
+  .usermenu-pop .um-item,.usermenu-pop .um-logout{min-height:44px}
+  .tabs{display:none}
+  .desk-dash{display:none}
+  .phone-home,.phone-chrome{display:block}
+  .ai-fab-root{display:none}
+  .wrap{padding:16px 16px max(92px, calc(72px + env(safe-area-inset-bottom, 0px)))}
+  .phone-sec .sectitle{font-size:26px; margin:2px 0 14px}
   .doctool{padding:10px 12px}
   .rowbtns .btn{flex:1 1 auto; justify-content:center}
+  .lock-card input{font-size:16px}
+  .phone-home button,.phone-home a,.phone-sec-row,.phone-qa button,.phone-ov-range,.phone-bell{
+    cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+  }
+  .phone-home button,.phone-sec-row,.phone-att,.phone-act,.phone-ov-range,.phone-bell{
+    transition:transform .1s ease, background-color .12s ease;
+  }
+  .phone-home button:active,.phone-sec-row:active,.phone-att:active,.phone-act:active,.phone-ov-range:active,.phone-bell:active{
+    transform:scale(.97);
+  }
+  .phone-home button:focus-visible,.phone-sec-row:focus-visible,.phone-ov-range:focus-visible,.phone-bell:focus-visible{
+    outline:none; box-shadow:var(--ring);
+  }
 }
+.phone-logo{display:none}
+.phone-hello{margin:2px 0 16px; font-size:26px; font-weight:700; color:var(--ink); letter-spacing:-.03em; display:flex; align-items:center; gap:8px; text-wrap:balance}
+.phone-hello svg{color:var(--brass); flex:0 0 auto}
+.phone-sec-h{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:18px 0 8px}
+.phone-sec-h h2,.phone-h{margin:0; font-size:15px; font-weight:700; color:var(--ink)}
+.phone-h{margin:18px 0 8px}
+.phone-sec-h a{font-size:12px; font-weight:600; color:var(--ochre-deep); text-decoration:none}
+.phone-ov{
+  border:1px solid var(--line-2); background:var(--panel-2); margin:0 0 8px;
+  border-radius:18px; box-shadow:var(--shadow-card); padding:14px 14px 8px;
+}
+.phone-ov-top{display:flex; align-items:flex-start; justify-content:space-between; gap:10px}
+.phone-ov-sales{flex:1; min-width:0; padding:0; text-align:left; color:inherit; font:inherit; border:0; background:transparent}
+.phone-ov-sales i{display:block; font-style:normal; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); font-weight:700}
+.phone-ov-sales strong{display:block; margin-top:6px; font-size:28px; font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.1}
+.phone-ov-sales em{display:inline-block; margin-top:6px; font-style:normal; font-size:12px; font-weight:700}
+.phone-ov-sales em.up{color:var(--green)}
+.phone-ov-sales em.dn{color:var(--danger)}
+.phone-ov-range{
+  flex:0 0 auto; margin-top:2px; padding:6px 12px; border:1px solid var(--line-2);
+  background:var(--paper); color:var(--ink); font:inherit; font-size:12px; font-weight:700;
+  border-radius:999px; min-height:44px;
+}
+.phone-ov-minis{display:flex; gap:6px; margin-top:14px}
+.phone-ov-minis button{
+  flex:1; min-width:0; padding:10px 6px 12px; text-align:center; color:inherit; font:inherit;
+  border:0; background:transparent;
+}
+.phone-ov-minis i{display:block; font-style:normal; font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); font-weight:700; margin-top:6px}
+.phone-ov-minis b{display:block; margin-top:4px; font-size:12px; font-family:var(--mono); font-weight:700; font-variant-numeric:tabular-nums; color:var(--ink)}
+.phone-ov-minis small{display:inline-block; margin-top:5px; font-size:10px; font-family:var(--mono); font-weight:700; padding:2px 6px; border-radius:999px}
+.phone-ov-minis small.ok,.phone-att em.ok{color:var(--green); background:rgba(86,107,59,.12)}
+.phone-ov-minis small.warn,.phone-att em.warn{color:var(--danger); background:rgba(165,61,41,.1)}
+.phone-ico{
+  width:32px; height:32px; border-radius:10px; display:grid; place-items:center;
+  background:rgba(51,36,26,.06); color:var(--walnut); margin:0;
+}
+.phone-ov-minis .phone-ico{margin:0 auto; width:28px; height:28px; border-radius:999px}
+.phone-ico.ok{background:rgba(86,107,59,.14); color:var(--green)}
+.phone-ico.warn{background:rgba(165,61,41,.12); color:var(--danger)}
+.phone-ico.gold{background:rgba(198,143,49,.16); color:var(--ochre-deep)}
+.phone-qa{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:0 0 8px}
+.phone-qa button{
+  min-height:78px; padding:10px 6px; border:1px solid var(--line-2);
+  background:var(--panel-2); color:var(--ink); font:inherit; font-size:11px; font-weight:700;
+  border-radius:14px; display:grid; place-items:center; gap:6px; align-content:center;
+  transition:transform .1s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.phone-qa button svg{color:var(--walnut)}
+.phone-qa button.on{border-color:var(--brass); box-shadow:inset 0 -2px 0 var(--brass); color:var(--walnut)}
+.phone-qa button.on svg{color:var(--ochre-deep)}
+.phone-qa button:active{transform:scale(.97)}
+.phone-list{border:1px solid var(--line-2); background:var(--panel-2); border-radius:16px; overflow:hidden}
+.phone-att,.phone-act{
+  display:flex; align-items:center; gap:10px; width:100%; padding:12px 12px;
+  text-align:left; border:0; border-bottom:1px solid var(--line); background:transparent;
+  color:inherit; font:inherit;
+}
+.phone-att:last-child,.phone-act:last-child{border-bottom:none}
+.phone-att .phone-ico,.phone-act .phone-ico{margin:0; flex:0 0 auto}
+.phone-att span:nth-child(2),.phone-act span:nth-child(2){flex:1; min-width:0}
+.phone-att .nm,.phone-act .nm{display:block; font-weight:700; font-size:13px}
+.phone-att .mut,.phone-act .mut{display:block; margin-top:2px; font-size:11px; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.phone-att em{flex:0 0 auto; font-style:normal; font-size:10px; font-weight:700; padding:3px 7px; border-radius:999px}
+.phone-att em.gold{color:var(--ochre-deep); background:rgba(198,143,49,.16)}
+.phone-act .amt{flex:0 0 auto; font-family:var(--mono); font-weight:700; font-size:12px; color:var(--ink)}
+.phone-act .amt.out{color:var(--danger)}
+.phone-bell{
+  display:none; position:relative; width:44px; height:44px; place-items:center;
+  border:1px solid var(--line-2); border-radius:999px; background:var(--panel-2);
+  color:var(--walnut); text-decoration:none; flex:0 0 auto;
+}
+.phone-bell b{
+  position:absolute; top:-3px; right:-3px; min-width:14px; height:14px; padding:0 3px;
+  border-radius:999px; background:var(--danger); color:#fff; font-size:9px; line-height:14px; text-align:center;
+}
+.phone-chrome{position:relative; z-index:45}
+.phone-tabs{
+  position:fixed; left:0; right:0; bottom:0; z-index:46;
+  height:calc(64px + env(safe-area-inset-bottom, 0px));
+  padding:4px 6px env(safe-area-inset-bottom, 0px);
+  background:var(--panel-2);
+  border-top:1px solid var(--line-2);
+  box-shadow:0 -8px 24px -18px rgba(40,28,16,.28);
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:2px;
+}
+.phone-tabs-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.phone-tabs a{
+  position:relative;
+  border:0; background:transparent;
+  color:color-mix(in srgb, var(--ink) 58%, transparent);
+  min-height:48px; min-width:0; padding:6px 2px 9px;
+  display:grid; place-items:center; gap:3px; align-content:center;
+  font-family:var(--disp); font-size:12px; font-weight:700; letter-spacing:.01em;
+  text-decoration:none; border-radius:10px; cursor:pointer;
+  touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+  transition:color .12s ease, background-color .12s ease, transform .1s ease;
+}
+.phone-tabs a svg{display:block}
+.phone-tabs a:hover:not(.on){color:var(--ink); background:rgba(51,36,26,.04)}
+.phone-tabs a:active{transform:scale(.97)}
+.phone-tabs a:focus-visible{outline:none; box-shadow:var(--ring)}
+.phone-tabs a.on{
+  color:var(--walnut);
+  background:rgba(51,36,26,.06);
+}
+.phone-tabs a.on::after{
+  content:"";
+  position:absolute; left:28%; right:28%; bottom:5px;
+  height:2px; border-radius:2px; background:var(--brass);
+}
+.phone-sec-row{
+  display:flex; align-items:center; gap:12px; width:100%;
+  min-height:52px; padding:14px 16px; text-align:left;
+  border:0; border-bottom:1px solid var(--line);
+  background:transparent; color:inherit; font:inherit; text-decoration:none;
+  grid-template-columns:none;
+}
+.phone-sec-row:last-child{border-bottom:none}
+.phone-sec-row .phone-ico{margin:0; flex:0 0 auto}
+.phone-sec-row .nm{flex:1; min-width:0; font-weight:700}
+.phone-sec-row svg{color:var(--walnut); flex:0 0 auto}
+.phone-sec-row em{margin-left:auto; font-style:normal; background:var(--walnut); color:#F4E9D8; font-size:11px; padding:1px 7px; border-radius:999px}
+
 @media(max-width:480px){
   .custcard .links{gap:6px}
   .custcard .links .btn, .lrow .acts .btn{flex:1 1 auto; justify-content:center}
@@ -1469,7 +1635,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 @media print{
   body{background:#fff; background-image:none}
   .wrap{padding:0; max-width:none}
-  .topnav,#toast{display:none !important}
+  .topnav,#toast,.phone-chrome{display:none !important}
   .doctool,.add-sec,.add-row,.x-sec,.x-row,.formula,.hint,.mode-btn,.mode-seg,.editor-tabs,.no-print{display:none !important}
   .print-only{display:block !important}
   /* line-selection highlight is a screen-only editing aid — never print it */
@@ -1949,6 +2115,15 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 /* Receipts form: amount · mode · date on a roomy row */
 .rec-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px}
 .rec-grid-due{grid-template-columns:1fr 1fr}
+.rec-transport-dues{margin-top:12px; display:flex; flex-direction:column; gap:8px}
+.rec-transport-dues-head{display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; font-family:var(--disp); font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint)}
+.rec-transport-dues-acts{display:flex; gap:6px}
+.ledger-page .acct-pay-src{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.ledger-page .acct-chip-bal{margin-left:8px; font-family:var(--mono); font-size:11px; opacity:.88}
+.ledger-page .acct-add-src{flex:0 1 190px; min-width:140px; padding:7px 12px; border:1px dashed var(--line-2); border-radius:999px;
+  background:var(--panel-2); color:var(--ink); font-family:var(--sans); font-size:13px}
+.ledger-page .acct-add-src:focus{outline:none; border-style:solid; border-color:var(--ochre)}
+.ledger-page .acct-warn{display:block; color:var(--danger); margin-bottom:8px}
 @media(max-width:560px){ .rec-grid{grid-template-columns:1fr 1fr} .rec-grid-due{grid-template-columns:1fr} }
 
 .stmt-filters{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:10px}
@@ -3320,6 +3495,10 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .ai-fab-root{ right:12px; bottom:14px; }
   .ai-fab{ width:48px; height:48px; }
 }
+@media (max-width:760px){
+  /* later .ai-fab-root{display:flex} was beating the phone hide and sitting on the tab bar */
+  .ai-fab-root{display:none}
+}
 
 .chat-fab-root{
   position:fixed; z-index:81; right:16px; bottom:78px;
@@ -3343,6 +3522,9 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 @media (max-width:640px){
   .chat-fab-root{ right:12px; bottom:70px; }
   .chat-fab-root.low{ bottom:14px; }
+}
+@media (max-width:760px){
+  .chat-fab-root{ right:12px; bottom:calc(76px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* ── Owner / Manager yard chat ── */
@@ -3728,4 +3910,158 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
     margin-top:6px; background:var(--paper);
   }
   .topnav{padding-top:env(safe-area-inset-top, 0px)}
+}
+
+/* Website quotations inbox — classes were in the view with no sheet */
+.wq-page{margin:0 0 24px}
+.wq-head{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:14px}
+.wq-title{margin:0; font-family:var(--serif); font-weight:600; font-size:30px; letter-spacing:-.015em; color:var(--ink)}
+.wq-sub{margin:6px 0 0; font-size:13.5px; color:var(--ink-faint); max-width:42em; line-height:1.45}
+.wq-kpis{display:flex; gap:10px}
+.wq-kpi{min-width:88px; padding:10px 14px; border:1px solid var(--line-2); border-radius:12px; background:var(--panel-2)}
+.wq-kpi span{display:block; font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint)}
+.wq-kpi strong{display:block; margin-top:4px; font-family:var(--mono); font-size:22px; font-weight:800; color:var(--ink)}
+.wq-toolbar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px}
+.wq-search{flex:1 1 200px; min-width:0; font-family:var(--mono); font-size:14px; padding:10px 12px; min-height:44px; border:1px solid var(--line-2); border-radius:10px; background:var(--panel-2); color:var(--ink)}
+.wq-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px}
+.wq-card{border:1px solid var(--line-2); border-radius:14px; background:var(--panel-2); overflow:hidden}
+.wq-card.imported{opacity:.78}
+.wq-card-main{display:block; width:100%; text-align:left; border:0; background:transparent; color:inherit; font:inherit; padding:14px 14px 12px; cursor:pointer}
+.wq-card-top{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.wq-card-top strong{font-family:var(--disp); font-size:15px; font-weight:700; color:var(--ink); min-width:0}
+.wq-status{flex:0 0 auto; font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:4px 8px; border-radius:999px}
+.wq-status.pend{background:rgba(176,124,40,.14); color:var(--ochre-deep)}
+.wq-status.done{background:rgba(86,107,59,.14); color:var(--green)}
+.wq-card-meta{display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:8px; font-family:var(--mono); font-size:12px; color:var(--ink-soft)}
+.wq-detail{padding:0 14px 14px; overflow-x:auto; -webkit-overflow-scrolling:touch}
+.wq-sec{margin-top:10px}
+.wq-sec-title{font-family:var(--disp); font-size:12px; font-weight:700; color:var(--walnut); margin-bottom:6px}
+.wq-table{width:100%; min-width:360px; border-collapse:collapse; font-family:var(--mono); font-size:12.5px}
+.wq-table th,.wq-table td{padding:7px 8px; border-bottom:1px solid var(--line); text-align:right}
+.wq-table th{font-family:var(--disp); font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); text-align:right}
+.wq-table th:first-child,.wq-table td:first-child{text-align:left}
+.wq-actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+
+/* Phone chrome is 760px — raise the 560/640/680/720 stacks so destination
+   pages match the tab bar. screen-only so print / html2canvas stay desktop.
+   .pdf-capture / .acct-print already lock columns with !important. */
+@media screen and (max-width:760px){
+  .wrap{overflow-x:clip}
+  .wrap input:not([type=checkbox]):not([type=radio]):not([type=hidden]),
+  .wrap select, .wrap textarea{font-size:16px}
+  .btn, .stmt-clear, .seg-btn, .rent-chip, .acct-day-chip, .acct-nav-btn, .ai-starter, .acct-chip{
+    min-height:44px;
+  }
+  .iconbtn, .x-row, .rbtn, .pb-plus, .pb-x, .acct-more-btn{
+    min-width:44px; min-height:44px;
+  }
+  .rowbtns{width:100%}
+  .rowbtns .btn{flex:1 1 auto; justify-content:center}
+  .setbox .rowbtns .btn{min-width:0}
+
+  /* Money */
+  .rec-grid{grid-template-columns:1fr 1fr}
+  .rec-grid-due{grid-template-columns:1fr}
+  .stmt-filters .paysel{flex:1 1 42%}
+  .stmt-filters .db-seg.sm{flex:1 1 100%}
+  .stmt-qhead .sq-bal{margin-left:0; flex-basis:100%}
+  .pay-hero{flex-direction:column}
+  .pay-hero .ph-main,.pay-hero .ph-side{flex:1 1 auto}
+  .custgrid{grid-template-columns:1fr}
+  .party-grid{grid-template-columns:1fr; gap:10px}
+  .party-stats{grid-template-columns:1fr 1fr}
+  .ledger-page{padding:8px 0 24px}
+  .ledger-page .bank-hdr span:first-child{display:none}
+  .ledger-page .bank-hdr,
+  .ledger-page .bank-row{grid-template-columns:minmax(0,1fr) 64px 64px 88px; gap:4px; padding:5px 8px}
+  .ledger-page .bank-date{display:none}
+  .bank-ledger:not(.acct-book) .bank-hdr{grid-template-columns:1fr 90px 90px 90px}
+  .bank-ledger:not(.acct-book) .bank-row{grid-template-columns:1fr 90px 90px 90px}
+  .bank-ledger:not(.acct-book) .bank-date{display:none}
+  .acct-overall-grid{grid-template-columns:1fr 1fr}
+  .acct-overall-grid.has-transport{grid-template-columns:1fr 1fr}
+  .acct-date-center{flex-direction:column}
+  .acct-day-label .btn{width:100%; justify-content:center}
+  .acct-head-totals{width:100%; margin-top:4px}
+  .acct-add-row .btn,.acct-collect-btn,.acct-pay-btn{width:100%; justify-content:center}
+  .acct-filters .btn.primary.sm{flex:1 1 100%}
+  .acct-page .acct-trow .acts{flex:1 1 100%}
+  .acct-page .acct-trow .acts .btn{flex:1; justify-content:center}
+  .acct-page .acct-book .bank-row.acct-txn{grid-template-columns:1fr 1fr 1fr 44px}
+  .acct-page .acct-more-btn{width:44px; height:44px; margin:0}
+  .books-grid{grid-template-columns:1fr; gap:12px}
+
+  /* Daybook / Records */
+  .db-shead{display:none}
+  .db-srow{
+    grid-template-columns:auto minmax(0,1fr) 1fr 1fr auto;
+    grid-template-areas:
+      "tag note note note acts"
+      "in in out bal acts";
+    gap:6px 8px; padding:10px 12px;
+  }
+  .db-srow .exptag{grid-area:tag; min-width:44px}
+  .db-srow .expnote{grid-area:note; min-width:0}
+  .db-srow .amt.in{grid-area:in; text-align:left}
+  .db-srow .amt.out:not(.bal){grid-area:out}
+  .db-srow .amt.bal{grid-area:bal}
+  .db-srow .x-row{grid-area:acts; opacity:1; align-self:start}
+  .db-srow:not(:has(.x-row)){
+    grid-template-areas:
+      "tag note note note note"
+      "in in out bal .";
+  }
+  .db-day-mini{display:none}
+  .exprow{grid-template-columns:1fr auto; gap:8px}
+  .exprow .expnote{grid-column:1 / -1}
+  .tsum{grid-template-columns:repeat(2,1fr)}
+  .tform input{width:100%}
+  .tform label{flex:1 1 45%}
+  .att-cell{width:44px; height:44px; font-size:15px}
+  .att-table th:first-child, .att-table td:first-child{
+    position:sticky; left:0; z-index:2; background:#FAF6EF;
+    box-shadow:2px 0 0 rgba(0,0,0,.04);
+  }
+  .att-week{flex-basis:100%; order:-1}
+  .att-card{left:10px; max-width:calc(100vw - 52px)}
+  .att-day-amt-add{opacity:.35}
+
+  /* Business / Official lists & forms */
+  .stockrow{grid-template-columns:1fr 1fr; gap:9px}
+  .buys-kpis{grid-template-columns:1fr 1fr; gap:10px}
+  .buys-kpi.head{grid-column:1 / -1}
+  .buys-search{flex:1 1 100%; min-width:0}
+  .buys-bar select{min-width:0; flex:1 1 140px}
+  .buys-reg-sides{grid-template-columns:1fr}
+  .buys-entry-grid.g3,.buys-entry-grid.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .buys-entry-grid label.span2,.buys-entry-grid label.span3{grid-column:span 2}
+  .rep-summary{grid-template-columns:repeat(2,1fr)}
+  .rep-summary.cols3,.rep-summary.cols4{grid-template-columns:repeat(2,1fr)}
+  .rep-doc{padding:14px 12px; overflow-x:auto; -webkit-overflow-scrolling:touch}
+  .rep-table{min-width:680px}
+  .rep-range input,.rep-range select{min-width:0; flex:1 1 140px}
+  .rep-print{margin-left:0; width:100%; justify-content:center}
+  .eway-grid{grid-template-columns:1fr 1fr}
+  .wq-head{flex-direction:column; align-items:stretch}
+  .wq-kpis{width:100%}
+  .wq-kpi{flex:1}
+  .wq-toolbar .db-seg{flex-basis:100%}
+  .wq-actions .btn{flex:1 1 auto; justify-content:center}
+
+  /* Invoice / quote chrome only — not a rewrite of Editor.tsx */
+  .inv-cols{grid-template-columns:1fr}
+  .inv-terms{border-left:none; border-top:1px solid var(--line)}
+  .cust-block, .cust-block.c4, .cust-block.c2{grid-template-columns:1fr 1fr}
+  .mast-top{flex-wrap:wrap; gap:12px; padding:16px 16px 12px}
+  .co-name{font-size:28px}
+  .logo{height:64px}
+  .meta .f{min-width:0; padding:10px 14px}
+
+  /* More: AI / staff chat sit above the tab bar */
+  .ai-composer,.staff-chat-form{bottom:calc(56px + env(safe-area-inset-bottom, 0px))}
+  .ai-page,.staff-chat{min-height:0; padding-bottom:8px}
+
+  .tgrid-wrap, .listwrap, .paybook, .buys-scroll, .tsheet-body{
+    overflow-x:auto; -webkit-overflow-scrolling:touch;
+  }
 }

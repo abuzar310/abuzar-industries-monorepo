@@ -9,16 +9,13 @@ export const FEATURES: AppFeatures = { invoices: true, simpleQuote: false, accep
 
 export const TABS: Tab[] = [
   { label: "Dashboard", href: "/" },
-  { label: "Quotation", href: "/editor" },
-  { label: "Quotations", href: "/quotations" },
-  { label: "Invoices", href: "/invoices" },
-  // Vouchers + Accounts hidden for now — pages still at /vouchers and /accounts
-  { label: "Customers", href: "/customers" },
-  { label: "Suppliers", href: "/suppliers" },
-  { label: "Stock", href: "/stock" },
-  { label: "Reports", href: "/reports" },
-  { label: "AI", href: "/ai" },
-  // Chat tab removed — page still at /chat for direct access
-  // Ledger tab removed from the nav — the pages still exist at /ledger for direct access
-  { label: "Settings", href: "/settings", owner: true },
+  { label: "Quotation", href: "/editor", group: "business" },
+  { label: "Quotations", href: "/quotations", group: "business" },
+  { label: "Invoices", href: "/invoices", group: "business" },
+  { label: "Customers", href: "/customers", group: "business" },
+  { label: "Suppliers", href: "/suppliers", group: "business" },
+  { label: "Stock", href: "/stock", group: "records" },
+  { label: "Reports", href: "/reports", group: "more" },
+  { label: "AI", href: "/ai", group: "more" },
+  { label: "Settings", href: "/settings", owner: true, group: "more" },
 ];

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { allRec, getRec, put } from "@/lib/data";
 import { inr, nowIso } from "@/lib/calc";
@@ -18,6 +18,25 @@ import { liveIncomeLines } from "@/lib/book-catalog";
 import { listWorkers, payWorker, repayWorker, type Worker } from "@/lib/attendance";
 import { partyLedger, quoteBill, quotePaid } from "@/lib/payments";
 import { applyCustomerReceipt, unwindReceiptPieces } from "@/lib/receipts";
+import {
+  acctLedger,
+  isAccountTransportPay,
+  isPendingTransport,
+  listCollections,
+  extraReceiptsTransportSources,
+  listHolders,
+  listTransportPaySources,
+  paySrcKey,
+  pickTransportPaySource,
+  receiptsTransportPaySources,
+  selectedTransportDueTotal,
+  settleTransportDues,
+  transportDueLabel,
+  type AccountCollection,
+  type PayHolder,
+  type TransportPaySource,
+} from "@/lib/accounts";
+import { getFeatures } from "@/lib/features";
 import { USERS } from "@/lib/local-auth";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -44,6 +63,8 @@ const isCategoryPayout = (e: Expense) =>
   !e.custId &&
   !e.charge &&
   !e.placeRentKind &&
+  !isPendingTransport(e) &&
+  !isAccountTransportPay(e) &&
   (e.type === "food" ||
     e.type === "salary" ||
     (e.type === "custom" && spendLabels().has(e.label || "")));
@@ -68,6 +89,8 @@ export default function ReceiptsView() {
   const [quotesRaw, setQuotes] = useState<Doc[]>([]);
   const [expensesRaw, setExpenses] = useState<Expense[]>([]);
   const [upiAccts, setUpiAccts] = useState<string[]>([]);
+  const [holdersRaw, setHolders] = useState<PayHolder[]>([]);
+  const [collectionsRaw, setCollections] = useState<AccountCollection[]>([]);
   const [picked, setPicked] = useState<Customer | null>(null);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<Kind>("received");
@@ -98,6 +121,11 @@ export default function ReceiptsView() {
   const [paidCarpenter, setPaidCarpenter] = useState("");
   /** Mini truck rounds */
   const [paidRounds, setPaidRounds] = useState("");
+  /** Locked transport dues picked on Paid out → Transport */
+  const [paidDueIds, setPaidDueIds] = useState<string[]>([]);
+  const [payHolder, setPayHolder] = useState<string | null>(null);
+  const [extraPayKeys, setExtraPayKeys] = useState<string[]>([]);
+  const [payFor, setPayFor] = useState<string | null>(null);
   /** Books / Carpenters deep-link: show only this paid-out category (and optional month). */
   const [focusPaid, setFocusPaid] = useState<{ id: string; mm: string; yy: string } | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -118,13 +146,19 @@ export default function ReceiptsView() {
   const [wBy, setWBy] = useState<"owner" | "manager" | null>(null);
 
   const load = useCallback(() => {
-    Promise.all([allRec<Customer>("customers"), allRec<Doc>("quotations"), allRec<Expense>("expenses")]).then(
-      ([c, q, e]) => {
-        setCustomers(c);
-        setQuotes(q);
-        setExpenses(e);
-      },
-    );
+    Promise.all([
+      allRec<Customer>("customers"),
+      allRec<Doc>("quotations"),
+      allRec<Expense>("expenses"),
+      listHolders(),
+      listCollections(),
+    ]).then(([c, q, e, hs, cols]) => {
+      setCustomers(c);
+      setQuotes(q);
+      setExpenses(e);
+      setHolders(hs);
+      setCollections(cols);
+    });
     upiAccounts().then(setUpiAccts);
     listWorkers().then(setWorkers);
   }, []);
@@ -137,6 +171,9 @@ export default function ReceiptsView() {
   const quotes = cloakMoney ? [] : quotesRaw;
   const expenses = cloakMoney ? [] : expensesRaw;
   const workers = cloakMoney ? [] : workersRaw;
+  const holders = cloakMoney ? [] : holdersRaw;
+  const collections = cloakMoney ? [] : collectionsRaw;
+  const canPayTransport = !!getFeatures().acceptPayment;
 
   // arrived from Accounts (a receipt line) → auto-open that customer's group
   useEffect(() => {
@@ -255,6 +292,10 @@ export default function ReceiptsView() {
     setPaidQuoteId("");
     setPaidCarpenter("");
     setPaidRounds("");
+    setPaidDueIds([]);
+    setPayHolder(null);
+    setPayFor(null);
+    setExtraPayKeys([]);
     setRecvVia("customer");
     setRecvName("");
     setRecvCat("");
@@ -307,7 +348,90 @@ export default function ReceiptsView() {
   })();
   const paidCust = paidCustId ? customers.find((c) => c.id === paidCustId) || null : null;
 
+  const pendingDues = useMemo(
+    () =>
+      expenses
+        .filter(isPendingTransport)
+        .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")),
+    [expenses],
+  );
+  const upiLedger = useMemo(
+    () => acctLedger(expenses, collections, quotes, customers),
+    [expenses, collections, quotes, customers],
+  );
+  const accountSrcs = useMemo(
+    () => listTransportPaySources(holders, upiLedger.accounts, collections, expenses),
+    [holders, upiLedger.accounts, collections, expenses],
+  );
+  const moreSrcs = useMemo(() => extraReceiptsTransportSources(accountSrcs), [accountSrcs]);
+  const paySources = useMemo(() => {
+    const extras = moreSrcs.filter((s) => extraPayKeys.includes(paySrcKey(s)));
+    return [...receiptsTransportPaySources(accountSrcs), ...extras];
+  }, [accountSrcs, moreSrcs, extraPayKeys]);
+  const pickedDues = useMemo(
+    () => pendingDues.filter((e) => paidDueIds.includes(e.id)),
+    [pendingDues, paidDueIds],
+  );
+  const pickedDueTotal = selectedTransportDueTotal(pickedDues);
+  const pickedPay = paySources.find(
+    (s) => (s.holderId || "") === (payHolder || "") && (s.account || "").trim().toLowerCase() === (payFor || "").trim().toLowerCase(),
+  );
+  const transportPaidOut = canPayTransport && kind === "paid" && paidCat === "transport" && !editId;
+
+  useEffect(() => {
+    if (paidCat !== "transport" || payFor) return;
+    const pick = pickTransportPaySource(paySources, pickedDueTotal);
+    if (!pick) return;
+    setPayHolder(pick.holderId || null);
+    setPayFor(pick.account);
+  }, [paidCat, payFor, paySources, pickedDueTotal]);
+
+  function togglePaidDue(id: string) {
+    setPaidDueIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  }
+  function samePaySrc(s: TransportPaySource) {
+    return (s.holderId || "") === (payHolder || "") && (s.account || "").trim().toLowerCase() === (payFor || "").trim().toLowerCase();
+  }
+  function choosePaySrc(s: TransportPaySource) {
+    setPayHolder(s.holderId || null);
+    setPayFor(s.account);
+  }
+
+  async function recordTransportPay() {
+    if (!pickedDues.length) return toast("Pick which transport dues to pay");
+    const pick = pickedPay || pickTransportPaySource(paySources, pickedDueTotal);
+    if (!pick) return toast("Pick Cash, UPI by owner, or an account");
+    if (!pick.cash && !pick.ownerUpi && pickedDueTotal > pick.balance + 0.5) {
+      return toast("Need ₹" + inr(pickedDueTotal) + " in " + pick.account + " (bal ₹" + inr(pick.balance) + ")");
+    }
+    const paid = await settleTransportDues({
+      ids: pickedDues.map((e) => e.id),
+      account: pick.account,
+      holderId: pick.holderId,
+      cash: !!pick.cash,
+      ownerUpi: !!pick.ownerUpi,
+      date: date ? toDmy(date) : undefined,
+      by: user?.id || "unknown",
+    });
+    if (!paid.length) return toast("Could not record");
+    resetForm();
+    setKind("paid");
+    setPaidCat("transport");
+    load();
+    bumpData();
+    toast(
+      "₹" +
+        inr(selectedTransportDueTotal(paid)) +
+        " transport — " +
+        paid.length +
+        (paid.length === 1 ? " due" : " dues") +
+        " · " +
+        pick.account,
+    );
+  }
+
   async function record() {
+    if (transportPaidOut) return recordTransportPay();
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return toast("Enter an amount");
 
@@ -610,7 +734,16 @@ export default function ReceiptsView() {
       title: "Delete " + label + "?",
       message:
         who + " — ₹" + inr(total) +
-        (e.charge ? "" : " · " + (e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : "Cash")) +
+        (e.charge
+          ? ""
+          : " · " +
+            (isAccountTransportPay(e)
+              ? e.account || "UPI"
+              : e.mode === "upi"
+                ? e.account || "UPI"
+                : e.toOwner
+                  ? "Cash → Owner"
+                  : "Cash")) +
         (settled ? "\nThis receipt " + settled + " — those quotations go back to due." : ""),
       confirmLabel: "Delete",
       danger: true,
@@ -768,7 +901,7 @@ export default function ReceiptsView() {
     });
   // Category paid-outs (Food / Salary / Heavy truck / …) — listed separately, no customer
   const paidOutList = expenses
-    .filter(isCategoryPayout)
+    .filter((e) => isCategoryPayout(e) || isAccountTransportPay(e))
     .filter((e) => {
       if (!focusPaid) return true;
       if (spendCatKey(e) !== focusPaid.id) return false;
@@ -957,6 +1090,12 @@ export default function ReceiptsView() {
                 const v = e.target.value;
                 setPaidCat(v);
                 if (v !== "minitruck") setPaidRounds("");
+                if (v !== "transport") {
+                  setPaidDueIds([]);
+                  setPayHolder(null);
+                  setPayFor(null);
+                  setExtraPayKeys([]);
+                }
                 // Paid to owner always leaves the manager's Daybook cash
                 if (v === "paid-owner") setPaidBy("manager");
                 // Paid to manager = owner float into Daybook (cash-in)
@@ -979,6 +1118,11 @@ export default function ReceiptsView() {
                 Owner cash goes into Manager Daybook balance — not in Books. Use Note for why / who.
               </small>
             )}
+            {canPayTransport && paidCat === "transport" && !editId && (
+              <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
+                Cash cuts the Daybook. UPI by owner is the owner's UPI. CS Kumar drops that pocket. + from Accounts for Tabrez.
+              </small>
+            )}
           </label>
         )}
 
@@ -996,10 +1140,18 @@ export default function ReceiptsView() {
         )}
 
         <div className={"rec-grid" + (showReceivedFields ? "" : " rec-grid-due")}>
+          {!transportPaidOut && (
           <label className="modal-field">
             <span>Amount ₹</span>
             <input type="number" inputMode="decimal" placeholder="0" value={amt} onChange={(e) => setAmt(e.target.value)} />
           </label>
+          )}
+          {transportPaidOut && (
+          <label className="modal-field">
+            <span>Amount ₹</span>
+            <input readOnly value={pickedDues.length ? inr(pickedDueTotal) : "0"} />
+          </label>
+          )}
           {showReceivedFields ? (
             recvCat === "paid-manager" ? (
               <label className="modal-field">
@@ -1059,7 +1211,97 @@ export default function ReceiptsView() {
           </label>
         )}
 
-        {kind === "paid" && (
+        {kind === "paid" && transportPaidOut && (
+          <div className="rec-transport-dues">
+            <div className="rec-transport-dues-head">
+              <span>Which dues to pay · {pendingDues.length}</span>
+              {pendingDues.length > 1 && (
+                <span className="rec-transport-dues-acts">
+                  <button
+                    className="btn sm"
+                    type="button"
+                    onClick={() => setPaidDueIds(pendingDues.map((e) => e.id))}
+                  >
+                    All
+                  </button>
+                  <button className="btn sm" type="button" onClick={() => setPaidDueIds([])}>
+                    None
+                  </button>
+                </span>
+              )}
+            </div>
+            {pendingDues.length === 0 ? (
+              <div className="acct-empty">Lock a transport due in Accounts first, then pick it here.</div>
+            ) : (
+              pendingDues.map((e) => {
+                const on = paidDueIds.includes(e.id);
+                return (
+                  <button
+                    key={e.id}
+                    type="button"
+                    className={"acct-chip" + (on ? " on" : "")}
+                    style={{ display: "flex", width: "100%", justifyContent: "space-between", textAlign: "left" }}
+                    onClick={() => togglePaidDue(e.id)}
+                  >
+                    <span>{transportDueLabel(e)}</span>
+                    <b>₹{inr(+e.amount || 0)}</b>
+                  </button>
+                );
+              })
+            )}
+            <span className="modal-field" style={{ marginTop: 4 }}>
+              <span>Pay from</span>
+            </span>
+            <div className="acct-pay-src">
+              {paySources.map((s) => {
+                const on = samePaySrc(s);
+                const tight = !s.cash && !s.ownerUpi && pickedDues.length > 0 && pickedDueTotal > s.balance + 0.5;
+                return (
+                  <button
+                    key={paySrcKey(s)}
+                    type="button"
+                    className={"acct-chip" + (on ? " on" : "")}
+                    onClick={() => choosePaySrc(s)}
+                  >
+                    {s.account}
+                    {!s.cash && !s.ownerUpi && (
+                      <span className="acct-chip-bal">{tight ? "need ₹" + inr(pickedDueTotal) : "₹" + inr(s.balance)}</span>
+                    )}
+                  </button>
+                );
+              })}
+              {moreSrcs.some((s) => !extraPayKeys.includes(paySrcKey(s))) && (
+                <select
+                  className="acct-add-src"
+                  value=""
+                  aria-label="Add from Accounts"
+                  onChange={(ev) => {
+                    const s = moreSrcs.find((x) => paySrcKey(x) === ev.target.value);
+                    if (!s) return;
+                    setExtraPayKeys((k) => (k.includes(paySrcKey(s)) ? k : [...k, paySrcKey(s)]));
+                    choosePaySrc(s);
+                  }}
+                >
+                  <option value="">+ from Accounts</option>
+                  {moreSrcs
+                    .filter((s) => !extraPayKeys.includes(paySrcKey(s)))
+                    .map((s) => (
+                      <option key={paySrcKey(s)} value={paySrcKey(s)}>
+                        {s.account} · ₹{inr(s.balance)}
+                      </option>
+                    ))}
+                </select>
+              )}
+            </div>
+            {pickedPay && !pickedPay.cash && !pickedPay.ownerUpi && pickedDues.length > 0 && pickedDueTotal > pickedPay.balance + 0.5 && (
+              <small className="acct-warn">
+                Need ₹{inr(pickedDueTotal)} — {pickedPay.account} has ₹{inr(pickedPay.balance)}.
+              </small>
+            )}
+          </div>
+        )}
+
+        {kind === "paid" && !transportPaidOut && (
           <div style={{ marginTop: 12, width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
             {paidCat === "carpenter" ? (
               <>
@@ -1229,7 +1471,7 @@ export default function ReceiptsView() {
             </small>
           </div>
         )}
-        {kind === "paid" && paidCat !== "paid-manager" && (
+        {kind === "paid" && paidCat !== "paid-manager" && !transportPaidOut && (
           <div className="att-paidby" style={{ marginTop: 12 }}>
             <span className="att-paidby-lbl">Paid by</span>
             <div className="db-seg sm">
@@ -1271,7 +1513,15 @@ export default function ReceiptsView() {
             : kind === "paid"
               ? paidCat === "paid-manager"
                 ? "Record — Paid to manager (add to Daybook)"
-                : "Record paid out — " + (liveSpendCategories({ hidden: true }).find((c) => c.id === paidCat)?.label || "Other")
+                : transportPaidOut
+                  ? pickedDues.length
+                    ? "Pay " +
+                      pickedDues.length +
+                      (pickedDues.length === 1 ? " due" : " dues") +
+                      " · ₹" +
+                      inr(pickedDueTotal)
+                    : "Pick which dues to pay"
+                  : "Record paid out — " + (liveSpendCategories({ hidden: true }).find((c) => c.id === paidCat)?.label || "Other")
               : recvVia === "name"
                 ? "Record received from " + (recvName.trim() || "name")
                 : "Record receipt"}
@@ -1413,7 +1663,12 @@ export default function ReceiptsView() {
                 <div className="stmt-to">
                   {spendCategoryOf(entry.e)}
                   <span className="acct-overall-hint">
-                    {" · "}{entry.e.toOwner ? "Owner's cash" : "Daybook"}
+                    {" · "}
+                    {isAccountTransportPay(entry.e)
+                      ? (entry.e.account || "UPI")
+                      : entry.e.toOwner
+                        ? "Owner's cash"
+                        : "Daybook"}
                     {" · "}{entry.e.date}
                   </span>
                 </div>
@@ -1426,7 +1681,9 @@ export default function ReceiptsView() {
               </div>
               <div className="stmt-amt due">−₹{inr(entry.amount)}</div>
               <span className="pb-rowacts">
-                <button className="pb-x" title="Edit" type="button" onClick={() => startEdit(entry)} style={{ marginRight: 4 }}>✎</button>
+                {!isAccountTransportPay(entry.e) && (
+                  <button className="pb-x" title="Edit" type="button" onClick={() => startEdit(entry)} style={{ marginRight: 4 }}>✎</button>
+                )}
                 <button className="pb-x" title="Delete" type="button" onClick={() => remove(entry)}>×</button>
               </span>
             </div>

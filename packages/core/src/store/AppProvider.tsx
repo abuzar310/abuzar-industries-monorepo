@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import type { AppFeatures, Tab } from "@/lib/types";
 import { setFeatures } from "@/lib/features";
 import { ApiError, bindUnloadGuard, bootData, pullChanges, resetData } from "@/lib/data";
-import { setBrandMode, setReady, setSyncState, setUser, toast as toastMsg, type BrandMode } from "./app-store";
+import { setBrandMode, setReady, setUser, toast as toastMsg, type BrandMode } from "./app-store";
 import { setDefaultBrand } from "./session";
 import { initPwa } from "@/lib/pwa";
 import { loadBrand } from "@/lib/brand";
@@ -12,6 +12,7 @@ import { loadLocalUser } from "@/lib/local-auth";
 import { checkOwnerNotifications, loadNotifyState } from "@/lib/notify";
 import { refreshChatUnseen } from "@/lib/staff-chat";
 import TopNav from "@/components/TopNav";
+import PhoneNav from "@/components/PhoneNav";
 import Toast from "@/components/Toast";
 import LockGate from "@/components/LockGate";
 import DialogHost from "@/components/DialogHost";
@@ -69,7 +70,7 @@ export default function AppProvider({
       if (!document.hidden) void poll();
     };
     const onOnline = () => void poll();
-    const onOffline = () => setSyncState("off");
+    // phones fire `offline` while the radio is fine — poll/boot paint Offline if the API really fails
 
     (async function boot() {
       const user = await loadLocalUser(); // httpOnly session cookie, if still valid
@@ -87,7 +88,6 @@ export default function AppProvider({
       timer = setInterval(() => void poll(), 8000);
       document.addEventListener("visibilitychange", onVisible);
       window.addEventListener("online", onOnline);
-      window.addEventListener("offline", onOffline);
     })().catch((e) => {
       console.error(e);
       setReady(true);
@@ -98,7 +98,6 @@ export default function AppProvider({
       if (timer) clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
     };
     // boot runs once; defaultBrand is a static per-app constant
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,6 +107,7 @@ export default function AppProvider({
     <>
       <TopNav tabs={tabs} />
       <div className="wrap">{children}</div>
+      <PhoneNav tabs={tabs} />
       <Toast />
       <LockGate />
       <DialogHost />

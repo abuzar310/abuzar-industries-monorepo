@@ -10,7 +10,7 @@ import { isInvoiceId } from "@/lib/doc";
 import { changePassword, lockApp } from "@/lib/local-auth";
 import { canToggleCloak } from "@/lib/staff-role";
 import { formDialog } from "@/store/dialog-store";
-import { TabIcon } from "@/components/Icons";
+import { IconBell, TabIcon } from "@/components/Icons";
 import type { Tab } from "@/lib/types";
 
 function isActive(href: string, path: string) {
@@ -84,6 +84,8 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
             if (mayCloak) e.preventDefault();
           }}
         >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="phone-logo" src="/icon.png" alt="" width={22} height={22} />
           {brand.name}
         </div>
         <div className="tabs">
@@ -116,11 +118,22 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
           <i />
           <span>{SYNC_LABEL[syncState]}</span>
         </span>
+        {(() => {
+          const n = (unseen || 0) + (websitePending || 0) + (buysDue || 0) + (chatUnseen || 0);
+          const href = websitePending ? "/website-quotations" : buysDue ? "/buys" : "/quotations";
+          return (
+            <Link className={"phone-bell" + (n ? " on" : "")} href={href} aria-label={n ? n + " alerts" : "Alerts"}>
+              <IconBell size={16} />
+              {n > 0 && <b>{n}</b>}
+            </Link>
+          );
+        })()}
         {user && (
           <div className="usermenu" onClick={(e) => e.stopPropagation()}>
             <button className="userchip" title={user.name} onClick={() => setUserMenu((v) => !v)}>
               <i>{user.name.charAt(0)}</i>
-              {user.name}
+              <span className="userchip-name">{user.name}</span>
+              <span className="userchip-role">{user.role === "owner" ? "Owner" : "Manager"}</span>
               <span className="um-caret">▾</span>
             </button>
             {userMenu && (

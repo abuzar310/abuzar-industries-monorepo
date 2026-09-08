@@ -316,6 +316,8 @@ export interface Activity {
 }
 
 // ---- app navigation (each app supplies its own tab set) ----
+export type TabGroup = "money" | "business" | "records" | "more";
+
 export interface Tab {
   label: string;
   href: string;
@@ -323,6 +325,8 @@ export interface Tab {
   /** true = Daybook unseen; "buys" = due purchase reminders; "chat" = unread staff messages */
   badge?: boolean | "buys" | "chat";
   owner?: boolean;
+  /** phone More shelf only — desktop top tabs ignore this */
+  group?: TabGroup;
 }
 
 // ---- local users / roles ----

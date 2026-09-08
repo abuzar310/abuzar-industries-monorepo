@@ -6,7 +6,17 @@ import {
   accountLedger,
   accountOverview,
   acctLedger,
+  applyTransportDueCash,
+  applyTransportDueOwnerUpi,
+  extraReceiptsTransportSources,
   holderPassbookLines,
+  holderPayBalance,
+  isCsKumarPocketName,
+  listTransportPaySources,
+  patchTransportDue,
+  pickTransportPaySource,
+  receiptsTransportPaySources,
+  selectedTransportDueTotal,
   settleFoldIndexes,
   settleFoldChildren,
   isAccountTransportPay,
@@ -21,6 +31,7 @@ import {
   type AccountCollection,
   type AcctBalance,
   type AcctStmtLine,
+  type PayHolder,
 } from "./accounts";
 import { inBooks, inDaybook, spendCatKey, spendDetailOf } from "./expenses";
 
@@ -209,6 +220,52 @@ export function demo() {
   ok(dueOnTransportPocket({ transportPocket: "h-cs" }, { id: "h-cs", name: "CS Kumar" }, true), "due pinned to CS Kumar id");
   ok(!dueOnTransportPocket({ transportPocket: "h-cs" }, { id: "h-tab", name: "Tabrez" }, false), "other holder is not that due");
   ok(dueOnTransportPocket({ transportPocket: "" }, { id: "h-cs", name: "CS Kumar" }, true), "old unassigned due falls on the transport pocket");
+
+  const locked = {
+    ...due,
+    id: "due-1",
+    party: "Raju lorry",
+    amount: 2500,
+    vehicleNo: "KA01",
+    placeOfSupply: "Chennai",
+  } as unknown as Expense;
+  const edited = patchTransportDue(locked, { party: "Raju", amount: 3000, vehicleNo: "KA02" });
+  ok(!!edited && edited.party === "Raju" && edited.amount === 3000 && edited.vehicleNo === "KA02", "locked due can change name and amount");
+  ok(!!edited && isPendingTransport(edited), "edit keeps the due locked (not paid)");
+  ok(patchTransportDue(pocket, { amount: 1 }) === null, "paid transport cannot be patched");
+  ok(patchTransportDue(locked, { party: "", amount: 3000 }) === null, "edit still needs a transporter name");
+  const three = [
+    { amount: 1000 },
+    { amount: 2000 },
+    { amount: 4000 },
+  ];
+  ok(selectedTransportDueTotal(three) === 7000, "pay-all is the sum of the locked dues");
+  ok(selectedTransportDueTotal([three[0], three[2]]) === 5000, "pay 1 and 3 skips the middle due");
+
+  const hCs = { id: "h-cs", name: "CS Kumar", accounts: ["CS Kumar"], kind: "transport", opening: 0, createdAt: "", updatedAt: "" } as PayHolder;
+  const hTab = { id: "h-tab", name: "Tabrez", accounts: ["Tabrez"], opening: 0, createdAt: "", updatedAt: "" } as PayHolder;
+  const bals: AcctBalance[] = [
+    { name: "CS Kumar", received: 10000, ownerReceived: 0, collected: 0, spent: 0, balance: 10000, lines: [] },
+    { name: "Tabrez", received: 2000, ownerReceived: 0, collected: 0, spent: 0, balance: 2000, lines: [] },
+  ];
+  ok(holderPayBalance(hCs, bals, [], []) === 10000, "CS Kumar pocket is UPI in");
+  const srcs = listTransportPaySources([hTab, hCs], bals, [], []);
+  ok(srcs[0].account === "CS Kumar" && srcs[0].transport, "transport pocket is first");
+  ok(pickTransportPaySource(srcs, 3000)?.account === "CS Kumar", "3000 pay prefers CS Kumar");
+  ok(pickTransportPaySource(srcs, 12000)?.account === "CS Kumar", "short pocket still offered so the form can warn");
+  ok(isCsKumarPocketName("CS KUMAR(SVT TRANSPORT CHENNAI)"), "CS Kumar name with lorry tag");
+  ok(!isCsKumarPocketName("Tabrez"), "Tabrez is not CS Kumar");
+  const recSrcs = receiptsTransportPaySources(srcs);
+  ok(recSrcs[0].cash && recSrcs[1].ownerUpi && recSrcs.length === 3 && recSrcs[2].account === "CS Kumar", "Receipts pay-from is Cash + UPI by owner + CS Kumar");
+  ok(extraReceiptsTransportSources(srcs).every((s) => s.account === "Tabrez"), "Tabrez stays behind + from Accounts");
+  ok(pickTransportPaySource(recSrcs, 12000)?.cash, "short CS Kumar → Cash");
+  const fromTill = applyTransportDueCash(locked);
+  ok(!!fromTill && !isPendingTransport(fromTill) && !isAccountTransportPay(fromTill), "cash pay unlocks the due without a UPI debit");
+  ok(inDaybook(fromTill!) && inBooks(fromTill!), "cash transport hits Daybook and Books");
+  const fromOwner = applyTransportDueOwnerUpi(locked);
+  ok(!!fromOwner && fromOwner.mode === "upi" && fromOwner.toOwner && !fromOwner.pocketSpend, "owner UPI is owner's UPI, not a pocket");
+  ok(!isAccountTransportPay(fromOwner!) && !isPendingTransport(fromOwner!), "owner UPI does not debit CS Kumar");
+  ok(!inDaybook(fromOwner!) && inBooks(fromOwner!), "owner UPI skips Daybook, still Books");
 
   console.log(`accounts.check OK (${n} assertions)`);
 }
