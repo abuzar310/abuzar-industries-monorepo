@@ -1356,16 +1356,16 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .doctool{padding:10px 12px}
   .rowbtns .btn{flex:1 1 auto; justify-content:center}
   .lock-card input{font-size:16px}
-  .phone-home button,.phone-home a,.phone-sec-row,.phone-qa button,.phone-eye,.phone-ov-range,.phone-bell{
+  .phone-home button,.phone-home a,.phone-sec-row,.phone-qa button,.phone-ov-range,.phone-bell{
     cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent;
   }
-  .phone-home button,.phone-sec-row,.phone-att,.phone-act,.phone-ov-range,.phone-eye,.phone-bell{
+  .phone-home button,.phone-sec-row,.phone-att,.phone-act,.phone-ov-range,.phone-bell{
     transition:transform .1s ease, background-color .12s ease;
   }
-  .phone-home button:active,.phone-sec-row:active,.phone-att:active,.phone-act:active,.phone-ov-range:active,.phone-eye:active,.phone-bell:active{
+  .phone-home button:active,.phone-sec-row:active,.phone-att:active,.phone-act:active,.phone-ov-range:active,.phone-bell:active{
     transform:scale(.97);
   }
-  .phone-home button:focus-visible,.phone-sec-row:focus-visible,.phone-eye:focus-visible,.phone-ov-range:focus-visible,.phone-bell:focus-visible{
+  .phone-home button:focus-visible,.phone-sec-row:focus-visible,.phone-ov-range:focus-visible,.phone-bell:focus-visible{
     outline:none; box-shadow:var(--ring);
   }
 }
@@ -1376,7 +1376,6 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .phone-sec-h h2,.phone-h{margin:0; font-size:15px; font-weight:700; color:var(--ink)}
 .phone-h{margin:18px 0 8px}
 .phone-sec-h a{font-size:12px; font-weight:600; color:var(--ochre-deep); text-decoration:none}
-.phone-eye{border:0; background:transparent; color:var(--ink-soft); padding:4px; min-height:44px; min-width:44px}
 .phone-ov{
   border:1px solid var(--line-2); background:var(--panel-2); margin:0 0 8px;
   border-radius:18px; box-shadow:var(--shadow-card); padding:14px 14px 8px;

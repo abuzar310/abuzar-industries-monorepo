@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TabIcon } from "@/components/Icons";
 import { dateSortKey, inr, quoteOwnBill, todayStr } from "@/lib/calc";
-import { cloakAvailable, toggleCloak } from "@/lib/cloak";
 import { createQuotation } from "@/lib/create";
 import { allRec } from "@/lib/data";
 import { dayTotals, inDaybook } from "@/lib/expenses";
@@ -13,7 +12,6 @@ import { getFeatures } from "@/lib/features";
 import { partyLedger } from "@/lib/payments";
 import { phoneQuickActions } from "@/lib/phone-nav";
 import { paidTotal, purchaseTotals, totalPurchase } from "@/lib/purchases";
-import { canToggleCloak } from "@/lib/staff-role";
 import { docTrade } from "@/lib/trading";
 import { useApp } from "@/store/useApp";
 import type { Customer, Doc, Expense, Purchase } from "@/lib/types";
@@ -91,7 +89,6 @@ export default function PhoneHome({
   const [making, setMaking] = useState(false);
   const quick = phoneQuickActions(feat);
   const cloaked = !!cloakMoney;
-  const canCloak = cloakAvailable() && canToggleCloak(user?.role);
   const curYm = ymNow();
   const lastYm = ymPrev(curYm);
 
@@ -238,11 +235,6 @@ export default function PhoneHome({
       </p>
       <div className="phone-sec-h">
         <h2>Business overview</h2>
-        {canCloak && (
-          <button type="button" className="phone-eye" onClick={() => void toggleCloak()} aria-label={cloaked ? "Show amounts" : "Hide amounts"}>
-            <TabIcon icon={cloaked ? "eye-off" : "eye"} size={18} />
-          </button>
-        )}
       </div>
       <div className="phone-ov">
         <div className="phone-ov-top">
