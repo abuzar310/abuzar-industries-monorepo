@@ -81,7 +81,7 @@ export default function PhoneHome({
   expenses: Expense[];
 }) {
   const router = useRouter();
-  const { user, cloakMoney, dataVersion, websitePending } = useApp();
+  const { user, cloakMoney, dataVersion } = useApp();
   const feat = getFeatures();
   const isOwner = user?.role === "owner";
   const [buys, setBuys] = useState<Purchase[]>([]);
@@ -173,7 +173,6 @@ export default function PhoneHome({
     { k: "Payments pending", sub: "Amt: " + rupee(receivables, cloaked) + " · " + pendingN + " parties", pill: pendingN + " pending", tone: "ok", icon: "payments", href: "/payments", hide: !feat.acceptPayment || pendingN < 1 },
     { k: "Outstanding amounts", sub: rupee(receivables, cloaked) + " still due", pill: pendingN + " parties", tone: "warn", icon: "scale", href: "/payments", hide: !feat.acceptPayment || receivables < 0.5 },
     { k: "Quotations pending", sub: pendingQuotes + " quotations awaiting payment", pill: pendingQuotes + " pending", tone: "gold", icon: "clipboard", href: "/quotations", hide: pendingQuotes < 1 },
-    { k: "New business alerts", sub: websitePending + " website quotations", pill: String(websitePending), tone: "gold", icon: "bell", href: "/website-quotations", hide: !websitePending },
   ].filter((t) => !t.hide);
 
   const recent: Act[] = [];

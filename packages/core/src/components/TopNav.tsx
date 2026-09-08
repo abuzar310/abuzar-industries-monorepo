@@ -119,8 +119,8 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
           <span>{SYNC_LABEL[syncState]}</span>
         </span>
         {(() => {
-          const n = (unseen || 0) + (websitePending || 0) + (buysDue || 0) + (chatUnseen || 0);
-          const href = websitePending ? "/website-quotations" : buysDue ? "/buys" : "/quotations";
+          const n = (unseen || 0) + (buysDue || 0) + (chatUnseen || 0);
+          const href = buysDue ? "/buys" : "/quotations";
           return (
             <Link className={"phone-bell" + (n ? " on" : "")} href={href} aria-label={n ? n + " alerts" : "Alerts"}>
               <IconBell size={16} />
