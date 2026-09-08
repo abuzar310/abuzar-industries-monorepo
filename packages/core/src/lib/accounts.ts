@@ -750,7 +750,35 @@ export type TransportPaySource = {
   account: string;
   balance: number;
   transport: boolean;
+  /** Receipts Paid out → Transport: till cash, not a UPI pocket. */
+  cash?: boolean;
+  /** Receipts: owner's own UPI — Books yes, Daybook no, no pocket drop. */
+  ownerUpi?: boolean;
 };
+
+export function isCsKumarPocketName(name?: string): boolean {
+  return /cs\s*kumar/i.test(name || "");
+}
+
+export const CASH_TRANSPORT_SRC: TransportPaySource = {
+  account: "Cash",
+  balance: 0,
+  transport: false,
+  cash: true,
+};
+
+export const OWNER_UPI_TRANSPORT_SRC: TransportPaySource = {
+  account: "UPI by owner",
+  balance: 0,
+  transport: false,
+  ownerUpi: true,
+};
+
+export function paySrcKey(s: TransportPaySource): string {
+  if (s.cash) return "cash";
+  if (s.ownerUpi) return "owner-upi";
+  return (s.holderId || "") + ":" + nameKey(s.account);
+}
 
 const nameKey = (s: string) => (s || "").trim().toLowerCase();
 
@@ -802,12 +830,39 @@ export function listTransportPaySources(
 }
 
 export function pickTransportPaySource(srcs: TransportPaySource[], amount: number): TransportPaySource | undefined {
+  const cash = srcs.find((s) => s.cash);
+  const cs = srcs.find((s) => isCsKumarPocketName(s.account));
+  if (cs && cs.balance + 0.5 >= amount) return cs;
+  if (cash) return cash;
   return (
     srcs.find((s) => s.transport && s.balance + 0.5 >= amount) ||
-    srcs.find((s) => s.balance + 0.5 >= amount) ||
+    srcs.find((s) => !s.cash && !s.ownerUpi && s.balance + 0.5 >= amount) ||
     srcs.find((s) => s.transport) ||
+    srcs.find((s) => s.cash) ||
     srcs[0]
   );
+}
+
+/** Receipts Transport defaults: Cash, UPI by owner, CS Kumar. Other pockets via + from Accounts. */
+export function receiptsTransportPaySources(srcs: TransportPaySource[]): TransportPaySource[] {
+  return [CASH_TRANSPORT_SRC, OWNER_UPI_TRANSPORT_SRC, ...srcs.filter((s) => isCsKumarPocketName(s.account))];
+}
+
+/** Tabrez / Mubeen / leftover UPI — hidden until added from Accounts. */
+export function extraReceiptsTransportSources(srcs: TransportPaySource[]): TransportPaySource[] {
+  return srcs.filter((s) => !s.cash && !s.ownerUpi && !isCsKumarPocketName(s.account));
+}
+
+/** Pay a locked due from Daybook cash — not a UPI pocket. */
+export function applyTransportDueCash(e: Expense): Expense | null {
+  if (!isPendingTransport(e)) return null;
+  return { ...e, mode: "cash", account: "", holderId: undefined, pocketSpend: undefined };
+}
+
+/** Owner paid the lorry from personal UPI — Books, not till, not a shop pocket. */
+export function applyTransportDueOwnerUpi(e: Expense): Expense | null {
+  if (!isPendingTransport(e)) return null;
+  return { ...e, mode: "upi", toOwner: true, account: "", holderId: undefined, pocketSpend: undefined };
 }
 
 export function selectedTransportDueTotal(dues: Pick<Expense, "amount">[]): number {
@@ -835,17 +890,55 @@ export async function settleTransportDue(fields: {
   return e;
 }
 
-/** Same pocket pay for several locked dues (Receipts Paid out → Transport). */
+export async function settleTransportDueCash(fields: {
+  id: string;
+  date?: string;
+  by: string;
+}): Promise<Expense | null> {
+  const e = await getRec<Expense>("expenses", fields.id);
+  if (!e) return null;
+  const next = applyTransportDueCash(e);
+  if (!next) return null;
+  next.date = fields.date || todayStr();
+  next.enteredBy = fields.by || e.enteredBy;
+  next.updatedAt = nowIso();
+  await put("expenses", next);
+  return next;
+}
+
+export async function settleTransportDueOwnerUpi(fields: {
+  id: string;
+  date?: string;
+  by: string;
+}): Promise<Expense | null> {
+  const e = await getRec<Expense>("expenses", fields.id);
+  if (!e) return null;
+  const next = applyTransportDueOwnerUpi(e);
+  if (!next) return null;
+  next.date = fields.date || todayStr();
+  next.enteredBy = fields.by || e.enteredBy;
+  next.updatedAt = nowIso();
+  await put("expenses", next);
+  return next;
+}
+
+/** Same pay for several locked dues (Receipts Paid out → Transport). */
 export async function settleTransportDues(fields: {
   ids: string[];
   account: string;
   holderId?: string;
+  cash?: boolean;
+  ownerUpi?: boolean;
   date?: string;
   by: string;
 }): Promise<Expense[]> {
   const out: Expense[] = [];
   for (const id of fields.ids) {
-    const e = await settleTransportDue({ ...fields, id });
+    const e = fields.cash
+      ? await settleTransportDueCash({ id, date: fields.date, by: fields.by })
+      : fields.ownerUpi
+        ? await settleTransportDueOwnerUpi({ id, date: fields.date, by: fields.by })
+        : await settleTransportDue({ ...fields, id });
     if (e) out.push(e);
   }
   return out;
