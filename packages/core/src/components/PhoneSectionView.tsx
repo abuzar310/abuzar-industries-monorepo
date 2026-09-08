@@ -17,7 +17,7 @@ const TITLE: Record<PhoneSection, string> = {
 
 export default function PhoneSectionView({ section, tabs }: { section: PhoneSection; tabs: Tab[] }) {
   const router = useRouter();
-  const { user, unseen, buysDue, websitePending, chatUnseen } = useApp();
+  const { user, unseen, buysDue, chatUnseen } = useApp();
   const isOwner = user?.role === "owner";
   const items = useMemo(() => phoneShelves(tabs, isOwner)[section], [tabs, isOwner, section]);
 
@@ -28,7 +28,6 @@ export default function PhoneSectionView({ section, tabs }: { section: PhoneSect
 
   function badge(t: Tab) {
     return t.badge === "buys" ? buysDue
-      : t.badge === "website" ? websitePending
       : t.badge === "chat" ? chatUnseen
       : t.badge ? unseen : 0;
   }
