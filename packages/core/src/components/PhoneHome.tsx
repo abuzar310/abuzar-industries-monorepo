@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { TabIcon } from "@/components/Icons";
 import { dateSortKey, inr, quoteOwnBill, todayStr } from "@/lib/calc";
 import { cloakAvailable, toggleCloak } from "@/lib/cloak";
+import { createQuotation } from "@/lib/create";
 import { allRec } from "@/lib/data";
 import { dayTotals, inDaybook } from "@/lib/expenses";
+import { toast } from "@/store/app-store";
 import { getFeatures } from "@/lib/features";
 import { partyLedger } from "@/lib/payments";
 import { phoneQuickActions } from "@/lib/phone-nav";
@@ -86,6 +88,7 @@ export default function PhoneHome({
   const isOwner = user?.role === "owner";
   const [buys, setBuys] = useState<Purchase[]>([]);
   const [monthOnly, setMonthOnly] = useState(true);
+  const [making, setMaking] = useState(false);
   const quick = phoneQuickActions(feat);
   const cloaked = !!cloakMoney;
   const canCloak = cloakAvailable() && canToggleCloak(user?.role);
@@ -96,6 +99,22 @@ export default function PhoneHome({
     if (!isOwner) return;
     allRec<Purchase>("purchases").then(setBuys);
   }, [isOwner, dataVersion]);
+
+  async function onQuick(href: string) {
+    if (href !== "/editor") {
+      router.push(href);
+      return;
+    }
+    if (making) return;
+    setMaking(true);
+    try {
+      const d = await createQuotation();
+      toast("New " + d.number + " created");
+      router.push("/editor/" + d.id);
+    } finally {
+      setMaking(false);
+    }
+  }
 
   function inScope(display: string) {
     if (!monthOnly) return true;
@@ -252,7 +271,7 @@ export default function PhoneHome({
       <h2 className="phone-h">Quick actions</h2>
       <div className="phone-qa">
         {quick.map((q) => (
-          <button key={q.href + q.label} type="button" className={q.href === "/editor" ? "on" : ""} onClick={() => router.push(q.href)}>
+          <button key={q.href + q.label} type="button" className={q.href === "/editor" ? "on" : ""} disabled={q.href === "/editor" && making} onClick={() => void onQuick(q.href)}>
             <TabIcon icon={q.icon} size={22} />
             {q.label}
           </button>
