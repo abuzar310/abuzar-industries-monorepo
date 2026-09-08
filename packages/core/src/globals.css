@@ -2116,6 +2116,12 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 /* Receipts form: amount · mode · date on a roomy row */
 .rec-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px}
 .rec-grid-due{grid-template-columns:1fr 1fr}
+.rec-transport-dues{margin-top:12px; display:flex; flex-direction:column; gap:8px}
+.rec-transport-dues-head{display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; font-family:var(--disp); font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint)}
+.rec-transport-dues-acts{display:flex; gap:6px}
+.ledger-page .acct-pay-src{display:flex; flex-wrap:wrap; gap:8px}
+.ledger-page .acct-chip-bal{margin-left:8px; font-family:var(--mono); font-size:11px; opacity:.88}
+.ledger-page .acct-warn{display:block; color:var(--danger); margin-bottom:8px}
 @media(max-width:560px){ .rec-grid{grid-template-columns:1fr 1fr} .rec-grid-due{grid-template-columns:1fr} }
 
 .stmt-filters{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:10px}
@@ -3941,7 +3947,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .wrap{overflow-x:clip}
   .wrap input:not([type=checkbox]):not([type=radio]):not([type=hidden]),
   .wrap select, .wrap textarea{font-size:16px}
-  .btn, .stmt-clear, .seg-btn, .rent-chip, .acct-day-chip, .acct-nav-btn, .ai-starter{
+  .btn, .stmt-clear, .seg-btn, .rent-chip, .acct-day-chip, .acct-nav-btn, .ai-starter, .acct-chip{
     min-height:44px;
   }
   .iconbtn, .x-row, .rbtn, .pb-plus, .pb-x, .acct-more-btn{
