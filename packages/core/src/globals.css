@@ -3904,3 +3904,157 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   }
   .topnav{padding-top:env(safe-area-inset-top, 0px)}
 }
+
+/* Website quotations inbox — classes were in the view with no sheet */
+.wq-page{margin:0 0 24px}
+.wq-head{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:14px}
+.wq-title{margin:0; font-family:var(--serif); font-weight:600; font-size:30px; letter-spacing:-.015em; color:var(--ink)}
+.wq-sub{margin:6px 0 0; font-size:13.5px; color:var(--ink-faint); max-width:42em; line-height:1.45}
+.wq-kpis{display:flex; gap:10px}
+.wq-kpi{min-width:88px; padding:10px 14px; border:1px solid var(--line-2); border-radius:12px; background:var(--panel-2)}
+.wq-kpi span{display:block; font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint)}
+.wq-kpi strong{display:block; margin-top:4px; font-family:var(--mono); font-size:22px; font-weight:800; color:var(--ink)}
+.wq-toolbar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px}
+.wq-search{flex:1 1 200px; min-width:0; font-family:var(--mono); font-size:14px; padding:10px 12px; min-height:44px; border:1px solid var(--line-2); border-radius:10px; background:var(--panel-2); color:var(--ink)}
+.wq-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px}
+.wq-card{border:1px solid var(--line-2); border-radius:14px; background:var(--panel-2); overflow:hidden}
+.wq-card.imported{opacity:.78}
+.wq-card-main{display:block; width:100%; text-align:left; border:0; background:transparent; color:inherit; font:inherit; padding:14px 14px 12px; cursor:pointer}
+.wq-card-top{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.wq-card-top strong{font-family:var(--disp); font-size:15px; font-weight:700; color:var(--ink); min-width:0}
+.wq-status{flex:0 0 auto; font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:4px 8px; border-radius:999px}
+.wq-status.pend{background:rgba(176,124,40,.14); color:var(--ochre-deep)}
+.wq-status.done{background:rgba(86,107,59,.14); color:var(--green)}
+.wq-card-meta{display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:8px; font-family:var(--mono); font-size:12px; color:var(--ink-soft)}
+.wq-detail{padding:0 14px 14px; overflow-x:auto; -webkit-overflow-scrolling:touch}
+.wq-sec{margin-top:10px}
+.wq-sec-title{font-family:var(--disp); font-size:12px; font-weight:700; color:var(--walnut); margin-bottom:6px}
+.wq-table{width:100%; min-width:360px; border-collapse:collapse; font-family:var(--mono); font-size:12.5px}
+.wq-table th,.wq-table td{padding:7px 8px; border-bottom:1px solid var(--line); text-align:right}
+.wq-table th{font-family:var(--disp); font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); text-align:right}
+.wq-table th:first-child,.wq-table td:first-child{text-align:left}
+.wq-actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+
+/* Phone chrome is 760px — raise the 560/640/680/720 stacks so destination
+   pages match the tab bar. screen-only so print / html2canvas stay desktop.
+   .pdf-capture / .acct-print already lock columns with !important. */
+@media screen and (max-width:760px){
+  .wrap{overflow-x:clip}
+  .wrap input:not([type=checkbox]):not([type=radio]):not([type=hidden]),
+  .wrap select, .wrap textarea{font-size:16px}
+  .btn, .stmt-clear, .seg-btn, .rent-chip, .acct-day-chip, .acct-nav-btn, .ai-starter{
+    min-height:44px;
+  }
+  .iconbtn, .x-row, .rbtn, .pb-plus, .pb-x, .acct-more-btn{
+    min-width:44px; min-height:44px;
+  }
+  .rowbtns{width:100%}
+  .rowbtns .btn{flex:1 1 auto; justify-content:center}
+  .setbox .rowbtns .btn{min-width:0}
+
+  /* Money */
+  .rec-grid{grid-template-columns:1fr 1fr}
+  .rec-grid-due{grid-template-columns:1fr}
+  .stmt-filters .paysel{flex:1 1 42%}
+  .stmt-filters .db-seg.sm{flex:1 1 100%}
+  .stmt-qhead .sq-bal{margin-left:0; flex-basis:100%}
+  .pay-hero{flex-direction:column}
+  .pay-hero .ph-main,.pay-hero .ph-side{flex:1 1 auto}
+  .custgrid{grid-template-columns:1fr}
+  .party-grid{grid-template-columns:1fr; gap:10px}
+  .party-stats{grid-template-columns:1fr 1fr}
+  .ledger-page{padding:8px 0 24px}
+  .ledger-page .bank-hdr span:first-child{display:none}
+  .ledger-page .bank-hdr,
+  .ledger-page .bank-row{grid-template-columns:minmax(0,1fr) 64px 64px 88px; gap:4px; padding:5px 8px}
+  .ledger-page .bank-date{display:none}
+  .bank-ledger:not(.acct-book) .bank-hdr{grid-template-columns:1fr 90px 90px 90px}
+  .bank-ledger:not(.acct-book) .bank-row{grid-template-columns:1fr 90px 90px 90px}
+  .bank-ledger:not(.acct-book) .bank-date{display:none}
+  .acct-overall-grid{grid-template-columns:1fr 1fr}
+  .acct-overall-grid.has-transport{grid-template-columns:1fr 1fr}
+  .acct-date-center{flex-direction:column}
+  .acct-day-label .btn{width:100%; justify-content:center}
+  .acct-head-totals{width:100%; margin-top:4px}
+  .acct-add-row .btn,.acct-collect-btn,.acct-pay-btn{width:100%; justify-content:center}
+  .acct-filters .btn.primary.sm{flex:1 1 100%}
+  .acct-page .acct-trow .acts{flex:1 1 100%}
+  .acct-page .acct-trow .acts .btn{flex:1; justify-content:center}
+  .acct-page .acct-book .bank-row.acct-txn{grid-template-columns:1fr 1fr 1fr 44px}
+  .acct-page .acct-more-btn{width:44px; height:44px; margin:0}
+  .books-grid{grid-template-columns:1fr; gap:12px}
+
+  /* Daybook / Records */
+  .db-shead{display:none}
+  .db-srow{
+    grid-template-columns:auto minmax(0,1fr) 1fr 1fr auto;
+    grid-template-areas:
+      "tag note note note acts"
+      "in in out bal acts";
+    gap:6px 8px; padding:10px 12px;
+  }
+  .db-srow .exptag{grid-area:tag; min-width:44px}
+  .db-srow .expnote{grid-area:note; min-width:0}
+  .db-srow .amt.in{grid-area:in; text-align:left}
+  .db-srow .amt.out:not(.bal){grid-area:out}
+  .db-srow .amt.bal{grid-area:bal}
+  .db-srow .x-row{grid-area:acts; opacity:1; align-self:start}
+  .db-srow:not(:has(.x-row)){
+    grid-template-areas:
+      "tag note note note note"
+      "in in out bal .";
+  }
+  .db-day-mini{display:none}
+  .exprow{grid-template-columns:1fr auto; gap:8px}
+  .exprow .expnote{grid-column:1 / -1}
+  .tsum{grid-template-columns:repeat(2,1fr)}
+  .tform input{width:100%}
+  .tform label{flex:1 1 45%}
+  .att-cell{width:44px; height:44px; font-size:15px}
+  .att-table th:first-child, .att-table td:first-child{
+    position:sticky; left:0; z-index:2; background:#FAF6EF;
+    box-shadow:2px 0 0 rgba(0,0,0,.04);
+  }
+  .att-week{flex-basis:100%; order:-1}
+  .att-card{left:10px; max-width:calc(100vw - 52px)}
+  .att-day-amt-add{opacity:.35}
+
+  /* Business / Official lists & forms */
+  .stockrow{grid-template-columns:1fr 1fr; gap:9px}
+  .buys-kpis{grid-template-columns:1fr 1fr; gap:10px}
+  .buys-kpi.head{grid-column:1 / -1}
+  .buys-search{flex:1 1 100%; min-width:0}
+  .buys-bar select{min-width:0; flex:1 1 140px}
+  .buys-reg-sides{grid-template-columns:1fr}
+  .buys-entry-grid.g3,.buys-entry-grid.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .buys-entry-grid label.span2,.buys-entry-grid label.span3{grid-column:span 2}
+  .rep-summary{grid-template-columns:repeat(2,1fr)}
+  .rep-summary.cols3,.rep-summary.cols4{grid-template-columns:repeat(2,1fr)}
+  .rep-doc{padding:14px 12px; overflow-x:auto; -webkit-overflow-scrolling:touch}
+  .rep-table{min-width:680px}
+  .rep-range input,.rep-range select{min-width:0; flex:1 1 140px}
+  .rep-print{margin-left:0; width:100%; justify-content:center}
+  .eway-grid{grid-template-columns:1fr 1fr}
+  .wq-head{flex-direction:column; align-items:stretch}
+  .wq-kpis{width:100%}
+  .wq-kpi{flex:1}
+  .wq-toolbar .db-seg{flex-basis:100%}
+  .wq-actions .btn{flex:1 1 auto; justify-content:center}
+
+  /* Invoice / quote chrome only — not a rewrite of Editor.tsx */
+  .inv-cols{grid-template-columns:1fr}
+  .inv-terms{border-left:none; border-top:1px solid var(--line)}
+  .cust-block, .cust-block.c4, .cust-block.c2{grid-template-columns:1fr 1fr}
+  .mast-top{flex-wrap:wrap; gap:12px; padding:16px 16px 12px}
+  .co-name{font-size:28px}
+  .logo{height:64px}
+  .meta .f{min-width:0; padding:10px 14px}
+
+  /* More: AI / staff chat sit above the tab bar */
+  .ai-composer,.staff-chat-form{bottom:calc(56px + env(safe-area-inset-bottom, 0px))}
+  .ai-page,.staff-chat{min-height:0; padding-bottom:8px}
+
+  .tgrid-wrap, .listwrap, .paybook, .buys-scroll, .tsheet-body{
+    overflow-x:auto; -webkit-overflow-scrolling:touch;
+  }
+}
