@@ -2119,8 +2119,11 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .rec-transport-dues{margin-top:12px; display:flex; flex-direction:column; gap:8px}
 .rec-transport-dues-head{display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; font-family:var(--disp); font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint)}
 .rec-transport-dues-acts{display:flex; gap:6px}
-.ledger-page .acct-pay-src{display:flex; flex-wrap:wrap; gap:8px}
+.ledger-page .acct-pay-src{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
 .ledger-page .acct-chip-bal{margin-left:8px; font-family:var(--mono); font-size:11px; opacity:.88}
+.ledger-page .acct-add-src{flex:0 1 190px; min-width:140px; padding:7px 12px; border:1px dashed var(--line-2); border-radius:999px;
+  background:var(--panel-2); color:var(--ink); font-family:var(--sans); font-size:13px}
+.ledger-page .acct-add-src:focus{outline:none; border-style:solid; border-color:var(--ochre)}
 .ledger-page .acct-warn{display:block; color:var(--danger); margin-bottom:8px}
 @media(max-width:560px){ .rec-grid{grid-template-columns:1fr 1fr} .rec-grid-due{grid-template-columns:1fr} }
 

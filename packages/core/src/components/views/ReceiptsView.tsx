@@ -23,9 +23,12 @@ import {
   isAccountTransportPay,
   isPendingTransport,
   listCollections,
+  extraReceiptsTransportSources,
   listHolders,
   listTransportPaySources,
+  paySrcKey,
   pickTransportPaySource,
+  receiptsTransportPaySources,
   selectedTransportDueTotal,
   settleTransportDues,
   transportDueLabel,
@@ -121,6 +124,7 @@ export default function ReceiptsView() {
   /** Locked transport dues picked on Paid out → Transport */
   const [paidDueIds, setPaidDueIds] = useState<string[]>([]);
   const [payHolder, setPayHolder] = useState<string | null>(null);
+  const [extraPayKeys, setExtraPayKeys] = useState<string[]>([]);
   const [payFor, setPayFor] = useState<string | null>(null);
   /** Books / Carpenters deep-link: show only this paid-out category (and optional month). */
   const [focusPaid, setFocusPaid] = useState<{ id: string; mm: string; yy: string } | null>(null);
@@ -291,6 +295,7 @@ export default function ReceiptsView() {
     setPaidDueIds([]);
     setPayHolder(null);
     setPayFor(null);
+    setExtraPayKeys([]);
     setRecvVia("customer");
     setRecvName("");
     setRecvCat("");
@@ -354,10 +359,15 @@ export default function ReceiptsView() {
     () => acctLedger(expenses, collections, quotes, customers),
     [expenses, collections, quotes, customers],
   );
-  const paySources = useMemo(
+  const accountSrcs = useMemo(
     () => listTransportPaySources(holders, upiLedger.accounts, collections, expenses),
     [holders, upiLedger.accounts, collections, expenses],
   );
+  const moreSrcs = useMemo(() => extraReceiptsTransportSources(accountSrcs), [accountSrcs]);
+  const paySources = useMemo(() => {
+    const extras = moreSrcs.filter((s) => extraPayKeys.includes(paySrcKey(s)));
+    return [...receiptsTransportPaySources(accountSrcs), ...extras];
+  }, [accountSrcs, moreSrcs, extraPayKeys]);
   const pickedDues = useMemo(
     () => pendingDues.filter((e) => paidDueIds.includes(e.id)),
     [pendingDues, paidDueIds],
@@ -390,14 +400,16 @@ export default function ReceiptsView() {
   async function recordTransportPay() {
     if (!pickedDues.length) return toast("Pick which transport dues to pay");
     const pick = pickedPay || pickTransportPaySource(paySources, pickedDueTotal);
-    if (!pick) return toast("Add a UPI holder first, then pay these dues");
-    if (pickedDueTotal > pick.balance + 0.5) {
+    if (!pick) return toast("Pick Cash, UPI by owner, or an account");
+    if (!pick.cash && !pick.ownerUpi && pickedDueTotal > pick.balance + 0.5) {
       return toast("Need ₹" + inr(pickedDueTotal) + " in " + pick.account + " (bal ₹" + inr(pick.balance) + ")");
     }
     const paid = await settleTransportDues({
       ids: pickedDues.map((e) => e.id),
       account: pick.account,
       holderId: pick.holderId,
+      cash: !!pick.cash,
+      ownerUpi: !!pick.ownerUpi,
       date: date ? toDmy(date) : undefined,
       by: user?.id || "unknown",
     });
@@ -1082,6 +1094,7 @@ export default function ReceiptsView() {
                   setPaidDueIds([]);
                   setPayHolder(null);
                   setPayFor(null);
+                  setExtraPayKeys([]);
                 }
                 // Paid to owner always leaves the manager's Daybook cash
                 if (v === "paid-owner") setPaidBy("manager");
@@ -1107,7 +1120,7 @@ export default function ReceiptsView() {
             )}
             {canPayTransport && paidCat === "transport" && !editId && (
               <small style={{ color: "var(--ink-faint)", marginTop: 4, display: "block" }}>
-                Pick the locked dues to pay. Money leaves the transport UPI (CS Kumar) — same as Accounts → Pay. Daybook cash does not move.
+                Cash cuts the Daybook. UPI by owner is the owner's UPI. CS Kumar drops that pocket. + from Accounts for Tabrez.
               </small>
             )}
           </label>
@@ -1239,28 +1252,48 @@ export default function ReceiptsView() {
             <span className="modal-field" style={{ marginTop: 4 }}>
               <span>Pay from</span>
             </span>
-            {paySources.length === 0 ? (
-              <div className="acct-empty">Add a UPI holder first (CS Kumar).</div>
-            ) : (
-              <div className="acct-pay-src">
-                {paySources.map((s) => {
-                  const on = samePaySrc(s);
-                  const tight = pickedDues.length > 0 && pickedDueTotal > s.balance + 0.5;
-                  return (
-                    <button
-                      key={(s.holderId || "") + ":" + s.account}
-                      type="button"
-                      className={"acct-chip" + (on ? " on" : "")}
-                      onClick={() => choosePaySrc(s)}
-                    >
-                      {s.account}
+            <div className="acct-pay-src">
+              {paySources.map((s) => {
+                const on = samePaySrc(s);
+                const tight = !s.cash && !s.ownerUpi && pickedDues.length > 0 && pickedDueTotal > s.balance + 0.5;
+                return (
+                  <button
+                    key={paySrcKey(s)}
+                    type="button"
+                    className={"acct-chip" + (on ? " on" : "")}
+                    onClick={() => choosePaySrc(s)}
+                  >
+                    {s.account}
+                    {!s.cash && !s.ownerUpi && (
                       <span className="acct-chip-bal">{tight ? "need ₹" + inr(pickedDueTotal) : "₹" + inr(s.balance)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {pickedPay && pickedDues.length > 0 && pickedDueTotal > pickedPay.balance + 0.5 && (
+                    )}
+                  </button>
+                );
+              })}
+              {moreSrcs.some((s) => !extraPayKeys.includes(paySrcKey(s))) && (
+                <select
+                  className="acct-add-src"
+                  value=""
+                  aria-label="Add from Accounts"
+                  onChange={(ev) => {
+                    const s = moreSrcs.find((x) => paySrcKey(x) === ev.target.value);
+                    if (!s) return;
+                    setExtraPayKeys((k) => (k.includes(paySrcKey(s)) ? k : [...k, paySrcKey(s)]));
+                    choosePaySrc(s);
+                  }}
+                >
+                  <option value="">+ from Accounts</option>
+                  {moreSrcs
+                    .filter((s) => !extraPayKeys.includes(paySrcKey(s)))
+                    .map((s) => (
+                      <option key={paySrcKey(s)} value={paySrcKey(s)}>
+                        {s.account} · ₹{inr(s.balance)}
+                      </option>
+                    ))}
+                </select>
+              )}
+            </div>
+            {pickedPay && !pickedPay.cash && !pickedPay.ownerUpi && pickedDues.length > 0 && pickedDueTotal > pickedPay.balance + 0.5 && (
               <small className="acct-warn">
                 Need ₹{inr(pickedDueTotal)} — {pickedPay.account} has ₹{inr(pickedPay.balance)}.
               </small>
