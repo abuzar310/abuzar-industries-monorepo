@@ -71,28 +71,48 @@ export default function AppProvider({
     };
     const onOnline = () => void poll();
     // phones fire `offline` while the radio is fine — poll/boot paint Offline if the API really fails
-
-    (async function boot() {
-      const user = await loadLocalUser(); // httpOnly session cookie, if still valid
-      if (user) {
-        await bootData();
-        await loadBrand(defaultBrand);
-        hydrateCloak(); // meta is loaded with bootstrap
-        loadNotifyState();
-        await checkOwnerNotifications();
-        refreshChatUnseen();
-      }
-      // No session → LockGate shows; unlock() + afterUnlock() run the same load.
-      setReady(true);
-
+    const startPoll = () => {
+      if (timer) return;
       timer = setInterval(() => void poll(), 8000);
       document.addEventListener("visibilitychange", onVisible);
       window.addEventListener("online", onOnline);
-    })().catch((e) => {
-      console.error(e);
+    };
+
+    async function loadSession() {
+      const user = await loadLocalUser();
+      if (!user) return;
+      await bootData();
+      await loadBrand(defaultBrand);
+      hydrateCloak();
+      loadNotifyState();
+      try {
+        await checkOwnerNotifications();
+        refreshChatUnseen();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    (async function boot() {
+      try {
+        await loadSession();
+      } catch (e) {
+        console.error(e);
+        toastMsg("Startup error — retrying…");
+        await new Promise((r) => setTimeout(r, 3000));
+        try {
+          await loadSession();
+        } catch (e2) {
+          console.error(e2);
+          toastMsg("Startup error — check the connection and reload");
+          setTimeout(() => void loadSession().catch((e3) => console.error(e3)), 12000);
+        }
+      }
+      // Always start the poll — a failed boot used to skip this, so the tab
+      // stayed empty until a manual reload lucked into a live DB socket.
       setReady(true);
-      toastMsg("Startup error — check the connection and reload");
-    });
+      startPoll();
+    })();
 
     return () => {
       if (timer) clearInterval(timer);

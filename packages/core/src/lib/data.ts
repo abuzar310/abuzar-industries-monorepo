@@ -152,8 +152,9 @@ export async function bootData(): Promise<void> {
       return;
     } catch (e) {
       last = e;
-      // First misses after a deploy are slow, not offline. Only show Offline if all tries fail.
+      // First misses after a deploy / stale pooler socket are slow, not offline.
       setSyncState(attempt === 3 ? "off" : "queue");
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 800 * attempt));
     }
   }
   throw last instanceof Error ? last : new Error("bootstrap failed");

@@ -58,15 +58,39 @@ export const TABLE_STORE: Record<string, string> = {
 
 let _pool: Pool | null = null;
 
+/** Supabase / Vercel drop idle sockets. Retry these once on a fresh pool. */
+export function isTransientPgError(e: unknown): boolean {
+  const err = e as { message?: string; code?: string };
+  return /terminat|ECONNRESET|EPIPE|ECONNREFUSED|ETIMEDOUT|connection timed? ?out|SSL|57P01|08006|08003|57P03|53300|too many clients|Connection ended/i.test(
+    `${err?.message || e} ${err?.code || ""}`,
+  );
+}
+
+function resetPool() {
+  const old = _pool;
+  _pool = null;
+  if (old) void old.end().catch(() => {});
+}
+
 export function pool(): Pool {
   if (_pool) return _pool;
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set");
+  // Serverless + session pooler: hold few sockets, give them back before the
+  // pooler kills them (~minutes idle). No error listener → the isolate dies
+  // and Safa shows "Startup error" until a new instance boots.
   _pool = new Pool({
     connectionString: url,
-    max: 5,
-    // Supabase requires TLS; the pooler's cert chain isn't in Node's default store.
+    max: 3,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 8_000,
+    allowExitOnIdle: true,
+    keepAlive: true,
     ssl: { rejectUnauthorized: false },
+  });
+  _pool.on("error", (err) => {
+    console.error("[db] idle client error", err.message);
+    resetPool();
   });
   return _pool;
 }
@@ -160,8 +184,15 @@ export async function ensureCarpentersTable(schema: AppSchema): Promise<void> {
 }
 
 export async function q<T = Row>(text: string, params: unknown[] = []): Promise<T[]> {
-  const r = await pool().query(text, params);
-  return r.rows as T[];
+  try {
+    const r = await pool().query(text, params);
+    return r.rows as T[];
+  } catch (e) {
+    if (!isTransientPgError(e)) throw e;
+    resetPool();
+    const r = await pool().query(text, params);
+    return r.rows as T[];
+  }
 }
 
 /** All live rows of a table (deleted rows excluded). */
@@ -232,7 +263,14 @@ export async function withAdvisoryLock<T>(
   key: string,
   fn: (client: import("pg").PoolClient) => Promise<T>,
 ): Promise<T> {
-  const client = await pool().connect();
+  let client: import("pg").PoolClient;
+  try {
+    client = await pool().connect();
+  } catch (e) {
+    if (!isTransientPgError(e)) throw e;
+    resetPool();
+    client = await pool().connect();
+  }
   try {
     await client.query("begin");
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [schema + ":" + key]);
