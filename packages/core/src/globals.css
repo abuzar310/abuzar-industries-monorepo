@@ -1012,9 +1012,23 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .empty .empty-note{color:var(--ink-faint); font-size:12.5px; max-width:300px}
 @media(max-width:760px){
   .lhead{display:none}
-  .lrow{grid-template-columns:1fr 1fr; gap:6px 12px; padding:14px 16px}
-  .lrow .acts{grid-column:span 2; justify-content:flex-start}
-  .lrow .col-date,.lrow .col-status{justify-self:end}
+  .lrow:not(.sup-lrow){
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:4px 12px;
+    padding:14px 14px;
+  }
+  .lrow:not(.sup-lrow) > .id{grid-column:1; grid-row:1}
+  .lrow:not(.sup-lrow) > .nm{grid-column:1; grid-row:2; min-width:0}
+  .lrow:not(.sup-lrow) > .mut:not(.col-date){grid-column:1; grid-row:3}
+  .lrow:not(.sup-lrow) > .col-date{grid-column:1; grid-row:4; justify-self:start}
+  .lrow:not(.sup-lrow) > .col-status{grid-column:2; grid-row:1; justify-self:end}
+  .lrow:not(.sup-lrow) > .col-amt,
+  .lrow:not(.sup-lrow) > .amt{
+    grid-column:1 / -1; grid-row:5;
+  }
+  .lrow .amt{text-align:left}
+  .lrow .acts{grid-column:span 2; justify-content:flex-start; margin-top:8px}
 }
 
 /* suppliers list (clean rows) */
@@ -1391,9 +1405,10 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .phone-ov-minis small.ok,.phone-att em.ok{color:var(--green); background:rgba(86,107,59,.12)}
 .phone-ov-minis small.warn,.phone-att em.warn{color:var(--danger); background:rgba(165,61,41,.1)}
 .phone-ico{
-  width:28px; height:28px; border-radius:999px; display:grid; place-items:center;
-  background:rgba(51,36,26,.06); color:var(--walnut); margin:0 auto;
+  width:32px; height:32px; border-radius:10px; display:grid; place-items:center;
+  background:rgba(51,36,26,.06); color:var(--walnut); margin:0;
 }
+.phone-ov-minis .phone-ico{margin:0 auto; width:28px; height:28px; border-radius:999px}
 .phone-ico.ok{background:rgba(86,107,59,.14); color:var(--green)}
 .phone-ico.warn{background:rgba(165,61,41,.12); color:var(--danger)}
 .phone-ico.gold{background:rgba(198,143,49,.16); color:var(--ochre-deep)}
@@ -1471,8 +1486,13 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .phone-sec-row{
   display:flex; align-items:center; gap:12px; width:100%;
   min-height:52px; padding:14px 16px; text-align:left;
-  border:0; background:transparent; color:inherit; font:inherit; text-decoration:none;
+  border:0; border-bottom:1px solid var(--line);
+  background:transparent; color:inherit; font:inherit; text-decoration:none;
+  grid-template-columns:none;
 }
+.phone-sec-row:last-child{border-bottom:none}
+.phone-sec-row .phone-ico{margin:0; flex:0 0 auto}
+.phone-sec-row .nm{flex:1; min-width:0; font-weight:700}
 .phone-sec-row svg{color:var(--walnut); flex:0 0 auto}
 .phone-sec-row em{margin-left:auto; font-style:normal; background:var(--walnut); color:#F4E9D8; font-size:11px; padding:1px 7px; border-radius:999px}
 
