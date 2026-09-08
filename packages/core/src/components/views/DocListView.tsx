@@ -366,7 +366,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                   ) : null}
                 </span>
                 <span className="nm">{d.customerName || "—"}</span>
-                <span className="mut">
+                <span className="mut col-party">
                   {d.phone}
                   <br />
                   {d.site}
@@ -376,7 +376,7 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
                 <span className="col-status">
                   <StatusBadge doc={d} />
                 </span>
-                <span>
+                <span className="col-amt">
                   <div className="amt">₹ {inr(bill)}</div>
                   {hasFinal && <div className="mut" style={{ fontSize: 11 }}>final · quote ₹{inr(t.grand)}</div>}
                   {(() => {

@@ -36,12 +36,12 @@ export default function PhoneSectionView({ section, tabs }: { section: PhoneSect
   return (
     <div className="phone-sec">
       <h1 className="sectitle">{TITLE[section]}</h1>
-      <div className="listwrap">
+      <div className="phone-list">
         {items.map((t) => {
           const n = badge(t);
           return (
-            <Link key={t.href} href={t.href} className="lrow phone-sec-row">
-              <span className="phone-ico"><TabIcon icon={t.icon || phoneTabIcon(t.href)} size={16} /></span>
+            <Link key={t.href} href={t.href} className="phone-sec-row">
+              <span className="phone-ico"><TabIcon icon={t.icon || phoneTabIcon(t.href)} size={18} /></span>
               <span className="nm">{t.label}</span>
               {n > 0 && <em>{n}</em>}
             </Link>
@@ -49,10 +49,12 @@ export default function PhoneSectionView({ section, tabs }: { section: PhoneSect
         })}
         {section === "more" && (
           <>
-            <button type="button" className="lrow phone-sec-row" onClick={() => lockApp()}>
+            <button type="button" className="phone-sec-row" onClick={() => lockApp()}>
+              <span className="phone-ico"><TabIcon icon="lock" size={18} /></span>
               <span className="nm">Switch profile</span>
             </button>
-            <button type="button" className="lrow phone-sec-row" onClick={() => lockApp()}>
+            <button type="button" className="phone-sec-row" onClick={() => lockApp()}>
+              <span className="phone-ico"><TabIcon icon="logout" size={18} /></span>
               <span className="nm">Log out</span>
             </button>
           </>

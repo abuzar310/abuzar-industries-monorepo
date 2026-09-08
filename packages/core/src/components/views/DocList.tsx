@@ -39,9 +39,9 @@ export default function DocList({ docs, empty }: { docs: Doc[]; empty: string })
         };
         return (
           <div className="lrow" key={d.id} onClick={() => open(d.id)} style={{ cursor: "pointer" }}>
-            <span className="id">{d.id}</span>
+            <span className="id">{d.displayNumber || d.number || d.id}</span>
             <span className="nm">{d.customerName || "—"}</span>
-            <span className="mut">
+            <span className="mut col-party">
               {d.phone}
               <br />
               {d.site}
@@ -50,7 +50,7 @@ export default function DocList({ docs, empty }: { docs: Doc[]; empty: string })
             <span className="col-status">
               <StatusBadge doc={d} />
             </span>
-            <span>
+            <span className="col-amt">
               <div className="amt">₹ {inr(bill)}</div>
               {hasFinal && <div className="mut" style={{ fontSize: 11 }}>final · quote ₹{inr(t.grand)}</div>}
               {cft > 0 && <div className="mut" style={{ fontSize: 12 }}>{inr(cft)} CFT</div>}
