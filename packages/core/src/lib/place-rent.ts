@@ -1,6 +1,6 @@
 import { dateSortKey, nowIso, todayStr } from "./calc";
 import { allRec, delRec, getRec, put } from "./data";
-import { carpenterKey, commissionPendingOnQuote } from "./carpenter-financials";
+import { carpenterKey, sameCarpenterSeed, commissionPendingOnQuote } from "./carpenter-financials";
 import { deleteCarpenter, listCarpenters } from "./carpenters";
 import { addExpense } from "./expenses";
 import type { Carpenter, Doc, Expense, PayMode } from "./types";
@@ -29,7 +29,8 @@ export function nameHitsSeed(name: string, seed: string): boolean {
   if (!n || !s) return false;
   if (n === s) return true;
   const words = n.split(/[^a-z0-9]+/).filter(Boolean);
-  return words.includes(s) || n.startsWith(s + " ");
+  if (words.includes(s) || n.startsWith(s + " ")) return true;
+  return sameCarpenterSeed(n, s);
 }
 
 export function isPlaceRentTenant(c: Carpenter | undefined | null): boolean {
@@ -67,6 +68,21 @@ export function placeRentDue(c: Carpenter, expenses: Expense[]): number {
   return r2(Math.max(0, due));
 }
 
+export const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
 export function monthKey(dmy: string): string {
   const [, mm = "", yy = ""] = (dmy || "").split("-");
   return mm && yy ? mm + "-" + yy : "";
@@ -74,16 +90,41 @@ export function monthKey(dmy: string): string {
 
 export function monthTitle(dmy: string): string {
   const [, mm = "", yy = ""] = (dmy || "").split("-");
-  const names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const mi = Math.max(1, Math.min(12, +mm || 0)) - 1;
   const year = yy.length === 2 ? "20" + yy : yy;
-  return (names[mi] || mm) + (year ? " " + year : "");
+  return (MONTH_NAMES[mi] || mm) + (year ? " " + year : "");
+}
+
+export function yearFromDmy(dmy: string): number {
+  const yy = (dmy || "").split("-")[2] || "";
+  const n = +yy;
+  if (!n) return new Date().getFullYear();
+  return yy.length === 2 ? 2000 + n : n;
+}
+
+/** First day of that calendar month — any collection day still counts as this month. */
+export function monthFirstDay(year: number, month1to12: number): string {
+  const m = Math.max(1, Math.min(12, month1to12 | 0));
+  const y = year < 100 ? 2000 + year : year;
+  return "01-" + String(m).padStart(2, "0") + "-" + String(y).slice(2);
 }
 
 export function monthCharged(c: Carpenter, expenses: Expense[], dmy: string): boolean {
+  return !!chargeOfMonth(c, expenses, dmy);
+}
+
+export function chargeOfMonth(c: Carpenter, expenses: Expense[], dmy: string): Expense | undefined {
   const k = monthKey(dmy);
-  if (!k) return false;
-  return expenses.some((e) => e.placeRentKind === "charge" && belongsToTenant(e, c) && monthKey(e.date) === k);
+  if (!k) return undefined;
+  return expenses.find((e) => e.placeRentKind === "charge" && belongsToTenant(e, c) && monthKey(e.date) === k);
+}
+
+export function yearMonthsCharged(c: Carpenter, expenses: Expense[], year: number): number {
+  let n = 0;
+  for (let m = 1; m <= 12; m++) {
+    if (monthCharged(c, expenses, monthFirstDay(year, m))) n++;
+  }
+  return n;
 }
 
 export function matchPlaceRentTenant(
@@ -181,6 +222,25 @@ export function tenantScore(c: Carpenter, seed: string): number {
   const note = carpenterKey(c.notes || "");
   if (note && note !== carpenterKey("Place rent")) n += 6;
   return n;
+}
+
+/** Ismail / Suresha cards — the real carpenter (Planning Work), not a blank stub. */
+export function listLinkedRentTenants(all: Carpenter[]): Carpenter[] {
+  const used = new Set<string>();
+  const out: Carpenter[] = [];
+  for (const seed of PLACE_RENT_SEEDS) {
+    const hit = pickPlaceRentForSeed(all, seed);
+    if (!hit || used.has(hit.id)) continue;
+    used.add(hit.id);
+    out.push(hit);
+  }
+  for (const c of all) {
+    if (!c.placeRent || used.has(c.id)) continue;
+    if (PLACE_RENT_SEEDS.some((s) => isSeedStub(c, s))) continue;
+    used.add(c.id);
+    out.push(c);
+  }
+  return out.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 
 export function pickPlaceRentForSeed(all: Carpenter[], seed: string): Carpenter | undefined {
@@ -388,9 +448,16 @@ export async function addPlaceRentDebt(
   });
 }
 
+export async function unchargePlaceRent(e: Expense): Promise<void> {
+  if (e.placeRentKind !== "charge") throw new Error("Only a monthly tick can be removed this way");
+  await delRec("expenses", e.id);
+}
+
 export async function chargePlaceRent(c: Carpenter, amount: number, enteredBy: string, date = todayStr()): Promise<Expense> {
   const a = r2(Math.max(0, amount));
   if (a <= 0.5) throw new Error("Enter the rent amount");
+  const expenses = await allRec<Expense>("expenses");
+  if (monthCharged(c, expenses, date)) throw new Error(monthTitle(date) + " is already ticked");
   return addExpense({
     type: "sale",
     amount: a,

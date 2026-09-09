@@ -5,10 +5,16 @@ import {
   belongsToTenant,
   isSeedStub,
   matchPlaceRentTenant,
+  MONTH_NAMES,
+  chargeOfMonth,
   monthCharged,
+  monthFirstDay,
   monthKey,
   nameHitsSeed,
+  yearFromDmy,
+  yearMonthsCharged,
   phonesMatch,
+  listLinkedRentTenants,
   pickPlaceRentForSeed,
   placeRentDue,
   placeRentStatement,
@@ -45,6 +51,8 @@ const exp = (partial: Partial<Expense> & Pick<Expense, "id" | "amount" | "placeR
 
 ok(nameHitsSeed("SURESHA", "Suresha"), "SURESHA hits Suresha");
 ok(nameHitsSeed("Suresha achari", "Suresha"), "suresha achari hits seed");
+ok(nameHitsSeed("SURESHA CARPENTER PLANNING WORK", "Suresha"), "planning-work hits Suresha");
+ok(nameHitsSeed("Suresh carpenter planning work", "Suresha"), "Suresh spelling hits Suresha");
 ok(!nameHitsSeed("IRFAN CARP", "Ismail"), "unrelated name does not hit");
 ok(phonesMatch("9845012345", "09845012345"), "phone last-10 match");
 ok(!phonesMatch("123", "456"), "short phones do not match");
@@ -59,8 +67,14 @@ const ledger = [
   exp({ id: "s1", amount: 2000, placeRentKind: "setoff", carpenterId: "CARP-1", carpenter: "Ismail" }),
 ];
 ok(placeRentDue(ismail, ledger) === 3000, "due = charged − received − setoff");
+ok(MONTH_NAMES.length === 12 && MONTH_NAMES[0] === "January" && MONTH_NAMES[11] === "December", "12 month names");
+ok(monthFirstDay(2026, 3) === "01-03-26", "March first day");
+ok(yearFromDmy("15-08-26") === 2026, "year from dmy");
 ok(monthCharged(ismail, ledger, "15-08-26"), "August charge counts for the month");
 ok(!monthCharged(ismail, ledger, "01-09-26"), "September not charged");
+ok(chargeOfMonth(ismail, ledger, "22-08-26")?.id === "c1", "mid-month still finds August");
+ok(!chargeOfMonth(ismail, ledger, "01-09-26"), "no September charge row");
+ok(yearMonthsCharged(ismail, ledger, 2026) === 1, "one month ticked in 2026");
 ok(monthKey("15-08-26") === "08-26", "month key");
 
 const stmt = placeRentStatement(ismail, ledger);
@@ -108,6 +122,12 @@ const real = carp("CARP-REAL", "SURESHA CARPENTER PLYNING WORK", "9880919422");
 ok(isSeedStub(stub, "Suresha"), "empty Suresha is a stub");
 ok(!isSeedStub(real, "Suresha"), "plyning-work Suresha is not a stub");
 ok(pickPlaceRentForSeed([stub, real], "Suresha")?.id === "CARP-REAL", "picks plyning-work Suresha over empty stub");
+const ismailWork = carp("CARP-ISW", "Ismail Planning Work", "9591152679");
+const sureshaWork = carp("CARP-SUW", "Suresha Planning Work", "9880919422");
+const linked = listLinkedRentTenants([stub, ismailWork, sureshaWork]);
+ok(linked.some((c) => c.id === "CARP-ISW"), "links Ismail Planning Work");
+ok(linked.some((c) => c.id === "CARP-SUW"), "links Suresha Planning Work");
+ok(!linked.some((c) => c.id === "CARP-STUB"), "does not link the empty Suresha stub");
 
 const profiled = { ...ismail, rentOpening: 5000 };
 ok(rentOpeningOf(profiled, [debt]) === 5000, "saved profile opening wins over recorded old debt");

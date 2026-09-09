@@ -1,6 +1,6 @@
 import { allRec, delRec, getRec, put } from "./data";
 import { nowIso, uid } from "./calc";
-import { carpenterKey } from "./carpenter-financials";
+import { carpenterKey, carpenterSeed, sameCarpenterSeed } from "./carpenter-financials";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import { toast } from "@/store/app-store";
 import type { Carpenter, Customer, Doc, Expense } from "./types";
@@ -37,10 +37,11 @@ export function resolveCarpenterRecord(
 ): Carpenter | undefined {
   if (r.record?.id) return directory.find((c) => c.id === r.record!.id) || r.record;
   const key = carpenterKey(r.name);
-  const seed = key.split(/[^a-z0-9]+/).filter(Boolean)[0] || "";
+  const seed = carpenterSeed(r.name);
   const named = directory.filter((c) => carpenterKey(c.name) === key);
   const related = directory.filter((c) => {
     const ck = carpenterKey(c.name);
+    if (sameCarpenterSeed(c.name, r.name)) return true;
     if (!seed || seed.length < 4) return false;
     return ck === seed || ck.startsWith(seed + " ") || key.startsWith(ck + " ");
   });

@@ -89,6 +89,7 @@ function receiptsActions(): AiQuickAction[] {
   return [
     explain("What is Receipts?", "the money desk: receive cash/UPI from a customer (apply to oldest quotes / one quote / account only), paid-outs, and worker give/repay shortcuts"),
     how("Take money from a customer", "Receipts → Received → Customer → pick customer → amount → Cash or UPI (+ account) → choose Apply to (oldest / one quote / account) → Record. Mention Pay full / Fill due if useful."),
+    how("Accept place rent", "Receipts → Received → Customer → search Ismail Planning Work or Suresha Planning Work → Accept rent → amount → Cash or UPI → Accept rent. Same money as Rent → They paid rent. Does not sit on a customer account."),
     how("Apply to one quotation only", "Receipts → pick customer → Apply to that quotation number (not oldest). Or open the quotation → Payment block."),
     how("Paid out (food/truck/salary)", "Receipts → Paid out → pick category (food, truck, carpenter, salary, etc.) → amount → mode → Record."),
     how("Worker advance from Receipts", "Receipts worker panel: Give advance / Received back — without opening Attendance. Say when to use Attendance Pay instead."),
@@ -360,11 +361,12 @@ export function resolveAiPageActions(pathname: string, doc: Doc | null): AiPageB
         title: onPerson ? "Tenant" : "Rent",
         actions: [
           explain("What is Rent?", "Cut Size place rent for two people (Ismail and Suresha). Two cards on top. Tap a card to open that person, the same way you open a carpenter or a customer. History for both sits under the cards."),
-          how("Set monthly rent", "Rent → tap the person → Monthly rent and old balance → Save monthly ₹."),
-          how("Set old balance", "Rent → tap the person → Monthly rent and old balance → Save old balance. This replaces what they already owe."),
-          how("Charge this month", "Rent → tap the person → Add this month under They owe. Type ₹. Does not put cash in Daybook."),
-          how("Record rent they paid", "Rent → tap the person → 2 They paid rent. Full, Part, or type an amount (₹5,000 of what they owe). Cash goes to Daybook and Receipts."),
-          how("Put commission towards rent", "Rent → tap the person → 1 Commission towards rent. On a locked quotation for Ismail or Suresha the same card appears under Commission lock. Towards rent is not cash; leftover cash commission goes to Daybook."),
+          how("Set monthly rent", "Rent → tap the person → Usual monthly ₹ on the year list → Save."),
+          how("Set old balance", "Rent → tap the person → Old balance → Save old balance. This replaces what they already owe."),
+          how("Tick a month", "Rent → tap the person → 12 month names. Tick the box after the month you want on the due. Any day is fine — it is not tied to today's date. Does not put cash in Daybook."),
+          how("Untick a month", "Rent → tap the person → tick a month that already has a mark → Remove tick."),
+          how("Record rent they paid", "Rent → tap the person → 1 They paid rent. Full, Part, or type an amount (₹5,000 of what they owe). Cash goes to Daybook and Receipts."),
+          how("Put commission towards rent", "Rent → tap the person → 2 Commission towards rent. On a locked quotation for Ismail or Suresha the same card appears under Commission lock. Towards rent is not cash; leftover cash commission goes to Daybook."),
         ],
       };
     }

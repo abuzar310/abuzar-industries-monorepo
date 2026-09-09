@@ -6,6 +6,7 @@ import {
   carpenterDashboard,
   carpenterHref,
   carpenterKey,
+  carpenterSeed,
   carpenterPendingAll,
   commissionGivenOnQuote,
   commissionPendingOnQuote,
@@ -197,6 +198,17 @@ function demo() {
   const stub = carp("CARP-STUB", "Suresha");
   ok(resolveCarpenterRecord({ name: "Suresha" }, [stub, ply])?.id === "CARP-PLY", "edit Suresha uses plyning-work row");
   ok(resolveCarpenterRecord({ record: ply, name: "Suresha" }, [stub, ply])?.id === "CARP-PLY", "saved id wins");
+  ok(carpenterSeed("Suresh carpenter planning work") === "suresha", "Suresh → Suresha seed");
+  const planning = carp("CARP-PLAN", "SURESHA CARPENTER PLANNING WORK", "9880919422");
+  const live = carp("CARP-LIVE", "SURESHA PLYNING WORK", "9880919422");
+  live.placeRent = true;
+  const qPlan = quote("QPLAN", "C1", "SURESHA CARPENTER PLANNING WORK", "70");
+  const merged = rollupCarpenters([live, planning], [], [qPlan], []);
+  ok(merged.filter((x) => carpenterSeed(x.name) === "suresha").length === 1, "planning-work folds into plyning-work");
+  ok(
+    merged.some((x) => x.record?.id === "CARP-LIVE" && x.quoteCount === 1),
+    "planning-work quotes sit on SURESHA PLYNING WORK",
+  );
 
   console.log("carpenter-financials.check OK (" + n + " assertions)");
 }

@@ -6,11 +6,13 @@ import { editCarpenterDialog, listCarpenters } from "@/lib/carpenters";
 import { allRec } from "@/lib/data";
 import { allExpenses, upiAccounts } from "@/lib/expenses";
 import {
+  MONTH_NAMES,
   applyAgainstRent,
+  chargeOfMonth,
   chargePlaceRent,
   ensurePlaceRentTenants,
   findDuplicateCarpenters,
-  monthCharged,
+  monthFirstDay,
   monthTitle,
   pendingForTenant,
   placeRentDue,
@@ -19,7 +21,11 @@ import {
   rentOpeningOf,
   setMonthlyRent,
   setRentOpening,
+  unchargePlaceRent,
+  yearFromDmy,
+  yearMonthsCharged,
 } from "@/lib/place-rent";
+import { confirmDialog } from "@/store/dialog-store";
 import { dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -144,7 +150,10 @@ function RentSection({
   const router = useRouter();
   const due = placeRentDue(tenant, expenses);
   const today = todayStr();
-  const charged = monthCharged(tenant, expenses, today);
+  const yearNow = yearFromDmy(today);
+  const monthNow = Math.max(1, Math.min(12, +(today.split("-")[1] || 0)));
+  const [year, setYear] = useState(yearNow);
+  const ticked = yearMonthsCharged(tenant, expenses, year);
   const pending = pendingForTenant(tenant, quotes, expenses);
   const pendingSum = r2(pending.reduce((s, p) => s + p.pending, 0));
   const stmt = placeRentStatement(tenant, expenses);
@@ -153,7 +162,6 @@ function RentSection({
   const opening = rentOpeningOf(tenant, expenses);
   const dups = findDuplicateCarpenters(tenant, directory);
 
-  const [chargeAmt, setChargeAmt] = useState("");
   const [recvAmt, setRecvAmt] = useState("");
   const [payKind, setPayKind] = useState<"part" | "full">("part");
   const [recvHow, setRecvHow] = useState("cash");
@@ -170,7 +178,6 @@ function RentSection({
   }, []);
 
   useEffect(() => {
-    setChargeAmt(monthly ? String(monthly) : "");
     setMonthAmt(monthly ? String(monthly) : "");
     setOpenAmt(opening ? String(opening) : "0");
     setRecvAmt("");
@@ -208,14 +215,36 @@ function RentSection({
     setRecvAmt(a ? String(a) : "");
   }
 
-  async function doCharge() {
+  async function toggleMonth(month1: number) {
+    const dmy = monthFirstDay(year, month1);
+    const row = chargeOfMonth(tenant, expenses, dmy);
+    if (row) {
+      const ok = await confirmDialog({
+        title: "Remove " + MONTH_NAMES[month1 - 1] + " " + year + "?",
+        message: "Takes ₹" + inr(+row.amount || 0) + " off what they owe. Cash they already paid stays.",
+        confirmLabel: "Remove tick",
+        danger: true,
+      });
+      if (!ok) return;
+      try {
+        await unchargePlaceRent(row);
+        bumpData();
+        onDone();
+        toast("Removed " + monthTitle(dmy));
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "Could not remove");
+      }
+      return;
+    }
+    const amt = r2(+monthAmt || monthly || 0);
+    if (amt <= 0.5) return toast("Type the usual monthly ₹ first, then tick");
     try {
-      await chargePlaceRent(tenant, +chargeAmt || 0, enteredBy);
+      await chargePlaceRent(tenant, amt, enteredBy, dmy);
       bumpData();
       onDone();
-      toast("Added " + monthTitle(today) + " rent · they owe ₹" + inr(+chargeAmt || 0) + " more");
+      toast(MONTH_NAMES[month1 - 1] + " ticked · ₹" + inr(amt) + " on the due");
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not charge");
+      toast(err instanceof Error ? err.message : "Could not tick");
     }
   }
 
@@ -324,101 +353,74 @@ function RentSection({
           <div className="rent-due-k">They owe</div>
           <div className={"rent-due-v" + (due > 0.5 ? " due" : "")}>{due > 0.5 ? "₹ " + inr(due) : "Settled"}</div>
           <div className="rent-due-s">
-            {charged ? monthTitle(today) + " already on the due" : monthTitle(today) + " not added yet"}
-            {monthly > 0 ? " · monthly ₹" + inr(monthly) : ""}
+            {ticked} of 12 months in {year}
+            {monthly > 0 ? " · usual ₹" + inr(monthly) : ""}
             {pendingSum > 0.5 ? " · we still owe them ₹" + inr(pendingSum) + " commission" : ""}
           </div>
-          {!charged && (
-            <div className="rent-due-charge">
+        </div>
+
+        <div className="rent-year">
+          <div className="rent-year-bar">
+            <div className="rent-year-top">
+              <button type="button" className="btn sm" onClick={() => setYear((y) => y - 1)} aria-label="Previous year">
+                ‹
+              </button>
+              <b>{year}</b>
+              <button type="button" className="btn sm" onClick={() => setYear((y) => y + 1)} aria-label="Next year">
+                ›
+              </button>
+              {year !== yearNow && (
+                <button type="button" className="btn sm" onClick={() => setYear(yearNow)}>
+                  Now
+                </button>
+              )}
+            </div>
+            <div className="rent-year-amt">
               <label className="modal-field">
-                <span>Add {monthTitle(today)} ₹</span>
+                <span>Usual ₹</span>
                 <input
                   type="number"
                   inputMode="decimal"
-                  value={chargeAmt}
-                  onChange={(e) => setChargeAmt(e.target.value)}
+                  value={monthAmt}
+                  onChange={(e) => setMonthAmt(e.target.value)}
+                  placeholder="tick amount"
                 />
               </label>
-              <button className="btn sm" type="button" onClick={() => void doCharge()}>
-                Add this month
+              <button className="btn sm" type="button" onClick={() => void doMonthly()}>
+                Save
               </button>
             </div>
-          )}
-        </div>
-
-        <div className={"rent-act" + (pending.length ? "" : " dim")}>
-          <div className="rent-act-h">
-            <span className="rent-act-n">1</span>
-            <div>
-              <b>Commission towards rent</b>
-              <p>
-                {pending.length
-                  ? "We owe them commission. Put it on this rent instead of paying cash."
-                  : "No pending commission on a quotation right now."}
-              </p>
-            </div>
           </div>
-          {pending.length > 0 && picked && (
-            <>
-              {pending.length === 1 ? (
+          <div className="rent-mos" role="list">
+            {MONTH_NAMES.map((name, i) => {
+              const month1 = i + 1;
+              const row = chargeOfMonth(tenant, expenses, monthFirstDay(year, month1));
+              const on = !!row;
+              const now = year === yearNow && month1 === monthNow;
+              return (
                 <button
+                  key={name}
                   type="button"
-                  className="rent-qrow"
-                  onClick={() => router.push("/editor/" + picked.d.id)}
+                  role="listitem"
+                  className={"rent-mo" + (on ? " on" : "") + (now ? " now" : "")}
+                  aria-pressed={on}
+                  aria-label={name + (on ? " charged" : " not charged")}
+                  title={row ? "₹" + inr(+row.amount || 0) : undefined}
+                  onClick={() => void toggleMonth(month1)}
                 >
-                  <span>
-                    #{picked.d.displayNumber || picked.d.number}
-                    <small>
-                      {(picked.d.commLock?.party || picked.d.customerName || "—") +
-                        " · pending ₹" +
-                        inr(picked.pending)}
-                    </small>
+                  <span className="rent-mo-name">{name}</span>
+                  <span className={"rent-mo-tick" + (on ? " on" : "")} aria-hidden>
+                    {on ? "✓" : ""}
                   </span>
-                  <span className="rent-qgo">Open</span>
                 </button>
-              ) : (
-                <label className="modal-field">
-                  <span>Quotation</span>
-                  <select className="paysel" value={picked.d.id} onChange={(e) => onQuoteChange(e.target.value)}>
-                    {pending.map((p) => (
-                      <option key={p.d.id} value={p.d.id}>
-                        #{p.d.displayNumber || p.d.number} · pending ₹{inr(p.pending)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <div className="rec-grid rec-grid-due">
-                <label className="modal-field">
-                  <span>Towards rent ₹</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={against}
-                    onChange={(e) => setAgainst(e.target.value)}
-                  />
-                </label>
-                <label className="modal-field">
-                  <span>Cash to them ₹</span>
-                  <input type="number" inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} />
-                </label>
-              </div>
-              <p className="rent-of">
-                Pending ₹{inr(picked.pending)}. Rent due ₹{inr(due)}.
-                {towards > 0.5 ? " After this they owe ₹" + inr(afterComm) + "." : ""}
-              </p>
-              <div className="rowbtns">
-                <button className="btn primary" type="button" onClick={() => void doConvert()}>
-                  Put towards rent
-                </button>
-              </div>
-            </>
-          )}
+              );
+            })}
+          </div>
         </div>
 
         <div className={"rent-act" + (due > 0.5 ? "" : " dim")}>
           <div className="rent-act-h">
-            <span className="rent-act-n">2</span>
+            <span className="rent-act-n">1</span>
             <div>
               <b>They paid rent</b>
               <p>
@@ -495,38 +497,93 @@ function RentSection({
           )}
         </div>
 
-        <details className="sqltoggle rent-hist">
-          <summary>Monthly rent and old balance</summary>
-          <div className="rent-form" style={{ marginTop: 10 }}>
-            <div className="rec-grid rec-grid-due">
-              <label className="modal-field">
-                <span>Monthly rent ₹</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={monthAmt}
-                  onChange={(e) => setMonthAmt(e.target.value)}
-                  placeholder="usual charge each month"
-                />
-              </label>
-              <label className="modal-field">
-                <span>Old balance ₹</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={openAmt}
-                  onChange={(e) => setOpenAmt(e.target.value)}
-                  placeholder="what they already owe"
-                />
-              </label>
+        <div className={"rent-act" + (pending.length ? "" : " dim")}>
+          <div className="rent-act-h">
+            <span className="rent-act-n">2</span>
+            <div>
+              <b>Commission towards rent</b>
+              <p>
+                {pending.length
+                  ? "We owe them commission. Put it on this rent instead of paying cash."
+                  : "No pending commission on a quotation right now."}
+              </p>
             </div>
+          </div>
+          {pending.length > 0 && picked && (
+            <>
+              {pending.length === 1 ? (
+                <button
+                  type="button"
+                  className="rent-qrow"
+                  onClick={() => router.push("/editor/" + picked.d.id)}
+                >
+                  <span>
+                    #{picked.d.displayNumber || picked.d.number}
+                    <small>
+                      {(picked.d.commLock?.party || picked.d.customerName || "—") +
+                        " · pending ₹" +
+                        inr(picked.pending)}
+                    </small>
+                  </span>
+                  <span className="rent-qgo">Open</span>
+                </button>
+              ) : (
+                <label className="modal-field">
+                  <span>Quotation</span>
+                  <select className="paysel" value={picked.d.id} onChange={(e) => onQuoteChange(e.target.value)}>
+                    {pending.map((p) => (
+                      <option key={p.d.id} value={p.d.id}>
+                        #{p.d.displayNumber || p.d.number} · pending ₹{inr(p.pending)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <div className="rec-grid rec-grid-due">
+                <label className="modal-field">
+                  <span>Towards rent ₹</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={against}
+                    onChange={(e) => setAgainst(e.target.value)}
+                  />
+                </label>
+                <label className="modal-field">
+                  <span>Cash to them ₹</span>
+                  <input type="number" inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} />
+                </label>
+              </div>
+              <p className="rent-of">
+                Pending ₹{inr(picked.pending)}. Rent due ₹{inr(due)}.
+                {towards > 0.5 ? " After this they owe ₹" + inr(afterComm) + "." : ""}
+              </p>
+              <div className="rowbtns">
+                <button className="btn primary" type="button" onClick={() => void doConvert()}>
+                  Put towards rent
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        <details className="sqltoggle rent-hist">
+          <summary>Old balance</summary>
+          <div className="rent-form" style={{ marginTop: 10 }}>
+            <label className="modal-field">
+              <span>Old balance ₹</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={openAmt}
+                onChange={(e) => setOpenAmt(e.target.value)}
+                placeholder="what they already owe"
+              />
+            </label>
             <p className="note" style={{ margin: "8px 0 0" }}>
-              Old balance replaces the figure. It does not add on top.
+              Replaces the figure. It does not add on top.
             </p>
             <div className="rowbtns">
-              <button className="btn sm" type="button" onClick={() => void doMonthly()}>
-                Save monthly ₹
-              </button>
               <button className="btn sm" type="button" onClick={() => void doOpening()}>
                 Save old balance
               </button>

@@ -6,13 +6,16 @@ import { editCarpenterDialog, listCarpenters } from "@/lib/carpenters";
 import { allRec } from "@/lib/data";
 import { allExpenses } from "@/lib/expenses";
 import {
+  MONTH_NAMES,
   ensurePlaceRentTenants,
   findDuplicateCarpenters,
   monthCharged,
-  monthTitle,
+  monthFirstDay,
   pendingForTenant,
   placeRentDue,
   placeRentStatement,
+  yearFromDmy,
+  yearMonthsCharged,
 } from "@/lib/place-rent";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -93,7 +96,7 @@ export default function RentView() {
   return (
     <div>
       <div className="sectitle">
-        Rent <small>— two people. Tap a card to open that person, like a carpenter or customer.</small>
+        Rent <small>— two people. Tap a card to open the year and tick the months they owe.</small>
       </div>
       <div className="rent-hero">
         {slots.map((slot, i) =>
@@ -177,8 +180,9 @@ function HeroCard({
   const pendingSum = r2(pendingForTenant(tenant, quotes, expenses).reduce((s, p) => s + p.pending, 0));
   const headline = due > 0.5 ? "They owe" : pendingSum > 0.5 ? "We owe" : "Settled";
   const headAmt = due > 0.5 ? due : pendingSum > 0.5 ? pendingSum : 0;
-  const today = todayStr();
-  const charged = monthCharged(tenant, expenses, today);
+  const year = yearFromDmy(todayStr());
+  const ticked = yearMonthsCharged(tenant, expenses, year);
+  const monthly = r2(+(tenant.monthlyRent || 0) || 0);
   const dups = findDuplicateCarpenters(tenant, directory);
 
   return (
@@ -190,9 +194,18 @@ function HeroCard({
         <div className="rent-pick-phone">{tenant.phone || "—"}</div>
         <div className="rent-pick-k">{headline}</div>
         <div className={"rent-pick-v" + (due > 0.5 ? " due" : "")}>{headAmt > 0.5 ? "₹ " + inr(headAmt) : "✓"}</div>
+        <div className="rent-pick-strip" aria-hidden>
+          {MONTH_NAMES.map((name, i) => (
+            <span
+              key={name}
+              className={"rent-dot" + (monthCharged(tenant, expenses, monthFirstDay(year, i + 1)) ? " on" : "")}
+              title={name}
+            />
+          ))}
+        </div>
         <div className="rent-pick-sub">
-          {charged ? monthTitle(today) + " charged" : monthTitle(today) + " not charged"}
-          {r2(+(tenant.monthlyRent || 0) || 0) > 0 ? " · monthly ₹" + inr(tenant.monthlyRent || 0) : ""}
+          {ticked} of 12 months · {year}
+          {monthly > 0 ? " · monthly ₹" + inr(monthly) : ""}
         </div>
       </button>
       <div className="rent-pick-tools">
