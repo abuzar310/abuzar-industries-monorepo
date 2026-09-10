@@ -92,9 +92,9 @@ export default function CustomerPicker({
                 <small> · {x.tag}</small>
                 {x.phone ? <small> · {x.phone}</small> : null}
                 {(x.due || 0) > 0.5 ? (
-                  <span className="cp-due">Accept rent ₹{Math.round(x.due || 0)}</span>
+                  <span className="cp-due">rent ₹{Math.round(x.due || 0)}</span>
                 ) : (
-                  <span className="cp-tag">Accept rent</span>
+                  <span className="cp-tag">{x.tag}</span>
                 )}
               </button>
             ))}

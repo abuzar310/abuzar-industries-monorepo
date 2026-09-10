@@ -15,6 +15,7 @@ import { allRec, delRec, getRec, put } from "./data";
 import { nowIso, uid } from "./calc";
 import { addExpense, isQuoteCommissionPay } from "./expenses";
 import { quoteBill, quotePaid } from "./payments";
+import { restoreAdvanceFromApply } from "./vouchers";
 import type { Doc, Expense } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -153,6 +154,7 @@ export async function unwindReceiptPieces(pieces: Expense[]): Promise<void> {
         await put("quotations", d);
       }
     }
+    await restoreAdvanceFromApply(e);
     await delRec("expenses", e.id); // soft delete — recoverable in the database
   }
 }

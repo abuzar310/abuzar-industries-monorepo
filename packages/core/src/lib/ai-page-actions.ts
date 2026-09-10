@@ -89,7 +89,7 @@ function receiptsActions(): AiQuickAction[] {
   return [
     explain("What is Receipts?", "the money desk: receive cash/UPI from a customer (apply to oldest quotes / one quote / account only), paid-outs, and worker give/repay shortcuts"),
     how("Take money from a customer", "Receipts → Received → Customer → pick customer → amount → Cash or UPI (+ account) → choose Apply to (oldest / one quote / account) → Record. Mention Pay full / Fill due if useful."),
-    how("Accept place rent", "Receipts → Received → Customer → search Ismail Planning Work or Suresha Planning Work → Accept rent → amount → Cash or UPI → Accept rent. Same money as Rent → They paid rent. Does not sit on a customer account."),
+    how("Accept place rent", "Receipts → Received → Customer → search Ismail or Suresha (they are also customers) → same Apply to as anyone else (oldest / one quote / account) or Place rent → amount → Record. Place rent is old balance + ticked months, same as Rent → They paid rent."),
     how("Apply to one quotation only", "Receipts → pick customer → Apply to that quotation number (not oldest). Or open the quotation → Payment block."),
     how("Paid out (food/truck/salary)", "Receipts → Paid out → pick category (food, truck, carpenter, salary, etc.) → amount → mode → Record."),
     how("Worker advance from Receipts", "Receipts worker panel: Give advance / Received back — without opening Attendance. Say when to use Attendance Pay instead."),

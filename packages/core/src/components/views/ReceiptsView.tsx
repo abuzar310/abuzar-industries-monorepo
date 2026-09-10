@@ -16,8 +16,9 @@ import {
 } from "@/lib/expenses";
 import { liveIncomeLines } from "@/lib/book-catalog";
 import { listWorkers, payWorker, repayWorker, type Worker } from "@/lib/attendance";
+import { carpenterKey, sameCarpenterSeed } from "@/lib/carpenter-financials";
 import { listCarpenters } from "@/lib/carpenters";
-import { listLinkedRentTenants, placeRentDue, receivePlaceRent } from "@/lib/place-rent";
+import { listLinkedRentTenants, phonesMatch, placeRentDue, receivePlaceRent } from "@/lib/place-rent";
 import { partyLedger, quoteBill, quotePaid } from "@/lib/payments";
 import { applyCustomerReceipt, unwindReceiptPieces } from "@/lib/receipts";
 import {
@@ -134,8 +135,8 @@ export default function ReceiptsView() {
   const [editId, setEditId] = useState<string | null>(null);
   /** editing a whole receipt (possibly split across quotes): its pieces get unwound + re-applied on save */
   const [editRcpt, setEditRcpt] = useState<{ id: string; pieces: Expense[] } | null>(null);
-  /** where a received amount goes: oldest-first · one specific quote · account only */
-  const [applyTo, setApplyTo] = useState<"quotes" | "quote" | "account">("quotes");
+  /** where a received amount goes: oldest-first · one specific quote · account only · place rent */
+  const [applyTo, setApplyTo] = useState<"quotes" | "quote" | "account" | "rent">("quotes");
   const [quoteId, setQuoteId] = useState("");
   // worker salary-account quick panel
   const [workersRaw, setWorkers] = useState<Worker[]>([]);
@@ -275,21 +276,44 @@ export default function ReceiptsView() {
   const outstanding = party ? party.balance : picked?.opening || 0;
   const custName = (id?: string) => customers.find((c) => c.id === id)?.name || "—";
 
+  function partyHitsTenant(c: Customer, t: Carpenter) {
+    if (phonesMatch(c.phone, t.phone) || phonesMatch(c.sitePhone || "", t.phone)) return true;
+    const ck = carpenterKey(c.name);
+    const tk = carpenterKey(t.name);
+    if (ck && tk && ck === tk) return true;
+    const site = carpenterKey(c.site || "");
+    if (site && site === tk) return true;
+    const shop = (s: string) => s.includes("planning") || s.includes("plyning");
+    return shop(ck) && shop(tk) && sameCarpenterSeed(c.name, t.name);
+  }
+  function tenantOf(c: Customer) {
+    return rentTenants.find((t) => partyHitsTenant(c, t)) || null;
+  }
+  function customerOf(t: Carpenter) {
+    const hits = customers.filter((c) => partyHitsTenant(c, t));
+    return (
+      hits.find((c) => phonesMatch(c.phone, t.phone) || phonesMatch(c.sitePhone || "", t.phone)) ||
+      hits.find((c) => carpenterKey(c.name) === carpenterKey(t.name) || carpenterKey(c.site || "") === carpenterKey(t.name)) ||
+      hits[0] ||
+      null
+    );
+  }
   function pickCustomer(c: Customer) {
     setPicked(c);
-    setRentTenant(null);
+    setRentTenant(tenantOf(c));
     setName(c.name);
     setQuoteId("");
-    if (applyTo === "quote") setApplyTo("quotes");
+    if (applyTo === "quote" || applyTo === "rent") setApplyTo("quotes");
   }
   function pickRent(id: string) {
     const t = rentTenants.find((c) => c.id === id);
     if (!t) return;
+    const cust = customerOf(t);
     setRentTenant(t);
-    setPicked(null);
-    setName(t.name);
+    setPicked(cust);
+    setName(cust?.name || t.name);
     setQuoteId("");
-    setAmt("");
+    setApplyTo(cust ? "quotes" : "rent");
   }
   function onType(v: string) {
     setName(v);
@@ -453,8 +477,8 @@ export default function ReceiptsView() {
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return toast("Enter an amount");
 
-    // ---- Place rent from Ismail / Suresha (carpenter cards, not a customer) ----
-    if (kind === "received" && rentTenant && !editRcpt) {
+    // ---- Place rent (same Ismail / Suresha who are also customers) ----
+    if (kind === "received" && applyTo === "rent" && rentTenant && !editRcpt) {
       const due = placeRentDue(rentTenant, expenses);
       if (a > due + 0.05) return toast("They only owe ₹" + inr(due));
       const isUpiMode = mode === "upi" || mode === "uowner";
@@ -1010,7 +1034,7 @@ export default function ReceiptsView() {
 
   const editing = !!editId || !!editRcpt;
   const showReceivedFields = kind === "received";
-  const recvFromCustomer = kind === "received" && recvVia === "customer" && !rentTenant;
+  const recvFromCustomer = kind === "received" && recvVia === "customer" && !!picked;
   const recvRent = kind === "received" && recvVia === "customer" && !!rentTenant;
   const rentDue = rentTenant ? placeRentDue(rentTenant, expenses) : 0;
   const rentExtras = rentTenants.map((c) => ({
@@ -1093,7 +1117,7 @@ export default function ReceiptsView() {
                   onType={onType}
                   onPick={pickCustomer}
                   onPickExtra={(x) => pickRent(x.id)}
-                  placeholder="Search a customer, or Ismail / Suresha for rent"
+                  placeholder="Search a customer — Ismail / Suresha included"
                 />
               </label>
             ) : (
@@ -1274,7 +1298,7 @@ export default function ReceiptsView() {
         )}
         {showReceivedFields && (
           <label className="modal-field" style={{ marginTop: 12, width: "100%" }}>
-            <span>Note (optional){rentTenant ? "" : <small style={{ color: "var(--ink-faint)" }}> — shows on the customer&apos;s statement PDF</small>}</span>
+            <span>Note (optional){applyTo === "rent" ? "" : <small style={{ color: "var(--ink-faint)" }}> — shows on the customer&apos;s statement PDF</small>}</span>
             <input
               type="text"
               placeholder={
@@ -1479,13 +1503,15 @@ export default function ReceiptsView() {
           </div>
         )}
 
-        {recvFromCustomer && (
+        {(recvFromCustomer || recvRent) && (
           <div className="modal-field" style={{ marginTop: 12, width: "100%" }}>
             <span>Use this money for</span>
             <div className="db-seg sm" style={{ marginTop: 4, flexWrap: "wrap" }}>
               <button
                 className={"seg-btn" + (applyTo === "quotes" ? " on" : "")}
                 type="button"
+                disabled={!picked}
+                title={!picked ? "No customer account for this name" : undefined}
                 onClick={() => { setApplyTo("quotes"); setQuoteId(""); }}
               >
                 Oldest first
@@ -1502,10 +1528,21 @@ export default function ReceiptsView() {
               <button
                 className={"seg-btn" + (applyTo === "account" ? " on" : "")}
                 type="button"
+                disabled={!picked}
+                title={!picked ? "No customer account for this name" : undefined}
                 onClick={() => { setApplyTo("account"); setQuoteId(""); }}
               >
                 Account only
               </button>
+              {rentTenant && (
+                <button
+                  className={"seg-btn" + (applyTo === "rent" ? " on" : "")}
+                  type="button"
+                  onClick={() => { setApplyTo("rent"); setQuoteId(""); }}
+                >
+                  Place rent
+                </button>
+              )}
             </div>
             {applyTo === "quote" && (
               <div style={{ marginTop: 10 }}>
@@ -1537,7 +1574,9 @@ export default function ReceiptsView() {
                 ? "Clears open quotations oldest-first; anything beyond stays on the account."
                 : applyTo === "quote"
                   ? "Applies only to the quotation you pick — enter the amount manually (or Fill due)."
-                  : "Whole amount pays the account balance only — not linked to any quotation."}
+                  : applyTo === "rent"
+                    ? "Place rent — old balance + months you ticked. Same as Rent → They paid rent."
+                    : "Whole amount pays the account balance only — not linked to any quotation."}
             </small>
           </div>
         )}
@@ -1603,7 +1642,7 @@ export default function ReceiptsView() {
                   : "Record paid out — " + (liveSpendCategories({ hidden: true }).find((c) => c.id === paidCat)?.label || "Other")
               : recvVia === "name"
                 ? "Record received from " + (recvName.trim() || "name")
-                : rentTenant
+                : applyTo === "rent" && rentTenant
                   ? "Accept rent — " + rentTenant.name
                   : "Record receipt"}
         </button>

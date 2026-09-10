@@ -972,6 +972,8 @@ export async function addPayTransport(fields: {
 export async function deleteAccountEntry(id: string): Promise<void> {
   const e = await getRec<Expense>("expenses", id);
   if (!e) return;
+  const { restoreAdvanceFromApply } = await import("./vouchers");
+  await restoreAdvanceFromApply(e);
   if (e.sourceId) {
     const q = await getRec<Doc>("quotations", e.sourceId);
     if (q) {

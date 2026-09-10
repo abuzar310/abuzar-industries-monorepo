@@ -4,9 +4,9 @@
 import { useEffect, useState } from "react";
 import { inr, todayStr } from "@/lib/calc";
 import { addExpense } from "@/lib/expenses";
-import { delRec } from "@/lib/data";
+import { delRec, getRec } from "@/lib/data";
 import { statementsForQuote, type PartyStatement } from "@/lib/payments";
-import { advanceBalance, applyAdvancesToInvoice, CASH_DAY_LIMIT, cashTakenFromCustomerOn, getBankAccounts } from "@/lib/vouchers";
+import { advanceBalance, applyAdvancesToInvoice, CASH_DAY_LIMIT, cashTakenFromCustomerOn, getBankAccounts, restoreAdvanceFromApply } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import { bumpData, toast } from "@/store/app-store";
 import { showReviewQr } from "@/store/review-qr-store";
@@ -121,7 +121,11 @@ export default function InvoicePayBlock({ doc, grand, expenses, by, setAggregate
   }
 
   async function delLine(l: PartyStatement) {
-    if (!l.synthetic) await delRec("expenses", l.id); // soft delete
+    if (!l.synthetic) {
+      const e = await getRec<Expense>("expenses", l.id);
+      if (e) await restoreAdvanceFromApply(e);
+      await delRec("expenses", l.id); // soft delete
+    }
     setAggregates(
       Math.max(0, r2((doc.payCash || 0) - (l.mode === "cash" ? l.amount : 0))),
       Math.max(0, r2((doc.payUpi || 0) - (l.mode === "upi" ? l.amount : 0))),
