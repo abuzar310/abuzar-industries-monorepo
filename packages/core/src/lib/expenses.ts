@@ -177,6 +177,7 @@ export async function addExpense(fields: {
   carpenter?: string;
   carpenterId?: string;
   placeRentKind?: "charge" | "opening" | "received" | "setoff";
+  placeRentMonth?: string;
   refQuoteId?: string;
   quoteNo?: string;
   account?: string;
@@ -214,6 +215,7 @@ export async function addExpense(fields: {
     carpenter: (fields.carpenter || "").trim() || undefined,
     carpenterId: (fields.carpenterId || "").trim() || undefined,
     placeRentKind: fields.placeRentKind || undefined,
+    placeRentMonth: (fields.placeRentMonth || "").trim() || undefined,
     refQuoteId: (fields.refQuoteId || "").trim() || undefined,
     quoteNo: (fields.quoteNo || "").trim() || undefined,
     account: (fields.account || "").trim(),

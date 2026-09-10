@@ -363,10 +363,10 @@ export function resolveAiPageActions(pathname: string, doc: Doc | null): AiPageB
           explain("What is Rent?", "Cut Size place rent for two people (Ismail and Suresha). Two cards on top. Tap a card to open that person, the same way you open a carpenter or a customer. History for both sits under the cards."),
           how("Set monthly rent", "Rent → tap the person → Usual monthly ₹ on the year list → Save."),
           how("Set old balance", "Rent → tap the person → Old balance → Save old balance. This replaces what they already owe."),
-          how("Tick a month", "Rent → tap the person → 12 month names. Tick the box after the month you want on the due. Any day is fine — it is not tied to today's date. Does not put cash in Daybook."),
-          how("Untick a month", "Rent → tap the person → tick a month that already has a mark → Remove tick."),
-          how("Record rent they paid", "Rent → tap the person → 1 They paid rent. Full, Part, or type an amount (₹5,000 of what they owe). Cash goes to Daybook and Receipts."),
-          how("Put commission towards rent", "Rent → tap the person → 2 Commission towards rent. On a locked quotation for Ismail or Suresha the same card appears under Commission lock. Towards rent is not cash; leftover cash commission goes to Daybook."),
+          how("Tick a month", "Rent → tap the person → tap a month → Accept. Cash taken or Commission into rent, full 15k or a part. When the month is full it shows Paid. They owe this month (no money yet) still puts the usual ₹ on the due."),
+          how("Untick a month", "Rent → tap the person → tap a due month with nothing in yet → Remove tick. A Paid month stays locked."),
+          how("Record rent they paid", "Rent → tap the person → tap the month, or 1 They paid rent for money not tied to one month. Cash goes to Daybook and Receipts."),
+          how("Put commission towards rent", "Rent → tap the person → tap the month → Commission into rent, or 2 Commission towards rent and pick which month. Towards rent is not cash."),
         ],
       };
     }

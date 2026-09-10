@@ -407,6 +407,8 @@ export interface Expense {
   carpenterId?: string;
   /** Place rent passbook: charge (this month) / opening (old debt) / cash received / commission set-off. */
   placeRentKind?: "charge" | "opening" | "received" | "setoff";
+  /** mm-yy of the calendar month this cash/set-off is for. Charge rows use date instead. */
+  placeRentMonth?: string;
   /** Quotation linked for logging only (not cascade-deleted with the quote — unlike sourceId). */
   refQuoteId?: string;
   /** Snapshot of quotation number at save time (survives quote delete). */

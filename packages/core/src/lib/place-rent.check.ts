@@ -7,9 +7,12 @@ import {
   matchPlaceRentTenant,
   MONTH_NAMES,
   chargeOfMonth,
+  monthAlloc,
   monthCharged,
   monthFirstDay,
   monthKey,
+  monthRemain,
+  monthRentStatus,
   nameHitsSeed,
   yearFromDmy,
   yearMonthsCharged,
@@ -154,5 +157,19 @@ ok(rentOpeningOf(afterSave, leftoverPlusNew) === 182000, "saved 182000 wins even
 ok(placeRentDue(afterSave, leftoverPlusNew) === 182000, "due does not add leftover old-debt on top of the saved figure");
 ok(placeRentStatement(afterSave, leftoverPlusNew).filter((r) => r.kind === "opening").length === 1, "history shows one old-balance line, not every leftover row");
 ok(placeRentStatement(afterSave, leftoverPlusNew)[0].signed === 182000, "history old-balance line is the saved figure");
+
+const aug = "01-08-26";
+const tagged = [
+  exp({ id: "c2", amount: 15000, placeRentKind: "charge", carpenterId: "CARP-1", date: aug }),
+  exp({ id: "r2", amount: 8000, placeRentKind: "received", carpenterId: "CARP-1", placeRentMonth: "08-26" }),
+  exp({ id: "s2", amount: 7000, placeRentKind: "setoff", carpenterId: "CARP-1", carpenter: "Ismail", placeRentMonth: "08-26" }),
+];
+ok(monthAlloc(ismail, tagged, aug) === 15000, "tagged cash + commission fill the month");
+ok(monthRemain(ismail, tagged, aug) === 0, "month remain is 0 when 15k is in");
+ok(monthRentStatus(ismail, tagged, aug) === "paid", "full 15k shows paid");
+ok(monthRentStatus(ismail, tagged.slice(0, 2), aug) === "part", "8k of 15k is part");
+ok(monthRentStatus(ismail, [tagged[0]], aug) === "due", "charge only is due");
+ok(monthRentStatus(ismail, [], aug) === "empty", "no charge is empty");
+ok(monthAlloc(ismail, [exp({ id: "r3", amount: 3000, placeRentKind: "received", carpenterId: "CARP-1" })], aug) === 0, "untagged cash does not fill a month");
 
 console.log("place-rent.check: " + n + " ok");

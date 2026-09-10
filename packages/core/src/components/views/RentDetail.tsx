@@ -12,7 +12,10 @@ import {
   chargePlaceRent,
   ensurePlaceRentTenants,
   findDuplicateCarpenters,
+  monthAlloc,
   monthFirstDay,
+  monthRemain,
+  monthRentStatus,
   monthTitle,
   pendingForTenant,
   placeRentDue,
@@ -22,10 +25,11 @@ import {
   setMonthlyRent,
   setRentOpening,
   unchargePlaceRent,
+  unpaidChargedMonths,
   yearFromDmy,
   yearMonthsCharged,
 } from "@/lib/place-rent";
-import { confirmDialog } from "@/store/dialog-store";
+import { formDialog, type DialogField } from "@/store/dialog-store";
 import { dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -171,6 +175,7 @@ function RentSection({
   const [quoteId, setQuoteId] = useState("");
   const [against, setAgainst] = useState("");
   const [cash, setCash] = useState("");
+  const [setoffMonth, setSetoffMonth] = useState("");
   const [upiAccts, setUpiAccts] = useState<string[]>([]);
 
   useEffect(() => {
@@ -189,6 +194,7 @@ function RentSection({
     const against0 = first ? r2(Math.min(first.pending, due)) : 0;
     setAgainst(against0 ? String(against0) : "0");
     setCash("0");
+    setSetoffMonth("");
     // Fill figures from this person. Do not reset while they type a payment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant.id, monthly, opening]);
@@ -215,36 +221,120 @@ function RentSection({
     setRecvAmt(a ? String(a) : "");
   }
 
-  async function toggleMonth(month1: number) {
+  async function openMonth(month1: number) {
     const dmy = monthFirstDay(year, month1);
+    const name = MONTH_NAMES[month1 - 1] + " " + year;
+    const status = monthRentStatus(tenant, expenses, dmy);
+    if (status === "paid") return toast(name + " rent is paid");
     const row = chargeOfMonth(tenant, expenses, dmy);
-    if (row) {
-      const ok = await confirmDialog({
-        title: "Remove " + MONTH_NAMES[month1 - 1] + " " + year + "?",
-        message: "Takes ₹" + inr(+row.amount || 0) + " off what they owe. Cash they already paid stays.",
-        confirmLabel: "Remove tick",
-        danger: true,
+    const usual = r2(+monthAmt || monthly || 0);
+    const remain = row ? monthRemain(tenant, expenses, dmy) : usual;
+    if (!row && usual <= 0.5) return toast("Type the usual monthly ₹ first");
+    const howOpts = [
+      { value: "cash", label: "Cash taken" },
+      ...(pending.length ? [{ value: "commission", label: "Commission into rent" }] : []),
+      ...(!row ? [{ value: "due", label: "They owe this month (no money yet)" }] : []),
+    ];
+    const fields: DialogField[] = [
+      { name: "how", label: "How", type: "select", value: "cash", options: howOpts },
+      { name: "amount", label: "Amount ₹ — full or part", type: "number", inputMode: "decimal", value: remain ? String(remain) : "" },
+    ];
+    if (pending.length > 1) {
+      fields.push({
+        name: "quote",
+        label: "Quotation",
+        type: "select",
+        value: picked?.d.id || pending[0].d.id,
+        options: pending.map((p) => ({
+          value: p.d.id,
+          label: "#" + (p.d.displayNumber || p.d.number) + " · ₹" + inr(p.pending),
+        })),
       });
-      if (!ok) return;
+    }
+    fields.push({
+      name: "pay",
+      label: "Cash how",
+      type: "select",
+      value: "cash",
+      options: [
+        { value: "cash", label: "Cash (Daybook)" },
+        { value: "owner", label: "Cash → Owner" },
+      ],
+    });
+    const res = await formDialog({
+      title: name,
+      message: row
+        ? "Month ₹" + inr(+row.amount || 0)
+          + (status === "part" ? " · already in ₹" + inr(monthAlloc(tenant, expenses, dmy)) + " · left ₹" + inr(remain) : " · nothing in yet")
+          + ". Accept cash or commission. Part is fine."
+        : "Usual ₹" + inr(usual) + " goes on the due. Then this amount is cash or commission against " + name + ".",
+      fields,
+      submitLabel: "Accept",
+      deleteLabel: row && status === "due" ? "Remove tick" : undefined,
+    });
+    if (!res) return;
+    if (res.__action === "delete") {
+      if (!row) return;
       try {
         await unchargePlaceRent(row);
         bumpData();
         onDone();
-        toast("Removed " + monthTitle(dmy));
+        toast("Removed " + name);
       } catch (err) {
         toast(err instanceof Error ? err.message : "Could not remove");
       }
       return;
     }
-    const amt = r2(+monthAmt || monthly || 0);
-    if (amt <= 0.5) return toast("Type the usual monthly ₹ first, then tick");
+    const how = res.how || "cash";
     try {
-      await chargePlaceRent(tenant, amt, enteredBy, dmy);
+      let charged = row;
+      if (!charged) {
+        charged = await chargePlaceRent(tenant, usual, enteredBy, dmy);
+      }
+      if (how === "due") {
+        bumpData();
+        onDone();
+        toast(name + " on the due · ₹" + inr(usual));
+        return;
+      }
+      const live = await allExpenses();
+      const left = monthRemain(tenant, live, dmy);
+      const pay = r2(Math.min(+res.amount || 0, left));
+      if (pay <= 0.5) {
+        if (!row && charged) {
+          bumpData();
+          onDone();
+          toast(name + " on the due · ₹" + inr(usual));
+          return;
+        }
+        return toast("Enter an amount");
+      }
+      if (how === "commission") {
+        const q = pending.find((p) => p.d.id === (res.quote || picked?.d.id)) || pending[0];
+        if (!q) {
+          if (!row) await unchargePlaceRent(charged);
+          return toast("No pending commission");
+        }
+        await applyAgainstRent({
+          tenant,
+          quote: q.d,
+          against: Math.min(pay, q.pending),
+          cash: 0,
+          enteredBy,
+          expenses: live,
+          placeRentMonth: dmy,
+        });
+        bumpData();
+        onDone();
+        toast("₹" + inr(Math.min(pay, q.pending)) + " commission → " + name);
+        return;
+      }
+      await receivePlaceRent(tenant, pay, enteredBy, "cash", "", res.pay === "owner", "", undefined, dmy);
       bumpData();
       onDone();
-      toast(MONTH_NAMES[month1 - 1] + " ticked · ₹" + inr(amt) + " on the due");
+      toast("₹" + inr(pay) + " cash → " + name);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not tick");
+      toast(err instanceof Error ? err.message : "Could not save");
     }
   }
 
@@ -292,6 +382,7 @@ function RentSection({
         cash: +cash || 0,
         enteredBy,
         expenses,
+        placeRentMonth: setoffMonth || undefined,
       });
       bumpData();
       onDone();
@@ -394,23 +485,26 @@ function RentSection({
           <div className="rent-mos" role="list">
             {MONTH_NAMES.map((name, i) => {
               const month1 = i + 1;
-              const row = chargeOfMonth(tenant, expenses, monthFirstDay(year, month1));
-              const on = !!row;
+              const dmy = monthFirstDay(year, month1);
+              const row = chargeOfMonth(tenant, expenses, dmy);
+              const st = monthRentStatus(tenant, expenses, dmy);
+              const on = st !== "empty";
               const now = year === yearNow && month1 === monthNow;
+              const mark = st === "paid" ? "Paid" : st === "part" ? "Part" : st === "due" ? "✓" : "";
               return (
                 <button
                   key={name}
                   type="button"
                   role="listitem"
-                  className={"rent-mo" + (on ? " on" : "") + (now ? " now" : "")}
+                  className={"rent-mo" + (on ? " on" : "") + (st === "paid" ? " paid" : "") + (now ? " now" : "")}
                   aria-pressed={on}
-                  aria-label={name + (on ? " charged" : " not charged")}
+                  aria-label={name + (st === "paid" ? " rent paid" : st === "part" ? " part paid" : on ? " due" : " empty")}
                   title={row ? "₹" + inr(+row.amount || 0) : undefined}
-                  onClick={() => void toggleMonth(month1)}
+                  onClick={() => void openMonth(month1)}
                 >
                   <span className="rent-mo-name">{name}</span>
-                  <span className={"rent-mo-tick" + (on ? " on" : "")} aria-hidden>
-                    {on ? "✓" : ""}
+                  <span className={"rent-mo-tick" + (on ? " on" : "") + (st === "paid" ? " paid" : "")} aria-hidden>
+                    {mark}
                   </span>
                 </button>
               );
@@ -534,6 +628,19 @@ function RentSection({
                     {pending.map((p) => (
                       <option key={p.d.id} value={p.d.id}>
                         #{p.d.displayNumber || p.d.number} · pending ₹{inr(p.pending)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {unpaidChargedMonths(tenant, expenses).length > 0 && (
+                <label className="modal-field">
+                  <span>Which month</span>
+                  <select className="paysel" value={setoffMonth} onChange={(e) => setSetoffMonth(e.target.value)}>
+                    <option value="">Old balance / any due</option>
+                    {unpaidChargedMonths(tenant, expenses).map((m) => (
+                      <option key={m.key} value={m.key}>
+                        {m.label} · left ₹{inr(m.remain)}
                       </option>
                     ))}
                   </select>

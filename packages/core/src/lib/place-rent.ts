@@ -88,6 +88,61 @@ export function monthKey(dmy: string): string {
   return mm && yy ? mm + "-" + yy : "";
 }
 
+/** Accepts 01-08-26 or 08-26. */
+export function asMonthKey(v?: string): string {
+  const s = (v || "").trim();
+  if (!s) return "";
+  return s.split("-").length === 3 ? monthKey(s) : s;
+}
+
+export function monthTitleFromKey(k: string): string {
+  const [mm = "", yy = ""] = (k || "").split("-");
+  return mm && yy ? monthTitle("01-" + mm + "-" + yy) : "";
+}
+
+export function monthAlloc(c: Carpenter, expenses: Expense[], dmy: string): number {
+  const k = monthKey(dmy);
+  if (!k) return 0;
+  let s = 0;
+  for (const e of expenses) {
+    if (!belongsToTenant(e, c)) continue;
+    if (e.placeRentKind !== "received" && e.placeRentKind !== "setoff") continue;
+    if (asMonthKey(e.placeRentMonth) !== k) continue;
+    s += r2(+e.amount || 0);
+  }
+  return r2(s);
+}
+
+export function monthRemain(c: Carpenter, expenses: Expense[], dmy: string): number {
+  const row = chargeOfMonth(c, expenses, dmy);
+  if (!row) return 0;
+  return r2(Math.max(0, r2(+row.amount || 0) - monthAlloc(c, expenses, dmy)));
+}
+
+export type MonthRentStatus = "empty" | "due" | "part" | "paid";
+
+export function monthRentStatus(c: Carpenter, expenses: Expense[], dmy: string): MonthRentStatus {
+  if (!chargeOfMonth(c, expenses, dmy)) return "empty";
+  if (monthRemain(c, expenses, dmy) <= 0.5) return "paid";
+  if (monthAlloc(c, expenses, dmy) > 0.5) return "part";
+  return "due";
+}
+
+export function unpaidChargedMonths(c: Carpenter, expenses: Expense[]): { key: string; label: string; remain: number }[] {
+  const out: { key: string; label: string; remain: number }[] = [];
+  const seen = new Set<string>();
+  for (const e of expenses) {
+    if (e.placeRentKind !== "charge" || !belongsToTenant(e, c)) continue;
+    const k = monthKey(e.date);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    const remain = monthRemain(c, expenses, e.date);
+    if (remain <= 0.5) continue;
+    out.push({ key: k, label: monthTitle(e.date), remain });
+  }
+  return out.sort((a, b) => a.key.slice(-2).localeCompare(b.key.slice(-2)) || a.key.localeCompare(b.key));
+}
+
 export function monthTitle(dmy: string): string {
   const [, mm = "", yy = ""] = (dmy || "").split("-");
   const mi = Math.max(1, Math.min(12, +mm || 0)) - 1;
@@ -192,7 +247,12 @@ export function placeRentStatement(c: Carpenter, expenses: Expense[]): PlaceRent
     const kind = e.placeRentKind!;
     const label =
       kind === "charge" ? "Place rent charged" : kind === "received" ? "Received" : "Against rent";
-    const sub = [e.note, e.quoteNo ? "Q#" + e.quoteNo : "", e.mode === "upi" ? "UPI" : kind === "received" ? "Cash" : ""]
+    const sub = [
+      e.placeRentMonth ? monthTitleFromKey(asMonthKey(e.placeRentMonth)) : "",
+      e.note,
+      e.quoteNo ? "Q#" + e.quoteNo : "",
+      e.mode === "upi" ? "UPI" : kind === "received" ? "Cash" : "",
+    ]
       .filter(Boolean)
       .join(" · ");
     out.push({ id: e.id, date: e.date, at: e.createdAt || "", kind, label, sub, signed, bal, quoteId: e.refQuoteId });
@@ -484,9 +544,11 @@ export async function receivePlaceRent(
   toOwner = false,
   note = "",
   date = todayStr(),
+  placeRentMonth = "",
 ): Promise<Expense> {
   const a = r2(Math.max(0, amount));
   if (a <= 0.5) throw new Error("Enter the amount received");
+  const mk = asMonthKey(placeRentMonth);
   return addExpense({
     type: "sale",
     amount: a,
@@ -498,7 +560,8 @@ export async function receivePlaceRent(
     carpenter: c.name,
     carpenterId: c.id,
     placeRentKind: "received",
-    note,
+    placeRentMonth: mk || undefined,
+    note: note || (mk ? monthTitleFromKey(mk) : ""),
     date,
     enteredBy,
   });
@@ -512,6 +575,7 @@ export async function applyAgainstRent(opts: {
   cash: number;
   enteredBy: string;
   expenses: Expense[];
+  placeRentMonth?: string;
 }): Promise<void> {
   const against = r2(Math.max(0, opts.against));
   const cash = r2(Math.max(0, opts.cash));
@@ -522,6 +586,7 @@ export async function applyAgainstRent(opts: {
   if (against > due + 0.05) throw new Error("Against rent is more than place rent due ₹" + due);
   const quoteNo = (opts.quote.displayNumber || opts.quote.number || "").trim();
   const party = (opts.quote.commLock?.party || opts.quote.customerName || "").trim();
+  const mk = asMonthKey(opts.placeRentMonth);
   if (against > 0.5) {
     await addExpense({
       type: "custom",
@@ -532,10 +597,11 @@ export async function applyAgainstRent(opts: {
       carpenter: opts.tenant.name,
       carpenterId: opts.tenant.id,
       placeRentKind: "setoff",
+      placeRentMonth: mk || undefined,
       party,
       refQuoteId: opts.quote.id,
       quoteNo,
-      note: "Against place rent",
+      note: mk ? "Against " + monthTitleFromKey(mk) : "Against place rent",
       enteredBy: opts.enteredBy,
     });
   }
