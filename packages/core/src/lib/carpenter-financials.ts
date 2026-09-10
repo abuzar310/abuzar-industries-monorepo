@@ -179,7 +179,7 @@ export function shopSelfCarpenter(c: Customer, carps: Carpenter[]): Carpenter | 
 }
 
 export function shopSelfCustomer(t: Carpenter, customers: Customer[]): Customer | undefined {
-  return customers.find((c) => shopSelfCarpenter(c, [t])?.id === t.id);
+  return customers.find((c) => !!shopSelfCarpenter(c, [t]));
 }
 
 function isPersonalBuy(a: { key: string; name?: string; phone: string; phoneAlt: string }, d: Doc, cust?: Customer): boolean {
@@ -357,8 +357,8 @@ export function rollupCarpenters(
     if (key && map.has(key)) return map.get(key);
     for (const a of map.values()) {
       if (phone && a.phone && phonesEq(phone, a.phone)) return a;
-      if (a.record && sameCarpenterSeed(a.record.name, name)) return a;
-      if (!a.record && sameCarpenterSeed(a.name, name)) return a;
+      const other = a.record?.name || a.name;
+      if (isShopName(name) && isShopName(other) && sameCarpenterSeed(other, name)) return a;
     }
     return undefined;
   };
@@ -384,7 +384,7 @@ export function rollupCarpenters(
   const seedKeep = new Map<string, Carpenter>();
   for (const c of directory) {
     const seed = carpenterSeed(c.name);
-    if (seed === "suresha" || seed === "ismail") {
+    if ((seed === "suresha" || seed === "ismail") && isShopName(c.name)) {
       const prev = seedKeep.get(seed);
       if (!prev) {
         seedKeep.set(seed, c);

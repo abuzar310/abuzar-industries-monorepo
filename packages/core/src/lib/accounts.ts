@@ -750,9 +750,11 @@ export type TransportPaySource = {
   account: string;
   balance: number;
   transport: boolean;
-  /** Receipts Paid out → Transport: till cash, not a UPI pocket. */
+  /** Manager Daybook cash — till goes down. */
   cash?: boolean;
-  /** Receipts: owner's own UPI — Books yes, Daybook no, no pocket drop. */
+  /** Owner cash in hand — Daybook stays, Books still gets Transport. */
+  ownerCash?: boolean;
+  /** Owner's own UPI — Books yes, Daybook no, no pocket drop. */
   ownerUpi?: boolean;
 };
 
@@ -761,10 +763,17 @@ export function isCsKumarPocketName(name?: string): boolean {
 }
 
 export const CASH_TRANSPORT_SRC: TransportPaySource = {
-  account: "Cash",
+  account: "Cash by manager",
   balance: 0,
   transport: false,
   cash: true,
+};
+
+export const OWNER_CASH_TRANSPORT_SRC: TransportPaySource = {
+  account: "Cash by owner",
+  balance: 0,
+  transport: false,
+  ownerCash: true,
 };
 
 export const OWNER_UPI_TRANSPORT_SRC: TransportPaySource = {
@@ -774,8 +783,13 @@ export const OWNER_UPI_TRANSPORT_SRC: TransportPaySource = {
   ownerUpi: true,
 };
 
+export function isHandTransportSrc(s: TransportPaySource): boolean {
+  return !!(s.cash || s.ownerCash || s.ownerUpi);
+}
+
 export function paySrcKey(s: TransportPaySource): string {
   if (s.cash) return "cash";
+  if (s.ownerCash) return "owner-cash";
   if (s.ownerUpi) return "owner-upi";
   return (s.holderId || "") + ":" + nameKey(s.account);
 }
@@ -829,6 +843,11 @@ export function listTransportPaySources(
   return srcs;
 }
 
+/** Accounts Pay chips: the three hand pots, then UPI pockets. */
+export function accountsTransportPaySources(pockets: TransportPaySource[]): TransportPaySource[] {
+  return [CASH_TRANSPORT_SRC, OWNER_CASH_TRANSPORT_SRC, OWNER_UPI_TRANSPORT_SRC, ...pockets];
+}
+
 export function pickTransportPaySource(srcs: TransportPaySource[], amount: number): TransportPaySource | undefined {
   const cash = srcs.find((s) => s.cash);
   const cs = srcs.find((s) => isCsKumarPocketName(s.account));
@@ -836,27 +855,38 @@ export function pickTransportPaySource(srcs: TransportPaySource[], amount: numbe
   if (cash) return cash;
   return (
     srcs.find((s) => s.transport && s.balance + 0.5 >= amount) ||
-    srcs.find((s) => !s.cash && !s.ownerUpi && s.balance + 0.5 >= amount) ||
+    srcs.find((s) => !isHandTransportSrc(s) && s.balance + 0.5 >= amount) ||
     srcs.find((s) => s.transport) ||
     srcs.find((s) => s.cash) ||
     srcs[0]
   );
 }
 
-/** Receipts Transport defaults: Cash, UPI by owner, CS Kumar. Other pockets via + from Accounts. */
+/** Receipts / Accounts: cash by manager, cash by owner, UPI by owner, then CS Kumar. */
 export function receiptsTransportPaySources(srcs: TransportPaySource[]): TransportPaySource[] {
-  return [CASH_TRANSPORT_SRC, OWNER_UPI_TRANSPORT_SRC, ...srcs.filter((s) => isCsKumarPocketName(s.account))];
+  return [
+    CASH_TRANSPORT_SRC,
+    OWNER_CASH_TRANSPORT_SRC,
+    OWNER_UPI_TRANSPORT_SRC,
+    ...srcs.filter((s) => isCsKumarPocketName(s.account)),
+  ];
 }
 
 /** Tabrez / Mubeen / leftover UPI — hidden until added from Accounts. */
 export function extraReceiptsTransportSources(srcs: TransportPaySource[]): TransportPaySource[] {
-  return srcs.filter((s) => !s.cash && !s.ownerUpi && !isCsKumarPocketName(s.account));
+  return srcs.filter((s) => !isHandTransportSrc(s) && !isCsKumarPocketName(s.account));
 }
 
 /** Pay a locked due from Daybook cash — not a UPI pocket. */
 export function applyTransportDueCash(e: Expense): Expense | null {
   if (!isPendingTransport(e)) return null;
-  return { ...e, mode: "cash", account: "", holderId: undefined, pocketSpend: undefined };
+  return { ...e, mode: "cash", toOwner: false, account: "", holderId: undefined, pocketSpend: undefined };
+}
+
+/** Owner paid the lorry from cash in hand — Books, not till, not a shop pocket. */
+export function applyTransportDueOwnerCash(e: Expense): Expense | null {
+  if (!isPendingTransport(e)) return null;
+  return { ...e, mode: "cash", toOwner: true, account: "", holderId: undefined, pocketSpend: undefined };
 }
 
 /** Owner paid the lorry from personal UPI — Books, not till, not a shop pocket. */
@@ -922,23 +952,42 @@ export async function settleTransportDueOwnerUpi(fields: {
   return next;
 }
 
+export async function settleTransportDueOwnerCash(fields: {
+  id: string;
+  date?: string;
+  by: string;
+}): Promise<Expense | null> {
+  const e = await getRec<Expense>("expenses", fields.id);
+  if (!e) return null;
+  const next = applyTransportDueOwnerCash(e);
+  if (!next) return null;
+  next.date = fields.date || todayStr();
+  next.enteredBy = fields.by || e.enteredBy;
+  next.updatedAt = nowIso();
+  await put("expenses", next);
+  return next;
+}
+
 /** Same pay for several locked dues (Receipts Paid out → Transport). */
 export async function settleTransportDues(fields: {
   ids: string[];
   account: string;
   holderId?: string;
   cash?: boolean;
+  ownerCash?: boolean;
   ownerUpi?: boolean;
   date?: string;
   by: string;
 }): Promise<Expense[]> {
   const out: Expense[] = [];
   for (const id of fields.ids) {
-    const e = fields.cash
-      ? await settleTransportDueCash({ id, date: fields.date, by: fields.by })
-      : fields.ownerUpi
-        ? await settleTransportDueOwnerUpi({ id, date: fields.date, by: fields.by })
-        : await settleTransportDue({ ...fields, id });
+    const e = fields.ownerCash
+      ? await settleTransportDueOwnerCash({ id, date: fields.date, by: fields.by })
+      : fields.cash
+        ? await settleTransportDueCash({ id, date: fields.date, by: fields.by })
+        : fields.ownerUpi
+          ? await settleTransportDueOwnerUpi({ id, date: fields.date, by: fields.by })
+          : await settleTransportDue({ ...fields, id });
     if (e) out.push(e);
   }
   return out;

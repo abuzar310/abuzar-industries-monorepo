@@ -1,6 +1,6 @@
 import { allRec, delRec, getRec, put } from "./data";
 import { nowIso, uid } from "./calc";
-import { carpenterKey, carpenterSeed, sameCarpenterSeed } from "./carpenter-financials";
+import { carpenterKey, carpenterSeed, isShopName, sameCarpenterSeed } from "./carpenter-financials";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import { toast } from "@/store/app-store";
 import type { Carpenter, Customer, Doc, Expense } from "./types";
@@ -41,14 +41,15 @@ export function resolveCarpenterRecord(
   const named = directory.filter((c) => carpenterKey(c.name) === key);
   const related = directory.filter((c) => {
     const ck = carpenterKey(c.name);
-    if (sameCarpenterSeed(c.name, r.name)) return true;
+    if (isShopName(c.name) && isShopName(r.name) && sameCarpenterSeed(c.name, r.name)) return true;
     if (!seed || seed.length < 4) return false;
+    if ((seed === "ismail" || seed === "suresha") && !(isShopName(c.name) && isShopName(r.name))) return false;
     return ck === seed || ck.startsWith(seed + " ") || key.startsWith(ck + " ");
   });
   const pool = [...new Map([...named, ...related].map((c) => [c.id, c])).values()];
   const phones = [r.phone, r.phoneAlt].map((p) => last10(p || "")).filter((p) => p.length >= 10);
   if (phones.length) {
-    const byPhone = pool.find((c) => phones.includes(last10(c.phone)) || phones.includes(last10(c.phoneAlt || "")));
+    const byPhone = directory.find((c) => phones.includes(last10(c.phone)) || phones.includes(last10(c.phoneAlt || "")));
     if (byPhone) return byPhone;
   }
   const rich = pool.filter((c) => last10(c.phone).length >= 10 || !!c.photo);

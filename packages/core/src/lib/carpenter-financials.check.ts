@@ -163,6 +163,10 @@ function demo() {
   ok(shopSelfCarpenter(ismCust[0], ismDir)?.id === "CARP-ISM", "Ismail customer folds into the carpenter");
   ok(shopSelfCustomer(ismDir[0], ismCust)?.id === "CUST-ISM", "Ismail carpenter finds the customer account");
   ok(
+    !shopSelfCustomer({ name: "Ismail", phone: "", id: "", createdAt: "" } as Carpenter, ismCust),
+    "bare Ismail has no shop customer account",
+  );
+  ok(
     !shopSelfCarpenter(cust("C-GOWDA", "Suresh Gowda", "", "1111111111"), [carp("CARP-SU", "SURESHA PLYNING WORK", "9880919422")]),
     "a different Suresh stays a customer",
   );
@@ -212,8 +216,12 @@ function demo() {
   const ply = carp("CARP-PLY", "SURESHA CARPENTER PLYNING WORK", "9880919422");
   ply.photo = "data:image/jpeg;base64,QQ==";
   const stub = carp("CARP-STUB", "Suresha");
-  ok(resolveCarpenterRecord({ name: "Suresha" }, [stub, ply])?.id === "CARP-PLY", "edit Suresha uses plyning-work row");
+  ok(resolveCarpenterRecord({ name: "Suresha", phone: "9880919422" }, [stub, ply])?.id === "CARP-PLY", "same phone uses plyning-work row");
   ok(resolveCarpenterRecord({ record: ply, name: "Suresha" }, [stub, ply])?.id === "CARP-PLY", "saved id wins");
+  ok(
+    resolveCarpenterRecord({ name: "Ismail" }, [carp("CARP-ISM-SHOP", "ISMAIL PLYNING WORK", "9591152679")]) == null,
+    "bare Ismail is not the plyning-work shop",
+  );
   ok(carpenterSeed("Suresh carpenter planning work") === "suresha", "Suresh → Suresha seed");
   const planning = carp("CARP-PLAN", "SURESHA CARPENTER PLANNING WORK", "9880919422");
   const live = carp("CARP-LIVE", "SURESHA PLYNING WORK", "9880919422");
@@ -224,6 +232,15 @@ function demo() {
   ok(
     merged.some((x) => x.record?.id === "CARP-LIVE" && x.quoteCount === 1),
     "planning-work quotes sit on SURESHA PLYNING WORK",
+  );
+  const ismShop = carp("CARP-ISM-LIVE", "ISMAIL PLYNING WORK", "9591152679");
+  ismShop.placeRent = true;
+  const qBareIsm = quote("Q025", "C-VINAY", "ISMAIL", "025");
+  const ismSplit = rollupCarpenters([ismShop], [], [qBareIsm], []);
+  ok(ismSplit.filter((x) => carpenterSeed(x.name) === "ismail").length === 2, "bare Ismail stays a different person");
+  ok(
+    ismSplit.some((x) => x.key === "ismail" && x.quoteCount === 1 && !x.record),
+    "the other Ismail keeps the one quote and no shop record",
   );
 
   console.log("carpenter-financials.check OK (" + n + " assertions)");

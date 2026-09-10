@@ -33,7 +33,12 @@ import {
   renameHolder,
   setHolderKind,
   setHolderOpening,
+  accountsTransportPaySources,
+  isHandTransportSrc,
   settleTransportDue,
+  settleTransportDueCash,
+  settleTransportDueOwnerCash,
+  settleTransportDueOwnerUpi,
   updateTransportDue,
   stashHolderOpening,
   transportDueLabel,
@@ -514,7 +519,7 @@ export default function AccountsView() {
     toast("Transport due updated · " + party + " · ₹" + inr(a));
   }
   function listPaySources() {
-    const srcs = [
+    const pockets = [
       ...holders.map((h) => {
         const { balance } = holderView(h);
         return { holderId: h.id as string | undefined, account: h.name, balance, transport: isTransportPocket(h) };
@@ -526,8 +531,8 @@ export default function AccountsView() {
         transport: isTransportPocket(undefined, a.name),
       })),
     ];
-    srcs.sort((a, b) => Number(b.transport) - Number(a.transport) || b.balance - a.balance);
-    return srcs;
+    pockets.sort((a, b) => Number(b.transport) - Number(a.transport) || b.balance - a.balance);
+    return accountsTransportPaySources(pockets);
   }
   function samePaySrc(
     s: { holderId?: string; account: string },
@@ -540,8 +545,9 @@ export default function AccountsView() {
     const srcs = listPaySources();
     return (
       srcs.find((s) => s.transport && s.balance + 0.5 >= amt) ||
-      srcs.find((s) => s.balance + 0.5 >= amt) ||
+      srcs.find((s) => !isHandTransportSrc(s) && s.balance + 0.5 >= amt) ||
       srcs.find((s) => s.transport) ||
+      srcs.find((s) => s.cash) ||
       srcs[0]
     );
   }
@@ -573,23 +579,32 @@ export default function AccountsView() {
     setTDate("");
     if (opts.account) setCollapsedAccts((s) => { const n = new Set(s); n.delete(openKey); return n; });
   }
-  async function submitPay(opts: { holderId?: string; account: string }, maxBal: number) {
+  async function submitPay(opts: { holderId?: string; account: string; cash?: boolean; ownerCash?: boolean; ownerUpi?: boolean }, maxBal: number) {
     const due = pendingDues.find((e) => e.id === payDueId);
     if (!due) return toast("Pick which transport due to pay");
     const a = +due.amount || 0;
-    if (a > maxBal + 0.5) return toast("Need ₹" + inr(a) + " in this account (bal ₹" + inr(maxBal) + ")");
-    const e = await settleTransportDue({
-      id: due.id,
-      account: opts.account,
-      holderId: opts.holderId,
-      date: tDate ? toDmy(tDate) : undefined,
-      by: user?.id || "unknown",
-    });
+    const hand = !!(opts.cash || opts.ownerCash || opts.ownerUpi);
+    if (!hand && a > maxBal + 0.5) return toast("Need ₹" + inr(a) + " in this account (bal ₹" + inr(maxBal) + ")");
+    const date = tDate ? toDmy(tDate) : undefined;
+    const by = user?.id || "unknown";
+    const e = opts.ownerCash
+      ? await settleTransportDueOwnerCash({ id: due.id, date, by })
+      : opts.cash
+        ? await settleTransportDueCash({ id: due.id, date, by })
+        : opts.ownerUpi
+          ? await settleTransportDueOwnerUpi({ id: due.id, date, by })
+          : await settleTransportDue({
+              id: due.id,
+              account: opts.account,
+              holderId: opts.holderId,
+              date,
+              by,
+            });
     if (!e) return toast("Could not record");
     cancelPay();
     load();
     bumpData();
-    toast("₹" + inr(a) + " transport — " + (due.party || ""));
+    toast("₹" + inr(a) + " transport — " + (due.party || "") + " · " + opts.account);
   }
   async function submitDue() {
     const party = dueParty.trim();
@@ -737,35 +752,34 @@ export default function AccountsView() {
     const srcs = listPaySources();
     const amt = +due.amount || 0;
     const picked = srcs.find((s) => samePaySrc(s, payHolder, payFor));
-    const short = !!(picked && amt > picked.balance + 0.5);
+    const short = !!(picked && !isHandTransportSrc(picked) && amt > picked.balance + 0.5);
     return (
       <div className="acct-form acct-due-pay">
-        <small className="acct-hint">Pay from a UPI. Pocket drops. Daybook cash does not.</small>
-        {srcs.length === 0 ? (
-          <div className="acct-empty">Add a UPI holder first, then pay this due.</div>
-        ) : (
-          <div className="acct-pay-src">
-            {srcs.map((s) => {
-              const on = samePaySrc(s, payHolder, payFor);
-              const tight = amt > s.balance + 0.5;
-              return (
-                <button
-                  key={(s.holderId || "") + ":" + s.account}
-                  type="button"
-                  className={"acct-chip" + (on ? " on" : "")}
-                  onClick={() => {
-                    setPayHolder(s.holderId || null);
-                    setPayFor(s.account);
-                  }}
-                >
-                  {s.account}
+        <small className="acct-hint">Cash by manager hits Daybook. Cash / UPI by owner does not. A UPI pocket drops.</small>
+        <div className="acct-pay-src">
+          {srcs.map((s) => {
+            const on = samePaySrc(s, payHolder, payFor);
+            const hand = isHandTransportSrc(s);
+            const tight = !hand && amt > s.balance + 0.5;
+            return (
+              <button
+                key={(s.holderId || "") + ":" + s.account}
+                type="button"
+                className={"acct-chip" + (on ? " on" : "")}
+                onClick={() => {
+                  setPayHolder(s.holderId || null);
+                  setPayFor(s.account);
+                }}
+              >
+                {s.account}
+                {!hand && (
                   <span className="acct-chip-bal">{tight ? "need ₹" + inr(amt) : "₹" + inr(s.balance)}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        {short && picked ? (
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {short && picked && !isHandTransportSrc(picked) ? (
           <small className="acct-warn">Need ₹{inr(amt)} — {picked.account} has ₹{inr(picked.balance)}.</small>
         ) : null}
         <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
@@ -778,8 +792,20 @@ export default function AccountsView() {
           <button
             className="btn primary sm"
             type="button"
-            disabled={!picked || short}
-            onClick={() => picked && submitPay({ holderId: picked.holderId, account: picked.account }, picked.balance)}
+            disabled={!picked || (short && !isHandTransportSrc(picked))}
+            onClick={() =>
+              picked &&
+              submitPay(
+                {
+                  holderId: picked.holderId,
+                  account: picked.account,
+                  cash: picked.cash,
+                  ownerCash: picked.ownerCash,
+                  ownerUpi: picked.ownerUpi,
+                },
+                picked.balance,
+              )
+            }
           >
             Pay ₹{inr(amt)}
           </button>
@@ -1514,7 +1540,7 @@ export default function AccountsView() {
         Accounts{" "}
         <small>
           {canPayTransport && acctTab === "transport"
-            ? "— lock the lorry, then Pay from a UPI"
+            ? "— lock the lorry, then Pay from cash, owner, or a UPI"
             : "— holders, their UPI accounts & hand-overs"}
         </small>
       </div>

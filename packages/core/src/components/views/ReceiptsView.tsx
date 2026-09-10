@@ -426,8 +426,8 @@ export default function ReceiptsView() {
   async function recordTransportPay() {
     if (!pickedDues.length) return toast("Pick which transport dues to pay");
     const pick = pickedPay || pickTransportPaySource(paySources, pickedDueTotal);
-    if (!pick) return toast("Pick Cash, UPI by owner, or an account");
-    if (!pick.cash && !pick.ownerUpi && pickedDueTotal > pick.balance + 0.5) {
+    if (!pick) return toast("Pick cash, UPI by owner, or an account");
+    if (!pick.cash && !pick.ownerCash && !pick.ownerUpi && pickedDueTotal > pick.balance + 0.5) {
       return toast("Need ₹" + inr(pickedDueTotal) + " in " + pick.account + " (bal ₹" + inr(pick.balance) + ")");
     }
     const paid = await settleTransportDues({
@@ -435,6 +435,7 @@ export default function ReceiptsView() {
       account: pick.account,
       holderId: pick.holderId,
       cash: !!pick.cash,
+      ownerCash: !!pick.ownerCash,
       ownerUpi: !!pick.ownerUpi,
       date: date ? toDmy(date) : undefined,
       by: user?.id || "unknown",
@@ -1344,7 +1345,7 @@ export default function ReceiptsView() {
             <div className="acct-pay-src">
               {paySources.map((s) => {
                 const on = samePaySrc(s);
-                const tight = !s.cash && !s.ownerUpi && pickedDues.length > 0 && pickedDueTotal > s.balance + 0.5;
+                const tight = !s.cash && !s.ownerCash && !s.ownerUpi && pickedDues.length > 0 && pickedDueTotal > s.balance + 0.5;
                 return (
                   <button
                     key={paySrcKey(s)}
@@ -1353,7 +1354,7 @@ export default function ReceiptsView() {
                     onClick={() => choosePaySrc(s)}
                   >
                     {s.account}
-                    {!s.cash && !s.ownerUpi && (
+                    {!s.cash && !s.ownerCash && !s.ownerUpi && (
                       <span className="acct-chip-bal">{tight ? "need ₹" + inr(pickedDueTotal) : "₹" + inr(s.balance)}</span>
                     )}
                   </button>

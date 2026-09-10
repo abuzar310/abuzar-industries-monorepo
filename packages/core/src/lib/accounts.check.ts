@@ -7,6 +7,7 @@ import {
   accountOverview,
   acctLedger,
   applyTransportDueCash,
+  applyTransportDueOwnerCash,
   applyTransportDueOwnerUpi,
   extraReceiptsTransportSources,
   holderPassbookLines,
@@ -256,12 +257,16 @@ export function demo() {
   ok(isCsKumarPocketName("CS KUMAR(SVT TRANSPORT CHENNAI)"), "CS Kumar name with lorry tag");
   ok(!isCsKumarPocketName("Tabrez"), "Tabrez is not CS Kumar");
   const recSrcs = receiptsTransportPaySources(srcs);
-  ok(recSrcs[0].cash && recSrcs[1].ownerUpi && recSrcs.length === 3 && recSrcs[2].account === "CS Kumar", "Receipts pay-from is Cash + UPI by owner + CS Kumar");
+  ok(recSrcs[0].cash && recSrcs[1].ownerCash && recSrcs[2].ownerUpi && recSrcs[3].account === "CS Kumar", "pay-from is manager cash + owner cash + owner UPI + CS Kumar");
   ok(extraReceiptsTransportSources(srcs).every((s) => s.account === "Tabrez"), "Tabrez stays behind + from Accounts");
-  ok(pickTransportPaySource(recSrcs, 12000)?.cash, "short CS Kumar → Cash");
+  ok(pickTransportPaySource(recSrcs, 12000)?.cash, "short CS Kumar → Cash by manager");
   const fromTill = applyTransportDueCash(locked);
   ok(!!fromTill && !isPendingTransport(fromTill) && !isAccountTransportPay(fromTill), "cash pay unlocks the due without a UPI debit");
-  ok(inDaybook(fromTill!) && inBooks(fromTill!), "cash transport hits Daybook and Books");
+  ok(inDaybook(fromTill!) && inBooks(fromTill!) && !fromTill!.toOwner, "manager cash hits Daybook and Books");
+  const fromOwnerCash = applyTransportDueOwnerCash(locked);
+  ok(!!fromOwnerCash && fromOwnerCash.mode === "cash" && fromOwnerCash.toOwner && !fromOwnerCash.pocketSpend, "owner cash is cash in hand, not a pocket");
+  ok(!inDaybook(fromOwnerCash!) && inBooks(fromOwnerCash!), "owner cash skips Daybook, still Books");
+  ok(!isAccountTransportPay(fromOwnerCash!), "owner cash does not debit CS Kumar");
   const fromOwner = applyTransportDueOwnerUpi(locked);
   ok(!!fromOwner && fromOwner.mode === "upi" && fromOwner.toOwner && !fromOwner.pocketSpend, "owner UPI is owner's UPI, not a pocket");
   ok(!isAccountTransportPay(fromOwner!) && !isPendingTransport(fromOwner!), "owner UPI does not debit CS Kumar");
