@@ -128,6 +128,20 @@ export function monthRentStatus(c: Carpenter, expenses: Expense[], dmy: string):
   return "due";
 }
 
+/** Due that is not sitting on an unpaid calendar month — old balance leftover. */
+export function openingLeft(c: Carpenter, expenses: Expense[]): number {
+  let months = 0;
+  const seen = new Set<string>();
+  for (const e of expenses) {
+    if (e.placeRentKind !== "charge" || !belongsToTenant(e, c)) continue;
+    const k = monthKey(e.date);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    months += monthRemain(c, expenses, e.date);
+  }
+  return r2(Math.max(0, placeRentDue(c, expenses) - months));
+}
+
 export function unpaidChargedMonths(c: Carpenter, expenses: Expense[]): { key: string; label: string; remain: number }[] {
   const out: { key: string; label: string; remain: number }[] = [];
   const seen = new Set<string>();

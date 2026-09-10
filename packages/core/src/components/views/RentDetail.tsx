@@ -16,7 +16,7 @@ import {
   monthFirstDay,
   monthRemain,
   monthRentStatus,
-  monthTitle,
+  openingLeft,
   pendingForTenant,
   placeRentDue,
   placeRentStatement,
@@ -29,7 +29,6 @@ import {
   yearFromDmy,
   yearMonthsCharged,
 } from "@/lib/place-rent";
-import { formDialog, type DialogField } from "@/store/dialog-store";
 import { dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
@@ -177,6 +176,12 @@ function RentSection({
   const [cash, setCash] = useState("");
   const [setoffMonth, setSetoffMonth] = useState("");
   const [upiAccts, setUpiAccts] = useState<string[]>([]);
+  const [sheetMo, setSheetMo] = useState<number | null>(null);
+  const [sheetHow, setSheetHow] = useState<"cash" | "commission" | "due">("cash");
+  const [sheetAmt, setSheetAmt] = useState("");
+  const [sheetPay, setSheetPay] = useState("cash");
+  const [sheetAcct, setSheetAcct] = useState("");
+  const [sheetQuote, setSheetQuote] = useState("");
 
   useEffect(() => {
     upiAccounts().then(setUpiAccts);
@@ -200,147 +205,133 @@ function RentSection({
   }, [tenant.id, monthly, opening]);
 
   const picked = pending.find((p) => p.d.id === quoteId) || pending[0];
+  const oldLeft = openingLeft(tenant, expenses);
   const pay = r2(+recvAmt || 0);
-  const stillDue = r2(Math.max(0, due - pay));
+  const stillOld = r2(Math.max(0, oldLeft - pay));
   const towards = r2(+against || 0);
   const afterComm = r2(Math.max(0, due - towards));
+  const sheetDmy = sheetMo ? monthFirstDay(year, sheetMo) : "";
+  const sheetRow = sheetDmy ? chargeOfMonth(tenant, expenses, sheetDmy) : undefined;
+  const sheetSt = sheetDmy ? monthRentStatus(tenant, expenses, sheetDmy) : "empty";
+  const sheetUsual = r2(+monthAmt || monthly || 0);
+  const sheetIn = sheetDmy ? monthAlloc(tenant, expenses, sheetDmy) : 0;
+  const sheetLeft = sheetRow ? monthRemain(tenant, expenses, sheetDmy) : sheetUsual;
+  const sheetQ = pending.find((p) => p.d.id === sheetQuote) || pending[0];
+  const sheetPayN = r2(+sheetAmt || 0);
 
   function setPayFull() {
     setPayKind("full");
-    setRecvAmt(due > 0.5 ? String(due) : "");
+    setRecvAmt(oldLeft > 0.5 ? String(oldLeft) : "");
   }
 
   function setPayPart() {
     setPayKind("part");
-    if (r2(+recvAmt || 0) >= due - 0.05) setRecvAmt("");
+    if (r2(+recvAmt || 0) >= oldLeft - 0.05) setRecvAmt("");
   }
 
-  function setPayAmount(n: number) {
-    const a = r2(Math.max(0, n));
-    setPayKind(due > 0.5 && a >= due - 0.05 ? "full" : "part");
-    setRecvAmt(a ? String(a) : "");
-  }
-
-  async function openMonth(month1: number) {
+  function openMonth(month1: number) {
     const dmy = monthFirstDay(year, month1);
     const name = MONTH_NAMES[month1 - 1] + " " + year;
-    const status = monthRentStatus(tenant, expenses, dmy);
-    if (status === "paid") return toast(name + " rent is paid");
+    if (monthRentStatus(tenant, expenses, dmy) === "paid") return toast(name + " rent is paid");
     const row = chargeOfMonth(tenant, expenses, dmy);
     const usual = r2(+monthAmt || monthly || 0);
-    const remain = row ? monthRemain(tenant, expenses, dmy) : usual;
     if (!row && usual <= 0.5) return toast("Type the usual monthly ₹ first");
-    const howOpts = [
-      { value: "cash", label: "Cash taken" },
-      ...(pending.length ? [{ value: "commission", label: "Commission into rent" }] : []),
-      ...(!row ? [{ value: "due", label: "They owe this month (no money yet)" }] : []),
-    ];
-    const fields: DialogField[] = [
-      { name: "how", label: "How", type: "select", value: "cash", options: howOpts },
-      { name: "amount", label: "Amount ₹ — full or part", type: "number", inputMode: "decimal", value: remain ? String(remain) : "" },
-    ];
-    if (pending.length > 1) {
-      fields.push({
-        name: "quote",
-        label: "Quotation",
-        type: "select",
-        value: picked?.d.id || pending[0].d.id,
-        options: pending.map((p) => ({
-          value: p.d.id,
-          label: "#" + (p.d.displayNumber || p.d.number) + " · ₹" + inr(p.pending),
-        })),
-      });
-    }
-    fields.push({
-      name: "pay",
-      label: "Cash how",
-      type: "select",
-      value: "cash",
-      options: [
-        { value: "cash", label: "Cash (Daybook)" },
-        { value: "owner", label: "Cash → Owner" },
-      ],
-    });
-    const res = await formDialog({
-      title: name,
-      message: row
-        ? "Month ₹" + inr(+row.amount || 0)
-          + (status === "part" ? " · already in ₹" + inr(monthAlloc(tenant, expenses, dmy)) + " · left ₹" + inr(remain) : " · nothing in yet")
-          + ". Accept cash or commission. Part is fine."
-        : "Usual ₹" + inr(usual) + " goes on the due. Then this amount is cash or commission against " + name + ".",
-      fields,
-      submitLabel: "Accept",
-      deleteLabel: row && status === "due" ? "Remove tick" : undefined,
-    });
-    if (!res) return;
-    if (res.__action === "delete") {
-      if (!row) return;
-      try {
-        await unchargePlaceRent(row);
-        bumpData();
-        onDone();
-        toast("Removed " + name);
-      } catch (err) {
-        toast(err instanceof Error ? err.message : "Could not remove");
-      }
-      return;
-    }
-    const how = res.how || "cash";
+    const remain = row ? monthRemain(tenant, expenses, dmy) : usual;
+    setSheetHow("cash");
+    setSheetAmt(remain ? String(remain) : "");
+    setSheetPay("cash");
+    setSheetAcct("");
+    setSheetQuote(pending[0]?.d.id || "");
+    setSheetMo(month1);
+  }
+
+  function closeSheet() {
+    setSheetMo(null);
+  }
+
+  async function acceptSheet() {
+    if (!sheetMo || !sheetDmy) return;
+    const name = MONTH_NAMES[sheetMo - 1] + " " + year;
     try {
-      let charged = row;
-      if (!charged) {
-        charged = await chargePlaceRent(tenant, usual, enteredBy, dmy);
-      }
-      if (how === "due") {
+      let charged = sheetRow;
+      if (!charged) charged = await chargePlaceRent(tenant, sheetUsual, enteredBy, sheetDmy);
+      if (sheetHow === "due") {
+        closeSheet();
         bumpData();
         onDone();
-        toast(name + " on the due · ₹" + inr(usual));
+        toast(name + " on the due · ₹" + inr(sheetUsual));
         return;
       }
       const live = await allExpenses();
-      const left = monthRemain(tenant, live, dmy);
-      const pay = r2(Math.min(+res.amount || 0, left));
-      if (pay <= 0.5) {
-        if (!row && charged) {
+      const left = monthRemain(tenant, live, sheetDmy);
+      const take = r2(Math.min(sheetPayN, left));
+      if (take <= 0.5) {
+        if (!sheetRow && charged) {
+          closeSheet();
           bumpData();
           onDone();
-          toast(name + " on the due · ₹" + inr(usual));
+          toast(name + " on the due · ₹" + inr(sheetUsual));
           return;
         }
         return toast("Enter an amount");
       }
-      if (how === "commission") {
-        const q = pending.find((p) => p.d.id === (res.quote || picked?.d.id)) || pending[0];
-        if (!q) {
-          if (!row) await unchargePlaceRent(charged);
+      if (sheetHow === "commission") {
+        if (!sheetQ) {
+          if (!sheetRow && charged) await unchargePlaceRent(charged);
           return toast("No pending commission");
         }
         await applyAgainstRent({
           tenant,
-          quote: q.d,
-          against: Math.min(pay, q.pending),
+          quote: sheetQ.d,
+          against: Math.min(take, sheetQ.pending),
           cash: 0,
           enteredBy,
           expenses: live,
-          placeRentMonth: dmy,
+          placeRentMonth: sheetDmy,
         });
+        closeSheet();
         bumpData();
         onDone();
-        toast("₹" + inr(Math.min(pay, q.pending)) + " commission → " + name);
+        toast("₹" + inr(Math.min(take, sheetQ.pending)) + " commission → " + name);
         return;
       }
-      await receivePlaceRent(tenant, pay, enteredBy, "cash", "", res.pay === "owner", "", undefined, dmy);
+      if (sheetPay === "upi" && !sheetAcct.trim()) return toast("Pick the UPI account");
+      await receivePlaceRent(
+        tenant,
+        take,
+        enteredBy,
+        sheetPay === "upi" ? "upi" : "cash",
+        sheetPay === "upi" ? sheetAcct.trim() : "",
+        sheetPay === "owner",
+        "",
+        undefined,
+        sheetDmy,
+      );
+      closeSheet();
       bumpData();
       onDone();
-      toast("₹" + inr(pay) + " cash → " + name);
+      toast("₹" + inr(take) + " cash → " + name);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not save");
     }
   }
 
+  async function removeSheetTick() {
+    if (!sheetRow || sheetSt !== "due") return;
+    try {
+      await unchargePlaceRent(sheetRow);
+      closeSheet();
+      bumpData();
+      onDone();
+      toast("Removed " + (sheetMo ? MONTH_NAMES[sheetMo - 1] + " " + year : ""));
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not remove");
+    }
+  }
+
   async function doReceived() {
     const amt = r2(+recvAmt || 0);
-    if (amt > due + 0.05) return toast("They only owe ₹" + inr(due));
+    if (amt > oldLeft + 0.05) return toast("Old balance left is ₹" + inr(oldLeft));
     const mode = recvHow === "upi" ? "upi" : "cash";
     try {
       await receivePlaceRent(tenant, amt, enteredBy, mode, recvAccount, recvHow === "owner");
@@ -348,7 +339,7 @@ function RentSection({
       onDone();
       setRecvAmt("");
       setPayKind("part");
-      toast("₹" + inr(amt) + " received · Receipts & Daybook");
+      toast("₹" + inr(amt) + " old balance · Receipts & Daybook");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not record");
     }
@@ -512,35 +503,47 @@ function RentSection({
           </div>
         </div>
 
-        <div className={"rent-act" + (due > 0.5 ? "" : " dim")}>
+        <div className={"rent-act" + (oldLeft > 0.5 || opening > 0.5 ? "" : " dim")}>
           <div className="rent-act-h">
             <span className="rent-act-n">1</span>
             <div>
-              <b>They paid rent</b>
+              <b>Old balance</b>
               <p>
-                {due > 0.5
-                  ? "Full or part. Type what they handed over, like ₹5,000 of ₹" + inr(due) + "."
-                  : "Nothing due right now."}
+                Months are on the calendar. This is what they already owed before those ticks
+                {oldLeft > 0.5 ? " — ₹" + inr(oldLeft) + " left." : "."}
               </p>
             </div>
           </div>
-          {due > 0.5 && (
+          <label className="modal-field">
+            <span>Set old balance ₹</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={openAmt}
+              onChange={(e) => setOpenAmt(e.target.value)}
+              placeholder="what they already owe"
+            />
+          </label>
+          <p className="note" style={{ margin: "8px 0 0" }}>
+            Replaces the figure. It does not add on top.
+          </p>
+          <div className="rowbtns">
+            <button className="btn sm" type="button" onClick={() => void doOpening()}>
+              Save old balance
+            </button>
+          </div>
+          {oldLeft > 0.5 && (
             <>
-              <div className="rent-chips" role="group" aria-label="Full or part">
+              <div className="rent-chips" role="group" aria-label="Full or part of old balance">
                 <button type="button" className={"rent-chip" + (payKind === "full" ? " on" : "")} onClick={setPayFull}>
-                  Full ₹{inr(due)}
+                  Full ₹{inr(oldLeft)}
                 </button>
                 <button type="button" className={"rent-chip" + (payKind === "part" ? " on" : "")} onClick={setPayPart}>
                   Part
                 </button>
-                {monthly > 0.5 && monthly < due - 0.5 && (
-                  <button type="button" className="rent-chip" onClick={() => setPayAmount(monthly)}>
-                    One month ₹{inr(monthly)}
-                  </button>
-                )}
               </div>
               <label className="modal-field">
-                <span>{payKind === "full" ? "Amount (full)" : "They paid ₹"}</span>
+                <span>They paid towards old balance ₹</span>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -549,13 +552,13 @@ function RentSection({
                     setPayKind("part");
                     setRecvAmt(e.target.value);
                   }}
-                  placeholder={payKind === "part" ? "e.g. 5000" : undefined}
+                  placeholder="e.g. 5000"
                 />
               </label>
               <p className="rent-of">
                 {pay > 0.5
-                  ? "₹" + inr(pay) + " of ₹" + inr(due) + (stillDue > 0.5 ? " · ₹" + inr(stillDue) + " still due" : " · settled")
-                  : "They owe ₹" + inr(due)}
+                  ? "₹" + inr(pay) + " of ₹" + inr(oldLeft) + (stillOld > 0.5 ? " · ₹" + inr(stillOld) + " old balance left" : " · old balance settled")
+                  : "Old balance left ₹" + inr(oldLeft)}
               </p>
               <label className="modal-field">
                 <span>How</span>
@@ -584,7 +587,7 @@ function RentSection({
               )}
               <div className="rowbtns">
                 <button className="btn primary" type="button" onClick={() => void doReceived()}>
-                  Record payment
+                  Accept old balance
                 </button>
               </div>
             </>
@@ -595,10 +598,10 @@ function RentSection({
           <div className="rent-act-h">
             <span className="rent-act-n">2</span>
             <div>
-              <b>Commission towards rent</b>
+              <b>Commission towards old balance</b>
               <p>
                 {pending.length
-                  ? "We owe them commission. Put it on this rent instead of paying cash."
+                  ? "We owe them ₹" + inr(pendingSum) + " commission. Use a month on the calendar, or put it here on old balance."
                   : "No pending commission on a quotation right now."}
               </p>
             </div>
@@ -674,30 +677,6 @@ function RentSection({
           )}
         </div>
 
-        <details className="sqltoggle rent-hist">
-          <summary>Old balance</summary>
-          <div className="rent-form" style={{ marginTop: 10 }}>
-            <label className="modal-field">
-              <span>Old balance ₹</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                value={openAmt}
-                onChange={(e) => setOpenAmt(e.target.value)}
-                placeholder="what they already owe"
-              />
-            </label>
-            <p className="note" style={{ margin: "8px 0 0" }}>
-              Replaces the figure. It does not add on top.
-            </p>
-            <div className="rowbtns">
-              <button className="btn sm" type="button" onClick={() => void doOpening()}>
-                Save old balance
-              </button>
-            </div>
-          </div>
-        </details>
-
         <details className="sqltoggle rent-hist" open>
           <summary>History</summary>
           <HistList
@@ -708,6 +687,179 @@ function RentSection({
           />
         </details>
       </div>
+
+      {sheetMo && sheetDmy && (
+        <div className="rent-sheet-scrim" onMouseDown={closeSheet}>
+          <div
+            className="rent-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label={MONTH_NAMES[sheetMo - 1] + " " + year}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="rent-sheet-k">{MONTH_NAMES[sheetMo - 1]}</div>
+            <h3 className="rent-sheet-title">{MONTH_NAMES[sheetMo - 1]} {year}</h3>
+            <p className="rent-sheet-lead">
+              {sheetSt === "part"
+                ? "Part paid. ₹" + inr(sheetIn) + " in · ₹" + inr(sheetLeft) + " left of ₹" + inr(+sheetRow!.amount || 0) + "."
+                : sheetRow
+                  ? "This month is on the due. Nothing in yet. Full ₹" + inr(+sheetRow.amount || 0) + " or a part."
+                  : "Accept puts ₹" + inr(sheetUsual) + " on the due, then this cash or commission against the month."}
+            </p>
+            <div className="rent-sheet-stats">
+              <div>
+                <span>Month rent</span>
+                <b>₹ {inr(sheetRow ? +sheetRow.amount || 0 : sheetUsual)}</b>
+              </div>
+              <div>
+                <span>Already in</span>
+                <b>₹ {inr(sheetIn)}</b>
+              </div>
+              <div>
+                <span>Left this month</span>
+                <b>₹ {inr(sheetLeft)}</b>
+              </div>
+              <div>
+                <span>They owe (all)</span>
+                <b>₹ {inr(due)}</b>
+              </div>
+              <div>
+                <span>Old balance left</span>
+                <b>₹ {inr(oldLeft)}</b>
+              </div>
+              <div>
+                <span>We owe commission</span>
+                <b>{pendingSum > 0.5 ? "₹ " + inr(pendingSum) : "Nothing"}</b>
+              </div>
+            </div>
+            <div className="rent-sheet-how" role="group" aria-label="How">
+              <button type="button" className={"rent-chip" + (sheetHow === "cash" ? " on" : "")} onClick={() => { setSheetHow("cash"); setSheetAmt(sheetLeft ? String(sheetLeft) : ""); }}>
+                Cash taken
+              </button>
+              <button
+                type="button"
+                className={"rent-chip" + (sheetHow === "commission" ? " on" : "")}
+                disabled={!pending.length}
+                onClick={() => {
+                  setSheetHow("commission");
+                  const cap = r2(Math.min(sheetLeft, pending[0]?.pending || 0));
+                  setSheetAmt(cap ? String(cap) : "");
+                }}
+              >
+                Commission into rent
+              </button>
+              {!sheetRow && (
+                <button type="button" className={"rent-chip" + (sheetHow === "due" ? " on" : "")} onClick={() => setSheetHow("due")}>
+                  They owe this month
+                </button>
+              )}
+            </div>
+            {sheetHow === "commission" && (
+              <div className="rent-sheet-comm">
+                {pending.length ? (
+                  <>
+                    <p>
+                      We owe them <b>₹{inr(pendingSum)}</b> commission
+                      {sheetQ ? " · ₹" + inr(sheetQ.pending) + " on #" + (sheetQ.d.displayNumber || sheetQ.d.number) : ""}.
+                    </p>
+                    {pending.length > 1 && (
+                      <label className="modal-field">
+                        <span>Which quotation</span>
+                        <select
+                          className="paysel"
+                          value={sheetQ?.d.id || ""}
+                          onChange={(e) => {
+                            setSheetQuote(e.target.value);
+                            const q = pending.find((p) => p.d.id === e.target.value);
+                            const cap = r2(Math.min(sheetLeft, q?.pending || 0));
+                            setSheetAmt(cap ? String(cap) : "");
+                          }}
+                        >
+                          {pending.map((p) => (
+                            <option key={p.d.id} value={p.d.id}>
+                              #{p.d.displayNumber || p.d.number} · we owe ₹{inr(p.pending)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </>
+                ) : (
+                  <p>No pending commission to put on this month.</p>
+                )}
+              </div>
+            )}
+            {sheetHow !== "due" && (
+              <>
+                <div className="rent-chips">
+                  {sheetLeft > 0.5 && (
+                    <button type="button" className="rent-chip" onClick={() => setSheetAmt(String(sheetLeft))}>
+                      Full left ₹{inr(sheetLeft)}
+                    </button>
+                  )}
+                  {sheetHow === "commission" && sheetQ && sheetQ.pending + 0.05 < sheetLeft && (
+                    <button type="button" className="rent-chip" onClick={() => setSheetAmt(String(sheetQ.pending))}>
+                      All we owe ₹{inr(sheetQ.pending)}
+                    </button>
+                  )}
+                </div>
+                <label className="modal-field">
+                  <span>Amount ₹ — full or part</span>
+                  <input type="number" inputMode="decimal" value={sheetAmt} onChange={(e) => setSheetAmt(e.target.value)} />
+                </label>
+                <p className="rent-of">
+                  {sheetPayN > 0.5
+                    ? "₹" + inr(sheetPayN) + " of ₹" + inr(sheetLeft) + (sheetPayN + 0.05 >= sheetLeft ? " · this month will show Paid" : " · ₹" + inr(Math.max(0, sheetLeft - sheetPayN)) + " still on this month")
+                    : "Type what they handed over."}
+                </p>
+              </>
+            )}
+            {sheetHow === "cash" && (
+              <>
+                <label className="modal-field">
+                  <span>Cash how</span>
+                  <select className="paysel" value={sheetPay} onChange={(e) => setSheetPay(e.target.value)}>
+                    <option value="cash">Cash (Daybook)</option>
+                    <option value="upi">UPI</option>
+                    <option value="owner">Cash → Owner</option>
+                  </select>
+                </label>
+                {sheetPay === "upi" && (
+                  <label className="modal-field">
+                    <span>UPI account</span>
+                    {upiAccts.length ? (
+                      <select className="paysel" value={sheetAcct} onChange={(e) => setSheetAcct(e.target.value)}>
+                        <option value="">Choose…</option>
+                        {upiAccts.map((a) => (
+                          <option key={a} value={a}>{a}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input value={sheetAcct} onChange={(e) => setSheetAcct(e.target.value)} placeholder="GPay / PhonePe…" />
+                    )}
+                  </label>
+                )}
+              </>
+            )}
+            {sheetHow === "due" && (
+              <p className="rent-of">Puts ₹{inr(sheetUsual)} on what they owe. No cash, no commission.</p>
+            )}
+            <div className="rent-sheet-actions">
+              {sheetRow && sheetSt === "due" && (
+                <button type="button" className="btn warn sm" onClick={() => void removeSheetTick()}>
+                  Remove tick
+                </button>
+              )}
+              <button type="button" className="btn sm" onClick={closeSheet}>
+                Cancel
+              </button>
+              <button type="button" className="btn primary" onClick={() => void acceptSheet()}>
+                Accept
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -13,6 +13,7 @@ import {
   monthKey,
   monthRemain,
   monthRentStatus,
+  openingLeft,
   nameHitsSeed,
   yearFromDmy,
   yearMonthsCharged,
@@ -171,5 +172,12 @@ ok(monthRentStatus(ismail, tagged.slice(0, 2), aug) === "part", "8k of 15k is pa
 ok(monthRentStatus(ismail, [tagged[0]], aug) === "due", "charge only is due");
 ok(monthRentStatus(ismail, [], aug) === "empty", "no charge is empty");
 ok(monthAlloc(ismail, [exp({ id: "r3", amount: 3000, placeRentKind: "received", carpenterId: "CARP-1" })], aug) === 0, "untagged cash does not fill a month");
+ok(
+  openingLeft(ismail, [
+    exp({ id: "o2", amount: 10000, placeRentKind: "opening", carpenterId: "CARP-1" }),
+    exp({ id: "c3", amount: 15000, placeRentKind: "charge", carpenterId: "CARP-1", date: aug }),
+  ]) === 10000,
+  "old balance left is due minus unpaid months",
+);
 
 console.log("place-rent.check: " + n + " ok");
