@@ -12,7 +12,6 @@ import {
   ensurePlaceRentTenants,
   matchPlaceRentTenant,
   placeRentDue,
-  unpaidChargedMonths,
 } from "@/lib/place-rent";
 import { USERS } from "@/lib/local-auth";
 import { bumpData, toast } from "@/store/app-store";
@@ -57,7 +56,6 @@ export default function CommissionLock({
   const [tenants, setTenants] = useState<Carpenter[]>([]);
   const [against, setAgainst] = useState("");
   const [cash, setCash] = useState("");
-  const [setoffMonth, setSetoffMonth] = useState("");
 
   useEffect(() => {
     void ensurePlaceRentTenants().then(setTenants);
@@ -179,7 +177,6 @@ export default function CommissionLock({
         cash: +cash || 0,
         enteredBy: by,
         expenses,
-        placeRentMonth: setoffMonth || undefined,
       });
       bumpData();
       onApplied?.();
@@ -208,19 +205,6 @@ export default function CommissionLock({
             </small>
           </span>
         </div>
-        {tenant && unpaidChargedMonths(tenant, expenses).length > 0 && (
-          <label className="modal-field">
-            <span>Which month</span>
-            <select className="paysel" value={setoffMonth} onChange={(e) => setSetoffMonth(e.target.value)}>
-              <option value="">Old balance / any due</option>
-              {unpaidChargedMonths(tenant, expenses).map((m) => (
-                <option key={m.key} value={m.key}>
-                  {m.label} · left ₹{inr(m.remain)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
         <div className="rec-grid rec-grid-due">
           <label className="modal-field">
             <span>Towards rent ₹</span>

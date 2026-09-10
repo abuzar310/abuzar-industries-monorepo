@@ -16,9 +16,9 @@ import {
 } from "@/lib/expenses";
 import { liveIncomeLines } from "@/lib/book-catalog";
 import { listWorkers, payWorker, repayWorker, type Worker } from "@/lib/attendance";
-import { carpenterKey, sameCarpenterSeed } from "@/lib/carpenter-financials";
+import { shopSelfCarpenter, shopSelfCustomer } from "@/lib/carpenter-financials";
 import { listCarpenters } from "@/lib/carpenters";
-import { listLinkedRentTenants, phonesMatch, placeRentDue, receivePlaceRent } from "@/lib/place-rent";
+import { listLinkedRentTenants, placeRentDue, receivePlaceRent } from "@/lib/place-rent";
 import { partyLedger, quoteBill, quotePaid } from "@/lib/payments";
 import { applyCustomerReceipt, unwindReceiptPieces } from "@/lib/receipts";
 import {
@@ -276,27 +276,11 @@ export default function ReceiptsView() {
   const outstanding = party ? party.balance : picked?.opening || 0;
   const custName = (id?: string) => customers.find((c) => c.id === id)?.name || "—";
 
-  function partyHitsTenant(c: Customer, t: Carpenter) {
-    if (phonesMatch(c.phone, t.phone) || phonesMatch(c.sitePhone || "", t.phone)) return true;
-    const ck = carpenterKey(c.name);
-    const tk = carpenterKey(t.name);
-    if (ck && tk && ck === tk) return true;
-    const site = carpenterKey(c.site || "");
-    if (site && site === tk) return true;
-    const shop = (s: string) => s.includes("planning") || s.includes("plyning");
-    return shop(ck) && shop(tk) && sameCarpenterSeed(c.name, t.name);
-  }
   function tenantOf(c: Customer) {
-    return rentTenants.find((t) => partyHitsTenant(c, t)) || null;
+    return shopSelfCarpenter(c, rentTenants) || null;
   }
   function customerOf(t: Carpenter) {
-    const hits = customers.filter((c) => partyHitsTenant(c, t));
-    return (
-      hits.find((c) => phonesMatch(c.phone, t.phone) || phonesMatch(c.sitePhone || "", t.phone)) ||
-      hits.find((c) => carpenterKey(c.name) === carpenterKey(t.name) || carpenterKey(c.site || "") === carpenterKey(t.name)) ||
-      hits[0] ||
-      null
-    );
+    return shopSelfCustomer(t, customers) || null;
   }
   function pickCustomer(c: Customer) {
     setPicked(c);
@@ -1037,13 +1021,15 @@ export default function ReceiptsView() {
   const recvFromCustomer = kind === "received" && recvVia === "customer" && !!picked;
   const recvRent = kind === "received" && recvVia === "customer" && !!rentTenant;
   const rentDue = rentTenant ? placeRentDue(rentTenant, expenses) : 0;
-  const rentExtras = rentTenants.map((c) => ({
-    id: c.id,
-    name: c.name,
-    phone: c.phone,
-    tag: "Place rent",
-    due: placeRentDue(c, expenses),
-  }));
+  const rentExtras = rentTenants
+    .filter((c) => !customerOf(c))
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      tag: "Place rent",
+      due: placeRentDue(c, expenses),
+    }));
   const activeWorkers = workers.filter((w) => w.active).sort((a, b) => a.name.localeCompare(b.name));
 
   async function recordWorker() {

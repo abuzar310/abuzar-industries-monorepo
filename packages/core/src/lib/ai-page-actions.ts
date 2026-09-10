@@ -363,10 +363,10 @@ export function resolveAiPageActions(pathname: string, doc: Doc | null): AiPageB
           explain("What is Rent?", "Cut Size place rent for two people (Ismail and Suresha). Two cards on top. Tap a card to open that person, the same way you open a carpenter or a customer. History for both sits under the cards."),
           how("Set monthly rent", "Rent → tap the person → Usual monthly ₹ on the year list → Save."),
           how("Set old balance", "Rent → tap the person → Old balance → Save old balance. This replaces what they already owe."),
-          how("Tick a month", "Rent → tap the person → tap a month. Big sheet: month rent, already in, left, what they owe, commission we owe. Cash taken or Commission into rent, full or part. When the month is full it shows Paid."),
-          how("Untick a month", "Rent → tap the person → tap a due month with nothing in yet → Remove tick. A Paid month stays locked."),
-          how("Accept old balance", "Rent → tap the person → 1 Old balance. Set the figure, then Accept old balance for cash towards that leftover. Months are only on the calendar."),
-          how("Put commission towards rent", "Rent → tap the person → tap the month → Commission into rent (shows how much we owe), or 2 Commission towards old balance."),
+          how("Tick a month", "Rent → tap the person → tap a month → keep usual ₹15,000 or edit → Add to due. Tap a ticked month again to remove it."),
+          how("Remove a rent line", "Rent → tap the person → History → tap the transaction → Remove. Tick the month or take cash again if you need it back."),
+          how("They paid rent", "Rent → tap the person → 1 They paid rent. Full or part, cash / UPI / owner → Record payment."),
+          how("Put commission towards rent", "Rent → tap the person → 2 Commission towards rent. Amount towards rent, cash to them if needed."),
         ],
       };
     }

@@ -15,6 +15,8 @@ import {
   parseCarpenterParam,
   pendingPayHref,
   rollupCarpenters,
+  shopSelfCarpenter,
+  shopSelfCustomer,
 } from "./carpenter-financials";
 import { nextCarpenterPhoto, resolveCarpenterRecord } from "./carpenters";
 
@@ -150,6 +152,20 @@ function demo() {
   ok(inDaybook(expenses[0]), "cash Record commission still hits Daybook");
   ok(r.lastPaid === "12-08-26", "latest payout date");
   ok(r.ownQuotes.length === 1 && r.ownQuotes[0].id === "QOWN", "quote in carpenter's own name is a personal buy");
+  const ismDir = [carp("CARP-ISM", "ISMAIL PLYNING WORK", "9591152679")];
+  const ismCust = [cust("CUST-ISM", "Ismail Planing", "", "994559992")];
+  const ismQ = [quote("QISM", "CUST-ISM", "", "1")];
+  ismQ[0].customerName = "Ismail Planing";
+  ismQ[0].finalPrice = 700;
+  const ism = rollupCarpenters(ismDir, ismCust, ismQ, []).find((x) => x.record?.id === "CARP-ISM")!;
+  ok(ism.ownQuotes.some((q) => q.id === "QISM"), "Ismail Planing quote is the carpenter's own buy");
+  ok(!ism.customers.some((c) => c.id === "CUST-ISM"), "Ismail customer is not a brought party");
+  ok(shopSelfCarpenter(ismCust[0], ismDir)?.id === "CARP-ISM", "Ismail customer folds into the carpenter");
+  ok(shopSelfCustomer(ismDir[0], ismCust)?.id === "CUST-ISM", "Ismail carpenter finds the customer account");
+  ok(
+    !shopSelfCarpenter(cust("C-GOWDA", "Suresh Gowda", "", "1111111111"), [carp("CARP-SU", "SURESHA PLYNING WORK", "9880919422")]),
+    "a different Suresh stays a customer",
+  );
   ok(r.ownBill === 15000, "personal bill is the quote final price");
   ok(r.broughtQuotes.some((q) => q.id === "Q1"), "party quote they brought is listed");
   ok(!r.broughtQuotes.some((q) => q.id === "QOWN"), "personal buy is not also a brought quote");

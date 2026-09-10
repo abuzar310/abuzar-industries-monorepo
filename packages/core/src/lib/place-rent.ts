@@ -527,6 +527,30 @@ export async function unchargePlaceRent(e: Expense): Promise<void> {
   await delRec("expenses", e.id);
 }
 
+export function monthLines(c: Carpenter, expenses: Expense[], dmy: string): Expense[] {
+  const k = monthKey(dmy);
+  if (!k) return [];
+  return expenses.filter((e) => {
+    if (!belongsToTenant(e, c) || !e.placeRentKind) return false;
+    if (e.placeRentKind === "charge") return monthKey(e.date) === k;
+    if (e.placeRentKind === "received" || e.placeRentKind === "setoff") return asMonthKey(e.placeRentMonth) === k;
+    return false;
+  });
+}
+
+/** Soft-delete a rent history line (charge / cash / commission). Not the saved old-balance figure. */
+export async function removePlaceRentTxn(e: Expense): Promise<void> {
+  if (!e.placeRentKind || e.placeRentKind === "opening") throw new Error("Old balance is changed on the card, not removed here");
+  await delRec("expenses", e.id);
+}
+
+/** Soft-delete the tick and every cash/commission tagged to that month. */
+export async function removePlaceRentMonth(c: Carpenter, expenses: Expense[], dmy: string): Promise<number> {
+  const rows = monthLines(c, expenses, dmy);
+  for (const e of rows) await delRec("expenses", e.id);
+  return rows.length;
+}
+
 export async function chargePlaceRent(c: Carpenter, amount: number, enteredBy: string, date = todayStr()): Promise<Expense> {
   const a = r2(Math.max(0, amount));
   if (a <= 0.5) throw new Error("Enter the rent amount");

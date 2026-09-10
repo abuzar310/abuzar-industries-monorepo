@@ -14,9 +14,11 @@ import {
   pendingForTenant,
   placeRentDue,
   placeRentStatement,
+  removePlaceRentTxn,
   yearFromDmy,
   yearMonthsCharged,
 } from "@/lib/place-rent";
+import { confirmDialog } from "@/store/dialog-store";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import type { Carpenter, Doc, Expense } from "@/lib/types";
@@ -79,6 +81,32 @@ export default function RentView() {
     toast("Saved " + res.name);
   }
 
+  async function removeHist(id: string) {
+    const e = expenses.find((x) => x.id === id);
+    if (!e) return;
+    const kind =
+      e.placeRentKind === "charge" ? "this month tick" : e.placeRentKind === "setoff" ? "this commission" : "this cash";
+    const ok = await confirmDialog({
+      title: "Remove " + kind + "?",
+      message:
+        "₹" +
+        inr(+e.amount || 0) +
+        (e.placeRentKind === "charge" ? " comes off what they owe." : " goes back on what they owe.") +
+        " Comes off the books. Tick the month or take the cash again if you need it back.",
+      confirmLabel: "Remove",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await removePlaceRentTxn(e);
+      bumpData();
+      load();
+      toast("Removed ₹" + inr(+e.amount || 0));
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not remove");
+    }
+  }
+
   const slots = rentSlots(tenants);
   const linked = slots.filter((s) => s.tenant);
   const history: HistLine[] = tenants
@@ -132,6 +160,7 @@ export default function RentView() {
             resetKey={"desk-" + history.length}
             onQuote={(id) => router.push("/editor/" + id)}
             onWho={(href) => router.push(href)}
+            onRemove={(id) => void removeHist(id)}
           />
         </details>
       )}

@@ -103,8 +103,9 @@ export async function apiLogin(userId: string, password: string): Promise<Sessio
       body: JSON.stringify({ userId, password }),
     });
     return r.user;
-  } catch {
-    return null;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) return null;
+    throw e;
   }
 }
 

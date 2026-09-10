@@ -1059,6 +1059,21 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
 .rent-sheet-comm p{margin:0; font-size:14.5px; line-height:1.5; color:var(--ink)}
 .rent-sheet-actions{display:flex; justify-content:flex-end; gap:9px; margin-top:20px; flex-wrap:wrap}
 .rent-sheet-actions .btn.warn:first-child{margin-right:auto}
+.rent-sheet-txns{margin:0 0 14px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff}
+.rent-sheet-txns .rent-sheet-k{padding:8px 12px 4px}
+.rent-sheet-txns .stmt{padding:8px 10px}
+.rent-hist-list button.stmt{
+  width:100%; margin:0; border:0; border-bottom:1px solid var(--line-2); border-radius:0;
+  background:transparent; cursor:pointer; text-align:left; font:inherit; color:inherit;
+}
+.rent-hist-list button.stmt:last-child{border-bottom:none}
+.rent-hist-link{min-height:44px}
+.rent-hist-link .stmt-to{text-decoration:underline; text-underline-offset:3px}
+.rent-hist-act{
+  flex:0 0 auto; font-family:var(--disp); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  font-weight:700; color:var(--danger); text-decoration:underline; text-underline-offset:2px;
+}
+.rent-sheet-txns .x-row{flex:0 0 auto; min-width:32px; min-height:32px}
 @media(min-width:561px){
   .rent-sheet-scrim{align-items:center; padding:24px}
   .rent-sheet-stats{grid-template-columns:1fr 1fr 1fr}
@@ -1297,7 +1312,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   font-family:var(--serif); font-size:12px; color:#F4E9D8; background:linear-gradient(180deg,var(--walnut),var(--walnut-2))}
 
 /* ---------- modal dialogs ---------- */
-.modal-scrim{position:fixed; inset:0; z-index:180; background:rgba(36,27,18,.5); backdrop-filter:blur(5px);
+.modal-scrim{position:fixed; inset:0; z-index:195; background:rgba(36,27,18,.5); backdrop-filter:blur(5px);
   display:flex; align-items:center; justify-content:center; padding:20px; animation:fade-in .2s ease}
 .modal-card{background:var(--panel-2); border:1px solid var(--line-2); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg);
   width:min(440px,94vw); padding:26px 26px 22px; animation:card-in .35s cubic-bezier(.22,1,.36,1)}

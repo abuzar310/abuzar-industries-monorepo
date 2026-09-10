@@ -165,9 +165,34 @@ function phonesEq(a: string, b: string): boolean {
   return x === y;
 }
 
-function isPersonalBuy(a: { key: string; phone: string; phoneAlt: string }, d: Doc, cust?: Customer): boolean {
+export function isShopName(name: string): boolean {
+  const n = carpenterKey(name);
+  return n.includes("planning") || n.includes("plyning") || n.includes("planing");
+}
+
+/** Customer row that is the carpenter themselves (Ismail / Suresh shop), not a party they brought. */
+export function shopSelfCarpenter(c: Customer, carps: Carpenter[]): Carpenter | undefined {
+  return carps.find((t) => {
+    if (phonesEq(c.phone, t.phone) || phonesEq(c.phone, t.phoneAlt || "")) return true;
+    return isShopName(c.name) && isShopName(t.name) && sameCarpenterSeed(c.name, t.name);
+  });
+}
+
+export function shopSelfCustomer(t: Carpenter, customers: Customer[]): Customer | undefined {
+  return customers.find((c) => shopSelfCarpenter(c, [t])?.id === t.id);
+}
+
+function isPersonalBuy(a: { key: string; name?: string; phone: string; phoneAlt: string }, d: Doc, cust?: Customer): boolean {
   if (a.key && carpenterKey(d.customerName) === a.key) return true;
   if (a.key && cust && carpenterKey(cust.name) === a.key) return true;
+  const self = a.name || a.key;
+  if (
+    isShopName(self) &&
+    (isShopName(d.customerName) || (cust && isShopName(cust.name))) &&
+    (sameCarpenterSeed(self, d.customerName) || (cust && sameCarpenterSeed(self, cust.name)))
+  ) {
+    return true;
+  }
   if (a.phone && (phonesEq(a.phone, d.phone) || (cust && phonesEq(a.phone, cust.phone)))) return true;
   if (a.phoneAlt && (phonesEq(a.phoneAlt, d.phone) || (cust && phonesEq(a.phoneAlt, cust.phone)))) return true;
   return false;
@@ -175,6 +200,7 @@ function isPersonalBuy(a: { key: string; phone: string; phoneAlt: string }, d: D
 
 function isSelfParty(a: Acc, p: CarpenterParty): boolean {
   if (a.key && carpenterKey(p.name) === a.key) return true;
+  if (isShopName(a.name) && isShopName(p.name) && sameCarpenterSeed(a.name, p.name)) return true;
   if (a.phone && phonesEq(a.phone, p.phone)) return true;
   if (a.phoneAlt && phonesEq(a.phoneAlt, p.phone)) return true;
   return false;

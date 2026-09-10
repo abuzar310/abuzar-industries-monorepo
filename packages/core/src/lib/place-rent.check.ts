@@ -9,6 +9,7 @@ import {
   chargeOfMonth,
   monthAlloc,
   monthCharged,
+  monthLines,
   monthFirstDay,
   monthKey,
   monthRemain,
@@ -172,6 +173,7 @@ ok(monthRentStatus(ismail, tagged.slice(0, 2), aug) === "part", "8k of 15k is pa
 ok(monthRentStatus(ismail, [tagged[0]], aug) === "due", "charge only is due");
 ok(monthRentStatus(ismail, [], aug) === "empty", "no charge is empty");
 ok(monthAlloc(ismail, [exp({ id: "r3", amount: 3000, placeRentKind: "received", carpenterId: "CARP-1" })], aug) === 0, "untagged cash does not fill a month");
+ok(monthLines(ismail, tagged, aug).length === 3, "August charge + two tagged pays are the month lines");
 ok(
   openingLeft(ismail, [
     exp({ id: "o2", amount: 10000, placeRentKind: "opening", carpenterId: "CARP-1" }),

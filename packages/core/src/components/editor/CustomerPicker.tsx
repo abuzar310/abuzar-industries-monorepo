@@ -41,7 +41,13 @@ export default function CustomerPicker({
   const ref = useRef<HTMLInputElement>(null);
   const term = value.trim().toLowerCase();
   const filtered = term
-    ? customers.filter((c) => (c.name || "").toLowerCase().includes(term) || (c.phone || "").includes(term))
+    ? customers.filter(
+        (c) =>
+          (c.name || "").toLowerCase().includes(term) ||
+          (c.phone || "").includes(term) ||
+          (c.notes || "").toLowerCase().includes(term) ||
+          (c.site || "").toLowerCase().includes(term),
+      )
     : customers;
   const matches = maxResults > 0 ? filtered.slice(0, maxResults) : filtered;
   const extraHits = (extras || []).filter((x) => {
