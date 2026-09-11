@@ -131,53 +131,48 @@ export function HistList({
   items,
   empty,
   resetKey,
+  onQuote,
   onWho,
-  onRemove,
 }: {
   items: HistLine[];
   empty: string;
   resetKey: string;
-  onQuote?: (id: string) => void;
+  onQuote: (id: string) => void;
   onWho?: (href: string) => void;
-  onRemove?: (id: string) => void;
 }) {
   if (!items.length) return <div className="empty-note" style={{ padding: "8px 0 4px" }}>{empty}</div>;
   return (
     <Paged items={items} resetKey={resetKey}>
       {(view) => (
         <div className="cs-card rent-hist-list">
-          {view.map((ev) => {
-            const canRemove = !!(onRemove && ev.kind !== "opening" && ev.id.startsWith("EXP-"));
-            const goWho = !canRemove && !!(ev.href && onWho);
-            const onRow = canRemove ? () => onRemove!(ev.id) : goWho ? () => onWho!(ev.href!) : undefined;
-            const body = (
-              <>
-                <div className={"stmt-ic " + (ev.kind === "received" ? "cash" : ev.kind === "setoff" ? "upi" : "due")}>
-                  {ev.kind === "received" ? "₹" : ev.kind === "setoff" ? "−" : ev.kind === "opening" ? "Old" : "Rent"}
-                </div>
-                <div className="stmt-main">
-                  <div className="stmt-to">{ev.label}</div>
-                  <div className="stmt-sub">{[ev.who, ev.date, ev.sub].filter(Boolean).join(" · ")}</div>
-                </div>
-                <div className="cs-amt">
-                  <div className={"stmt-amt" + (ev.signed > 0 ? " due" : "")}>
-                    {ev.signed > 0 ? "+" : "−"}₹{inr(Math.abs(ev.signed))}
-                  </div>
-                  <small className="cs-runbal">due ₹{inr(ev.bal)}</small>
-                </div>
-                {canRemove && <span className="rent-hist-act">Remove</span>}
-              </>
-            );
-            return onRow ? (
-              <button type="button" className={"stmt" + (canRemove ? " rent-hist-link" : "")} key={ev.id} onClick={onRow}>
-                {body}
-              </button>
-            ) : (
-              <div className="stmt" key={ev.id}>
-                {body}
+          {view.map((ev) => (
+            <div
+              className="stmt"
+              key={ev.id}
+              style={ev.quoteId || ev.href ? { cursor: "pointer" } : undefined}
+              onClick={
+                ev.quoteId
+                  ? () => onQuote(ev.quoteId!)
+                  : ev.href && onWho
+                    ? () => onWho(ev.href!)
+                    : undefined
+              }
+            >
+              <div className={"stmt-ic " + (ev.kind === "received" ? "cash" : ev.kind === "setoff" ? "upi" : "due")}>
+                {ev.kind === "received" ? "₹" : ev.kind === "setoff" ? "−" : ev.kind === "opening" ? "Old" : "Rent"}
               </div>
-            );
-          })}
+              <div className="stmt-main">
+                <div className="stmt-to">{ev.label}</div>
+                <div className="stmt-sub">{[ev.who, ev.date, ev.sub].filter(Boolean).join(" · ")}</div>
+              </div>
+              <div className="cs-amt">
+                <div className={"stmt-amt" + (ev.signed > 0 ? " due" : "")}>
+                  {ev.signed > 0 ? "+" : "−"}₹{inr(Math.abs(ev.signed))}
+                </div>
+                <small className="cs-runbal">due ₹{inr(ev.bal)}</small>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </Paged>

@@ -361,12 +361,11 @@ export function resolveAiPageActions(pathname: string, doc: Doc | null): AiPageB
         title: onPerson ? "Tenant" : "Rent",
         actions: [
           explain("What is Rent?", "Cut Size place rent for two people (Ismail and Suresha). Two cards on top. Tap a card to open that person, the same way you open a carpenter or a customer. History for both sits under the cards."),
-          how("Set monthly rent", "Rent → tap the person → Usual monthly ₹ on the year list → Save."),
-          how("Set old balance", "Rent → tap the person → Old balance → Save old balance. This replaces what they already owe."),
-          how("Tick a month", "Rent → tap the person → tap a month → keep usual ₹15,000 or edit → Add to due. Tap a ticked month again to remove it."),
-          how("Remove a rent line", "Rent → tap the person → History → tap the transaction → Remove. Tick the month or take cash again if you need it back."),
-          how("They paid rent", "Rent → tap the person → 1 They paid rent. Full or part, cash / UPI / owner → Record payment."),
-          how("Put commission towards rent", "Rent → tap the person → 2 Commission towards rent. Amount towards rent, cash to them if needed."),
+          how("Set monthly rent", "Rent → tap the person → Monthly rent and old balance → Save monthly ₹."),
+          how("Set old balance", "Rent → tap the person → Monthly rent and old balance → Save old balance. This replaces what they already owe."),
+          how("Charge this month", "Rent → tap the person → Add this month under They owe. Type ₹. Does not put cash in Daybook."),
+          how("Record rent they paid", "Rent → tap the person → 2 They paid rent. Full, Part, or type an amount (₹5,000 of what they owe). Cash goes to Daybook and Receipts."),
+          how("Put commission towards rent", "Rent → tap the person → 1 Commission towards rent. On a locked quotation for Ismail or Suresha the same card appears under Commission lock. Towards rent is not cash; leftover cash commission goes to Daybook."),
         ],
       };
     }

@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, fetchAllTransactions, type AllTransaction } from "@/lib/data";
-import { computeDoc, inr, qty } from "@/lib/calc";
+import { allRec, fetchAllTransactions, txnHref, type AllTransaction } from "@/lib/data";
+import { clockOf, computeDoc, inr, qty } from "@/lib/calc";
 import { partyLedger, quoteLedger, quoteOwnBill } from "@/lib/payments";
 import { computeTrading, docTrade, getStockConfig, type StockConfig } from "@/lib/trading";
 import { getFeatures } from "@/lib/features";
@@ -415,6 +415,7 @@ export default function DashboardView() {
                     <div className="stmt-to">{quoteById.get(e.sourceId || "")?.customerName || "Payment"}</div>
                     <div className="stmt-sub">
                       {e.mode === "upi" ? e.account || "UPI" : e.toOwner ? "Cash → Owner" : "Cash"} · {e.date}
+                      {clockOf(e.createdAt) ? " · " + clockOf(e.createdAt) : ""}
                     </div>
                   </div>
                   <div className="stmt-amt">+₹{inr(e.amount)}</div>
@@ -468,7 +469,7 @@ export default function DashboardView() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "var(--t-cream2, #f6f0e4)", borderBottom: "1px solid var(--line)" }}>
-                    <th style={thStyle}>Date</th>
+                    <th style={thStyle}>Date / time</th>
                     <th style={thStyle}>Type</th>
                     <th style={thStyle}>Party</th>
                     <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
@@ -480,8 +481,16 @@ export default function DashboardView() {
                 </thead>
                 <tbody>
                   {allTxns.map((txn) => (
-                    <tr key={txn.id} style={{ borderBottom: "1px solid var(--line)", background: txn.deleted ? "rgba(220,53,69,0.04)" : "transparent" }}>
-                      <td style={{ padding: "6px 8px", fontFamily: "var(--mono)", fontSize: 11 }}>{txn.date}</td>
+                    <tr
+                      key={txn.id}
+                      style={{ borderBottom: "1px solid var(--line)", background: txn.deleted ? "rgba(220,53,69,0.04)" : "transparent", cursor: "pointer" }}
+                      onClick={() => router.push(txnHref(txn))}
+                      title="Open where this was recorded"
+                    >
+                      <td style={{ padding: "6px 8px", fontFamily: "var(--mono)", fontSize: 11 }}>
+                        {txn.date}
+                        {clockOf(txn.createdAt) ? <div className="sub">{clockOf(txn.createdAt)}</div> : null}
+                      </td>
                       <td style={{ padding: "6px 8px" }}>
                         <span style={{
                           display: "inline-block", padding: "1px 6px", borderRadius: "999px",

@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { fetchAllTransactions, type AllTransaction } from "@/lib/data";
-import { inr } from "@/lib/calc";
+import { fetchAllTransactions, txnHref, type AllTransaction } from "@/lib/data";
+import { clockOf, inr } from "@/lib/calc";
 import { useApp } from "@/store/useApp";
 import Pager from "@/components/Pager";
 
@@ -202,7 +202,7 @@ export default function TransactionsView() {
             <table className="dash-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr style={{ background: "var(--t-cream2)", borderBottom: "1px solid var(--line)" }}>
-                  <th style={thS}>Date</th>
+                  <th style={thS}>Date / time</th>
                   <th style={thS}>Type</th>
                   <th style={thS}>Party</th>
                   <th style={{ ...thS, textAlign: "right" }}>Amount</th>
@@ -222,16 +222,14 @@ export default function TransactionsView() {
                         borderBottom: "1px solid var(--line)",
                         background: t.deleted ? "rgba(220,53,69,0.04)" : "transparent",
                         opacity: t.deleted ? 0.7 : 1,
-                        cursor: t.sourceId ? "pointer" : "default",
+                        cursor: "pointer",
                       }}
-                      onClick={() => {
-                        if (t.sourceId && (t.type === "receipt" || t.type === "expense")) {
-                          router.push("/editor/" + t.sourceId);
-                        }
-                      }}
+                      onClick={() => router.push(txnHref(t))}
+                      title="Open where this was recorded"
                     >
                       <td style={{ padding: "7px 10px", fontFamily: "var(--mono)", fontSize: 11, color: t.deleted ? "var(--ink-faint)" : "inherit" }}>
                         {t.date}
+                        {clockOf(t.createdAt) ? <div className="sub">{clockOf(t.createdAt)}</div> : null}
                       </td>
                       <td style={{ padding: "7px 10px" }}>
                     <span className={"txn-badge " + t.type}>
