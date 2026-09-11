@@ -1,18 +1,26 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
 import { Paged } from "@/components/Pager";
+import PassbookPrint, { type PassbookLine } from "@/components/PassbookPrint";
+import PdfButtons from "@/components/PdfButtons";
+import { brandFor } from "@/lib/brand";
 import { inr } from "@/lib/calc";
+import { generatePdf } from "@/lib/pdf";
 import {
   PLACE_RENT_SEEDS,
   adoptCarpenterAsTenant,
   findDuplicateCarpenters,
   mergePlaceRentTenants,
   nameHitsSeed,
+  placeRentDue,
+  placeRentStatement,
   preferKeep,
   type PlaceRentStmt,
 } from "@/lib/place-rent";
-import type { Carpenter } from "@/lib/types";
+import type { Carpenter, Expense } from "@/lib/types";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import { toast } from "@/store/app-store";
+import { useApp } from "@/store/useApp";
 
 export const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -127,52 +135,151 @@ export function stmtTotals(stmt: PlaceRentStmt[]) {
   return { charged: r2(charged), opening: r2(opening), received: r2(received), setoff: r2(setoff) };
 }
 
+/** Same cream passbook as Accounts / customer statement, with rent words. */
+export function rentPassbook(tenant: Carpenter, expenses: Expense[]): {
+  summary: { k: string; v: string }[];
+  rows: PassbookLine[];
+} {
+  const stmt = placeRentStatement(tenant, expenses);
+  const tot = stmtTotals(stmt);
+  const due = placeRentDue(tenant, expenses);
+  const monthly = r2(+(tenant.monthlyRent || 0) || 0);
+  const added = r2(tot.opening + tot.charged);
+  const paid = r2(tot.received + tot.setoff);
+  const rows: PassbookLine[] = stmt.map((e) => ({
+    key: e.id,
+    date: e.date,
+    who:
+      e.kind === "opening"
+        ? "Old balance — already owed"
+        : e.kind === "charge"
+          ? "Rent added"
+          : e.kind === "received"
+            ? "They paid"
+            : "Commission put on rent",
+    detail: e.sub,
+    debit: e.signed > 0 ? Math.abs(e.signed) : 0,
+    credit: e.signed < 0 ? Math.abs(e.signed) : 0,
+    balance: e.bal,
+    open: e.kind === "opening",
+  }));
+  rows.push({
+    key: tenant.id + "-close",
+    date: "",
+    who: due > 0.5 ? "They still owe" : "Settled",
+    debit: 0,
+    credit: 0,
+    balance: due,
+    close: true,
+  });
+  return {
+    summary: [
+      { k: "Usual month", v: monthly > 0.5 ? "₹ " + inr(monthly) : "—" },
+      { k: "Rent added", v: "₹ " + inr(added) },
+      { k: "They paid", v: "₹ " + inr(paid) },
+      { k: "They still owe", v: due > 0.5 ? "₹ " + inr(due) : "Settled" },
+    ],
+    rows,
+  };
+}
+
+export function RentPdfButtons({ tenant, expenses }: { tenant: Carpenter; expenses: Expense[] }) {
+  const printRef = useRef<HTMLDivElement>(null);
+  const { brandMode } = useApp();
+  const brand = brandFor(brandMode);
+  const [job, setJob] = useState<{ preview: boolean } | null>(null);
+  const book = rentPassbook(tenant, expenses);
+
+  useEffect(() => {
+    if (!job) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const el = printRef.current;
+      if (!el) {
+        setJob(null);
+        return;
+      }
+      const fileBase = (tenant.name || "rent").replace(/\s+/g, "-").toLowerCase() + "-place-rent";
+      try {
+        if (!job.preview) toast("Preparing PDF…");
+        await generatePdf(el, fileBase, {
+          pageBreak: ".bank-row,.acct-print-sum,.acct-print-hdr",
+          width: 700,
+          title: (brand.name || "Place rent") + " — " + (tenant.name || "tenant"),
+          marginMm: 8,
+          preview: job.preview,
+        });
+        if (!cancelled && !job.preview) toast("Rent PDF downloaded");
+      } catch {
+        if (!cancelled) toast("Could not create the PDF");
+      }
+      if (!cancelled) setJob(null);
+    }, 80);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [job, tenant.name, brand.name]);
+
+  return (
+    <>
+      <PdfButtons onPreview={() => setJob({ preview: true })} onDownload={() => setJob({ preview: false })} />
+      <PassbookPrint printRef={printRef} summary={book.summary} rows={book.rows} dr="They owe" cr="They paid" />
+    </>
+  );
+}
+
 export function HistList({
   items,
   empty,
   resetKey,
-  onQuote,
   onWho,
+  onRemove,
 }: {
   items: HistLine[];
   empty: string;
   resetKey: string;
-  onQuote: (id: string) => void;
+  onQuote?: (id: string) => void;
   onWho?: (href: string) => void;
+  onRemove?: (id: string) => void;
 }) {
   if (!items.length) return <div className="empty-note" style={{ padding: "8px 0 4px" }}>{empty}</div>;
   return (
     <Paged items={items} resetKey={resetKey}>
       {(view) => (
         <div className="cs-card rent-hist-list">
-          {view.map((ev) => (
-            <div
-              className="stmt"
-              key={ev.id}
-              style={ev.quoteId || ev.href ? { cursor: "pointer" } : undefined}
-              onClick={
-                ev.quoteId
-                  ? () => onQuote(ev.quoteId!)
-                  : ev.href && onWho
-                    ? () => onWho(ev.href!)
-                    : undefined
-              }
-            >
-              <div className={"stmt-ic " + (ev.kind === "received" ? "cash" : ev.kind === "setoff" ? "upi" : "due")}>
-                {ev.kind === "received" ? "₹" : ev.kind === "setoff" ? "−" : ev.kind === "opening" ? "Old" : "Rent"}
-              </div>
-              <div className="stmt-main">
-                <div className="stmt-to">{ev.label}</div>
-                <div className="stmt-sub">{[ev.who, ev.date, ev.sub].filter(Boolean).join(" · ")}</div>
-              </div>
-              <div className="cs-amt">
-                <div className={"stmt-amt" + (ev.signed > 0 ? " due" : "")}>
-                  {ev.signed > 0 ? "+" : "−"}₹{inr(Math.abs(ev.signed))}
+          {view.map((ev) => {
+            const canRemove = !!(onRemove && ev.kind !== "opening" && ev.id.startsWith("EXP-"));
+            const goWho = !canRemove && !!(ev.href && onWho);
+            const onRow = canRemove ? () => onRemove!(ev.id) : goWho ? () => onWho!(ev.href!) : undefined;
+            const body = (
+              <>
+                <div className={"stmt-ic " + (ev.kind === "received" ? "cash" : ev.kind === "setoff" ? "upi" : "due")}>
+                  {ev.kind === "received" ? "₹" : ev.kind === "setoff" ? "−" : ev.kind === "opening" ? "Old" : "Rent"}
                 </div>
-                <small className="cs-runbal">due ₹{inr(ev.bal)}</small>
+                <div className="stmt-main">
+                  <div className="stmt-to">{ev.label}</div>
+                  <div className="stmt-sub">{[ev.who, ev.date, ev.sub].filter(Boolean).join(" · ")}</div>
+                </div>
+                <div className="cs-amt">
+                  <div className={"stmt-amt" + (ev.signed > 0 ? " due" : "")}>
+                    {ev.signed > 0 ? "+" : "−"}₹{inr(Math.abs(ev.signed))}
+                  </div>
+                  <small className="cs-runbal">due ₹{inr(ev.bal)}</small>
+                </div>
+                {canRemove && <span className="rent-hist-act">Remove</span>}
+              </>
+            );
+            return onRow ? (
+              <button type="button" className={"stmt" + (canRemove ? " rent-hist-link" : "")} key={ev.id} onClick={onRow}>
+                {body}
+              </button>
+            ) : (
+              <div className="stmt" key={ev.id}>
+                {body}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </Paged>
