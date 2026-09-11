@@ -4,7 +4,7 @@ import { inr, nowIso } from "@/lib/calc";
 import { addExpense, liveSpendCategories } from "@/lib/expenses";
 import { delRec, getRec, put } from "@/lib/data";
 import { quoteBill, quotePaid, statementsForQuote, type PartyStatement } from "@/lib/payments";
-import { advanceBalance, applyAdvancesToQuote } from "@/lib/vouchers";
+import { advanceBalance, applyAdvancesToQuote, restoreAdvanceFromApply } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import AccountPicker from "@/components/AccountPicker";
 import { bumpData, toast } from "@/store/app-store";
@@ -336,7 +336,11 @@ export default function PaymentBlock({
   async function delLine(l: PartyStatement) {
     // synthetic lines ("from quote record") have no backing expense — they live only in the quote's
     // pay totals, so just reduce those aggregates (no expense to delete).
-    if (!l.synthetic) await delRec("expenses", l.id);
+    if (!l.synthetic) {
+      const e = await getRec<Expense>("expenses", l.id);
+      if (e) await restoreAdvanceFromApply(e);
+      await delRec("expenses", l.id);
+    }
     if (l.commission) {
       setAggregates(cashOf(), upiOf(), Math.max(0, r2(commOf() - l.amount)));
     } else {

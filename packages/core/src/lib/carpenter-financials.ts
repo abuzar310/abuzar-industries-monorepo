@@ -9,6 +9,18 @@ export function carpenterKey(name: string): string {
   return (name || "").trim().toLowerCase();
 }
 
+/** First name-word, with Suresh/Suresha treated as one person. */
+export function carpenterSeed(name: string): string {
+  const w = carpenterKey(name).split(/[^a-z0-9]+/).filter(Boolean)[0] || "";
+  return w === "suresh" ? "suresha" : w;
+}
+
+export function sameCarpenterSeed(a: string, b: string): boolean {
+  const x = carpenterSeed(a);
+  const y = carpenterSeed(b);
+  return !!x && x === y && (x === "suresha" || x === "ismail");
+}
+
 export function isCarpenterCommission(e: Expense): boolean {
   if (e.type === "sale" || e.charge) return false;
   return spendCatKey(e) === "carpenter";
@@ -153,9 +165,34 @@ function phonesEq(a: string, b: string): boolean {
   return x === y;
 }
 
-function isPersonalBuy(a: { key: string; phone: string; phoneAlt: string }, d: Doc, cust?: Customer): boolean {
+export function isShopName(name: string): boolean {
+  const n = carpenterKey(name);
+  return n.includes("planning") || n.includes("plyning") || n.includes("planing");
+}
+
+/** Customer row that is the carpenter themselves (Ismail / Suresh shop), not a party they brought. */
+export function shopSelfCarpenter(c: Customer, carps: Carpenter[]): Carpenter | undefined {
+  return carps.find((t) => {
+    if (phonesEq(c.phone, t.phone) || phonesEq(c.phone, t.phoneAlt || "")) return true;
+    return isShopName(c.name) && isShopName(t.name) && sameCarpenterSeed(c.name, t.name);
+  });
+}
+
+export function shopSelfCustomer(t: Carpenter, customers: Customer[]): Customer | undefined {
+  return customers.find((c) => !!shopSelfCarpenter(c, [t]));
+}
+
+function isPersonalBuy(a: { key: string; name?: string; phone: string; phoneAlt: string }, d: Doc, cust?: Customer): boolean {
   if (a.key && carpenterKey(d.customerName) === a.key) return true;
   if (a.key && cust && carpenterKey(cust.name) === a.key) return true;
+  const self = a.name || a.key;
+  if (
+    isShopName(self) &&
+    (isShopName(d.customerName) || (cust && isShopName(cust.name))) &&
+    (sameCarpenterSeed(self, d.customerName) || (cust && sameCarpenterSeed(self, cust.name)))
+  ) {
+    return true;
+  }
   if (a.phone && (phonesEq(a.phone, d.phone) || (cust && phonesEq(a.phone, cust.phone)))) return true;
   if (a.phoneAlt && (phonesEq(a.phoneAlt, d.phone) || (cust && phonesEq(a.phoneAlt, cust.phone)))) return true;
   return false;
@@ -163,6 +200,7 @@ function isPersonalBuy(a: { key: string; phone: string; phoneAlt: string }, d: D
 
 function isSelfParty(a: Acc, p: CarpenterParty): boolean {
   if (a.key && carpenterKey(p.name) === a.key) return true;
+  if (isShopName(a.name) && isShopName(p.name) && sameCarpenterSeed(a.name, p.name)) return true;
   if (a.phone && phonesEq(a.phone, p.phone)) return true;
   if (a.phoneAlt && phonesEq(a.phoneAlt, p.phone)) return true;
   return false;
@@ -302,6 +340,35 @@ export function rollupCarpenters(
     return a;
   };
 
+  const preferCarp = (a: Carpenter, b: Carpenter): Carpenter => {
+    const score = (c: Carpenter) => {
+      let n = 0;
+      if (last10(c.phone).length >= 10) n += 100;
+      if (c.placeRent) n += 8;
+      if (c.photo) n += 5;
+      if ((c.name || "").length > 12) n += 4;
+      return n;
+    };
+    return score(a) >= score(b) ? a : b;
+  };
+
+  const foldInto = (name: string, phone?: string): Acc | undefined => {
+    const key = carpenterKey(name);
+    if (key && map.has(key)) return map.get(key);
+    for (const a of map.values()) {
+      if (phone && a.phone && phonesEq(phone, a.phone)) return a;
+      const other = a.record?.name || a.name;
+      if (isShopName(name) && isShopName(other) && sameCarpenterSeed(other, name)) return a;
+    }
+    return undefined;
+  };
+
+  const ensureNamed = (name: string, phone?: string): Acc => {
+    const hit = foldInto(name, phone);
+    if (hit) return hit;
+    return ensure(carpenterKey(name), name);
+  };
+
   const addParty = (a: Acc, party: CarpenterParty) => {
     const pk = partyKey(party);
     const cur = a.parties.get(pk);
@@ -313,7 +380,26 @@ export function rollupCarpenters(
     }
   };
 
+  const pickedDir: Carpenter[] = [];
+  const seedKeep = new Map<string, Carpenter>();
   for (const c of directory) {
+    const seed = carpenterSeed(c.name);
+    if ((seed === "suresha" || seed === "ismail") && isShopName(c.name)) {
+      const prev = seedKeep.get(seed);
+      if (!prev) {
+        seedKeep.set(seed, c);
+        pickedDir.push(c);
+      } else {
+        const keep = preferCarp(prev, c);
+        seedKeep.set(seed, keep);
+        const i = pickedDir.findIndex((x) => x.id === prev.id);
+        if (i >= 0) pickedDir[i] = keep;
+      }
+    } else {
+      pickedDir.push(c);
+    }
+  }
+  for (const c of pickedDir) {
     const key = carpenterKey(c.name);
     if (!key) continue;
     const a = ensure(key, c.name);
@@ -329,7 +415,7 @@ export function rollupCarpenters(
   for (const c of customers) {
     const key = carpenterKey(c.site);
     if (!key) continue;
-    const a = ensure(key, c.site);
+    const a = ensureNamed(c.site, c.sitePhone);
     if (!a.phone && c.sitePhone) a.phone = c.sitePhone;
     if (!a.village && c.siteVillage) a.village = c.siteVillage;
     if (!a.city && c.siteCity) a.city = c.siteCity;
@@ -338,9 +424,8 @@ export function rollupCarpenters(
 
   for (const d of quotes) {
     if (!liveDoc(d)) continue;
-    const key = carpenterKey(d.site);
-    if (!key) continue;
-    const a = ensure(key, d.site);
+    if (!carpenterKey(d.site)) continue;
+    const a = ensureNamed(d.site, d.sitePhone);
     if (!a.phone && d.sitePhone) a.phone = d.sitePhone;
     a.quoteIds.add(d.id);
     const cust = d.customerId ? byId.get(d.customerId) : undefined;
@@ -367,7 +452,7 @@ export function rollupCarpenters(
       label = (namedCust?.site || "").trim();
     }
     if (!key) continue;
-    const a = ensure(key, label);
+    const a = ensureNamed(label || key);
     const fromQuote = q?.customerId ? byId.get(q.customerId) : undefined;
     const cust = namedCust || fromQuote;
     const partyName = (e.party || cust?.name || "").trim();
@@ -397,9 +482,8 @@ export function rollupCarpenters(
     const locked = lockAmount(d);
     if (locked <= 0) continue;
     const carpenter = (d.commLock?.carpenter || d.site || "").trim();
-    const key = carpenterKey(carpenter);
-    if (!key) continue;
-    const a = ensure(key, carpenter);
+    if (!carpenterKey(carpenter)) continue;
+    const a = ensureNamed(carpenter);
     const cust = d.commLock?.partyId
       ? byId.get(d.commLock.partyId)
       : d.customerId
@@ -421,7 +505,7 @@ export function rollupCarpenters(
       quoteId: d.id,
       quoteNo: (d.displayNumber || d.number || "").trim(),
       carpenter: (carpenter || a.name).trim(),
-      carpenterKey: key,
+      carpenterKey: a.key,
       party: partyName || "—",
       partyId: cust?.id || d.commLock?.partyId || d.customerId || undefined,
       locked,
@@ -450,7 +534,7 @@ export function rollupCarpenters(
     }
     const siteKey = carpenterKey(d.site);
     if (!siteKey) continue;
-    const site = map.get(siteKey);
+    const site = map.get(siteKey) || foldInto(d.site, d.sitePhone);
     if (site && !isPersonalBuy(site, d, cust)) site.broughtQuotes.push(line);
   }
 
