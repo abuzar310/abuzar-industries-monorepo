@@ -79,6 +79,14 @@ body{
   font-size:20px; line-height:1; color:var(--ink); white-space:nowrap; padding-right:4px;
 }
 .nav-brand b{color:var(--ochre); font-weight:600; padding:0 2px}
+.nav-hist{display:flex; gap:2px; flex:0 0 auto}
+.nav-hist-btn{
+  width:34px; height:34px; padding:0; border:1px solid var(--line); border-radius:9px;
+  background:rgba(252,250,244,.7); color:var(--ink); font-size:22px; line-height:1;
+  cursor:pointer; display:grid; place-items:center;
+}
+.nav-hist-btn:hover{border-color:var(--ochre); color:var(--ink)}
+.nav-hist-btn:active{transform:translateY(1px)}
 .tabs{display:flex; gap:2px; flex-wrap:wrap; flex:1 1 auto}
 .tab{
   font-family:var(--disp); letter-spacing:.02em; font-weight:600;
@@ -1430,6 +1438,7 @@ select.statussel:focus, select.paysel:focus{outline:none; border-color:var(--och
   .topnav{padding-top:env(safe-area-inset-top, 0px)}
   .topnav-in{padding:10px 14px; gap:10px; flex-wrap:nowrap}
   .nav-brand{font-size:13px; letter-spacing:.04em; text-transform:uppercase; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:8px}
+  .nav-hist-btn{width:44px; height:44px; min-height:44px}
   .phone-logo{display:block; width:22px; height:22px; object-fit:contain; flex:0 0 auto}
   .um-caret{display:none}
   .navsearch{display:none}

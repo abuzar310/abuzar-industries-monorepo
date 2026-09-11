@@ -34,7 +34,11 @@ import {
   setHolderKind,
   setHolderOpening,
   accountsTransportPaySources,
+  collectOnLabel,
+  collectOnOptions,
+  isHandCollectOn,
   isHandTransportSrc,
+  pickPaySourceForCollectOn,
   settleTransportDue,
   settleTransportDueCash,
   settleTransportDueOwnerCash,
@@ -321,7 +325,8 @@ export default function AccountsView() {
   }, [holders, ungrouped]);
   useEffect(() => {
     if (duePocket || !transportPockets.length) return;
-    setDuePocket(transportPockets[0].key);
+    const t = transportPockets.find((p) => p.transport) || transportPockets[0];
+    setDuePocket(t.key);
   }, [transportPockets, duePocket]);
 
   const allNames = useMemo(() => accounts.map((a) => a.name), [accounts]);
@@ -541,16 +546,6 @@ export default function AccountsView() {
   ) {
     return (s.holderId || "") === (holderId || "") && lc(s.account) === lc(account || "");
   }
-  function pickPaySource(amt: number) {
-    const srcs = listPaySources();
-    return (
-      srcs.find((s) => s.transport && s.balance + 0.5 >= amt) ||
-      srcs.find((s) => !isHandTransportSrc(s) && s.balance + 0.5 >= amt) ||
-      srcs.find((s) => s.transport) ||
-      srcs.find((s) => s.cash) ||
-      srcs[0]
-    );
-  }
   function startPayDue(dueId: string) {
     cancelCollect();
     cancelEditDue();
@@ -559,7 +554,7 @@ export default function AccountsView() {
       return;
     }
     const due = pendingDues.find((e) => e.id === dueId);
-    const pick = pickPaySource(+(due?.amount || 0));
+    const pick = pickPaySourceForCollectOn(listPaySources(), due?.transportPocket, +(due?.amount || 0));
     setPayDueId(dueId);
     setPayHolder(pick?.holderId || null);
     setPayFor(pick?.account || null);
@@ -702,7 +697,7 @@ export default function AccountsView() {
           submitEditDue();
         }}
       >
-        <small className="acct-hint">Change name, amount, vehicle, place, or which UPI this due collects on. Still not paid.</small>
+        <small className="acct-hint">Change name, amount, vehicle, place, or Collect on (Cash, UPI, or a pocket). Still not paid.</small>
         <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
           <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
             <span>Transporter</span>
@@ -716,18 +711,16 @@ export default function AccountsView() {
             <span>Amount ₹</span>
             <input type="number" inputMode="decimal" value={dueAmt} onChange={(e) => setDueAmt(e.target.value)} />
           </label>
-          {transportPockets.length > 0 && (
-            <label className="modal-field" style={{ flex: "1 1 160px", minWidth: 0 }}>
-              <span>Collect on</span>
-              <select value={duePocket} onChange={(e) => setDuePocket(e.target.value)}>
-                {transportPockets.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <label className="modal-field" style={{ flex: "1 1 160px", minWidth: 0 }}>
+            <span>Collect on</span>
+            <select value={duePocket} onChange={(e) => setDuePocket(e.target.value)}>
+              {collectOnOptions(transportPockets).map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
             <span>From</span>
             <input type="text" list="acct-bought-from" value={dueFrom} onChange={(e) => setDueFrom(e.target.value)} />
@@ -1621,7 +1614,7 @@ export default function AccountsView() {
               }}
             >
               <small className="acct-hint">
-                Locking a due shows Need to collect on that UPI (CS Kumar). As money comes in, the need drops. Pay the lorry when the pocket has enough.
+                Locking on a UPI pocket shows Need to collect there. Cash or UPI has no pocket need. Pay later from cash by manager, cash by owner, or a UPI.
               </small>
               <div className="acct-add-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
                 <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
@@ -1646,18 +1639,16 @@ export default function AccountsView() {
                   <span>Amount ₹</span>
                   <input type="number" inputMode="decimal" placeholder="0" value={dueAmt} onChange={(e) => setDueAmt(e.target.value)} />
                 </label>
-                {transportPockets.length > 0 && (
-                  <label className="modal-field" style={{ flex: "1 1 160px", minWidth: 0 }}>
-                    <span>Collect on</span>
-                    <select value={duePocket} onChange={(e) => setDuePocket(e.target.value)}>
-                      {transportPockets.map((p) => (
-                        <option key={p.key} value={p.key}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
+                <label className="modal-field" style={{ flex: "1 1 160px", minWidth: 0 }}>
+                  <span>Collect on</span>
+                  <select value={duePocket} onChange={(e) => setDuePocket(e.target.value)}>
+                    {collectOnOptions(transportPockets).map((p) => (
+                      <option key={p.key} value={p.key}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="modal-field" style={{ flex: "2 1 160px", minWidth: 0 }}>
                   <span>From</span>
                   <input
@@ -1719,7 +1710,9 @@ export default function AccountsView() {
                     ₹{inr(+e.amount || 0)}
                     {e.date ? " · " + e.date : ""}
                     {e.transportPocket
-                      ? " · " + (transportPockets.find((p) => p.key === e.transportPocket || lc(p.name) === lc(e.transportPocket))?.name || e.transportPocket)
+                      ? " · " + (isHandCollectOn(e.transportPocket)
+                        ? collectOnLabel(e.transportPocket)
+                        : (transportPockets.find((p) => p.key === e.transportPocket || lc(p.name) === lc(e.transportPocket))?.name || e.transportPocket))
                       : ""}
                   </span>
                   <span className="acct-tag pending">Due</span>

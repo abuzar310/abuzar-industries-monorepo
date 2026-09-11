@@ -88,6 +88,14 @@ export default function TopNav({ tabs }: { tabs: Tab[] }) {
           <img className="phone-logo" src="/icon.png" alt="" width={22} height={22} />
           {brand.name}
         </div>
+        <div className="nav-hist" role="group" aria-label="Page history">
+          <button type="button" className="nav-hist-btn" aria-label="Back" title="Back" onClick={() => window.history.back()}>
+            ‹
+          </button>
+          <button type="button" className="nav-hist-btn" aria-label="Forward" title="Forward" onClick={() => window.history.forward()}>
+            ›
+          </button>
+        </div>
         <div className="tabs">
           {TABS.filter((t) => !t.owner || isOwner).map((t) => {
             const active = isActive(t.href, path);

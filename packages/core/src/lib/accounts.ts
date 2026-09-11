@@ -3,6 +3,8 @@ import { allRec, delRec, getRec, metaGet, metaSet, put } from "./data";
 import { nowIso, todayStr, uid } from "./calc";
 import { quoteBill, quotePaid } from "./payments";
 import {
+  COLLECT_CASH,
+  COLLECT_UPI,
   isAccountTransportPay,
   isPendingTransport,
   isTransportPocketName,
@@ -634,6 +636,11 @@ export {
   transportNeedToCollect,
   dueOnTransportPocket,
   transportPlaceOf,
+  COLLECT_CASH,
+  COLLECT_UPI,
+  isHandCollectOn,
+  collectOnLabel,
+  collectOnOptions,
 } from "./pocket-spend";
 
 /** Pay transport is the main button on this pocket (name heuristic, unless kind overrides). */
@@ -860,6 +867,22 @@ export function pickTransportPaySource(srcs: TransportPaySource[], amount: numbe
     srcs.find((s) => s.cash) ||
     srcs[0]
   );
+}
+
+/** Pay chips start on the Collect on pick; owner/manager cash can still be changed. */
+export function pickPaySourceForCollectOn(
+  srcs: TransportPaySource[],
+  collectOn: string | undefined,
+  amount: number,
+): TransportPaySource | undefined {
+  const p = (collectOn || "").trim().toLowerCase();
+  if (p === COLLECT_CASH) return srcs.find((s) => s.cash) || srcs.find((s) => s.ownerCash);
+  if (p === COLLECT_UPI) return srcs.find((s) => s.ownerUpi);
+  if (p) {
+    const hit = srcs.find((s) => nameKey(s.holderId || "") === p || nameKey(s.account) === p);
+    if (hit) return hit;
+  }
+  return pickTransportPaySource(srcs, amount);
 }
 
 /** Receipts / Accounts: cash by manager, cash by owner, UPI by owner, then CS Kumar. */
