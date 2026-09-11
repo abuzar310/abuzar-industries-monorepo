@@ -27,13 +27,17 @@ export default function LockGate() {
   async function submit() {
     if (!picked) return;
     setErr("Checking…");
-    const ok = await unlock(picked, pass);
-    if (ok) {
-      setErr("");
-      setPass("");
-      void afterUnlock(); // loads the dataset (views fill in as it lands)
-    } else {
-      setErr("Wrong password");
+    try {
+      const ok = await unlock(picked, pass);
+      if (ok) {
+        setErr("");
+        setPass("");
+        void afterUnlock(); // loads the dataset (views fill in as it lands)
+      } else {
+        setErr("Wrong password");
+      }
+    } catch {
+      setErr("Can't reach the books — wait a moment and try again");
     }
   }
 

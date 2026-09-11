@@ -1,7 +1,7 @@
 // Simple business vouchers (official app): RECEIPTS = money received against invoices
 // (or as a customer ADVANCE before any invoice exists), PAYMENT VOUCHERS = money paid
 // out (cash or a named bank account). Backed by the expenses store — no double-entry.
-import { allRec, delRec, metaGet, metaSet, put } from "./data";
+import { allRec, delRec, getRec, metaGet, metaSet, put } from "./data";
 import { addExpense } from "./expenses";
 import { computeDoc, dateSortKey, nowIso, uid } from "./calc";
 import { quoteBill, quotePaid } from "./payments";
@@ -468,6 +468,9 @@ export async function applyAdvancesToInvoice(
       label: ["Advance applied", a.label].filter(Boolean).join(" · "),
       note: (inv.customerName || "Walk-in") + " · " + inv.number,
       sourceId: inv.id,
+      custId: inv.customerId,
+      rcptId: a.rcptId,
+      fromAdvanceId: a.id,
       date: a.date,
       enteredBy: a.enteredBy,
     });
@@ -526,6 +529,9 @@ export async function applyAdvancesToQuote(
       label: ["Advance applied", a.label].filter(Boolean).join(" · "),
       note: (quote.customerName || "Walk-in") + " · " + quote.number,
       sourceId: quote.id,
+      custId: quote.customerId,
+      rcptId: a.rcptId,
+      fromAdvanceId: a.id,
       date: a.date,
       enteredBy: a.enteredBy,
     });
@@ -551,4 +557,37 @@ export async function applyAdvancesToQuote(
     await put("quotations", quote);
   }
   return { applied, payCash, payUpi };
+}
+
+/** Grow the account-advance row back when an "Advance applied" payment is deleted.
+ *  Without this, Apply then × eats the receipt (Ganeshanna ₹25,000 → leftover only). */
+export async function restoreAdvanceFromApply(e: Expense): Promise<void> {
+  const id = (e.fromAdvanceId || "").trim();
+  if (!id) return;
+  const amt = r2(+e.amount || 0);
+  if (amt <= 0.005) return;
+  const parent = await getRec<Expense>("expenses", id);
+  if (parent) {
+    parent.amount = r2((+parent.amount || 0) + amt);
+    parent.updatedAt = nowIso();
+    await put("expenses", parent);
+    return;
+  }
+  await put("expenses", {
+    id,
+    date: e.date,
+    type: "sale",
+    label: "",
+    mode: e.mode === "upi" ? "upi" : "cash",
+    amount: amt,
+    note: e.note || "",
+    account: e.account || "",
+    toOwner: !!e.toOwner,
+    enteredBy: e.enteredBy,
+    custId: e.custId,
+    rcptId: e.rcptId,
+    charge: false,
+    createdAt: e.createdAt || nowIso(),
+    updatedAt: nowIso(),
+  } satisfies Expense);
 }

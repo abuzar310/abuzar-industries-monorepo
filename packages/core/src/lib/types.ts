@@ -370,6 +370,8 @@ export interface Expense {
   carpenterId?: string;
   /** Place rent passbook: charge (this month) / opening (old debt) / cash received / commission set-off. */
   placeRentKind?: "charge" | "opening" | "received" | "setoff";
+  /** mm-yy of the calendar month this cash/set-off is for. Charge rows use date instead. */
+  placeRentMonth?: string;
   /** Quotation linked for logging only (not cascade-deleted with the quote — unlike sourceId). */
   refQuoteId?: string;
   /** Snapshot of quotation number at save time (survives quote delete). */
@@ -390,6 +392,8 @@ export interface Expense {
   /** one customer receipt may be split across quotes (waterfall) — every piece carries the
    *  SAME receipt id so lists can show it back as the single amount that was actually taken. */
   rcptId?: string;
+  /** account-advance row this "Advance applied" payment was taken from — delete must grow it back. */
+  fromAdvanceId?: string;
   /** on a custId entry: true = a DUE added (debit, they owe more); false/absent = a payment received. */
   charge?: boolean;
   /** Internal cash move (Paid to owner / Paid to manager): hits Daybook cash, never Books. */

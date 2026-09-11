@@ -7,6 +7,7 @@ import {
   carpenterCommissionHistory,
   carpenterHref,
   findCarpenterRollup,
+  shopSelfCustomer,
 } from "@/lib/carpenter-financials";
 import { editCarpenterDialog, listCarpenters, resolveCarpenterRecord, setCarpenterPhoto } from "@/lib/carpenters";
 import { dialPhone, waLink } from "@/lib/whatsapp";
@@ -59,6 +60,10 @@ export default function CarpenterDetail({ id }: { id: string }) {
   }
 
   const history = carpenterCommissionHistory([rollup]);
+  const acct = shopSelfCustomer(
+    rollup.record || ({ name: rollup.name, phone: rollup.phone, phoneAlt: rollup.phoneAlt } as Carpenter),
+    customers,
+  );
 
   async function saveContact() {
     const existing = resolveCarpenterRecord(rollup!, directory);
@@ -151,6 +156,11 @@ export default function CarpenterDetail({ id }: { id: string }) {
             </div>
           </div>
           <div className="links" style={{ marginTop: 0 }}>
+            {acct ? (
+              <button className="btn sm" onClick={() => router.push("/customers/" + acct.id)}>
+                Account
+              </button>
+            ) : null}
             <button className="btn primary sm" onClick={recordCommission}>
               Record commission
             </button>

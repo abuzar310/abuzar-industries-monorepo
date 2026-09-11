@@ -6,6 +6,7 @@ import {
   carpenterDashboard,
   carpenterHref,
   carpenterKey,
+  carpenterSeed,
   carpenterPendingAll,
   commissionGivenOnQuote,
   commissionPendingOnQuote,
@@ -14,6 +15,8 @@ import {
   parseCarpenterParam,
   pendingPayHref,
   rollupCarpenters,
+  shopSelfCarpenter,
+  shopSelfCustomer,
 } from "./carpenter-financials";
 import { nextCarpenterPhoto, resolveCarpenterRecord } from "./carpenters";
 
@@ -149,6 +152,24 @@ function demo() {
   ok(inDaybook(expenses[0]), "cash Record commission still hits Daybook");
   ok(r.lastPaid === "12-08-26", "latest payout date");
   ok(r.ownQuotes.length === 1 && r.ownQuotes[0].id === "QOWN", "quote in carpenter's own name is a personal buy");
+  const ismDir = [carp("CARP-ISM", "ISMAIL PLYNING WORK", "9591152679")];
+  const ismCust = [cust("CUST-ISM", "Ismail Planing", "", "994559992")];
+  const ismQ = [quote("QISM", "CUST-ISM", "", "1")];
+  ismQ[0].customerName = "Ismail Planing";
+  ismQ[0].finalPrice = 700;
+  const ism = rollupCarpenters(ismDir, ismCust, ismQ, []).find((x) => x.record?.id === "CARP-ISM")!;
+  ok(ism.ownQuotes.some((q) => q.id === "QISM"), "Ismail Planing quote is the carpenter's own buy");
+  ok(!ism.customers.some((c) => c.id === "CUST-ISM"), "Ismail customer is not a brought party");
+  ok(shopSelfCarpenter(ismCust[0], ismDir)?.id === "CARP-ISM", "Ismail customer folds into the carpenter");
+  ok(shopSelfCustomer(ismDir[0], ismCust)?.id === "CUST-ISM", "Ismail carpenter finds the customer account");
+  ok(
+    !shopSelfCustomer({ name: "Ismail", phone: "", id: "", createdAt: "" } as Carpenter, ismCust),
+    "bare Ismail has no shop customer account",
+  );
+  ok(
+    !shopSelfCarpenter(cust("C-GOWDA", "Suresh Gowda", "", "1111111111"), [carp("CARP-SU", "SURESHA PLYNING WORK", "9880919422")]),
+    "a different Suresh stays a customer",
+  );
   ok(r.ownBill === 15000, "personal bill is the quote final price");
   ok(r.broughtQuotes.some((q) => q.id === "Q1"), "party quote they brought is listed");
   ok(!r.broughtQuotes.some((q) => q.id === "QOWN"), "personal buy is not also a brought quote");
@@ -195,8 +216,32 @@ function demo() {
   const ply = carp("CARP-PLY", "SURESHA CARPENTER PLYNING WORK", "9880919422");
   ply.photo = "data:image/jpeg;base64,QQ==";
   const stub = carp("CARP-STUB", "Suresha");
-  ok(resolveCarpenterRecord({ name: "Suresha" }, [stub, ply])?.id === "CARP-PLY", "edit Suresha uses plyning-work row");
+  ok(resolveCarpenterRecord({ name: "Suresha", phone: "9880919422" }, [stub, ply])?.id === "CARP-PLY", "same phone uses plyning-work row");
   ok(resolveCarpenterRecord({ record: ply, name: "Suresha" }, [stub, ply])?.id === "CARP-PLY", "saved id wins");
+  ok(
+    resolveCarpenterRecord({ name: "Ismail" }, [carp("CARP-ISM-SHOP", "ISMAIL PLYNING WORK", "9591152679")]) == null,
+    "bare Ismail is not the plyning-work shop",
+  );
+  ok(carpenterSeed("Suresh carpenter planning work") === "suresha", "Suresh → Suresha seed");
+  const planning = carp("CARP-PLAN", "SURESHA CARPENTER PLANNING WORK", "9880919422");
+  const live = carp("CARP-LIVE", "SURESHA PLYNING WORK", "9880919422");
+  live.placeRent = true;
+  const qPlan = quote("QPLAN", "C1", "SURESHA CARPENTER PLANNING WORK", "70");
+  const merged = rollupCarpenters([live, planning], [], [qPlan], []);
+  ok(merged.filter((x) => carpenterSeed(x.name) === "suresha").length === 1, "planning-work folds into plyning-work");
+  ok(
+    merged.some((x) => x.record?.id === "CARP-LIVE" && x.quoteCount === 1),
+    "planning-work quotes sit on SURESHA PLYNING WORK",
+  );
+  const ismShop = carp("CARP-ISM-LIVE", "ISMAIL PLYNING WORK", "9591152679");
+  ismShop.placeRent = true;
+  const qBareIsm = quote("Q025", "C-VINAY", "ISMAIL", "025");
+  const ismSplit = rollupCarpenters([ismShop], [], [qBareIsm], []);
+  ok(ismSplit.filter((x) => carpenterSeed(x.name) === "ismail").length === 2, "bare Ismail stays a different person");
+  ok(
+    ismSplit.some((x) => x.key === "ismail" && x.quoteCount === 1 && !x.record),
+    "the other Ismail keeps the one quote and no shop record",
+  );
 
   console.log("carpenter-financials.check OK (" + n + " assertions)");
 }

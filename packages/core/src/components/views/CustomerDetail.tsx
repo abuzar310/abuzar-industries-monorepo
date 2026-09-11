@@ -7,6 +7,8 @@ import { brandFor } from "@/lib/brand";
 import { generatePdf } from "@/lib/pdf";
 import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/create";
 import { getFeatures } from "@/lib/features";
+import { carpenterHref, carpenterKey, shopSelfCarpenter } from "@/lib/carpenter-financials";
+import { listCarpenters } from "@/lib/carpenters";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
 import { mergeReceiptPieces, quoteOwnBill, type PartyStatement } from "@/lib/payments";
@@ -14,7 +16,7 @@ import { balanceReminderMessage, customerFollowupMessage, dialPhone, waLink } fr
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
-import type { Customer, Doc, Expense } from "@/lib/types";
+import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 import { Paged } from "../Pager";
 import PassbookPrint, { type PassbookLine } from "../PassbookPrint";
 import PdfButtons from "../PdfButtons";
@@ -24,6 +26,7 @@ export default function CustomerDetail({ id }: { id: string }) {
   const { ready, dataVersion, brandMode } = useApp();
   const router = useRouter();
   const [cust, setCust] = useState<Customer | null | undefined>(undefined);
+  const [twin, setTwin] = useState<Carpenter | undefined>(undefined);
   const [quotes, setQuotes] = useState<Doc[]>([]);
   const [invs, setInvs] = useState<Doc[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -32,11 +35,13 @@ export default function CustomerDetail({ id }: { id: string }) {
   const load = useCallback(() => {
     Promise.all([
       getRec<Customer>("customers", id),
+      listCarpenters(),
       allRec<Doc>("quotations"),
       allRec<Doc>("invoices"),
       allRec<Expense>("expenses"),
-    ]).then(([c, q, i, e]) => {
+    ]).then(([c, carps, q, i, e]) => {
       setCust(c ?? null);
+      setTwin(c ? shopSelfCarpenter(c, carps) : undefined);
       const myQuotes = q.filter((d) => d.customerId === id);
       const qids = new Set(myQuotes.map((d) => d.id));
       setQuotes(myQuotes.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")));
@@ -252,7 +257,13 @@ export default function CustomerDetail({ id }: { id: string }) {
             <h3 style={{ fontSize: 26 }}>{cust.name}</h3>
             <div className="ph">{cust.phone || "—"}</div>
             <div className="meta2">
-              {cust.site && (
+              {twin ? (
+                <>
+                  Carpenter
+                  {twin.placeRent ? " · rent" : ""}
+                  <br />
+                </>
+              ) : cust.site ? (
                 <>
                   Carpenter: {cust.site}
                   {cust.sitePhone ? " · " + cust.sitePhone : ""}
@@ -260,12 +271,20 @@ export default function CustomerDetail({ id }: { id: string }) {
                     " · " + [cust.siteVillage, cust.siteCity].filter(Boolean).join(", ")}
                   <br />
                 </>
-              )}
+              ) : null}
               {cust.address && <>{cust.address}<br /></>}
               {cust.notes && <>Note: {cust.notes}</>}
             </div>
           </div>
           <div className="links" style={{ marginTop: 0 }}>
+            {twin ? (
+              <button
+                className="btn sm"
+                onClick={() => router.push(carpenterHref(carpenterKey(twin.name), twin.id))}
+              >
+                Open carpenter
+              </button>
+            ) : null}
             <button className="btn primary sm" onClick={newDoc}>{invoiceMode ? "New invoice" : "New quote"}</button>
             {cust.phone ? (
               <>

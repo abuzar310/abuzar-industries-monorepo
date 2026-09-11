@@ -7,6 +7,7 @@ import { createInvoiceForCustomer, createQuotationForCustomer } from "@/lib/crea
 import { getFeatures } from "@/lib/features";
 import { customerFinancials } from "@/lib/customers";
 import { editCustomerDialog } from "@/lib/customer-form";
+import { carpenterHref, carpenterKey, shopSelfCarpenter, shopSelfCustomer } from "@/lib/carpenter-financials";
 import { editCarpenterDialog, listCarpenters, setCarpenterPhoto } from "@/lib/carpenters";
 import { partyMatches } from "@/lib/party-search";
 import { customerFollowupMessage, dialPhone, waLink } from "@/lib/whatsapp";
@@ -161,14 +162,24 @@ export default function CustomersView() {
 
   const query = q.trim();
   const entries = useMemo(() => {
-    const src = cloakMoney ? [] : list.filter((c) => partyMatches(query, customerFields(c)));
+    const src = cloakMoney
+      ? []
+      : list.filter((c) => !shopSelfCarpenter(c, carpenters) && partyMatches(query, customerFields(c)));
     const next = src.map((c) => ({
       c,
       f: customerFinancials(c.id, quotes, invs, c.opening || 0, expenses, quotesAsBills),
     }));
     if (sortBy === "due") next.sort((a, b) => b.f.outstanding - a.f.outstanding || (a.c.name || "").localeCompare(b.c.name || ""));
     return next;
-  }, [cloakMoney, list, query, quotes, invs, expenses, quotesAsBills, sortBy]);
+  }, [cloakMoney, list, carpenters, query, quotes, invs, expenses, quotesAsBills, sortBy]);
+  const carpHits = useMemo(() => {
+    if (cloakMoney) return [];
+    return carpenters.filter((t) => {
+      const acct = shopSelfCustomer(t, list);
+      if (!acct) return false;
+      return partyMatches(query, [...customerFields(acct), ...carpenterFields(t)]);
+    });
+  }, [cloakMoney, query, carpenters, list]);
 
   const carpList = useMemo(
     () => (cloakMoney ? [] : carpenters.filter((c) => partyMatches(query, carpenterFields(c)))),
@@ -224,15 +235,44 @@ export default function CustomersView() {
         value={q}
         onChange={pickQuery}
         placeholder={view === "customers" ? "Search name, phone, carpenter, GSTIN…" : "Search name, phone, village…"}
-        count={view === "customers" ? entries.length : carpList.length}
-        total={view === "customers" ? list.length : carpenters.length}
+        count={view === "customers" ? entries.length + carpHits.length : carpList.length}
+        total={view === "customers" ? list.filter((c) => !shopSelfCarpenter(c, carpenters)).length : carpenters.length}
       />
 
       {view === "customers" ? (
         <>
         <div className="custgrid">
-          {entries.length ? (
-            entries.map(({ c, f }) => (
+          {entries.length || carpHits.length ? (
+            <>
+            {carpHits.map((t) => {
+              const acct = shopSelfCustomer(t, list);
+              return (
+                <div
+                  className="custcard"
+                  key={t.id}
+                  onClick={() => router.push(carpenterHref(carpenterKey(t.name), t.id))}
+                  style={{ cursor: "pointer" }}
+                >
+                  <h3>{t.name}</h3>
+                  <div className="ph">{t.phone || "—"}</div>
+                  <div className="meta2">Carpenter{t.placeRent ? " · rent" : ""}</div>
+                  <div className="links">
+                    {acct ? (
+                      <button
+                        className="btn sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push("/customers/" + acct.id);
+                        }}
+                      >
+                        Account
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+            {entries.map(({ c, f }) => (
               <div className="custcard" key={c.id} onClick={() => router.push("/customers/" + c.id)} style={{ cursor: "pointer" }}>
                 <h3>{c.name}</h3>
                 <div className="ph">{c.phone || "—"}</div>
@@ -291,7 +331,8 @@ export default function CustomersView() {
                   </button>
                 </div>
               </div>
-            ))
+            ))}
+            </>
           ) : (
             <div className="empty">
               <div className="empty-icon">👥</div>

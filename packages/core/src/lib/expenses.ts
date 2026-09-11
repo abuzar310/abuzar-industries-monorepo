@@ -177,6 +177,7 @@ export async function addExpense(fields: {
   carpenter?: string;
   carpenterId?: string;
   placeRentKind?: "charge" | "opening" | "received" | "setoff";
+  placeRentMonth?: string;
   refQuoteId?: string;
   quoteNo?: string;
   account?: string;
@@ -192,6 +193,7 @@ export async function addExpense(fields: {
   charge?: boolean;
   /** groups the pieces of one split customer receipt (see receipts.ts) */
   rcptId?: string;
+  fromAdvanceId?: string;
 }): Promise<Expense> {
   const mode = fields.charge ? "" : isInflow(fields.type) ? fields.mode || "cash" : "";
   const rounds = Math.max(0, Math.floor(+(fields.rounds || 0) || 0));
@@ -213,6 +215,7 @@ export async function addExpense(fields: {
     carpenter: (fields.carpenter || "").trim() || undefined,
     carpenterId: (fields.carpenterId || "").trim() || undefined,
     placeRentKind: fields.placeRentKind || undefined,
+    placeRentMonth: (fields.placeRentMonth || "").trim() || undefined,
     refQuoteId: (fields.refQuoteId || "").trim() || undefined,
     quoteNo: (fields.quoteNo || "").trim() || undefined,
     account: (fields.account || "").trim(),
@@ -225,6 +228,7 @@ export async function addExpense(fields: {
     sourceId: fields.sourceId,
     custId: fields.custId,
     rcptId: fields.rcptId,
+    fromAdvanceId: fields.fromAdvanceId,
     charge: !!fields.charge,
     createdAt: nowIso(),
     updatedAt: nowIso(),
