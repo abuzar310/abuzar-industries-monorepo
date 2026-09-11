@@ -570,7 +570,7 @@ export function createDataApi(schema: AppSchema) {
         id: string; date: string; type: string; amount: number;
         party: string; partyType: string; mode: string; note: string;
         enteredBy: string; deleted: boolean; createdAt: string;
-        sourceId?: string;
+        sourceId?: string; custId?: string; carpenterId?: string;
       }
 
       const all: UnifiedTx[] = [];
@@ -606,8 +606,10 @@ export function createDataApi(schema: AppSchema) {
           partyType, mode, note: String(e.note || ""),
           enteredBy: String(e.enteredBy || ""),
           deleted: !!r.deleted_at,
-          createdAt: String(r.created_at || ""),
+          createdAt: String(e.createdAt || r.created_at || ""),
           sourceId: (e.sourceId as string) || undefined,
+          custId: (e.custId as string) || undefined,
+          carpenterId: (e.carpenterId as string) || undefined,
         });
       }
 

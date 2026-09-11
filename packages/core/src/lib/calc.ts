@@ -43,6 +43,12 @@ export const todayStr = () => {
 
 export const nowIso = () => new Date().toISOString();
 
+/** Clock from an ISO timestamp — empty if missing or unparseable. */
+export function clockOf(iso?: string): string {
+  const d = new Date(iso || "");
+  return isNaN(+d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 /** Normalise a loosely-typed date into the app's `dd-mm-yy` display format.
  *  Accepts: "" (kept blank), "t"/"today", "5" (day this month), "5-7" / "5/7"
  *  (day-month this year), "5-7-26" / "5.7.2026" (full), and ISO "2026-07-05".

@@ -390,6 +390,19 @@ export interface AllTransaction {
   deleted: boolean;
   createdAt: string;
   sourceId?: string;
+  custId?: string;
+  carpenterId?: string;
+}
+
+/** Screen where this money was entered — quotation, rent person, customer, or the desk. */
+export function txnHref(t: AllTransaction): string {
+  if (t.sourceId) return "/editor/" + t.sourceId;
+  if (t.carpenterId) return "/rent/" + encodeURIComponent(t.carpenterId);
+  if (t.custId) return "/customers/" + encodeURIComponent(t.custId);
+  if (t.type === "salary") return "/attendance";
+  if (t.type === "session" || t.type === "session_handover") return "/expenses";
+  if (t.type === "expense") return "/expenses";
+  return "/receipts";
 }
 
 export interface AllTransactionsResponse {

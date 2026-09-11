@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TabIcon } from "@/components/Icons";
-import { dateSortKey, inr, quoteOwnBill, todayStr } from "@/lib/calc";
+import { clockOf, dateSortKey, inr, quoteOwnBill, todayStr } from "@/lib/calc";
 import { createQuotation } from "@/lib/create";
 import { allRec } from "@/lib/data";
 import { dayTotals, inDaybook } from "@/lib/expenses";
@@ -185,7 +185,7 @@ export default function PhoneHome({
       href: "/editor/" + d.id,
       kind: feat.simpleQuote ? "Quotation raised" : "Invoice generated",
       title: d.customerName || "Cash",
-      sub: (d.displayNumber || d.number || "—") + " · " + (d.date || ""),
+      sub: (d.displayNumber || d.number || "—") + " · " + (d.date || "") + (clockOf(d.createdAt) ? " · " + clockOf(d.createdAt) : ""),
       amt: feat.acceptPayment ? Math.max(0, bill - paid) || bill : bill,
       sort: dateSortKey(d.date || "") + (d.createdAt || ""),
       icon: feat.simpleQuote ? "file-plus" : "invoices",
@@ -196,10 +196,16 @@ export default function PhoneHome({
       if (e.type !== "sale" || e.charge || !(e.amount > 0.5)) continue;
       recent.push({
         id: "rcpt-" + e.id,
-        href: "/receipts",
+        href: e.sourceId
+          ? "/editor/" + e.sourceId
+          : e.carpenterId
+            ? "/rent/" + encodeURIComponent(e.carpenterId)
+            : e.custId
+              ? "/customers/" + encodeURIComponent(e.custId)
+              : "/receipts",
         kind: "Payment received",
-        title: e.party || e.label || "Receipt",
-        sub: "Receipt · " + (e.date || ""),
+        title: e.party || e.note || e.label || "Receipt",
+        sub: "Receipt · " + (e.date || "") + (clockOf(e.createdAt) ? " · " + clockOf(e.createdAt) : ""),
         amt: e.amount,
         sort: dateSortKey(e.date || "") + (e.createdAt || ""),
         icon: "receipt",
