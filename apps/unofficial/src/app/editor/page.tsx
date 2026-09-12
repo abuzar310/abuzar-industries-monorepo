@@ -39,9 +39,14 @@ export default function Page() {
       <p className="note" style={{ margin: "0 0 20px" }}>
         Start a new quotation whenever you&apos;re ready.
       </p>
-      <button className="btn primary" style={{ fontSize: 16, padding: "12px 24px" }} onClick={create}>
-        + Create a quotation
-      </button>
+      <div className="rowbtns" style={{ justifyContent: "center" }}>
+        <button className="btn primary" style={{ fontSize: 16, padding: "12px 24px" }} onClick={create}>
+          + Create a quotation
+        </button>
+        <button className="btn" style={{ fontSize: 16, padding: "12px 24px" }} onClick={() => router.push("/paper-quote")}>
+          From paper
+        </button>
+      </div>
     </div>
   );
 }
