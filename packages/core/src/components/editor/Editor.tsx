@@ -976,6 +976,11 @@ export default function Editor({
           <button className="btn sm" onClick={onNewQuote}>
             + Quotation
           </button>
+          {feat.simpleQuote && (
+            <button className="btn sm" onClick={() => router.push("/paper-quote")}>
+              From paper
+            </button>
+          )}
         </div>
         <div className="empty" style={{ padding: 48, textAlign: "center" }}>
           No quotation open.
@@ -1178,6 +1183,11 @@ export default function Editor({
         <button className="btn sm" onClick={onNewQuote}>
           + Quotation
         </button>
+        {feat.simpleQuote && (
+          <button className="btn sm" onClick={() => router.push("/paper-quote")}>
+            From paper
+          </button>
+        )}
         {feat.invoices && (
           <button className="btn sm" onClick={onNewInvoice}>
             + Invoice
