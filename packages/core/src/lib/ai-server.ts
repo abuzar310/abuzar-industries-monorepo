@@ -11,7 +11,7 @@ import {
   normalizeAiModel,
   textFromAnthropicSse,
 } from "@/lib/ai-host";
-import { parsePaperAiJson } from "@/lib/paper-quote";
+import { PAPER_READ_PROMPT, parsePaperAiJson } from "@/lib/paper-quote";
 
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
@@ -214,12 +214,6 @@ export async function handleAiChat(req: Request, appLabel: string, schema: AppSc
 }
 
 const PAPER_MAX_CHARS = 500_000;
-const PAPER_PROMPT =
-  "Read this handwritten timber size list. Return JSON only: " +
-  '{"customerName":"","lines":[{"name":"Teak","l":"12","w":"6","t":"1","pcs":"4","rate":""}]} ' +
-  "Each paper row is one line. name = wood if written else Teak. l w t pcs as written (inches). " +
-  'rate = ₹/CFT if written else "". customerName only if a name is clearly on the paper. ' +
-  "Do not invent sizes. Skip unreadable rows. Do not convert units.";
 
 function paperImageParts(image: string) {
   const m = image.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i);
@@ -287,7 +281,7 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
               role: "user",
               content: [
                 { type: "image", source: { type: "base64", media_type: parts.media, data: parts.data } },
-                { type: "text", text: PAPER_PROMPT },
+                { type: "text", text: PAPER_READ_PROMPT },
               ],
             },
           ],
@@ -316,7 +310,7 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
             {
               role: "user",
               content: [
-                { type: "text", text: PAPER_PROMPT },
+                { type: "text", text: PAPER_READ_PROMPT },
                 { type: "image_url", image_url: { url: image } },
               ],
             },
