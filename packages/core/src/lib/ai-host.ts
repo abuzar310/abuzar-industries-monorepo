@@ -58,3 +58,38 @@ export function normalizeAiModel(raw: string): string {
   const m = raw.trim().slice(0, 80);
   return m || DEFAULT_AI_MODEL;
 }
+
+export const GEMINI_HOST = "https://generativelanguage.googleapis.com";
+export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+
+export function isGemini(host: string, key = ""): boolean {
+  if (key.trim().startsWith("AIza")) return true;
+  try {
+    return /generativelanguage\.googleapis\.com$/i.test(new URL(host).hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function geminiPaperModel(model: string): string {
+  const m = model.trim().replace(/^models\//, "");
+  if (/^gemini/i.test(m)) return m;
+  return DEFAULT_GEMINI_MODEL;
+}
+
+export function geminiGenerateUrl(model: string, key: string): string {
+  return (
+    GEMINI_HOST +
+    "/v1beta/models/" +
+    encodeURIComponent(geminiPaperModel(model)) +
+    ":generateContent?key=" +
+    encodeURIComponent(key)
+  );
+}
+
+export function textFromGemini(data: unknown): string {
+  if (!data || typeof data !== "object") return "";
+  const parts = (data as { candidates?: { content?: { parts?: { text?: string }[] } }[] }).candidates?.[0]
+    ?.content?.parts;
+  return (parts || []).map((p) => p.text || "").join("").trim();
+}
