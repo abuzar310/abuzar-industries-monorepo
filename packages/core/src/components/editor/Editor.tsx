@@ -1856,6 +1856,13 @@ export default function Editor({
               style={{ resize: "vertical", width: "100%", fontFamily: "var(--body)", fontSize: 14, padding: "8px 10px" }}
             />
           </label>
+          {doc.paperPhoto ? (
+            <div className="paper-on-doc">
+              <span>Photo of the list</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={doc.paperPhoto} alt="Handwritten list this quote was typed from" />
+            </div>
+          ) : null}
         </div>
       )}
 

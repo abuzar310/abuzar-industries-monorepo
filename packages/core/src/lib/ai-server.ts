@@ -11,6 +11,7 @@ import {
   normalizeAiModel,
   textFromAnthropicSse,
 } from "@/lib/ai-host";
+import { parsePaperAiJson } from "@/lib/paper-quote";
 
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
@@ -206,6 +207,145 @@ export async function handleAiChat(req: Request, appLabel: string, schema: AppSc
     const text = (data?.choices?.[0]?.message?.content || "").trim();
     if (!text) return json({ error: "Empty reply from the AI host" }, 502);
     return json({ reply: text, model });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "AI request failed";
+    return json({ error: msg.slice(0, 400) }, 502);
+  }
+}
+
+const PAPER_MAX_CHARS = 500_000;
+const PAPER_PROMPT =
+  "Read this handwritten timber size list. Return JSON only: " +
+  '{"customerName":"","lines":[{"name":"Teak","l":"12","w":"6","t":"1","pcs":"4","rate":""}]} ' +
+  "Each paper row is one line. name = wood if written else Teak. l w t pcs as written (inches). " +
+  'rate = ₹/CFT if written else "". customerName only if a name is clearly on the paper. ' +
+  "Do not invent sizes. Skip unreadable rows. Do not convert units.";
+
+function paperImageParts(image: string) {
+  const m = image.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i);
+  if (!m) return null;
+  const media = m[1].toLowerCase() === "image/jpg" ? "image/jpeg" : m[1].toLowerCase();
+  return { media, data: m[2] };
+}
+
+function textFromKintioBody(raw: string): string {
+  const sse = textFromAnthropicSse(raw).trim();
+  if (sse) return sse;
+  try {
+    const d = JSON.parse(raw) as { content?: { text?: string }[] };
+    const t = (d.content || []).map((c) => c.text || "").join("").trim();
+    if (t) return t;
+  } catch {
+    /* not json */
+  }
+  return raw.trim();
+}
+
+/** POST /api/ai/paper — { image: dataUrl }. Reads sizes. Never writes a quotation. */
+export async function handleAiReadPaper(req: Request, schema: AppSchema): Promise<Response> {
+  const user = sessionUser(req);
+  if (!user) return json({ error: "Sign in first" }, 401);
+
+  const { key, host, model } = await aiCreds(schema);
+  if (!key) return json({ error: "Add an API key in Settings → AI assistant" }, 503);
+
+  let body: { image?: string };
+  try {
+    body = (await req.json()) as typeof body;
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const image = String(body.image || "").trim();
+  if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(image)) {
+    return json({ error: "Send a JPEG or PNG photo" }, 400);
+  }
+  if (image.length > PAPER_MAX_CHARS) return json({ error: "Photo is too large — try another shot" }, 400);
+
+  const abort =
+    typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(60000) : undefined;
+
+  try {
+    let text = "";
+    if (isKintio(host, key)) {
+      const parts = paperImageParts(image);
+      if (!parts) return json({ error: "Send a JPEG or PNG photo" }, 400);
+      const upstream = await fetch(kintioMessagesUrl(host), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 2000,
+          stream: true,
+          system: "Return JSON only. No markdown.",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "image", source: { type: "base64", media_type: parts.media, data: parts.data } },
+                { type: "text", text: PAPER_PROMPT },
+              ],
+            },
+          ],
+        }),
+        signal: abort,
+      });
+      const raw = await upstream.text();
+      if (!upstream.ok) {
+        let data: unknown = null;
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          data = { message: raw.slice(0, 200) };
+        }
+        return json({ error: upstreamErrorMessage(data, upstream.status).slice(0, 400) }, 502);
+      }
+      text = textFromKintioBody(raw);
+    } else {
+      const url = chatCompletionsUrl(host);
+      const upstream = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: PAPER_PROMPT },
+                { type: "image_url", image_url: { url: image } },
+              ],
+            },
+          ],
+          max_tokens: 2000,
+          temperature: 0,
+          response_format: { type: "json_object" },
+        }),
+        signal: abort,
+      });
+      const data = (await upstream.json().catch(() => null)) as {
+        choices?: { message?: { content?: string } }[];
+        error?: { message?: string } | string;
+        message?: string;
+      } | null;
+      if (!upstream.ok) {
+        return json({ error: upstreamErrorMessage(data, upstream.status).slice(0, 400) }, 502);
+      }
+      text = (data?.choices?.[0]?.message?.content || "").trim();
+    }
+    if (!text) return json({ error: "Could not read that list — try a clearer photo" }, 502);
+    let parsed;
+    try {
+      parsed = parsePaperAiJson(text);
+    } catch {
+      return json({ error: "Could not read that list — try a clearer photo" }, 502);
+    }
+    if (!parsed.lines.length) return json({ error: "No sizes found on that photo" }, 422);
+    return json(parsed);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "AI request failed";
     return json({ error: msg.slice(0, 400) }, 502);

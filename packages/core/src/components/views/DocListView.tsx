@@ -268,6 +268,11 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
           <button className="btn primary sm" onClick={onNew}>
             {isInv ? "+ New Sales Invoice" : "+ New Quotation"}
           </button>
+          {canReport && (
+            <button className="btn sm" onClick={() => router.push("/paper-quote")}>
+              From paper
+            </button>
+          )}
           {isInv && (
             <button className="btn sm" onClick={onNewPurchase}>
               + New Purchase

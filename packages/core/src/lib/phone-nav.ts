@@ -28,6 +28,7 @@ export function phoneBar(shelves: ReturnType<typeof phoneShelves>, isOwner: bool
 
 export function phoneSectionOf(tabs: Tab[], href: string): PhoneSection | "home" {
   if (!href || href === "/") return "home";
+  if (href === "/paper-quote") return "business";
   if (href === "/money" || href.startsWith("/money/")) return "money";
   if (href === "/business" || href.startsWith("/business/")) return "business";
   if (href === "/records" || href.startsWith("/records/")) return "records";
@@ -38,6 +39,7 @@ export function phoneSectionOf(tabs: Tab[], href: string): PhoneSection | "home"
 
 export function phoneQuickActions(feat: AppFeatures) {
   const out: { href: string; label: string; icon: string }[] = [{ href: "/editor", label: "New quotation", icon: "file-plus" }];
+  if (feat.simpleQuote) out.push({ href: "/paper-quote", label: "From paper", icon: "file-text" });
   if (feat.acceptPayment) out.push({ href: "/receipts", label: "Receipt", icon: "receipt" });
   out.push({ href: "/customers", label: "Customer", icon: "customers" });
   if (feat.simpleQuote) {
