@@ -2,7 +2,22 @@
 // OpenAI-compatible Chat Completions (OpenAI, Groq, OpenRouter, local, …).
 import { readSessionToken, SESSION_COOKIE } from "@/server/auth";
 import { metaGetAll, metaSet, type AppSchema } from "@/server/db";
-import { chatCompletionsUrl, DEFAULT_AI_HOST, normalizeAiHost, normalizeAiModel } from "@/lib/ai-host";
+import {
+  chatCompletionsUrl,
+  DEFAULT_AI_HOST,
+  DEFAULT_GEMINI_MODEL,
+  geminiGenerateUrl,
+  geminiPaperModel,
+  isGemini,
+  isGeminiKey,
+  isKintio,
+  kintioMessagesUrl,
+  normalizeAiHost,
+  normalizeAiModel,
+  textFromAnthropicSse,
+  textFromGemini,
+} from "@/lib/ai-host";
+import { PAPER_READ_PROMPT, parsePaperAiJson } from "@/lib/paper-quote";
 
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
@@ -25,6 +40,29 @@ async function aiCreds(schema: AppSchema) {
   const host = normalizeAiHost(String(meta.aiHost || process.env.AI_BASE_URL || "")) || DEFAULT_AI_HOST;
   const model = normalizeAiModel(String(meta.aiModel || process.env.AI_MODEL || ""));
   return { key, host, model };
+}
+
+/** Settings still has gpt-4o-mini; Kintio's list does not. Paper uses their router. */
+function kintioPaperModel(model: string): string {
+  const m = model.trim();
+  if (!m || /^gpt-4o/i.test(m)) return "kintio-auto";
+  return m;
+}
+
+/** Paper prefers Gemini so Kintio chat can stay in Settings. Tries each key. */
+function geminiPaperKeys(settings: { key: string; host: string; model: string }) {
+  const keys: string[] = [];
+  const add = (raw: string) => {
+    const s = String(raw || "").trim();
+    if (isGeminiKey(s) && !keys.includes(s)) keys.push(s);
+  };
+  add(settings.key);
+  add(process.env.GEMINI_API_KEY || "");
+  add(process.env.GEMINI_API_KEY_2 || "");
+  add(process.env.AI_API_KEY || "");
+  if (!keys.length) return null;
+  const model = isGemini(settings.host, settings.key) ? geminiPaperModel(settings.model) : DEFAULT_GEMINI_MODEL;
+  return { keys, model };
 }
 
 function systemPrompt(appLabel: string, schema: AppSchema): string {
@@ -166,6 +204,180 @@ export async function handleAiChat(req: Request, appLabel: string, schema: AppSc
     const text = (data?.choices?.[0]?.message?.content || "").trim();
     if (!text) return json({ error: "Empty reply from the AI host" }, 502);
     return json({ reply: text, model });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "AI request failed";
+    return json({ error: msg.slice(0, 400) }, 502);
+  }
+}
+
+const PAPER_MAX_CHARS = 500_000;
+
+function paperImageParts(image: string) {
+  const m = image.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i);
+  if (!m) return null;
+  const media = m[1].toLowerCase() === "image/jpg" ? "image/jpeg" : m[1].toLowerCase();
+  return { media, data: m[2] };
+}
+
+function textFromKintioBody(raw: string): string {
+  const sse = textFromAnthropicSse(raw).trim();
+  if (sse) return sse;
+  try {
+    const d = JSON.parse(raw) as { content?: { text?: string }[] };
+    const t = (d.content || []).map((c) => c.text || "").join("").trim();
+    if (t) return t;
+  } catch {
+    /* not json */
+  }
+  return raw.trim();
+}
+
+/** POST /api/ai/paper — { image: dataUrl }. Reads sizes. Never writes a quotation. */
+export async function handleAiReadPaper(req: Request, schema: AppSchema): Promise<Response> {
+  const user = sessionUser(req);
+  if (!user) return json({ error: "Sign in first" }, 401);
+
+  const creds = await aiCreds(schema);
+  const gemini = geminiPaperKeys(creds);
+  let { key, host, model } = creds;
+  if (isKintio(host, key)) model = kintioPaperModel(model);
+  if (!key && !gemini) return json({ error: "Add an API key in Settings → AI assistant" }, 503);
+
+  let body: { image?: string };
+  try {
+    body = (await req.json()) as typeof body;
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const image = String(body.image || "").trim();
+  if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(image)) {
+    return json({ error: "Send a JPEG or PNG photo" }, 400);
+  }
+  if (image.length > PAPER_MAX_CHARS) return json({ error: "Photo is too large — try another shot" }, 400);
+
+  const abort =
+    typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(60000) : undefined;
+
+  try {
+    let text = "";
+    if (gemini) {
+      const parts = paperImageParts(image);
+      if (!parts) return json({ error: "Send a JPEG or PNG photo" }, 400);
+      const payload = {
+        systemInstruction: { parts: [{ text: "Return JSON only. No markdown." }] },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inline_data: { mime_type: parts.media, data: parts.data } },
+              { text: PAPER_READ_PROMPT },
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0, maxOutputTokens: 2000, responseMimeType: "application/json" },
+      };
+      let lastErr = "";
+      for (const gKey of gemini.keys) {
+        const upstream = await fetch(geminiGenerateUrl(gemini.model, gKey), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: abort,
+        });
+        const data = (await upstream.json().catch(() => null)) as unknown;
+        if (!upstream.ok) {
+          lastErr = upstreamErrorMessage(data, upstream.status).slice(0, 400);
+          continue;
+        }
+        text = textFromGemini(data);
+        if (text) break;
+        lastErr = "Empty reply from Gemini";
+      }
+      if (!text) return json({ error: lastErr || "Could not read that list — try a clearer photo" }, 502);
+    } else if (isKintio(host, key)) {
+      const parts = paperImageParts(image);
+      if (!parts) return json({ error: "Send a JPEG or PNG photo" }, 400);
+      const upstream = await fetch(kintioMessagesUrl(host), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 2000,
+          stream: true,
+          system: "Return JSON only. No markdown.",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "image", source: { type: "base64", media_type: parts.media, data: parts.data } },
+                { type: "text", text: PAPER_READ_PROMPT },
+              ],
+            },
+          ],
+        }),
+        signal: abort,
+      });
+      const raw = await upstream.text();
+      if (!upstream.ok) {
+        let data: unknown = null;
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          data = { message: raw.slice(0, 200) };
+        }
+        const msg = upstreamErrorMessage(data, upstream.status);
+        if (upstream.status === 402 || /upgrade_required/i.test(msg)) {
+          return json({ error: "Kintio is blocking photos on this plan — open kintio.com and turn on vision" }, 502);
+        }
+        return json({ error: msg.slice(0, 400) }, 502);
+      }
+      text = textFromKintioBody(raw);
+    } else {
+      const url = chatCompletionsUrl(host);
+      const upstream = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: PAPER_READ_PROMPT },
+                { type: "image_url", image_url: { url: image } },
+              ],
+            },
+          ],
+          max_tokens: 2000,
+          temperature: 0,
+          response_format: { type: "json_object" },
+        }),
+        signal: abort,
+      });
+      const data = (await upstream.json().catch(() => null)) as {
+        choices?: { message?: { content?: string } }[];
+        error?: { message?: string } | string;
+        message?: string;
+      } | null;
+      if (!upstream.ok) {
+        return json({ error: upstreamErrorMessage(data, upstream.status).slice(0, 400) }, 502);
+      }
+      text = (data?.choices?.[0]?.message?.content || "").trim();
+    }
+    if (!text) return json({ error: "Could not read that list — try a clearer photo" }, 502);
+    let parsed;
+    try {
+      parsed = parsePaperAiJson(text);
+    } catch {
+      return json({ error: "Could not read that list — try a clearer photo" }, 502);
+    }
+    if (!parsed.lines.length) return json({ error: "No sizes found on that photo" }, 422);
+    return json(parsed);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "AI request failed";
     return json({ error: msg.slice(0, 400) }, 502);

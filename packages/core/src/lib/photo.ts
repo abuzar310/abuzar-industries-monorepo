@@ -34,24 +34,39 @@ function loadImage(file: File): Promise<HTMLImageElement> {
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error("Could not read that photo"));
+      const heic = /heic|heif/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
+      reject(
+        new Error(
+          heic
+            ? "This iPhone photo is HEIC — tap Take photo, or send a JPEG"
+            : "Could not read that photo",
+        ),
+      );
     };
     img.src = url;
   });
 }
 
-export async function compressPhoto(file: File): Promise<string> {
+/** Bigger JPEG for reading handwriting. Store the default compressPhoto() copy on the quote. */
+export const PAPER_READ = { maxSide: 1400, maxChars: 450_000 };
+
+export async function compressPhoto(
+  file: File,
+  opts?: { maxSide?: number; maxChars?: number },
+): Promise<string> {
   if (file.type && !file.type.startsWith("image/")) throw new Error("Pick a photo");
+  const maxSide = opts?.maxSide ?? MAX_SIDE;
+  const maxChars = opts?.maxChars ?? PHOTO_MAX_CHARS;
   const img = await loadImage(file);
-  const scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
   const w = Math.max(1, Math.round((img.naturalWidth || img.width) * scale));
   const h = Math.max(1, Math.round((img.naturalHeight || img.height) * scale));
   let q = 0.74;
   let url = drawToJpeg(img, w, h, q);
-  while (url.length > PHOTO_MAX_CHARS && q > 0.38) {
+  while (url.length > maxChars && q > 0.38) {
     q -= 0.08;
     url = drawToJpeg(img, w, h, q);
   }
-  if (url.length > PHOTO_MAX_CHARS) throw new Error("Photo is still too large · try another shot");
+  if (url.length > maxChars) throw new Error("Photo is still too large · try another shot");
   return url;
 }

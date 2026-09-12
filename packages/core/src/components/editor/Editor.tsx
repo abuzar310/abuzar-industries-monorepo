@@ -42,6 +42,8 @@ import DateField from "./DateField";
 import EwayBillPanel from "./EwayBillPanel";
 import { showReviewQr } from "@/store/review-qr-store";
 import { extractPincode } from "@/lib/ewaybill";
+import PaperQuoteView from "@/components/views/PaperQuoteView";
+import { applyPaperToDoc } from "@/lib/paper-quote";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 const NO_SEL: Set<number> = new Set(); // stable empty selection for non-active boxes
@@ -119,6 +121,10 @@ export default function Editor({
   const pendingFocus = useRef<{ si: number; ri: number; k: string } | null>(null);
   const [editingNo, setEditingNo] = useState(false);
   const [ewayAutoRun, setEwayAutoRun] = useState(false);
+  const [paperOpen, setPaperOpen] = useState(false);
+  const [paperFile, setPaperFile] = useState<File | null>(null);
+  const paperCamRef = useRef<HTMLInputElement>(null);
+  const paperLibRef = useRef<HTMLInputElement>(null);
   const [permit, setPermit] = useState<PermitFields | null>(null);
   const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
   const [expenses, setExpenses] = useState<Expense[]>([]); // this quote's recorded payments (for the mini statements)
@@ -881,6 +887,7 @@ export default function Editor({
     if (action === "print") onPrint();
     else if (action === "wa") onWaSend();
     else if (action === "remind-balance") onWaBalance();
+    else if (action === "paper") setPaperOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -967,6 +974,78 @@ export default function Editor({
   const freeMode = feat.simpleQuote && !!doc.freeLayout;
   const commLockedAmt = !isInv && !temporary ? lockAmount(doc) : 0;
 
+  useEffect(() => {
+    if (!temporary && !isInv && doc.id) prefSet("lastOpen", { store: "quotations", id: doc.id });
+  }, [temporary, isInv, doc.id]);
+
+  function takePaperFile(file: File | undefined) {
+    if (!file) return;
+    setPaperFile(file);
+    setPaperOpen(true);
+  }
+  function closePaper() {
+    setPaperFile(null);
+    setPaperOpen(false);
+  }
+  function openPaperCam() {
+    paperCamRef.current?.click();
+  }
+  function openPaperLib() {
+    paperLibRef.current?.click();
+  }
+
+  const paperOk = feat.simpleQuote && !isInv;
+  const paperBtns = paperOk ? (
+    <>
+      <button className="btn sm" type="button" onClick={openPaperCam}>
+        From paper
+      </button>
+      <button className="btn sm" type="button" onClick={openPaperLib}>
+        Add image
+      </button>
+    </>
+  ) : null;
+
+  const paperInputs = paperOk ? (
+    <>
+      <input
+        ref={paperCamRef}
+        type="file"
+        accept="image/*,.heic,.heif"
+        capture="environment"
+        hidden
+        onChange={(e) => {
+          takePaperFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={paperLibRef}
+        type="file"
+        accept="image/*,.heic,.heif"
+        hidden
+        onChange={(e) => {
+          takePaperFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+    </>
+  ) : null;
+
+  const paperOverlay = paperOpen ? (
+    <div className="paper-quote-overlay">
+      <PaperQuoteView
+        initialFile={paperFile}
+        onApply={(got) => {
+          commit(applyPaperToDoc(docRef.current, got), true);
+          closePaper();
+          toast("Lines added to this quotation — check them");
+        }}
+        onCancel={closePaper}
+      />
+    </div>
+  ) : null;
+
   // panic cloak: open quote must not show customer/lines — look like nothing is open
   if (cloakMoney && feat.simpleQuote) {
     return (
@@ -976,10 +1055,13 @@ export default function Editor({
           <button className="btn sm" onClick={onNewQuote}>
             + Quotation
           </button>
+          {paperBtns}
         </div>
         <div className="empty" style={{ padding: 48, textAlign: "center" }}>
           No quotation open.
         </div>
+        {paperInputs}
+        {paperOverlay}
       </div>
     );
   }
@@ -1178,6 +1260,7 @@ export default function Editor({
         <button className="btn sm" onClick={onNewQuote}>
           + Quotation
         </button>
+        {paperBtns}
         {feat.invoices && (
           <button className="btn sm" onClick={onNewInvoice}>
             + Invoice
@@ -1856,6 +1939,13 @@ export default function Editor({
               style={{ resize: "vertical", width: "100%", fontFamily: "var(--body)", fontSize: 14, padding: "8px 10px" }}
             />
           </label>
+          {doc.paperPhoto ? (
+            <div className="paper-on-doc">
+              <span>Photo of the list</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={doc.paperPhoto} alt="Handwritten list this quote was typed from" />
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -1873,6 +1963,8 @@ export default function Editor({
           onClose={() => setPermit(null)}
         />
       )}
+      {paperInputs}
+      {paperOverlay}
     </div>
   );
 }
