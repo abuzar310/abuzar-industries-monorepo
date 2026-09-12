@@ -36,13 +36,11 @@ async function aiCreds(schema: AppSchema) {
   return { key, host, model };
 }
 
-/** Paper photos need vision. Kintio sf_ keys often return upgrade_required — use env OpenAI if set. */
-function envVisionCreds() {
-  const key = String(process.env.AI_API_KEY || "").trim();
-  const host = normalizeAiHost(String(process.env.AI_BASE_URL || "")) || DEFAULT_AI_HOST;
-  const model = normalizeAiModel(String(process.env.AI_MODEL || ""));
-  if (!key || isKintio(host, key)) return null;
-  return { key, host, model };
+/** Settings still has gpt-4o-mini; Kintio's list does not. Paper uses their router. */
+function kintioPaperModel(model: string): string {
+  const m = model.trim();
+  if (!m || /^gpt-4o/i.test(m)) return "kintio-auto";
+  return m;
 }
 
 function systemPrompt(appLabel: string, schema: AppSchema): string {
@@ -249,11 +247,9 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
   const user = sessionUser(req);
   if (!user) return json({ error: "Sign in first" }, 401);
 
-  let { key, host, model } = await aiCreds(schema);
-  if (isKintio(host, key)) {
-    const vision = envVisionCreds();
-    if (vision) ({ key, host, model } = vision);
-  }
+  const creds = await aiCreds(schema);
+  let { key, host, model } = creds;
+  if (isKintio(host, key)) model = kintioPaperModel(model);
   if (!key) return json({ error: "Add an API key in Settings → AI assistant" }, 503);
 
   let body: { image?: string };
@@ -309,7 +305,11 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
         } catch {
           data = { message: raw.slice(0, 200) };
         }
-        return json({ error: upstreamErrorMessage(data, upstream.status).slice(0, 400) }, 502);
+        const msg = upstreamErrorMessage(data, upstream.status);
+        if (upstream.status === 402 || /upgrade_required/i.test(msg)) {
+          return json({ error: "Kintio is blocking photos on this plan — open kintio.com and turn on vision" }, 502);
+        }
+        return json({ error: msg.slice(0, 400) }, 502);
       }
       text = textFromKintioBody(raw);
     } else {
