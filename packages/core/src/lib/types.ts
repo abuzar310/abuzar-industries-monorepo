@@ -61,6 +61,8 @@ export interface Doc {
   buyer?: "party" | "carpenter";
   address: string;
   notes: string;
+  /** Compressed JPEG of the handwritten list this quote was typed from. */
+  paperPhoto?: string;
   date: string;
   sections: Section[];
   /** free-arrange mode: boxes are placed/sized by hand on the A4 canvas (see Section.box). */

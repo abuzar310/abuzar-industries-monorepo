@@ -4168,3 +4168,19 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
     overflow-x:auto; -webkit-overflow-scrolling:touch;
   }
 }
+
+.paper-quote{max-width:720px}
+.paper-quote-pic{display:block; max-width:min(100%,280px); max-height:180px; object-fit:contain; margin:12px 0; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--panel-2)}
+.paper-lines{display:flex; flex-direction:column; gap:10px; margin:14px 0}
+.paper-line{padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius-md); background:var(--panel-2)}
+.paper-line.off{opacity:.45}
+.paper-keep{display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; margin-bottom:4px}
+.paper-dims{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)) auto; gap:8px; align-items:end}
+.paper-dims .modal-field{margin-top:6px}
+.paper-dims .btn{margin-bottom:2px}
+.paper-on-doc{margin-top:10px}
+.paper-on-doc>span{display:block; font-family:var(--disp); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; font-weight:700; color:var(--ink-faint); margin-bottom:6px}
+.paper-on-doc img{display:block; max-width:220px; max-height:160px; object-fit:contain; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--panel-2)}
+@media (max-width:640px){
+  .paper-dims{grid-template-columns:repeat(3,minmax(0,1fr))}
+}

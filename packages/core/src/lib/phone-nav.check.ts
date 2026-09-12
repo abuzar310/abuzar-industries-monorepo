@@ -27,11 +27,13 @@ ok(mgr.money.length === 0, "manager has no money shelf");
 ok(mgr.business.some((t) => t.href === "/receipts") && !mgr.business.some((t) => t.href === "/books"), "manager money ops in business, no books");
 ok(phoneBar(mgr, false).map((t) => t.id).join() === "home,business,records,more", "manager bar");
 ok(phoneSectionOf(tabs, "/receipts") === "money", "section of receipts");
+ok(phoneSectionOf(tabs, "/paper-quote") === "business", "paper quote is business");
 ok(phoneSectionOf(tabs, "/money") === "money", "money page");
 ok(phoneSectionOf(tabs, "/business") === "business", "business page");
-ok(phoneQuickActions({ invoices: false, simpleQuote: true, acceptPayment: true }).length === 5, "cut-size quick actions");
+ok(phoneQuickActions({ invoices: false, simpleQuote: true, acceptPayment: true }).length === 6, "cut-size quick actions");
 ok(phoneQuickActions({ invoices: true, simpleQuote: false, acceptPayment: false }).length === 2, "official quick actions");
 ok(phoneQuickActions({ invoices: false, simpleQuote: true, acceptPayment: true })[0].href === "/editor", "quote is first quick action");
+ok(phoneQuickActions({ invoices: false, simpleQuote: true, acceptPayment: true })[1].href === "/paper-quote", "from paper");
 ok(!!phoneTabIcon("/receipts") && !!phoneTabIcon("/stock"), "shelf icons");
 
 console.log(`phone-nav.check OK (${n} assertions)`);
