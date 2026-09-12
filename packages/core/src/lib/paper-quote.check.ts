@@ -9,6 +9,8 @@ import {
   parsePaperAiJson,
   parsePaperRead,
   sectionsFromPaperLines,
+  applyPaperToDoc,
+  mergePaperSections,
 } from "./paper-quote.ts";
 
 const fenced = parsePaperAiJson(`here
@@ -97,5 +99,39 @@ assert.equal(p2704.lines.length, 4);
 assert.equal(p2704.lines[3].w, "1.5");
 assert.equal(p2704.lines[3].t, "1.5");
 assert.equal(p2704.lines[3].pcs, "6");
+
+const mergedEmpty = mergePaperSections(
+  [{ name: "Teak", rate: 4000, rows: [{ l: "", w: "", t: "", pcs: "" }] }],
+  [{ name: "Teak", rate: 4000, rows: [{ l: "8", w: "5", t: "3", pcs: "4" }] }],
+);
+assert.equal(mergedEmpty.length, 1);
+assert.equal(mergedEmpty[0].rows.length, 1);
+assert.equal(mergedEmpty[0].rows[0].l, "8");
+
+const mergedKeep = mergePaperSections(
+  [{ name: "Teak", rate: 4100, rows: [{ l: "12", w: "6", t: "1", pcs: "2" }] }],
+  [{ name: "Honne", rate: 4000, rows: [{ l: "9", w: "4", t: "2", pcs: "1" }] }],
+);
+assert.equal(mergedKeep.length, 2);
+assert.equal(mergedKeep[0].rate, 4100);
+assert.equal(mergedKeep[1].name, "Honne");
+
+const onto = applyPaperToDoc(
+  {
+    id: "inv_keep",
+    customerName: "Ismail",
+    notes: "keep me",
+    sections: [{ name: "Teak", rate: 4000, rows: [{ l: "", w: "", t: "", pcs: "" }] }],
+  } as never,
+  {
+    lines: [{ keep: true, name: "Teak", l: "8", w: "5", t: "3", pcs: "4", rate: "" }],
+    customerName: "Other",
+    paperPhoto: "data:image/jpeg;base64,xx",
+  },
+);
+assert.equal(onto.id, "inv_keep");
+assert.equal(onto.customerName, "Ismail");
+assert.equal(onto.notes, "keep me");
+assert.equal(onto.sections[0].rows[0].pcs, "4");
 
 console.log("paper-quote.check OK");

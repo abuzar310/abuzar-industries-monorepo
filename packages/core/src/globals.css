@@ -4170,6 +4170,16 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 }
 
 .paper-quote{max-width:720px}
+.paper-quote-overlay{position:fixed; inset:0; z-index:170; overflow:auto; background:var(--bg); padding:16px 18px 88px}
+.paper-crop-wrap{margin:12px 0}
+.paper-crop{position:relative; max-width:min(100%,520px); touch-action:none; user-select:none; background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius-sm)}
+.paper-crop img{display:block; width:100%; height:auto; pointer-events:none}
+.paper-crop-box{position:absolute; border:2px solid #fff; box-shadow:0 0 0 9999px rgba(0,0,0,.45); cursor:move; touch-action:none}
+.paper-crop-h{position:absolute; width:28px; height:28px; background:#fff; border-radius:4px; box-shadow:0 0 0 1px rgba(0,0,0,.2)}
+.paper-crop-h.nw{left:-10px; top:-10px; cursor:nwse-resize}
+.paper-crop-h.ne{right:-10px; top:-10px; cursor:nesw-resize}
+.paper-crop-h.sw{left:-10px; bottom:-10px; cursor:nesw-resize}
+.paper-crop-h.se{right:-10px; bottom:-10px; cursor:nwse-resize}
 .paper-quote-pic{display:block; max-width:min(100%,280px); max-height:180px; object-fit:contain; margin:12px 0; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--panel-2)}
 .paper-lines{display:flex; flex-direction:column; gap:10px; margin:14px 0}
 .paper-line{padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius-md); background:var(--panel-2)}
