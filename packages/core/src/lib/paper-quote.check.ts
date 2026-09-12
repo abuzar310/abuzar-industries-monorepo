@@ -2,6 +2,8 @@
 import assert from "node:assert/strict";
 import {
   blankPaperLine,
+  expandCrossSize,
+  normalizePaperDim,
   paperLineHasSize,
   paperQuoteSeed,
   parsePaperAiJson,
@@ -61,4 +63,39 @@ assert.equal(seed.sections?.[0].rows[0].l, "12");
 
 assert.throws(() => parsePaperAiJson("no json here"), /not JSON/);
 
-console.log("paper-quote.check OK (11 checks)");
+assert.equal(normalizePaperDim("1-5"), "1.5");
+assert.equal(normalizePaperDim("1,5"), "1.5");
+assert.deepEqual(expandCrossSize("8 × 5 × 3 × 4"), { l: "8", w: "5", t: "3", pcs: "4" });
+assert.deepEqual(expandCrossSize("8x5x3x4"), { l: "8", w: "5", t: "3", pcs: "4" });
+
+// IMG_2705-style: Teak heading + L×B×H×pcs
+const p2705 = parsePaperRead({
+  lines: [
+    { name: "Teak" },
+    { name: "Teak", l: "8", w: "5", t: "3", pcs: "4" },
+    { size: "9 × 6 × 2 × 10" },
+    { name: "L B H Pices" },
+  ],
+});
+assert.equal(p2705.lines.length, 2);
+assert.equal(p2705.lines[0].name, "Teak");
+assert.equal(p2705.lines[0].pcs, "4");
+assert.equal(p2705.lines[1].l, "9");
+assert.equal(p2705.lines[1].pcs, "10");
+
+// IMG_2704-style: L B H Pices columns, 1-5 decimals
+const p2704 = parsePaperRead({
+  lines: [
+    { name: "L", l: "B", w: "H", t: "Pices" },
+    { name: "Teak", l: "5", w: "2", t: "3", pcs: "10" },
+    { name: "Teak", l: "8", w: "9", t: "2", pcs: "5" },
+    { name: "Teak", l: "7", w: "6", t: "2", pcs: "2" },
+    { name: "Teak", l: "2", w: "1-5", t: "1-5", pcs: "6" },
+  ],
+});
+assert.equal(p2704.lines.length, 4);
+assert.equal(p2704.lines[3].w, "1.5");
+assert.equal(p2704.lines[3].t, "1.5");
+assert.equal(p2704.lines[3].pcs, "6");
+
+console.log("paper-quote.check OK");

@@ -34,7 +34,14 @@ function loadImage(file: File): Promise<HTMLImageElement> {
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error("Could not read that photo"));
+      const heic = /heic|heif/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
+      reject(
+        new Error(
+          heic
+            ? "This iPhone photo is HEIC — tap Take photo, or send a JPEG"
+            : "Could not read that photo",
+        ),
+      );
     };
     img.src = url;
   });

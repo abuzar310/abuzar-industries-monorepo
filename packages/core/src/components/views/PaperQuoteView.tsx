@@ -87,13 +87,14 @@ export default function PaperQuoteView() {
         New quote from paper <small>— photo the list, then check it</small>
       </div>
       <p className="hint">
-        Nothing is saved until you tap <b>Confirm</b>. Tick, fix, or delete lines. The photo stays on the draft.
+        Nothing is saved until you tap <b>Confirm</b>. Lists look like Teak then 8×5×3×4, or columns L B H
+        Pices. Tick, fix, or delete lines. The photo stays on the draft.
       </p>
 
       <input
         ref={camRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.heic,.heif"
         capture="environment"
         hidden
         onChange={(e) => void fromFile(e.target.files?.[0])}
@@ -101,7 +102,7 @@ export default function PaperQuoteView() {
       <input
         ref={libRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.heic,.heif"
         hidden
         onChange={(e) => void fromFile(e.target.files?.[0])}
       />
@@ -175,6 +176,7 @@ export default function PaperQuoteView() {
               {saving ? "Making quotation…" : "Confirm — make quotation"}
             </button>
           </div>
+          <p className="hint">Check H and Pcs — their handwritten 2 often looks like 11.</p>
           {!kept.length && <p className="hint">Tick at least one line with a size.</p>}
         </>
       )}
