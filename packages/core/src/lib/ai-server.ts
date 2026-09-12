@@ -36,6 +36,15 @@ async function aiCreds(schema: AppSchema) {
   return { key, host, model };
 }
 
+/** Paper photos need vision. Kintio sf_ keys often return upgrade_required — use env OpenAI if set. */
+function envVisionCreds() {
+  const key = String(process.env.AI_API_KEY || "").trim();
+  const host = normalizeAiHost(String(process.env.AI_BASE_URL || "")) || DEFAULT_AI_HOST;
+  const model = normalizeAiModel(String(process.env.AI_MODEL || ""));
+  if (!key || isKintio(host, key)) return null;
+  return { key, host, model };
+}
+
 function systemPrompt(appLabel: string, schema: AppSchema): string {
   const unofficial = schema === "unofficial";
   return [
@@ -240,7 +249,11 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
   const user = sessionUser(req);
   if (!user) return json({ error: "Sign in first" }, 401);
 
-  const { key, host, model } = await aiCreds(schema);
+  let { key, host, model } = await aiCreds(schema);
+  if (isKintio(host, key)) {
+    const vision = envVisionCreds();
+    if (vision) ({ key, host, model } = vision);
+  }
   if (!key) return json({ error: "Add an API key in Settings → AI assistant" }, 503);
 
   let body: { image?: string };
