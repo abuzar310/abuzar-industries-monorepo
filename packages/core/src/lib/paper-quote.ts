@@ -158,3 +158,40 @@ export function paperQuoteSeed(opts: {
     status: "Draft",
   };
 }
+
+function rowHasSize(r: { l?: unknown; w?: unknown; t?: unknown; pcs?: unknown }): boolean {
+  return [r.l, r.w, r.t, r.pcs].some((x) => String(x ?? "").trim() !== "");
+}
+
+/** Append paper woods onto an already-open quote. Empty starter rows drop. */
+export function mergePaperSections(existing: Section[], incoming: Section[]): Section[] {
+  const out: Section[] = existing.map((s) => ({ ...s, rows: s.rows.map((r) => ({ ...r })) }));
+  for (const add of incoming) {
+    const i = out.findIndex((s) => s.name.trim().toLowerCase() === add.name.trim().toLowerCase());
+    if (i < 0) {
+      out.push({ name: add.name, rate: add.rate, rows: add.rows.map((r) => ({ ...r })) });
+      continue;
+    }
+    const kept = out[i].rows.filter(rowHasSize);
+    out[i] = {
+      ...out[i],
+      rows: [...kept, ...add.rows.map((r) => ({ ...r }))],
+      rate: String(out[i].rate ?? "").trim() !== "" ? out[i].rate : add.rate,
+    };
+  }
+  const useful = out.filter((s) => s.rows.some(rowHasSize));
+  return useful.length ? useful : incoming.map((s) => ({ ...s, rows: s.rows.map((r) => ({ ...r })) }));
+}
+
+/** Same quote, plus the paper lines. Does not invent a new quotation. */
+export function applyPaperToDoc(
+  doc: Doc,
+  opts: { lines: PaperLine[]; customerName: string; paperPhoto: string },
+): Doc {
+  return {
+    ...doc,
+    customerName: String(doc.customerName || "").trim() || opts.customerName.trim(),
+    paperPhoto: opts.paperPhoto || doc.paperPhoto,
+    sections: mergePaperSections(doc.sections || [], sectionsFromPaperLines(opts.lines)),
+  };
+}
