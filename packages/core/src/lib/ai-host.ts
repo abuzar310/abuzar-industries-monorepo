@@ -60,10 +60,14 @@ export function normalizeAiModel(raw: string): string {
 }
 
 export const GEMINI_HOST = "https://generativelanguage.googleapis.com";
-export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
+
+export function isGeminiKey(key: string): boolean {
+  return /^(AIza|AQ\.)/.test(key.trim());
+}
 
 export function isGemini(host: string, key = ""): boolean {
-  if (key.trim().startsWith("AIza")) return true;
+  if (isGeminiKey(key)) return true;
   try {
     return /generativelanguage\.googleapis\.com$/i.test(new URL(host).hostname);
   } catch {

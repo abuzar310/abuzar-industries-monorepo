@@ -24,6 +24,7 @@ import { bumpData, toast } from "@/store/app-store";
 import type { Carpenter, Doc, Expense } from "@/lib/types";
 import {
   HistList,
+  RentPdfButtons,
   mergeDuplicates,
   pullCarpenter,
   r2,
@@ -238,6 +239,7 @@ function HeroCard({
         </div>
       </button>
       <div className="rent-pick-tools">
+        <RentPdfButtons tenant={tenant} expenses={expenses} />
         <button type="button" className="rent-ico" onClick={onEdit}>
           Edit
         </button>

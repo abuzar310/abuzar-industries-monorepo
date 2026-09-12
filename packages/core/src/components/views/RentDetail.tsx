@@ -31,7 +31,7 @@ import { dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import type { Carpenter, Doc, Expense } from "@/lib/types";
-import { HistList, mergeDuplicates, pullCarpenter, r2 } from "./rent-ui";
+import { HistList, RentPdfButtons, mergeDuplicates, pullCarpenter, r2 } from "./rent-ui";
 
 export default function RentDetail({ id }: { id: string }) {
   const { ready, dataVersion, user, cloakMoney } = useApp();
@@ -360,6 +360,7 @@ function RentSection({
       <div className="pc-head">
         <span className="rent-sec-name">{tenant.name}</span>
         <span className="rent-sec-tools">
+          <RentPdfButtons tenant={tenant} expenses={expenses} />
           <button type="button" className="rent-ico" onClick={onEdit}>
             Edit
           </button>

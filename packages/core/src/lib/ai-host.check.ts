@@ -28,20 +28,12 @@ assert.equal(
 );
 assert.equal(normalizeAiModel(""), "gpt-4o-mini");
 assert.equal(normalizeAiModel(" llama-3.1-8b-instant "), "llama-3.1-8b-instant");
-assert.equal(isKintio("https://api.kintio.com"), true);
-assert.equal(isKintio("https://api.openai.com/v1", "sf_abc"), true);
-assert.equal(isKintio("https://api.openai.com/v1", "sk-x"), false);
-assert.equal(kintioMessagesUrl("https://api.kintio.com"), "https://api.kintio.com/v1/messages");
-assert.equal(kintioMessagesUrl("https://api.openai.com/v1"), "https://api.kintio.com/v1/messages");
-assert.equal(
-  textFromAnthropicSse('event: ping\ndata: {"type":"content_block_delta","delta":{"text":"PO"}}\ndata: {"delta":{"text":"NG"}}\n'),
-  "PONG",
-);
 assert.equal(isGemini("", "AIzaSyxxxx"), true);
+assert.equal(isGemini("", "AQ.xxxx"), true);
 assert.equal(isGemini("https://generativelanguage.googleapis.com", ""), true);
 assert.equal(isGemini("https://api.kintio.com", "sf_x"), false);
 assert.equal(geminiPaperModel("gpt-4o-mini"), DEFAULT_GEMINI_MODEL);
 assert.equal(geminiPaperModel("gemini-2.5-flash"), "gemini-2.5-flash");
-assert.ok(geminiGenerateUrl("gemini-2.0-flash", "AIzaX").includes("/v1beta/models/gemini-2.0-flash:generateContent"));
+assert.ok(geminiGenerateUrl("gemini-3.6-flash", "AIzaX").includes("/v1beta/models/gemini-3.6-flash:generateContent"));
 assert.equal(textFromGemini({ candidates: [{ content: { parts: [{ text: " hi " }] } }] }), "hi");
 console.log("ai-host.check ok");

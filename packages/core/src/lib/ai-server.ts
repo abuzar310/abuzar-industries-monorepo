@@ -9,6 +9,7 @@ import {
   geminiGenerateUrl,
   geminiPaperModel,
   isGemini,
+  isGeminiKey,
   isKintio,
   kintioMessagesUrl,
   normalizeAiHost,
@@ -48,16 +49,20 @@ function kintioPaperModel(model: string): string {
   return m;
 }
 
-/** Paper prefers Gemini (AIza) so Kintio chat can stay in Settings. */
-function geminiPaperCreds(settings: { key: string; host: string; model: string }) {
-  if (isGemini(settings.host, settings.key)) {
-    return { key: settings.key, model: geminiPaperModel(settings.model) };
-  }
-  const envG = String(process.env.GEMINI_API_KEY || "").trim();
-  if (envG.startsWith("AIza")) return { key: envG, model: DEFAULT_GEMINI_MODEL };
-  const envAi = String(process.env.AI_API_KEY || "").trim();
-  if (envAi.startsWith("AIza")) return { key: envAi, model: DEFAULT_GEMINI_MODEL };
-  return null;
+/** Paper prefers Gemini so Kintio chat can stay in Settings. Tries each key. */
+function geminiPaperKeys(settings: { key: string; host: string; model: string }) {
+  const keys: string[] = [];
+  const add = (raw: string) => {
+    const s = String(raw || "").trim();
+    if (isGeminiKey(s) && !keys.includes(s)) keys.push(s);
+  };
+  add(settings.key);
+  add(process.env.GEMINI_API_KEY || "");
+  add(process.env.GEMINI_API_KEY_2 || "");
+  add(process.env.AI_API_KEY || "");
+  if (!keys.length) return null;
+  const model = isGemini(settings.host, settings.key) ? geminiPaperModel(settings.model) : DEFAULT_GEMINI_MODEL;
+  return { keys, model };
 }
 
 function systemPrompt(appLabel: string, schema: AppSchema): string {
@@ -265,7 +270,7 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
   if (!user) return json({ error: "Sign in first" }, 401);
 
   const creds = await aiCreds(schema);
-  const gemini = geminiPaperCreds(creds);
+  const gemini = geminiPaperKeys(creds);
   let { key, host, model } = creds;
   if (isKintio(host, key)) model = kintioPaperModel(model);
   if (!key && !gemini) return json({ error: "Add an API key in Settings → AI assistant" }, 503);
@@ -291,29 +296,37 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
     if (gemini) {
       const parts = paperImageParts(image);
       if (!parts) return json({ error: "Send a JPEG or PNG photo" }, 400);
-      const upstream = await fetch(geminiGenerateUrl(gemini.model, gemini.key), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: "Return JSON only. No markdown." }] },
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { inline_data: { mime_type: parts.media, data: parts.data } },
-                { text: PAPER_READ_PROMPT },
-              ],
-            },
-          ],
-          generationConfig: { temperature: 0, maxOutputTokens: 2000, responseMimeType: "application/json" },
-        }),
-        signal: abort,
-      });
-      const data = (await upstream.json().catch(() => null)) as unknown;
-      if (!upstream.ok) {
-        return json({ error: upstreamErrorMessage(data, upstream.status).slice(0, 400) }, 502);
+      const payload = {
+        systemInstruction: { parts: [{ text: "Return JSON only. No markdown." }] },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inline_data: { mime_type: parts.media, data: parts.data } },
+              { text: PAPER_READ_PROMPT },
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0, maxOutputTokens: 2000, responseMimeType: "application/json" },
+      };
+      let lastErr = "";
+      for (const gKey of gemini.keys) {
+        const upstream = await fetch(geminiGenerateUrl(gemini.model, gKey), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: abort,
+        });
+        const data = (await upstream.json().catch(() => null)) as unknown;
+        if (!upstream.ok) {
+          lastErr = upstreamErrorMessage(data, upstream.status).slice(0, 400);
+          continue;
+        }
+        text = textFromGemini(data);
+        if (text) break;
+        lastErr = "Empty reply from Gemini";
       }
-      text = textFromGemini(data);
+      if (!text) return json({ error: lastErr || "Could not read that list — try a clearer photo" }, 502);
     } else if (isKintio(host, key)) {
       const parts = paperImageParts(image);
       if (!parts) return json({ error: "Send a JPEG or PNG photo" }, 400);
