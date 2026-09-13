@@ -117,6 +117,7 @@ function quotationHubActions(): AiQuickAction[] {
   return [
     how("Start a new quotation", "Quotation tab / + Create a quotation (or Quotations → + New). Fill customer (or turn on Carpenter mode), sizes/CFT lines, rates → Save. Draft vs Created: Created counts as billable in Balances."),
     how("New quote from paper", "Quotation → From paper opens the camera. Crop the list, check the lines, then confirm. Lines go on the quote you already had open. Add image is the gallery. Empty hub / no last quote makes a new draft."),
+    how("Quote from Excel", "Open quotation → Excel → pick .xlsx or CSV (L B H Pices, or 8x5x3x4). Check lines, then add to this quote. Print flips to Long list so more lines fit on two pages. Old .xls: save as xlsx or CSV first."),
     how("Carpenter came to buy", "Quotation → Carpenter mode on → pick the carpenter. Customer is hidden; the bill is still under that name. House owner with a carpenter? Leave Carpenter mode off: Customer = owner, Carpenter = who brought them."),
     how("Open last quotation", "Quotation tab resumes the last open quote, or pick from Quotations list."),
     draft("Ask customer for sizes", "WhatsApp asking customer/carpenter for sizes (L×W×T×Pcs) and wood type before making the quote"),
@@ -138,6 +139,7 @@ function quotationsListActions(): AiQuickAction[] {
     how("Month report PDF", "Quotations → Download report PDF. Same cream passbook as Accounts: Date / Particulars / Billed / Received / Balance, oldest month first, every quote not just the list page."),
     how("New quotation from list", "Quotations → + New Quotation → editor."),
     how("New quote from paper", "Open quotation → From paper (camera) or Add image → crop → check lines → Add to this quotation. Phone /paper-quote uses the last open quote. Only with no last quote does it make a new draft."),
+    how("Quote from Excel", "Open quotation → Excel → .xlsx or CSV → check lines → Add to this quotation. Turns on Long list print (skinny table, two pages). Old .xls: save as xlsx or CSV."),
     how("Recycle bin quotes", "Multi-select rows → Recycle bin. Restore later from Settings."),
     draft("Follow up old draft", "WhatsApp to customer about an old draft quotation still pending approval — [Name] [Quote no]"),
   ];

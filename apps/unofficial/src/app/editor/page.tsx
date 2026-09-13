@@ -5,6 +5,7 @@ import { prefGet } from "@/lib/data";
 import { createQuotation } from "@/lib/create";
 import { useApp } from "@/store/useApp";
 import PaperQuoteView from "@/components/views/PaperQuoteView";
+import SheetImportView from "@/components/views/SheetImportView";
 
 export default function Page() {
   const { ready } = useApp();
@@ -12,8 +13,11 @@ export default function Page() {
   const [checked, setChecked] = useState(false);
   const [paperFile, setPaperFile] = useState<File | null>(null);
   const [paperOpen, setPaperOpen] = useState(false);
+  const [sheetFile, setSheetFile] = useState<File | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const camRef = useRef<HTMLInputElement>(null);
   const libRef = useRef<HTMLInputElement>(null);
+  const xlsRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!ready) return;
@@ -60,6 +64,9 @@ export default function Page() {
         <button className="btn" style={{ fontSize: 16, padding: "12px 24px" }} onClick={() => libRef.current?.click()}>
           Add image
         </button>
+        <button className="btn" style={{ fontSize: 16, padding: "12px 24px" }} onClick={() => xlsRef.current?.click()}>
+          Excel
+        </button>
       </div>
       <input
         ref={camRef}
@@ -82,6 +89,19 @@ export default function Page() {
           e.target.value = "";
         }}
       />
+      <input
+        ref={xlsRef}
+        type="file"
+        accept=".xlsx,.xlsm,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file) return;
+          setSheetFile(file);
+          setSheetOpen(true);
+        }}
+      />
       {paperOpen ? (
         <div className="paper-quote-overlay">
           <PaperQuoteView
@@ -89,6 +109,17 @@ export default function Page() {
             onCancel={() => {
               setPaperOpen(false);
               setPaperFile(null);
+            }}
+          />
+        </div>
+      ) : null}
+      {sheetOpen ? (
+        <div className="paper-quote-overlay">
+          <SheetImportView
+            initialFile={sheetFile}
+            onCancel={() => {
+              setSheetOpen(false);
+              setSheetFile(null);
             }}
           />
         </div>
