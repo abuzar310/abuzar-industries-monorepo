@@ -3,7 +3,7 @@ import type { AppFeatures, Tab } from "@/lib/types";
 // Official Abuzar Industries app: quotations -> invoices + stock/trading.
 // No daybook, no ledger.
 // vouchers: false — hide Vouchers/Accounts nav + invoice Payments received for now (routes stay for later)
-export const FEATURES: AppFeatures = { invoices: true, simpleQuote: false, acceptPayment: false, soloLogin: true, ledger: true, vouchers: false };
+export const FEATURES: AppFeatures = { invoices: true, simpleQuote: false, acceptPayment: false, ledger: true, vouchers: false };
 
 // Data isolation lives server-side: this app's API routes use the "official" schema.
 
