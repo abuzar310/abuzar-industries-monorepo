@@ -43,7 +43,9 @@ import EwayBillPanel from "./EwayBillPanel";
 import { showReviewQr } from "@/store/review-qr-store";
 import { extractPincode } from "@/lib/ewaybill";
 import PaperQuoteView from "@/components/views/PaperQuoteView";
+import SheetImportView from "@/components/views/SheetImportView";
 import { applyPaperToDoc } from "@/lib/paper-quote";
+import { applySheetToDoc } from "@/lib/sheet-import";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 const NO_SEL: Set<number> = new Set(); // stable empty selection for non-active boxes
@@ -70,6 +72,85 @@ const customerIdFor = (name: string, phone: string, list: Customer[]) => {
   });
   return hit?.id || "";
 };
+
+function DensePrintTable({ doc, hidePrices }: { doc: Doc; hidePrices: boolean }) {
+  let n = 0;
+  const rows: { n: number; wood: string; l: string; w: string; t: string; pcs: string; cft: number; rate: string; amt: number }[] = [];
+  for (const sec of doc.sections || []) {
+    const rate = +sec.rate || 0;
+    for (const r of sec.rows || []) {
+      if (![r.l, r.w, r.t, r.pcs].some((x) => String(x ?? "").trim() !== "")) continue;
+      n += 1;
+      const cft = cftOf(r);
+      rows.push({
+        n,
+        wood: sec.name,
+        l: String(r.l ?? ""),
+        w: String(r.w ?? ""),
+        t: String(r.t ?? ""),
+        pcs: String(r.pcs ?? ""),
+        cft,
+        rate: String(sec.rate ?? ""),
+        amt: Math.round(cft * rate * 100) / 100,
+      });
+    }
+  }
+  return (
+    <table className="dense-tbl">
+      <colgroup>
+        <col className="c-n" />
+        <col className="c-wood" />
+        <col className="c-d" />
+        <col className="c-d" />
+        <col className="c-d" />
+        <col className="c-d" />
+        <col className="c-cft" />
+        {!hidePrices && (
+          <>
+            <col className="c-rate" />
+            <col className="c-amt" />
+          </>
+        )}
+      </colgroup>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th className="wood">Wood</th>
+          <th>L</th>
+          <th>B</th>
+          <th>H</th>
+          <th>Pcs</th>
+          <th>CFT</th>
+          {!hidePrices && (
+            <>
+              <th>Rate</th>
+              <th>Amt</th>
+            </>
+          )}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.n}>
+            <td>{r.n}</td>
+            <td className="wood">{r.wood}</td>
+            <td>{r.l}</td>
+            <td>{r.w}</td>
+            <td>{r.t}</td>
+            <td>{r.pcs}</td>
+            <td>{r.cft.toFixed(2)}</td>
+            {!hidePrices && (
+              <>
+                <td className="print-money">{r.rate}</td>
+                <td className="print-money">{inr(r.amt)}</td>
+              </>
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 const STATUS_BADGE: Record<string, string> = {
   Draft: "b-draft",
@@ -125,6 +206,9 @@ export default function Editor({
   const [paperFile, setPaperFile] = useState<File | null>(null);
   const paperCamRef = useRef<HTMLInputElement>(null);
   const paperLibRef = useRef<HTMLInputElement>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetFile, setSheetFile] = useState<File | null>(null);
+  const excelRef = useRef<HTMLInputElement>(null);
   const [permit, setPermit] = useState<PermitFields | null>(null);
   const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
   const [expenses, setExpenses] = useState<Expense[]>([]); // this quote's recorded payments (for the mini statements)
@@ -533,6 +617,11 @@ export default function Editor({
   const onBillBox = (r: BoxRect) => update((d) => (d.billBox = r));
   const toggleFree = () => update((d) => (d.freeLayout = !d.freeLayout));
   const toggleHidePrices = () => update((d) => (d.hidePricesOnPrint = !d.hidePricesOnPrint));
+  const toggleDense = () =>
+    update((d) => {
+      d.listLayout = d.listLayout === "dense" ? "boxes" : "dense";
+      if (d.listLayout === "dense") d.freeLayout = false;
+    });
 
   // ---- arrow-key grid navigation (identical behaviour to legacy) ----
   function findDim(si: number, ri: number, k: string) {
@@ -898,6 +987,10 @@ export default function Editor({
     const fit = () => {
       // free-arrange mode places boxes by hand on the A4 canvas — never auto-fit/thin/paginate.
       if (docRef.current.freeLayout) return;
+      if (sheet.classList.contains("dense")) {
+        sheet.classList.add("a4multi");
+        return;
+      }
       const probe = document.createElement("div");
       // printable A4 area for a 6mm @page margin (210-12 × 297-12) — near-full-bleed so the
       // sheet uses almost all of the paper left-to-right
@@ -972,6 +1065,7 @@ export default function Editor({
   const badgeText = isInv ? (isBuy ? "Purchase Invoice" : doc.rented ? "Rented Invoice" : "Invoice") : doc.status;
   const showLink = isInv && !!doc.quotationId;
   const freeMode = feat.simpleQuote && !!doc.freeLayout;
+  const denseMode = feat.simpleQuote && !isInv && doc.listLayout === "dense";
   const commLockedAmt = !isInv && !temporary ? lockAmount(doc) : 0;
 
   useEffect(() => {
@@ -993,6 +1087,20 @@ export default function Editor({
   function openPaperLib() {
     paperLibRef.current?.click();
   }
+  function takeSheetFile(file: File | undefined) {
+    if (!file) return;
+    const name = file.name.toLowerCase();
+    if (name.endsWith(".xls") && !name.endsWith(".xlsx")) {
+      toast("Save that file as .xlsx or CSV, then upload");
+      return;
+    }
+    setSheetFile(file);
+    setSheetOpen(true);
+  }
+  function closeSheet() {
+    setSheetFile(null);
+    setSheetOpen(false);
+  }
 
   const paperOk = feat.simpleQuote && !isInv;
   const paperBtns = paperOk ? (
@@ -1002,6 +1110,9 @@ export default function Editor({
       </button>
       <button className="btn sm" type="button" onClick={openPaperLib}>
         Add image
+      </button>
+      <button className="btn sm" type="button" onClick={() => excelRef.current?.click()}>
+        Excel
       </button>
     </>
   ) : null;
@@ -1029,6 +1140,16 @@ export default function Editor({
           e.target.value = "";
         }}
       />
+      <input
+        ref={excelRef}
+        type="file"
+        accept=".xlsx,.xlsm,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        hidden
+        onChange={(e) => {
+          takeSheetFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
     </>
   ) : null;
 
@@ -1042,6 +1163,20 @@ export default function Editor({
           toast("Lines added to this quotation — check them");
         }}
         onCancel={closePaper}
+      />
+    </div>
+  ) : null;
+
+  const sheetOverlay = sheetOpen ? (
+    <div className="paper-quote-overlay">
+      <SheetImportView
+        initialFile={sheetFile}
+        onApply={(got) => {
+          commit(applySheetToDoc(docRef.current, got), true);
+          closeSheet();
+          toast("Lines added — print uses Long list");
+        }}
+        onCancel={closeSheet}
       />
     </div>
   ) : null;
@@ -1062,6 +1197,7 @@ export default function Editor({
         </div>
         {paperInputs}
         {paperOverlay}
+        {sheetOverlay}
       </div>
     );
   }
@@ -1362,6 +1498,7 @@ export default function Editor({
         id="sheet"
         className={
           (isInv ? "inv" : feat.simpleQuote ? "sq" : "") +
+          (denseMode ? " dense" : "") +
           (freeMode ? " free" : "") +
           (isInv && !isBuy && !isRent ? " p3a" : "") +
           (!isInv && (doc.hidePricesOnPrint || cloakMoney) ? " hide-prices" : "")
@@ -1605,7 +1742,7 @@ export default function Editor({
           )}
         </div>
 
-        <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} onFocus={onSecFocusIn} className={feat.simpleQuote ? "twocol" : ""}>
+        <div id="sections" ref={secRef} onKeyDown={onGridKeyDown} onFocus={onSecFocusIn} className={denseMode ? "dense-sec" : feat.simpleQuote ? "twocol" : ""}>
           {(() => {
             // rented invoice: a single custom "Rent" line instead of wood boxes.
             if (isRent)
@@ -1646,6 +1783,16 @@ export default function Editor({
             // first (each box stacks directly below the previous one), and only start the right column
             // once the left is full (~one page of compact 0.72cm rows ≈ 30 lines). Never three columns.
             if (!feat.simpleQuote) return doc.sections.map((_, si) => renderCard(si));
+            if (denseMode)
+              return (
+                <>
+                  <div className="dense-print">
+                    <DensePrintTable doc={doc} hidePrices={!!doc.hidePricesOnPrint} />
+                  </div>
+                  <div className="dense-edit">{doc.sections.map((_, si) => renderCard(si))}</div>
+                  {billNode}
+                </>
+              );
             // box height ≈ header/footer chrome + rows×0.72cm; a printable column is ~25cm tall.
             const COL_CM = 25;
             const boxCm = (sec: (typeof doc.sections)[number]) => 3 + (sec.rows.length || 1) * 0.72;
@@ -1798,7 +1945,16 @@ export default function Editor({
             {doc.hidePricesOnPrint ? "✓ Hide prices" : "Hide prices"}
           </button>
         )}
-        {feat.simpleQuote && (
+        {feat.simpleQuote && !isInv && (
+          <button
+            className={"btn" + (denseMode ? " primary" : "")}
+            onClick={toggleDense}
+            title="Long list print — skinny table, more lines on two pages"
+          >
+            {denseMode ? "✓ Long list" : "Long list"}
+          </button>
+        )}
+        {feat.simpleQuote && !denseMode && (
           <button className={"btn" + (freeMode ? " primary" : "")} onClick={toggleFree} title="Drag & resize the boxes freely on the A4 page">
             {freeMode ? "✓ Free arrange" : "Free arrange"}
           </button>
@@ -1965,6 +2121,7 @@ export default function Editor({
       )}
       {paperInputs}
       {paperOverlay}
+      {sheetOverlay}
     </div>
   );
 }

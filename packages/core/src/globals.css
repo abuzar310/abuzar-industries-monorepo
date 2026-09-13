@@ -529,6 +529,31 @@ body{
    The canvas is the printable A4 area (748×1077px ≈ 198×285mm @96dpi); on screen it's scaled to fit,
    and it prints 1:1 inside the @page 6mm margins. ===== */
 #sheet.sq.free{background:transparent; box-shadow:none; border:none; padding:0}
+/* Long list: skinny full-width table so a fat quote can run onto page 2 */
+#sheet.sq.dense #sections.dense-sec{display:block}
+#sheet.sq .dense-print{display:none}
+#sheet.sq.dense .dense-tbl{
+  width:100%; border-collapse:collapse; table-layout:fixed;
+  font-family:var(--mono); font-size:8.5px;
+}
+#sheet.sq.dense .dense-tbl th,
+#sheet.sq.dense .dense-tbl td{
+  border:.4px solid var(--line-2); padding:1px 3px; height:.42cm;
+  line-height:.38cm; overflow:hidden; white-space:nowrap; text-align:right;
+}
+#sheet.sq.dense .dense-tbl th{
+  text-align:center; font-size:7.5px; letter-spacing:.04em; text-transform:uppercase;
+  font-family:var(--disp); font-weight:700; color:var(--ink-soft);
+}
+#sheet.sq.dense .dense-tbl td.wood,
+#sheet.sq.dense .dense-tbl th.wood{text-align:left}
+#sheet.sq.dense .dense-tbl col.c-n{width:5%}
+#sheet.sq.dense .dense-tbl col.c-wood{width:18%}
+#sheet.sq.dense .dense-tbl col.c-d{width:8%}
+#sheet.sq.dense .dense-tbl col.c-cft{width:11%}
+#sheet.sq.dense .dense-tbl col.c-rate{width:12%}
+#sheet.sq.dense .dense-tbl col.c-amt{width:14%}
+#sheet.sq.dense #sections .totals{margin-top:10px}
 .qcanvas-wrap{position:relative; width:100%; overflow:visible}
 .qcanvas{position:relative; transform-origin:top left; background:#fff;
   border:1.5px dashed var(--line-2); box-shadow:var(--shadow-card); border-radius:2px;
@@ -3328,6 +3353,12 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
     break-after:avoid-page;
     page-break-after:avoid;
   }
+  #sheet.sq.dense .dense-edit{display:none !important}
+  #sheet.sq.dense .dense-print{display:block !important}
+  #sheet.sq.dense #sections{display:block !important; grid-template-columns:1fr !important}
+  #sheet.sq.dense .dense-tbl thead{display:table-header-group}
+  #sheet.sq.dense .dense-tbl tr{break-inside:avoid; page-break-inside:avoid}
+  #sheet.sq.dense{max-height:none}
   .sq-review-qr .review-qr img{width:48px !important; height:48px !important}
   .sq-review-qr .review-qr-label{font-size:7px}
   .qc-review-qr .review-qr img{width:48px !important; height:48px !important}

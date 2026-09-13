@@ -157,6 +157,12 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
   if (clone.classList.contains("hide-prices")) {
     clone.querySelectorAll(".print-money,.totals,.words,.pay-sheet").forEach((el) => el.remove());
   }
+  if (clone.classList.contains("dense")) {
+    clone.querySelectorAll(".dense-edit").forEach((el) => el.remove());
+    clone.querySelectorAll<HTMLElement>(".dense-print").forEach((el) => {
+      el.style.display = "block";
+    });
+  }
   // print-only elements (e.g. the solid Total-Price value) are display:none on screen — show them
   clone.querySelectorAll<HTMLElement>(".amt-print").forEach((el) => (el.style.display = "inline"));
   // drop the screen-only selection highlight classes so nothing is tinted in the PDF
@@ -227,7 +233,7 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
   // quote: lock to one A4 with the .a4fill layout — rows stay compact (see #sheet.sq.a4fill).
   // Use ~272mm worth of height (not full 297) so float rounding + QR/footer never tip a
   // one-page capture into a blank second PDF page.
-  if (clone.classList.contains("sq")) {
+  if (clone.classList.contains("sq") && !clone.classList.contains("dense")) {
     const a4h = (width * 272) / 210;
     if (clone.scrollHeight <= a4h + 4) {
       clone.classList.add("a4fill");
@@ -270,10 +276,11 @@ async function renderPdf(sheet: HTMLElement, opts?: PdfOpts) {
     const pagePx = Math.max(1, Math.floor(canvas.width * ((contentH - 2) / contentW)));
     type BreakUnit = { top: number; bottom: number };
     let units: BreakUnit[] = [];
-    if (opts?.pageBreak) {
+    const breakSel = opts?.pageBreak || (clone.classList.contains("dense") ? ".dense-tbl tbody tr" : "");
+    if (breakSel) {
       const cr = clone.getBoundingClientRect();
       const ratio = cr.height > 0 ? canvas.height / cr.height : 1;
-      units = Array.from(clone.querySelectorAll(opts.pageBreak))
+      units = Array.from(clone.querySelectorAll(breakSel))
         .map((u) => {
           const r = u.getBoundingClientRect();
           return {

@@ -65,6 +65,8 @@ export interface Doc {
   paperPhoto?: string;
   date: string;
   sections: Section[];
+  /** Cut Size print: wood boxes (default) or skinny long-list table that can run onto page 2. */
+  listLayout?: "boxes" | "dense";
   /** free-arrange mode: boxes are placed/sized by hand on the A4 canvas (see Section.box). */
   freeLayout?: boolean;
   /** free-arrange: placement of the grand-total (bill) box on the A4 page. */
