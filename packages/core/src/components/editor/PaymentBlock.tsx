@@ -2,12 +2,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { inr, nowIso } from "@/lib/calc";
 import { addExpense, liveSpendCategories } from "@/lib/expenses";
-import { delRec, getRec, put } from "@/lib/data";
+import { delRec, getRec, listCached, put } from "@/lib/data";
+import { agoLabel, findRecentDuplicate, type DupQuery } from "@/lib/dup-guard";
 import { quoteBill, quotePaid, statementsForQuote, type PartyStatement } from "@/lib/payments";
 import { advanceBalance, applyAdvancesToQuote, restoreAdvanceFromApply } from "@/lib/vouchers";
 import { USERS } from "@/lib/local-auth";
 import AccountPicker from "@/components/AccountPicker";
 import { bumpData, toast } from "@/store/app-store";
+import { confirmDialog } from "@/store/dialog-store";
 import { showReviewQr } from "@/store/review-qr-store";
 import type { Customer, Doc, Expense } from "@/lib/types";
 import CustomerPicker from "./CustomerPicker";
@@ -91,6 +93,8 @@ export default function PaymentBlock({
   const [acct, setAcct] = useState("");
   const [note, setNote] = useState(""); // free-text note on a cash payment (shown in Statements)
   const [payDate, setPayDate] = useState(""); // optional: when the payment actually happened (yyyy-mm-dd)
+  /** true while "+" is writing — the button greys out so a second tap can't record twice. */
+  const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<string | null>(null); // a recorded payment being edited (its expense id)
   /** Hold money on the customer account for a future quotation (not this quote's paid total). */
   const [forNext, setForNext] = useState(false);
@@ -242,7 +246,35 @@ export default function PaymentBlock({
     return true;
   }
 
+  /** Same amount, same way, same paper/person in the last 15 minutes → ask before recording it again.
+   *  Looks only; nothing is written until the user says yes. */
+  async function okToRecordAgain(q: DupQuery, who: string): Promise<boolean> {
+    const hit = findRecentDuplicate(listCached<Expense>("expenses"), q);
+    if (!hit) return true;
+    const byName = USERS.find((u) => u.id === hit.expense.enteredBy)?.name || hit.expense.enteredBy || "someone";
+    return confirmDialog({
+      title: "Already recorded?",
+      message:
+        "₹" + inr(hit.amount) + " " + (q.mode === "upi" ? "UPI" : "cash") + " on " + who +
+        " was recorded " + agoLabel(hit.agoMs) + " by " + byName + ". Record it again?",
+      confirmLabel: "Yes, record again",
+      cancelLabel: "No",
+      danger: true,
+    });
+  }
+
+  /** One press = one save: "+" stays disabled until the write has gone through. */
   async function addLine() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await addLineInner();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addLineInner() {
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return;
     if (isComm) {
@@ -271,6 +303,7 @@ export default function PaymentBlock({
     if (forNext && !editId) {
       const custId = await resolveCustId();
       if (!custId) return;
+      if (!(await okToRecordAgain({ amount: a, mode: isUpiMode ? "upi" : "cash", custId }, (doc.customerName || "").trim() || "this customer"))) return;
       await addExpense({
         type: "sale",
         amount: a,
@@ -297,6 +330,7 @@ export default function PaymentBlock({
 
     // Flyer only on the first amount entry for this quotation.
     const firstPay = quotePaid(doc) <= 0.005;
+    if (!(await okToRecordAgain({ amount: a, mode: isUpiMode ? "upi" : "cash", sourceId: doc.id }, "#" + (doc.displayNumber || doc.number)))) return;
     await addExpense({
       type: "sale",
       amount: a,
@@ -702,9 +736,9 @@ export default function PaymentBlock({
               type="button"
               title={editId ? "Save changes" : forNext ? "Hold as advance" : "Add payment"}
               onClick={editId ? saveEdit : addLine}
-              disabled={!(+amt > 0)}
+              disabled={!(+amt > 0) || saving}
             >
-              {editId ? "✓" : "+"}
+              {saving ? "…" : editId ? "✓" : "+"}
             </button>
           </div>
         )}

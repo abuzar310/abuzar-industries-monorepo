@@ -3,8 +3,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { inr, todayStr } from "@/lib/calc";
 import { editCarpenterDialog, listCarpenters } from "@/lib/carpenters";
-import { allRec } from "@/lib/data";
+import { allRec, listCached } from "@/lib/data";
+import { agoLabel, findRecentDuplicate } from "@/lib/dup-guard";
 import { allExpenses, upiAccounts } from "@/lib/expenses";
+import { USERS } from "@/lib/local-auth";
 import {
   MONTH_NAMES,
   applyAgainstRent,
@@ -167,6 +169,8 @@ function RentSection({
   const [payKind, setPayKind] = useState<"part" | "full">("part");
   const [recvHow, setRecvHow] = useState("cash");
   const [recvAccount, setRecvAccount] = useState("");
+  /** true while "Record payment" is writing — the button greys out so a second tap can't record twice. */
+  const [saving, setSaving] = useState(false);
   const [monthAmt, setMonthAmt] = useState("");
   const [openAmt, setOpenAmt] = useState("");
   const [quoteId, setQuoteId] = useState("");
@@ -294,9 +298,26 @@ function RentSection({
   }
 
   async function doReceived() {
+    if (saving) return;
     const amt = r2(+recvAmt || 0);
     if (amt > due + 0.05) return toast("They only owe ₹" + inr(due));
     const mode = recvHow === "upi" ? "upi" : "cash";
+    // same amount, same way, same tenant in the last 15 minutes → ask before recording it again
+    const hit = findRecentDuplicate(listCached<Expense>("expenses"), { amount: amt, mode, carpenterId: tenant.id });
+    if (hit) {
+      const byName = USERS.find((u) => u.id === hit.expense.enteredBy)?.name || hit.expense.enteredBy || "someone";
+      const ok = await confirmDialog({
+        title: "Already recorded?",
+        message:
+          "₹" + inr(hit.amount) + " " + (mode === "upi" ? "UPI" : "cash") + " from " + tenant.name +
+          " was recorded " + agoLabel(hit.agoMs) + " by " + byName + ". Record it again?",
+        confirmLabel: "Yes, record again",
+        cancelLabel: "No",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    setSaving(true);
     try {
       await receivePlaceRent(tenant, amt, enteredBy, mode, recvAccount, recvHow === "owner");
       bumpData();
@@ -306,6 +327,8 @@ function RentSection({
       toast("₹" + inr(amt) + " received · Receipts & Daybook");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not record");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -535,8 +558,8 @@ function RentSection({
                 </label>
               )}
               <div className="rowbtns">
-                <button className="btn primary" type="button" onClick={() => void doReceived()}>
-                  Record payment
+                <button className="btn primary" type="button" onClick={() => void doReceived()} disabled={saving}>
+                  {saving ? "Saving…" : "Record payment"}
                 </button>
               </div>
             </>
