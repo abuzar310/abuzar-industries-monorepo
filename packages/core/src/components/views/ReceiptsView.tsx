@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { allRec, getRec, put } from "@/lib/data";
+import { allRec, getRec, listCached, put } from "@/lib/data";
 import { inr, nowIso } from "@/lib/calc";
+import { agoLabel, findRecentDuplicate, type DupQuery } from "@/lib/dup-guard";
 import {
   addExpense,
   PAID_TO_MANAGER_LABEL,
@@ -150,6 +151,8 @@ export default function ReceiptsView() {
   const [wBy, setWBy] = useState<"owner" | "manager" | null>(null);
   const [carpsRaw, setCarps] = useState<Carpenter[]>([]);
   const [rentTenant, setRentTenant] = useState<Carpenter | null>(null);
+  /** true while Record is writing — the button greys out so a second tap can't record twice. */
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
     Promise.all([
@@ -457,7 +460,35 @@ export default function ReceiptsView() {
     );
   }
 
+  /** Same amount, same way, same person in the last 15 minutes → ask before recording it again.
+   *  Looks only; nothing is written until the user says yes. */
+  async function okToRecordAgain(q: DupQuery, who: string): Promise<boolean> {
+    const hit = findRecentDuplicate(listCached<Expense>("expenses"), q);
+    if (!hit) return true;
+    const byName = USERS.find((u) => u.id === hit.expense.enteredBy)?.name || hit.expense.enteredBy || "someone";
+    return confirmDialog({
+      title: "Already recorded?",
+      message:
+        "₹" + inr(hit.amount) + " " + (q.mode === "upi" ? "UPI" : "cash") + " for " + who +
+        " was recorded " + agoLabel(hit.agoMs) + " by " + byName + ". Record it again?",
+      confirmLabel: "Yes, record again",
+      cancelLabel: "No",
+      danger: true,
+    });
+  }
+
+  /** One press = one save: Record stays disabled until the write has gone through. */
   async function record() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await recordInner();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function recordInner() {
     if (transportPaidOut) return recordTransportPay();
     const a = Math.max(0, +amt || 0);
     if (a <= 0) return toast("Enter an amount");
@@ -471,6 +502,7 @@ export default function ReceiptsView() {
       const payMode = isUpiMode ? "upi" : "cash";
       const toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
       const useAcct = mode === "upi" || (!isUpiMode && mode !== "owner") ? acct.trim() : "";
+      if (!(await okToRecordAgain({ amount: a, mode: payMode, carpenterId: rentTenant.id }, rentTenant.name))) return;
       try {
         await receivePlaceRent(
           rentTenant,
@@ -537,6 +569,7 @@ export default function ReceiptsView() {
         bumpData();
         return toast("Updated ✓");
       }
+      if (!(await okToRecordAgain({ amount: a, mode: useMode, party: who }, who))) return;
       await addExpense({
         type: "sale",
         amount: a,
@@ -742,6 +775,8 @@ export default function ReceiptsView() {
     if (applyTo === "quote" && !quoteId) return toast("Pick which quotation to settle");
     const isCash = !isUpiMode;
     const toOwner = isUpiMode ? mode === "uowner" : mode === "owner" || isOwner;
+    const custQuoteIds = quotes.filter((d) => d.customerId === picked.id).map((d) => d.id);
+    if (!(await okToRecordAgain({ amount: a, mode: isUpiMode ? "upi" : "cash", custId: picked.id, quoteIds: custQuoteIds }, picked.name))) return;
     // apply the receipt across open quotations (oldest-first, or one picked quote); leftover → account
     const { applied, leftover } = await applyCustomerReceipt({
       custId: picked.id,
@@ -1612,8 +1647,10 @@ export default function ReceiptsView() {
           </div>
         )}
 
-        <button className="btn primary" type="button" onClick={record} style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: 12 }}>
-          {editing
+        <button className="btn primary" type="button" onClick={record} disabled={saving} style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: 12 }}>
+          {saving
+            ? "Saving…"
+            : editing
             ? "Save changes"
             : kind === "paid"
               ? paidCat === "paid-manager"
