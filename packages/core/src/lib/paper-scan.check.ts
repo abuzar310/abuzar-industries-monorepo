@@ -1,5 +1,28 @@
 import assert from "node:assert/strict";
-import { frameDetail, frameMotion, lumaFrame, scanStep, type ScanState } from "./paper-scan.ts";
+import {
+  CROP_FULL,
+  CROP_MIN,
+  cropPixels,
+  dragCrop,
+  frameDetail,
+  frameMotion,
+  isFullCrop,
+  lumaFrame,
+  scanStep,
+  type CropBox,
+  type ScanState,
+} from "./paper-scan.ts";
+
+// crop: a corner drag resizes without crossing over, a move stays inside, pixels stay inside the photo
+const near = (a: CropBox, b: CropBox) => (["x", "y", "w", "h"] as const).every((k) => Math.abs(a[k] - b[k]) < 1e-9);
+assert.ok(near(dragCrop(CROP_FULL, "nw", 0.25, 0.1), { x: 0.25, y: 0.1, w: 0.75, h: 0.9 }));
+assert.ok(near(dragCrop(CROP_FULL, "se", -2, -2), { x: 0, y: 0, w: CROP_MIN, h: CROP_MIN }));
+assert.ok(near(dragCrop({ x: 0.2, y: 0.2, w: 0.5, h: 0.5 }, "move", 0.9, -0.9), { x: 0.5, y: 0, w: 0.5, h: 0.5 }));
+assert.ok(near(dragCrop({ x: 0.2, y: 0.2, w: 0.5, h: 0.5 }, "ne", 0.1, 5), { x: 0.2, y: 0.58, w: 0.6, h: 0.12 }));
+assert.ok(near(dragCrop({ x: 0.2, y: 0.2, w: 0.5, h: 0.5 }, "sw", -1, -0.1), { x: 0, y: 0.2, w: 0.7, h: 0.4 }));
+assert.deepEqual(cropPixels({ x: 0.25, y: 0.5, w: 0.5, h: 0.5 }, 1000, 800), { sx: 250, sy: 400, sw: 500, sh: 400 });
+assert.deepEqual(cropPixels({ x: 0.999, y: 0.999, w: 0.5, h: 0.5 }, 100, 100), { sx: 99, sy: 99, sw: 1, sh: 1 });
+assert.ok(isFullCrop(CROP_FULL) && !isFullCrop(dragCrop(CROP_FULL, "se", -0.1, 0)));
 
 const px = (r: number, g: number, b: number) => lumaFrame([r, g, b, 255], 1, 1)[0];
 assert.ok(Math.abs(px(255, 255, 255) - 255) < 1.5);

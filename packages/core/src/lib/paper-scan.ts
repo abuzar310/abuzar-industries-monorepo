@@ -4,6 +4,41 @@
  */
 export const SCAN_W = 192;
 export const SCAN_SAMPLE_MS = 250;
+
+/** Crop box as fractions of the photo: x and y from the top-left corner, w and h across. */
+export type CropBox = { x: number; y: number; w: number; h: number };
+export type CropGrip = "move" | "nw" | "ne" | "sw" | "se";
+
+/** The smallest box a drag can make, so it never shrinks to nothing. */
+export const CROP_MIN = 0.12;
+export const CROP_FULL: CropBox = { x: 0, y: 0, w: 1, h: 1 };
+
+const within = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+
+/** The box after dragging a corner (or the middle, to move it) by dx, dy measured in photo widths and heights. */
+export function dragCrop(start: CropBox, grip: CropGrip, dx: number, dy: number): CropBox {
+  if (grip === "move") {
+    return { ...start, x: within(start.x + dx, 0, 1 - start.w), y: within(start.y + dy, 0, 1 - start.h) };
+  }
+  let left = start.x;
+  let top = start.y;
+  let right = start.x + start.w;
+  let bottom = start.y + start.h;
+  if (grip === "nw" || grip === "sw") left = within(left + dx, 0, right - CROP_MIN);
+  if (grip === "ne" || grip === "se") right = within(right + dx, left + CROP_MIN, 1);
+  if (grip === "nw" || grip === "ne") top = within(top + dy, 0, bottom - CROP_MIN);
+  if (grip === "sw" || grip === "se") bottom = within(bottom + dy, top + CROP_MIN, 1);
+  return { x: left, y: top, w: right - left, h: bottom - top };
+}
+
+/** The box in the photo's own pixels: inside the photo and at least one pixel wide and tall. */
+export function cropPixels(box: CropBox, width: number, height: number) {
+  const sx = within(Math.round(box.x * width), 0, width - 1);
+  const sy = within(Math.round(box.y * height), 0, height - 1);
+  return { sx, sy, sw: within(Math.round(box.w * width), 1, width - sx), sh: within(Math.round(box.h * height), 1, height - sy) };
+}
+
+export const isFullCrop = (b: CropBox) => b.x < 0.001 && b.y < 0.001 && b.w > 0.999 && b.h > 0.999;
 const MIN_EDGES = 0.04; // blank paper measured 0.000, handwritten lists 0.17 to 0.19
 const MAX_STEADY_MOTION = 5; // sensor noise 2.4, a 1px shake 3.5, a 4px move 8
 const MIN_SHARP = 10; // noise-only frames measured 7.1, heavy blur 7.3, the sharp lists 18.7 to 19.7

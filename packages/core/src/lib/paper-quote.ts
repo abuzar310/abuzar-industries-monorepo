@@ -38,6 +38,56 @@ export const PAPER_READ_PROMPT =
   "Examples: Teak / 8×5×3×4 / 9×6×2×10 → two Teak lines (skip any L B H Pices under them). " +
   "Columns 5 2 3 10 / 8 9 2 5 / 7 6 2 2 / 2 1-5 1-5 6 → four Teak lines, last w=1.5 t=1.5 pcs=6.";
 
+/** Excel sheets and PDFs: a table in any layout. Same JSON as the photo read. */
+export const FILE_READ_PROMPT =
+  "Read the timber size list in this document. It is an Excel sheet or a PDF, typed or a scan of handwriting. Return JSON only: " +
+  '{"customerName":"","lines":[{"name":"Teak","l":"8","w":"5","t":"3","pcs":"4","rate":""}]} ' +
+  "First work out the layout: which column is the length, which the breadth, which the height or thickness, and which the pieces. " +
+  "Headings can come in any order and any spelling: Length/Len/L (ft or inch), Breadth/Breath/Width/B/W, Height/Thickness/Thick/H/T, Pieces/Pices/Pcs/Qty/Nos. " +
+  "Map length→l, breadth or width→w, height or thickness→t, pieces→pcs. A size written 8x5x3x4 is l×w×t×pcs; 8x5x3 is l×w×t. " +
+  "Skip serial numbers (Sl No, S.No, Sr, #), CFT, amounts, totals, headings and notes. " +
+  "The wood name comes from a Wood/Item/Particulars column, or from a heading row above a group, and applies downward. No wood → Teak. " +
+  "1-5 or 1,5 means 1.5. Give rate only when a rate column has a number for that row. customerName only when a customer or party name is written. " +
+  "Do not invent sizes; leave a field empty when the document does not show it.";
+
+/** What one read sends to the model: a photo or PDF as a file part, or a sheet's rows inside the prompt. */
+export type PaperInput =
+  | { kind: "photo" | "pdf"; media: string; data: string; prompt: string; empty: string }
+  | { kind: "text"; prompt: string; empty: string };
+
+export const PAPER_PHOTO_MAX_CHARS = 500_000;
+/** About 3 MB of PDF once base64. Vercel refuses request bodies over 4.5 MB. */
+export const PAPER_PDF_MAX_CHARS = 4_200_000;
+export const PAPER_TEXT_MAX_CHARS = 60_000;
+
+/** Check what the app sent (a photo, a PDF, or a sheet as text) and pick the prompt for it. */
+export function paperInput(body: unknown): PaperInput | { error: string } {
+  const b = (body && typeof body === "object" ? body : {}) as { image?: unknown; pdf?: unknown; text?: unknown };
+  const pick = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const pdf = pick(b.pdf);
+  if (pdf) {
+    if (pdf.length > PAPER_PDF_MAX_CHARS) return { error: "That PDF is too big. Send one under 3 MB, or a photo of the list." };
+    const m = pdf.match(/^data:application\/pdf;base64,([A-Za-z0-9+/=]+)$/);
+    if (!m) return { error: "Send a PDF file" };
+    return { kind: "pdf", media: "application/pdf", data: m[1], prompt: FILE_READ_PROMPT, empty: "No sizes found in that file" };
+  }
+  const text = pick(b.text);
+  if (text) {
+    if (text.length > PAPER_TEXT_MAX_CHARS) return { error: "That sheet is too long to read in one go. Split it into smaller sheets." };
+    return {
+      kind: "text",
+      prompt: FILE_READ_PROMPT + "\nThe sheet, one row per line, cells split by |:\n" + text,
+      empty: "No sizes found in that file",
+    };
+  }
+  const image = pick(b.image);
+  if (image.length > PAPER_PHOTO_MAX_CHARS) return { error: "That photo is too large. Try another shot." };
+  const m = image.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i);
+  if (!m) return { error: "Send a JPEG or PNG photo" };
+  const media = m[1].toLowerCase() === "image/jpg" ? "image/jpeg" : m[1].toLowerCase();
+  return { kind: "photo", media, data: m[2], prompt: PAPER_READ_PROMPT, empty: "No sizes found on that photo" };
+}
+
 export function blankPaperLine(): PaperLine {
   return { keep: true, name: "Teak", l: "", w: "", t: "", pcs: "", rate: "" };
 }
@@ -153,20 +203,6 @@ export function sectionsFromPaperLines(lines: PaperLine[]): Section[] {
   return out;
 }
 
-export function paperQuoteSeed(opts: {
-  lines: PaperLine[];
-  customerName: string;
-  paperPhoto: string;
-}): Partial<Doc> {
-  return {
-    customerName: opts.customerName.trim(),
-    notes: "From paper",
-    sections: sectionsFromPaperLines(opts.lines),
-    paperPhoto: opts.paperPhoto,
-    status: "Draft",
-  };
-}
-
 function rowHasSize(r: { l?: unknown; w?: unknown; t?: unknown; pcs?: unknown }): boolean {
   return [r.l, r.w, r.t, r.pcs].some((x) => String(x ?? "").trim() !== "");
 }
@@ -205,9 +241,9 @@ export function applyPaperToDoc(
 }
 
 /** Toast after paper lines land on a quotation. */
-export function paperAddedMessage(lines: PaperLine[]): string {
+export function paperAddedMessage(lines: PaperLine[], from: "photo" | "file" = "photo"): string {
   const n = lines.filter((l) => l.keep && paperLineHasSize(l)).length;
-  return n + (n === 1 ? " line" : " lines") + " added from paper. Check the sizes.";
+  return n + (n === 1 ? " line" : " lines") + (from === "file" ? " added from the file" : " added from paper") + ". Check the sizes.";
 }
 
 export type PaperReadStep = { model: string; key: string };
@@ -225,7 +261,7 @@ const PAPER_STEP_MIN_MS = 8_000;
 export async function readPaperSteps(
   steps: PaperReadStep[],
   run: (step: PaperReadStep, timeoutMs: number) => Promise<PaperStepReply>,
-  opts: { budgetMs: number; now?: () => number },
+  opts: { budgetMs: number; now?: () => number; empty?: string },
 ): Promise<PaperStepsResult> {
   const now = opts.now ?? Date.now;
   const start = now();
@@ -252,7 +288,7 @@ export async function readPaperSteps(
       lastErr = "Could not read that list — try a clearer photo";
       continue;
     }
-    if (!read.lines.length) return { error: "No sizes found on that photo", busy: false };
+    if (!read.lines.length) return { error: opts.empty || "No sizes found on that photo", busy: false };
     return { read, step };
   }
   if (busy) return { error: PAPER_BUSY_MESSAGE, busy: true };

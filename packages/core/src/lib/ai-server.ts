@@ -18,7 +18,7 @@ import {
   textFromAnthropicSse,
   textFromGemini,
 } from "@/lib/ai-host";
-import { PAPER_READ_PROMPT, parsePaperAiJson, readPaperSteps } from "@/lib/paper-quote";
+import { paperInput, parsePaperAiJson, readPaperSteps } from "@/lib/paper-quote";
 
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
@@ -243,16 +243,8 @@ export async function handleAiChat(req: Request, appLabel: string, schema: AppSc
   }
 }
 
-const PAPER_MAX_CHARS = 500_000;
 // The route gets 60 seconds on Vercel. Stop starting new tries with time left to answer.
 const PAPER_BUDGET_MS = 50_000;
-
-function paperImageParts(image: string) {
-  const m = image.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i);
-  if (!m) return null;
-  const media = m[1].toLowerCase() === "image/jpg" ? "image/jpeg" : m[1].toLowerCase();
-  return { media, data: m[2] };
-}
 
 function textFromKintioBody(raw: string): string {
   const sse = textFromAnthropicSse(raw).trim();
@@ -267,7 +259,7 @@ function textFromKintioBody(raw: string): string {
   return raw.trim();
 }
 
-/** POST /api/ai/paper — { image: dataUrl }. Reads sizes. Never writes a quotation. */
+/** POST /api/ai/paper with { image } (a photo), { pdf } (a PDF) or { text } (a sheet's rows). Reads sizes. Never writes a quotation. */
 export async function handleAiReadPaper(req: Request, schema: AppSchema): Promise<Response> {
   const user = sessionUser(req);
   if (!user) return json({ error: "Sign in first" }, 401);
@@ -278,18 +270,21 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
   if (isKintio(host, key)) model = kintioPaperModel(model);
   if (!key && !gemini) return json({ error: "Add an API key in Settings → AI assistant" }, 503);
 
-  let body: { image?: string };
+  let body: unknown;
   try {
-    body = (await req.json()) as typeof body;
+    body = await req.json();
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  const image = String(body.image || "").trim();
-  if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(image)) {
-    return json({ error: "Send a JPEG or PNG photo" }, 400);
+  // a photo of a handwritten list, a PDF, or a sheet's rows as text
+  const input = paperInput(body);
+  if ("error" in input) return json({ error: input.error }, 400);
+  if (!gemini && input.kind !== "photo") {
+    return json({ error: "Reading Excel or PDF files needs the Google key (GEMINI_API_KEY)" }, 503);
   }
-  if (image.length > PAPER_MAX_CHARS) return json({ error: "Photo is too large — try another shot" }, 400);
+  const partMedia = input.kind === "text" ? "" : input.media;
+  const partData = input.kind === "text" ? "" : input.data;
 
   const abort =
     typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(60000) : undefined;
@@ -297,8 +292,6 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
   try {
     let text = "";
     if (gemini) {
-      const parts = paperImageParts(image);
-      if (!parts) return json({ error: "Send a JPEG or PNG photo" }, 400);
       // Thinking stays on: without it the model reads their handwritten 2 as 4 or 11.
       // 8192 tokens leave room for the thinking plus a long list.
       const payload = JSON.stringify({
@@ -306,10 +299,10 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
         contents: [
           {
             role: "user",
-            parts: [
-              { inline_data: { mime_type: parts.media, data: parts.data } },
-              { text: PAPER_READ_PROMPT },
-            ],
+            parts:
+              input.kind === "text"
+                ? [{ text: input.prompt }]
+                : [{ inline_data: { mime_type: partMedia, data: partData } }, { text: input.prompt }],
           },
         ],
         generationConfig: { temperature: 0, maxOutputTokens: 8192, responseMimeType: "application/json" },
@@ -329,7 +322,7 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
           }
           return { status: 200, text: textFromGemini(data) };
         },
-        { budgetMs: PAPER_BUDGET_MS },
+        { budgetMs: PAPER_BUDGET_MS, empty: input.empty },
       );
       if ("error" in got) {
         const status = got.busy ? 503 : /No sizes/.test(got.error) ? 422 : 502;
@@ -337,8 +330,6 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
       }
       return json(got.read);
     } else if (isKintio(host, key)) {
-      const parts = paperImageParts(image);
-      if (!parts) return json({ error: "Send a JPEG or PNG photo" }, 400);
       const upstream = await fetch(kintioMessagesUrl(host), {
         method: "POST",
         headers: {
@@ -355,8 +346,8 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
             {
               role: "user",
               content: [
-                { type: "image", source: { type: "base64", media_type: parts.media, data: parts.data } },
-                { type: "text", text: PAPER_READ_PROMPT },
+                { type: "image", source: { type: "base64", media_type: partMedia, data: partData } },
+                { type: "text", text: input.prompt },
               ],
             },
           ],
@@ -389,8 +380,8 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
             {
               role: "user",
               content: [
-                { type: "text", text: PAPER_READ_PROMPT },
-                { type: "image_url", image_url: { url: image } },
+                { type: "text", text: input.prompt },
+                { type: "image_url", image_url: { url: "data:" + partMedia + ";base64," + partData } },
               ],
             },
           ],
@@ -417,7 +408,7 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
     } catch {
       return json({ error: "Could not read that list — try a clearer photo" }, 502);
     }
-    if (!parsed.lines.length) return json({ error: "No sizes found on that photo" }, 422);
+    if (!parsed.lines.length) return json({ error: input.empty }, 422);
     return json(parsed);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "AI request failed";

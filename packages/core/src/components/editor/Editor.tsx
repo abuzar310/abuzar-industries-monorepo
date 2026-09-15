@@ -44,10 +44,9 @@ import { showReviewQr } from "@/store/review-qr-store";
 import { extractPincode } from "@/lib/ewaybill";
 import PaperScanner from "@/components/PaperScanner";
 import { PaperJobsBar, usePaperReader } from "./PaperReader";
-import SheetImportView from "@/components/views/SheetImportView";
 import { applyPaperToDoc, paperAddedMessage } from "@/lib/paper-quote";
 import { takePendingPaper } from "@/lib/paper-client";
-import { applySheetToDoc } from "@/lib/sheet-import";
+import { applySheetToDoc, IMPORT_ACCEPT, importKind } from "@/lib/sheet-import";
 import { TabIcon } from "@/components/Icons";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
@@ -206,13 +205,12 @@ export default function Editor({
   const [editingNo, setEditingNo] = useState(false);
   const [ewayAutoRun, setEwayAutoRun] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
-  // scanned photos read in the background; their lines land on this quotation and save
-  const paper = usePaperReader((got) => {
-    commit(applyPaperToDoc(docRef.current, got), true);
-    toast(paperAddedMessage(got.lines));
+  const [scanFile, setScanFile] = useState<File | null>(null);
+  // photos and files are read in the background; their lines land on this quotation and save
+  const paper = usePaperReader((got, kind) => {
+    commit(kind === "file" ? applySheetToDoc(docRef.current, got) : applyPaperToDoc(docRef.current, got), true);
+    toast(paperAddedMessage(got.lines, kind));
   });
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [sheetFile, setSheetFile] = useState<File | null>(null);
   const excelRef = useRef<HTMLInputElement>(null);
   const [permit, setPermit] = useState<PermitFields | null>(null);
   const [upiAccts, setUpiAccts] = useState<string[]>([]); // past accounts, for quick-pick
@@ -1086,23 +1084,21 @@ export default function Editor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc.id]);
 
-  function takeScan(file: File) {
+  function closeScan() {
     setScanOpen(false);
+    setScanFile(null);
+  }
+  function takeScan(file: File) {
+    closeScan();
     void paper.start(file);
   }
-  function takeSheetFile(file: File | undefined) {
+  /** A photo goes through the crop screen first; Excel, CSV and PDF go straight to the reader. */
+  function takeImport(file: File | undefined) {
     if (!file) return;
-    const name = file.name.toLowerCase();
-    if (name.endsWith(".xls") && !name.endsWith(".xlsx")) {
-      toast("Save that file as .xlsx or CSV, then upload");
-      return;
-    }
-    setSheetFile(file);
-    setSheetOpen(true);
-  }
-  function closeSheet() {
-    setSheetFile(null);
-    setSheetOpen(false);
+    if (importKind(file) === "image") {
+      setScanFile(file);
+      setScanOpen(true);
+    } else void paper.start(file);
   }
 
   const paperOk = feat.simpleQuote && !isInv;
@@ -1112,7 +1108,7 @@ export default function Editor({
         Scan paper
       </button>
       <button className="btn sm" type="button" onClick={() => excelRef.current?.click()}>
-        Excel
+        Excel / PDF
       </button>
     </>
   ) : null;
@@ -1122,32 +1118,19 @@ export default function Editor({
       <input
         ref={excelRef}
         type="file"
-        accept=".xlsx,.xlsm,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        accept={IMPORT_ACCEPT}
         hidden
         onChange={(e) => {
-          takeSheetFile(e.target.files?.[0]);
+          takeImport(e.target.files?.[0]);
           e.target.value = "";
         }}
       />
     </>
   ) : null;
 
-  const paperOverlay = paperOk && scanOpen ? <PaperScanner onPhoto={takeScan} onClose={() => setScanOpen(false)} /> : null;
+  const paperOverlay =
+    paperOk && scanOpen ? <PaperScanner file={scanFile ?? undefined} onPhoto={takeScan} onClose={closeScan} /> : null;
   const paperBar = paperOk ? <PaperJobsBar jobs={paper.jobs} onRetry={paper.retry} onDismiss={paper.dismiss} /> : null;
-
-  const sheetOverlay = sheetOpen ? (
-    <div className="paper-quote-overlay">
-      <SheetImportView
-        initialFile={sheetFile}
-        onApply={(got) => {
-          commit(applySheetToDoc(docRef.current, got), true);
-          closeSheet();
-          toast("Lines added — print uses Long list");
-        }}
-        onCancel={closeSheet}
-      />
-    </div>
-  ) : null;
 
   // panic cloak: open quote must not show customer/lines — look like nothing is open
   if (cloakMoney && feat.simpleQuote) {
@@ -1166,7 +1149,6 @@ export default function Editor({
         </div>
         {paperInputs}
         {paperOverlay}
-        {sheetOverlay}
       </div>
     );
   }
@@ -2092,7 +2074,6 @@ export default function Editor({
       )}
       {paperInputs}
       {paperOverlay}
-      {sheetOverlay}
     </div>
   );
 }
