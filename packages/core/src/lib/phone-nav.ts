@@ -28,7 +28,7 @@ export function phoneBar(shelves: ReturnType<typeof phoneShelves>, isOwner: bool
 
 export function phoneSectionOf(tabs: Tab[], href: string): PhoneSection | "home" {
   if (!href || href === "/") return "home";
-  if (href === "/paper-quote") return "business";
+  if (href === "/paper-quote" || href.startsWith("/people/")) return "business";
   if (href === "/money" || href.startsWith("/money/")) return "money";
   if (href === "/business" || href.startsWith("/business/")) return "business";
   if (href === "/records" || href.startsWith("/records/")) return "records";

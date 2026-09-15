@@ -28,6 +28,7 @@ ok(mgr.business.some((t) => t.href === "/receipts") && !mgr.business.some((t) =>
 ok(phoneBar(mgr, false).map((t) => t.id).join() === "home,business,records,more", "manager bar");
 ok(phoneSectionOf(tabs, "/receipts") === "money", "section of receipts");
 ok(phoneSectionOf(tabs, "/paper-quote") === "business", "paper quote is business");
+ok(phoneSectionOf(tabs, "/people/PER-1") === "business", "person card is business");
 ok(phoneSectionOf(tabs, "/money") === "money", "money page");
 ok(phoneSectionOf(tabs, "/business") === "business", "business page");
 ok(phoneQuickActions({ invoices: false, simpleQuote: true, acceptPayment: true }).length === 6, "cut-size quick actions");
