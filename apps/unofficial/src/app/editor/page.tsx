@@ -47,24 +47,24 @@ export default function Page() {
     );
   }
   return (
-    <div style={{ textAlign: "center", padding: "54px 20px" }}>
-      <div style={{ fontFamily: "var(--serif)", fontSize: 30, letterSpacing: "-.01em", color: "var(--walnut)", marginBottom: 8 }}>
+    <div className="editor-none ph-kit">
+      <div className="editor-none-title">
         No quotation open
       </div>
-      <p className="note" style={{ margin: "0 0 20px" }}>
+      <p className="note editor-none-note">
         Start a new quotation whenever you&apos;re ready.
       </p>
-      <div className="rowbtns" style={{ justifyContent: "center" }}>
-        <button className="btn primary" style={{ fontSize: 16, padding: "12px 24px" }} onClick={create}>
+      <div className="rowbtns">
+        <button className="btn primary" onClick={create}>
           + Create a quotation
         </button>
-        <button className="btn" style={{ fontSize: 16, padding: "12px 24px" }} onClick={() => camRef.current?.click()}>
+        <button className="btn" onClick={() => camRef.current?.click()}>
           From paper
         </button>
-        <button className="btn" style={{ fontSize: 16, padding: "12px 24px" }} onClick={() => libRef.current?.click()}>
+        <button className="btn" onClick={() => libRef.current?.click()}>
           Add image
         </button>
-        <button className="btn" style={{ fontSize: 16, padding: "12px 24px" }} onClick={() => xlsRef.current?.click()}>
+        <button className="btn" onClick={() => xlsRef.current?.click()}>
           Excel
         </button>
       </div>

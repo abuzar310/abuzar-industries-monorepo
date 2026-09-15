@@ -15,6 +15,7 @@ import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import CarpenterHistory, { CarpenterPendingList, CarpenterQuoteList } from "./CarpenterHistory";
 import PhotoField from "../PhotoField";
+import { TabIcon } from "../Icons";
 import { Paged } from "../Pager";
 import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 
@@ -47,14 +48,16 @@ export default function CarpenterDetail({ id }: { id: string }) {
 
   const rollup = cloakMoney ? null : findCarpenterRollup(directory, customers, quotes, expenses, id);
 
-  if (!loaded) return <div className="sectitle">Carpenter <small>— loading…</small></div>;
+  if (!loaded) return <div className="ph-kit"><div className="sectitle">Carpenter <small><span className="desk-only">— </span>loading…</small></div></div>;
   if (!rollup) {
     return (
+      <div className="ph-kit">
       <div className="empty">
         <div className="empty-title">{cloakMoney ? "Hidden" : "Carpenter not found"}</div>
         <button className="btn sm" style={{ marginTop: 12 }} onClick={() => router.push("/carpenters")}>
           ← Back to carpenters
         </button>
+      </div>
       </div>
     );
   }
@@ -126,7 +129,7 @@ export default function CarpenterDetail({ id }: { id: string }) {
   }
 
   return (
-    <div>
+    <div className="ph-kit">
       <button className="btn sm" style={{ marginBottom: 14 }} onClick={() => router.push("/carpenters")}>
         ← Carpenters
       </button>
@@ -141,7 +144,7 @@ export default function CarpenterDetail({ id }: { id: string }) {
               onChange={(url) => void savePhoto(url)}
             />
             <div className="carp-who">
-            <h3 style={{ fontSize: 26 }}>{rollup.name}</h3>
+            <h3 className="carp-name">{rollup.name}</h3>
             <div className="ph">{rollup.phone || "—"}</div>
             {rollup.phoneAlt ? <div className="ph">Alt {rollup.phoneAlt}</div> : null}
             <div className="meta2">
@@ -218,6 +221,7 @@ export default function CarpenterDetail({ id }: { id: string }) {
       </div>
 
       <div className="dash-section" style={{ marginTop: 22 }}>
+        <span className="phone-ico ph-only"><TabIcon icon="bag" size={16} /></span>
         Bought themselves
         <span>· wood they purchased</span>
       </div>
@@ -226,6 +230,7 @@ export default function CarpenterDetail({ id }: { id: string }) {
       </Paged>
 
       <div className="dash-section" style={{ marginTop: 22 }}>
+        <span className="phone-ico ph-only"><TabIcon icon="clipboard" size={16} /></span>
         Quotations they brought
         <span>· {rollup.broughtQuotes.length} · billed ₹ {inr(rollup.broughtBill)}</span>
       </div>
@@ -234,13 +239,14 @@ export default function CarpenterDetail({ id }: { id: string }) {
       </Paged>
 
       <div className="dash-section" style={{ marginTop: 22 }}>
+        <span className="phone-ico ph-only"><TabIcon icon="customers" size={16} /></span>
         Customers <span>· {rollup.customerCount}</span>
       </div>
       {rollup.customers.length ? (
         <Paged items={rollup.customers} resetKey={id + "c"}>
           {(view) => (
         <div className="panel-card" style={{ marginTop: 0 }}>
-          <table className="carp-roster">
+          <table className="carp-roster roster-cust">
             <thead>
               <tr>
                 <th>Customer</th>
@@ -279,6 +285,7 @@ export default function CarpenterDetail({ id }: { id: string }) {
       {rollup.pendingCount > 0 && (
         <>
           <div className="dash-section" style={{ marginTop: 22 }}>
+            <span className="phone-ico ph-only"><TabIcon icon="scale" size={16} /></span>
             Pending
             <span>· locked, not yet given</span>
           </div>
@@ -292,6 +299,7 @@ export default function CarpenterDetail({ id }: { id: string }) {
       )}
 
       <div className="dash-section" style={{ marginTop: 22 }}>
+        <span className="phone-ico ph-only"><TabIcon icon="wallet" size={16} /></span>
         Transaction history
         <span>· commission we paid</span>
       </div>

@@ -20,6 +20,7 @@ import {
 } from "@/lib/place-rent";
 import { confirmDialog } from "@/store/dialog-store";
 import { useApp } from "@/store/useApp";
+import { TabIcon } from "@/components/Icons";
 import { bumpData, toast } from "@/store/app-store";
 import type { Carpenter, Doc, Expense } from "@/lib/types";
 import {
@@ -123,9 +124,10 @@ export default function RentView() {
     });
 
   return (
-    <div>
+    <div className="ph-kit">
       <div className="sectitle">
-        Rent <small>— two people. Tap a card to open the year and tick the months they owe.</small>
+        <span className="phone-ico ph-only"><TabIcon icon="building" size={18} /></span>
+        Rent <small><span className="desk-only">— </span>two people. Tap a card to open the year and tick the months they owe.</small>
       </div>
       <div className="rent-hero">
         {slots.map((slot, i) =>

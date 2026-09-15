@@ -65,6 +65,7 @@ import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
 import PdfButtons from "@/components/PdfButtons";
 import type { Customer, Doc, Expense, Purchase, Supplier } from "@/lib/types";
+import { TabIcon } from "@/components/Icons";
 
 const hhmm = (iso: string) => {
   if (!iso) return "";
@@ -1527,14 +1528,16 @@ export default function AccountsView() {
   const ungroupedNames = ungrouped.map((a) => a.name);
 
   return (
-    <div className="ledger-page acct-page">
+    <div className="ledger-page acct-page ph-kit">
       <div className="cd-screen">
       <div className="sectitle">
+        <span className="phone-ico ph-only"><TabIcon icon="building" size={18} /></span>
         Accounts{" "}
         <small>
+          <span className="desk-only">— </span>
           {canPayTransport && acctTab === "transport"
-            ? "— lock the lorry, then Pay from cash, owner, or a UPI"
-            : "— holders, their UPI accounts & hand-overs"}
+            ? "lock the lorry, then Pay from cash, owner, or a UPI"
+            : "holders, their UPI accounts & hand-overs"}
         </small>
       </div>
 

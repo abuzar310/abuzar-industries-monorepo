@@ -43,7 +43,7 @@ export default function LockGate() {
 
   return (
     <div className="lock-gate">
-      <div className="lock-card">
+      <div className="lock-card ph-kit">
         <div className="lock-brand">
           {brand.name}
           <span>{brand.tagline}</span>

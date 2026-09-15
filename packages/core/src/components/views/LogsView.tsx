@@ -7,6 +7,7 @@ import { inr } from "@/lib/calc";
 import { useApp } from "@/store/useApp";
 import Pager, { PAGE, usePager } from "@/components/Pager";
 import type { Activity } from "@/lib/types";
+import { TabIcon } from "@/components/Icons";
 
 type Act = Activity["action"];
 
@@ -74,16 +75,19 @@ export default function LogsView() {
 
   if (user && user.role !== "owner") {
     return (
+      <div className="ph-kit">
       <div className="empty" style={{ padding: 24 }}>
         Logs are for the owner only.
+      </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="ph-kit">
       <div className="sectitle">
-        Logs <small>— full activity trail · login, logout, create, update, delete</small>
+        <span className="phone-ico ph-only"><TabIcon icon="clipboard" size={18} /></span>
+        Logs <small><span className="desk-only">— </span>full activity trail · login, logout, create, update, delete</small>
       </div>
 
       <div className="rep-controls" style={{ marginBottom: 12 }}>
@@ -123,16 +127,16 @@ export default function LogsView() {
 
       <div className="panel-card" style={{ padding: 0, overflow: "hidden" }}>
         {shown.length ? (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <div className="log-scroll">
+            <table className="log-table">
               <thead>
-                <tr style={{ background: "var(--t-cream2, #f6f0e4)", borderBottom: "1px solid var(--line)" }}>
-                  <th style={th}>When</th>
-                  <th style={th}>Who</th>
-                  <th style={th}>Action</th>
-                  <th style={th}>What</th>
-                  <th style={{ ...th, textAlign: "right" }}>Amount</th>
-                  <th style={th}>Mode / date</th>
+                <tr className="log-head">
+                  <th className="log-th">When</th>
+                  <th className="log-th">Who</th>
+                  <th className="log-th">Action</th>
+                  <th className="log-th">What</th>
+                  <th className="log-th r">Amount</th>
+                  <th className="log-th">Mode / date</th>
                 </tr>
               </thead>
               <tbody>
@@ -142,30 +146,26 @@ export default function LogsView() {
                   return (
                     <tr
                       key={r.id}
+                      className="log-row"
                       onClick={() => setOpenId(open ? null : r.id)}
-                      style={{
-                        borderBottom: "1px solid var(--line)",
-                        cursor: "pointer",
-                        background: open ? "rgba(0,0,0,0.03)" : "transparent",
-                        verticalAlign: "top",
-                      }}
+                      style={{ background: open ? "rgba(0,0,0,0.03)" : "transparent" }}
                     >
-                      <td style={td} colSpan={open ? 6 : 1}>
+                      <td className="log-td" colSpan={open ? 6 : 1}>
                         {!open ? (
-                          <div style={{ fontFamily: "var(--mono)", fontSize: 11, whiteSpace: "nowrap" }}>
+                          <div className="log-when">
                             <div>{when.day}</div>
-                            <div style={{ color: "var(--ink-faint)" }}>{when.time}</div>
+                            <div className="log-time">{when.time}</div>
                           </div>
                         ) : (
-                          <div style={{ padding: "8px 4px 12px" }}>
-                            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8, alignItems: "baseline" }}>
+                          <div className="log-open">
+                            <div className="log-open-top">
                               <b style={{ color: actionTone(r.action) }}>{actionLabel(r.action)}</b>
                               <span>{r.summary}</span>
-                              <span style={{ marginLeft: "auto", fontFamily: "var(--mono)", fontSize: 11, color: "var(--ink-faint)" }}>
+                              <span className="log-open-when">
                                 {when.full}
                               </span>
                             </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8, marginBottom: 10, fontSize: 12 }}>
+                            <div className="log-meta">
                               <Meta label="Who" value={(r.byName || r.by || "—") + (r.role ? " · " + r.role : "")} />
                               <Meta label="User id" value={r.by || "—"} />
                               <Meta label="Store" value={r.store || "—"} />
@@ -177,19 +177,7 @@ export default function LogsView() {
                               <Meta label="Log id" value={r.id} />
                             </div>
                             {r.detail ? (
-                              <pre
-                                style={{
-                                  margin: 0,
-                                  padding: 12,
-                                  background: "var(--t-cream2, #f6f0e4)",
-                                  borderRadius: 8,
-                                  whiteSpace: "pre-wrap",
-                                  wordBreak: "break-word",
-                                  fontFamily: "var(--mono)",
-                                  fontSize: 11,
-                                  lineHeight: 1.55,
-                                }}
-                              >
+                              <pre className="log-pre">
                                 {r.detail}
                               </pre>
                             ) : (
@@ -200,40 +188,28 @@ export default function LogsView() {
                       </td>
                       {!open && (
                         <>
-                          <td style={td}>
-                            <div style={{ fontWeight: 600 }}>{r.byName || r.by || "—"}</div>
-                            <div style={{ fontSize: 10, color: "var(--ink-faint)", textTransform: "capitalize" }}>{r.role || "—"}</div>
+                          <td className="log-td">
+                            <div className="log-who">{r.byName || r.by || "—"}</div>
+                            <div className="log-role">{r.role || "—"}</div>
                           </td>
-                          <td style={td}>
-                            <span
-                              style={{
-                                display: "inline-block",
-                                padding: "1px 7px",
-                                borderRadius: 999,
-                                fontSize: 10,
-                                fontWeight: 700,
-                                letterSpacing: ".06em",
-                                textTransform: "uppercase",
-                                color: actionTone(r.action),
-                                background: "rgba(0,0,0,0.04)",
-                              }}
-                            >
+                          <td className="log-td">
+                            <span className="log-pill" style={{ color: actionTone(r.action) }}>
                               {actionLabel(r.action)}
                             </span>
                           </td>
-                          <td style={td}>
-                            <div style={{ fontWeight: 600 }}>{r.summary || "—"}</div>
+                          <td className="log-td">
+                            <div className="log-what">{r.summary || "—"}</div>
                             {(r.party || r.store) && (
-                              <div style={{ fontSize: 10, color: "var(--ink-faint)" }}>
+                              <div className="log-sub">
                                 {[r.party, r.store, r.targetId && ("id " + r.targetId.slice(0, 12))].filter(Boolean).join(" · ")}
                               </div>
                             )}
-                            <div style={{ fontSize: 10, color: "var(--ink-faint)", marginTop: 2 }}>Tap for full detail ▾</div>
+                            <div className="log-tap">Tap for full detail ▾</div>
                           </td>
-                          <td style={{ ...td, textAlign: "right", fontFamily: "var(--mono)", fontWeight: 700 }}>
+                          <td className="log-td log-amt">
                             {r.amount != null ? "₹" + inr(r.amount) : "—"}
                           </td>
-                          <td style={{ ...td, fontFamily: "var(--mono)", fontSize: 11, color: "var(--ink-faint)" }}>
+                          <td className="log-td log-mode">
                             <div>{r.mode || "—"}</div>
                             <div>{r.date || ""}</div>
                           </td>
@@ -259,27 +235,11 @@ export default function LogsView() {
   );
 }
 
-const th: React.CSSProperties = {
-  padding: "8px 10px",
-  textAlign: "left",
-  fontFamily: "var(--disp)",
-  fontSize: 9,
-  fontWeight: 700,
-  letterSpacing: ".09em",
-  textTransform: "uppercase",
-  color: "var(--ink-faint)",
-  whiteSpace: "nowrap",
-};
-
-const td: React.CSSProperties = {
-  padding: "8px 10px",
-};
-
 function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div style={{ fontSize: 9, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-faint)", fontWeight: 700 }}>{label}</div>
-      <div style={{ fontFamily: "var(--mono)", fontSize: 11, wordBreak: "break-all" }}>{value}</div>
+      <div className="log-meta-k">{label}</div>
+      <div className="log-meta-v">{value}</div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { TabIcon } from "../Icons";
 import { useRouter } from "next/navigation";
 import { allRec, delRec, getRec, prefGet, prefSet } from "@/lib/data";
 import { inr } from "@/lib/calc";
@@ -187,15 +188,16 @@ export default function CustomersView() {
   );
 
   return (
-    <div>
+    <div className="ph-kit">
       <div className="sectitle">
+        <span className="phone-ico ph-only"><TabIcon icon="customers" size={18} /></span>
         {view === "customers" ? (
           <>
-            Customers <small>— {list.length} contact{list.length === 1 ? "" : "s"}</small>
+            Customers <small><span className="desk-only">— </span>{list.length} contact{list.length === 1 ? "" : "s"}</small>
           </>
         ) : (
           <>
-            Carpenters <small>— {carpenters.length} contact{carpenters.length === 1 ? "" : "s"}</small>
+            Carpenters <small><span className="desk-only">— </span>{carpenters.length} contact{carpenters.length === 1 ? "" : "s"}</small>
           </>
         )}
       </div>

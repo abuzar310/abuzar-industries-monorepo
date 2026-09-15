@@ -29,6 +29,7 @@ import {
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import { dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
+import { TabIcon } from "@/components/Icons";
 import { bumpData, toast } from "@/store/app-store";
 import type { Carpenter, Doc, Expense } from "@/lib/types";
 import { HistList, RentPdfButtons, mergeDuplicates, pullCarpenter, r2 } from "./rent-ui";
@@ -95,20 +96,22 @@ export default function RentDetail({ id }: { id: string }) {
     await go(res);
   }
 
-  if (!loaded) return <div className="sectitle">Rent <small>— loading…</small></div>;
+  if (!loaded) return <div className="ph-kit"><div className="sectitle">Rent <small><span className="desk-only">— </span>loading…</small></div></div>;
   if (!tenant) {
     return (
+      <div className="ph-kit">
       <div className="empty">
         <div className="empty-title">{cloakMoney ? "Hidden" : "Tenant not found"}</div>
         <button className="btn sm" style={{ marginTop: 12 }} onClick={() => router.push("/rent")}>
           ← Back to rent
         </button>
       </div>
+      </div>
     );
   }
 
   return (
-    <div>
+    <div className="ph-kit">
       <button className="btn sm" style={{ marginBottom: 14 }} onClick={() => router.push("/rent")}>
         ← Rent
       </button>
@@ -358,6 +361,7 @@ function RentSection({
   return (
     <section className="rent-section" aria-label={tenant.name + " place rent"}>
       <div className="pc-head">
+        <span className="phone-ico ph-only"><TabIcon icon="building" size={16} /></span>
         <span className="rent-sec-name">{tenant.name}</span>
         <span className="rent-sec-tools">
           <RentPdfButtons tenant={tenant} expenses={expenses} />

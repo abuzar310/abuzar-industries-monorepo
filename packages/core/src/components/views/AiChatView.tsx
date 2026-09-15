@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/store/useApp";
 import { getFeatures } from "@/lib/features";
 import { isCloaked } from "@/lib/cloak";
+import { TabIcon } from "@/components/Icons";
 import {
   aiChatKey,
   bindAiMemoryUser,
@@ -87,10 +88,10 @@ export default function AiChatView() {
   }
 
   return (
-    <div className="ai-page">
+    <div className="ai-page ph-kit">
       <header className="ai-page-head">
         <div>
-          <h1 className="ai-page-title">AI Assistant</h1>
+          <h1 className="ai-page-title"><span className="phone-ico ph-only"><TabIcon icon="chart" size={18} /></span>AI Assistant</h1>
           <p className="ai-page-sub">Draft WhatsApp messages, explain balances, ask how to use the yard books. This chat stays on the AI tab only.</p>
         </div>
         {messages.length > 0 ? (

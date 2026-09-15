@@ -1,6 +1,7 @@
 "use client";
 // Owner-only contacts directory — report-style: Customers or Carpenters.
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { TabIcon } from "../Icons";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { allRec } from "@/lib/data";
@@ -124,9 +125,10 @@ export default function ContactsView() {
   const listCount = mode === "customers" ? filteredParties.length : filteredCarpenters.length;
 
   return (
-    <div className="repwrap">
+    <div className="repwrap ph-kit">
       <div className="sectitle no-print">
-        Contacts <small>— customers &amp; carpenters</small>
+        <span className="phone-ico ph-only"><TabIcon icon="customers" size={18} /></span>
+        Contacts <small><span className="desk-only">— </span>customers &amp; carpenters</small>
       </div>
 
       <div className="rep-controls no-print">
@@ -197,7 +199,7 @@ export default function ContactsView() {
           filteredParties.length === 0 ? (
             <div className="rep-empty">No customers match.</div>
           ) : (
-            <table className="rep-table">
+            <table className="rep-table ct-cust">
               <colgroup>
                 <col style={{ width: "6%" }} />
                 <col style={{ width: "30%" }} />
@@ -234,7 +236,7 @@ export default function ContactsView() {
         ) : filteredCarpenters.length === 0 ? (
           <div className="rep-empty">No carpenters match.</div>
         ) : (
-          <table className="rep-table">
+          <table className="rep-table ct-carp">
             <colgroup>
               <col style={{ width: "6%" }} />
               <col style={{ width: "24%" }} />

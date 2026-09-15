@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { TabIcon } from "../Icons";
 import { useRouter } from "next/navigation";
 import { createQuotation } from "@/lib/create";
 import { getRec, prefGet, put } from "@/lib/data";
@@ -105,10 +106,11 @@ export default function SheetImportView({
   }
 
   return (
-    <div className="paper-quote">
+    <div className="paper-quote ph-kit">
       <div className="sectitle">
+        <span className="phone-ico ph-only"><TabIcon icon="file-plus" size={18} /></span>
         {intoOpen ? "Add Excel to this quotation" : "New quote from Excel"}
-        <small> — .xlsx or CSV, then check</small>
+        <small><span className="desk-only"> — </span>.xlsx or CSV, then check</small>
       </div>
       <p className="hint">
         Columns L B H Pices (or 8x5x3x4). Print switches to Long list so more lines fit on two pages.

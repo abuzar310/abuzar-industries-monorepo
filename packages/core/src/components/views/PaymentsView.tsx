@@ -13,6 +13,7 @@ import { toast } from "@/store/app-store";
 import PdfButtons from "@/components/PdfButtons";
 import PassbookPrint, { type PassbookLine } from "@/components/PassbookPrint";
 import type { Customer, Doc, Expense } from "@/lib/types";
+import { TabIcon } from "@/components/Icons";
 
 // dd-mm-yy → yyyy-mm-dd for chronological sorting
 const sortDate = (d: string) => {
@@ -261,9 +262,10 @@ export default function PaymentsView() {
   }, [pdfParty, pdfTick, brand.name]);
 
   return (
-    <div className="ledger-page">
+    <div className="ledger-page ph-kit">
       <div className="sectitle">
-        Balances <small>— who still owes</small>
+        <span className="phone-ico ph-only"><TabIcon icon="scale" size={18} /></span>
+        Balances <small><span className="desk-only">— </span>who still owes</small>
       </div>
 
       {/* overview stat cards */}
@@ -396,7 +398,7 @@ function PartyCard({
           </>
         )}
       </div>
-      <div className={"lch-bal " + bc} style={{ marginTop: 8 }}>
+      <div className={"lch-bal " + bc}>
         {balText(p.balance)}
         <small>{settled ? "clear" : "due"}</small>
       </div>

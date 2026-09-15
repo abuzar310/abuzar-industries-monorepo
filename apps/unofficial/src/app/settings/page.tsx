@@ -19,8 +19,10 @@ export default function Page() {
 
   if (!isOwner) {
     return (
+      <div className="ph-kit">
       <div className="sectitle">
-        Settings <small>— owner only</small>
+        Settings <small><span className="desk-only">— </span>owner only</small>
+      </div>
       </div>
     );
   }
