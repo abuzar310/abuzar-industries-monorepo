@@ -18,7 +18,8 @@ import {
   textFromAnthropicSse,
   textFromGemini,
 } from "@/lib/ai-host";
-import { paperInput, parsePaperAiJson, readPaperSteps } from "@/lib/paper-quote";
+import { extractJson, paperInput, parsePaperAiJson, readPaperSteps } from "@/lib/paper-quote";
+import { parsePurchaseRead } from "@/lib/purchase-check";
 
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
@@ -280,7 +281,7 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
   // a photo of a handwritten list, a PDF, or a sheet's rows as text
   const input = paperInput(body);
   if ("error" in input) return json({ error: input.error }, 400);
-  if (!gemini && input.kind !== "photo") {
+  if (!gemini && (input.kind !== "photo" || input.purchase)) {
     return json({ error: "Reading Excel or PDF files needs the Google key (GEMINI_API_KEY)" }, 503);
   }
   const partMedia = input.kind === "text" ? "" : input.media;
@@ -293,7 +294,7 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
     let text = "";
     if (gemini) {
       // Thinking stays on: without it the model reads their handwritten 2 as 4 or 11.
-      // 8192 tokens leave room for the thinking plus a long list.
+      // 8192 tokens leave room for the thinking plus a photo's list; files and purchase lists can run to hundreds of lines.
       const payload = JSON.stringify({
         systemInstruction: { parts: [{ text: "Return JSON only. No markdown." }] },
         contents: [
@@ -305,9 +306,13 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
                 : [{ inline_data: { mime_type: partMedia, data: partData } }, { text: input.prompt }],
           },
         ],
-        generationConfig: { temperature: 0, maxOutputTokens: 8192, responseMimeType: "application/json" },
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: input.kind === "photo" && !input.purchase ? 8192 : 24000,
+          responseMimeType: "application/json",
+        },
       });
-      const got = await readPaperSteps(
+      const got = await readPaperSteps<{ lines: unknown[] }>(
         geminiPaperPlan(gemini.model, gemini.keys),
         async (step, timeoutMs) => {
           const upstream = await fetch(geminiGenerateUrl(step.model, step.key), {
@@ -322,7 +327,13 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
           }
           return { status: 200, text: textFromGemini(data) };
         },
-        { budgetMs: PAPER_BUDGET_MS, empty: input.empty },
+        {
+          budgetMs: PAPER_BUDGET_MS,
+          // a supplier's long list can take 40s, so one try gets the whole budget; a photo keeps 30s and a second try
+          stepMs: input.kind === "photo" && !input.purchase ? undefined : PAPER_BUDGET_MS,
+          empty: input.empty,
+          parse: input.purchase ? (t: string) => parsePurchaseRead(extractJson(t)) : parsePaperAiJson,
+        },
       );
       if ("error" in got) {
         const status = got.busy ? 503 : /No sizes/.test(got.error) ? 422 : 502;

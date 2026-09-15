@@ -218,6 +218,29 @@ async function readStepsChecks() {
   );
   assert.ok("error" in slow && slow.busy === true);
   assert.equal(clock, 60_000);
+
+  // a supplier's long list can take 40s, so purchase and file reads give one attempt the whole budget; photos keep 30s
+  const limits: number[] = [];
+  const long = await readPaperSteps(
+    [{ model: "a", key: "1" }, { model: "b", key: "1" }],
+    async (_step, timeoutMs) => {
+      limits.push(timeoutMs);
+      return { status: 200, text: good8 };
+    },
+    { budgetMs: 50_000, stepMs: 50_000, now: () => 0 },
+  );
+  assert.ok("read" in long);
+  assert.deepEqual(limits, [50_000]);
+  const photoLimits: number[] = [];
+  await readPaperSteps(
+    [{ model: "a", key: "1" }],
+    async (_step, timeoutMs) => {
+      photoLimits.push(timeoutMs);
+      return { status: 200, text: good8 };
+    },
+    { budgetMs: 50_000, now: () => 0 },
+  );
+  assert.deepEqual(photoLimits, [30_000]);
 }
 
 readStepsChecks()

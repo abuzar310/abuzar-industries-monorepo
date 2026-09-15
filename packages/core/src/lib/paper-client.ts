@@ -1,6 +1,7 @@
 import { createQuotation } from "./create";
 import { getRec, prefGet } from "./data";
 import { parsePaperRead } from "./paper-quote";
+import { parsePurchaseRead, type PurchaseRead } from "./purchase-check";
 import { compressPhoto, PAPER_READ } from "./photo";
 import type { Doc } from "./types";
 
@@ -50,14 +51,14 @@ export async function pdfDataUrl(file: File): Promise<string> {
 const READ_TIMEOUT_MS = 70_000;
 
 /** Ask the server to read it. Every failure comes back as a sentence the yard can act on. */
-export async function readPaperSource(source: PaperSource) {
+async function postReader(body: object): Promise<unknown> {
   let r: Response;
   try {
     r = await fetch("/api/ai/paper", {
       method: "POST",
       credentials: "same-origin",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(source),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(READ_TIMEOUT_MS),
     });
   } catch (e) {
@@ -72,7 +73,18 @@ export async function readPaperSource(source: PaperSource) {
       r.status === 504 || r.status === 502 ? "The list reader took too long. Tap Try again." : "Could not read that list. Tap Try again.",
     );
   }
-  const parsed = parsePaperRead(data);
+  return data;
+}
+
+export async function readPaperSource(source: PaperSource) {
+  const parsed = parsePaperRead(await postReader(source));
   if (!parsed.lines.length) throw new Error("No sizes found in that list");
   return parsed;
+}
+
+/** A supplier's list for a purchase check: every line as printed, their CFT per line and their totals. */
+export async function readPurchaseSource(source: PaperSource): Promise<PurchaseRead> {
+  const read = parsePurchaseRead(await postReader({ ...source, mode: "purchase" }));
+  if (!read.lines.length) throw new Error("No sizes found in that list");
+  return read;
 }

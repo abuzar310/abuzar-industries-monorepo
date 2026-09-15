@@ -7,6 +7,7 @@ import {
   type PaperLine,
   type PaperRead,
 } from "./paper-quote";
+import { parsePurchaseRead, type PurchaseRead } from "./purchase-check";
 
 export type { PaperLine, PaperRead };
 
@@ -27,7 +28,7 @@ export function importKind(file: { name: string; type: string }): ImportKind {
 
 const OLE = [0xd0, 0xcf, 0x11, 0xe0];
 
-type ColKind = "l" | "w" | "t" | "pcs" | "wood" | "rate" | "size" | "serial";
+type ColKind = "l" | "w" | "t" | "pcs" | "wood" | "rate" | "size" | "serial" | "cft" | "cbm";
 type ColMap = Partial<Record<ColKind, number>>;
 
 function xmlText(s: string): string {
@@ -48,7 +49,7 @@ const T_HEADS = new Set(["h", "t", "ht", "th", "thk", "height", "hight", "thick"
 const PCS_HEADS = new Set(["pcs", "pc", "pieces", "piece", "pices", "pice", "qty", "quantity", "nos"]);
 const WOOD_HEADS = new Set(["wood", "item", "items", "name", "particulars", "particular", "description", "desc", "timber", "species", "material"]);
 const SIZE_HEADS = new Set(["size", "sizes", "dimension", "dimensions", "dim", "lxbxh", "lxwxh", "lbh", "lwh"]);
-const SERIAL_HEADS = new Set(["sl", "slno", "sno", "sr", "srno", "serial", "serialno", "sn", "no", "sino", "#"]);
+const SERIAL_HEADS = new Set(["sl", "slno", "sno", "sr", "srno", "serial", "serialno", "sn", "no", "sino", "#", "itemno", "lotno", "logno"]);
 
 /** What a heading names, however it is written: "Length (ft)", "Breath", "No. of Pcs", "Sl No". */
 function classify(cell: string): ColKind | "" {
@@ -62,6 +63,8 @@ function classify(cell: string): ColKind | "" {
   const joined = words.join("");
   const first = words[0];
   if (words.includes("rate") || first === "rs" || first === "price") return "rate";
+  if (words.includes("cbm") || words.includes("m3")) return "cbm";
+  if (words.includes("cft")) return "cft";
   if (words.some((w) => PCS_HEADS.has(w))) return "pcs";
   if (SERIAL_HEADS.has(joined)) return "serial";
   if (SIZE_HEADS.has(joined) || SIZE_HEADS.has(first)) return "size";
@@ -149,7 +152,7 @@ function serialColumn(rows: string[][]): number {
 function rowToLoose(row: string[], cols: ColMap | null): Record<string, unknown> | null {
   if (!row.some((c) => String(c || "").trim())) return null;
   const blob = row.join(" ").trim();
-  if (/^(total|grand)\b/i.test(blob)) return null;
+  if (/^(sub\s*total|total|grand|difference|supplier total)\b/i.test(blob)) return null;
 
   if (cols) {
     const name = cols.wood != null ? String(row[cols.wood] || "") : "";
@@ -313,7 +316,8 @@ function sharedStrings(xml: string): string[] {
 export function gridFromXlsxParts(sheetXml: string, sharedXml = ""): string[][] {
   const shared = sharedXml ? sharedStrings(sharedXml) : [];
   const cells: { r: number; c: number; v: string }[] = [];
-  const re = /<(?:[A-Za-z0-9]+:)?c\b([^>]*)(?:\/>|>([\s\S]*?)<\/(?:[A-Za-z0-9]+:)?c>)/g;
+  // lazy, so an empty <c r="B1" s="13" /> ends at its own "/>" instead of swallowing the cells after it
+  const re = /<(?:[A-Za-z0-9]+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:[A-Za-z0-9]+:)?c>)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(sheetXml))) {
     const attrs = m[1] || "";
@@ -427,17 +431,78 @@ function attemptGrids(grids: string[][][]): SheetAttempt {
   return { text };
 }
 
-export async function readSheetBytes(name: string, buf: Uint8Array): Promise<SheetAttempt> {
+/** Every sheet of an Excel file, or the one grid of a CSV. */
+async function sheetGrids(name: string, buf: Uint8Array): Promise<string[][][]> {
   const lower = String(name || "").toLowerCase();
   if (looksOle(buf) || (lower.endsWith(".xls") && !lower.endsWith(".xlsx"))) {
     throw new Error("Old .xls files can't be opened here. In Excel use Save As and pick .xlsx, or save it as a PDF.");
   }
-  if (looksZip(buf) || /\.xlsx?m?$/.test(lower)) return attemptGrids(await xlsxGrids(buf));
-  return attemptGrids([parseCsv(new TextDecoder("utf-8").decode(buf))]);
+  if (looksZip(buf) || /\.xlsx?m?$/.test(lower)) return xlsxGrids(buf);
+  return [parseCsv(new TextDecoder("utf-8").decode(buf))];
+}
+
+export async function readSheetBytes(name: string, buf: Uint8Array): Promise<SheetAttempt> {
+  return attemptGrids(await sheetGrids(name, buf));
 }
 
 export async function readSheetFile(file: File): Promise<SheetAttempt> {
   return readSheetBytes(file.name, new Uint8Array(await file.arrayBuffer()));
+}
+
+/** A supplier's list for a purchase check: sizes, item numbers, their CFT per line and their TOTAL row. */
+export function purchaseFromGrid(grid: string[][]): PurchaseRead {
+  const rows = (grid || []).map((r) => (r || []).map((c) => String(c ?? "").trim()));
+  let cols: ColMap | null = null;
+  let start = 0;
+  for (let i = 0; i < Math.min(rows.length, 40); i++) {
+    const found = headerMap(rows[i]);
+    if (found) {
+      cols = found;
+      start = i + 1;
+      break;
+    }
+  }
+  const title = rows.slice(0, Math.max(0, start - 1)).map((r) => r.filter(Boolean).join(" ")).find(Boolean) || "";
+  if (!cols) return parsePurchaseRead({ title, lines: [] });
+  const map = cols;
+  const at = (row: string[], k: ColKind) => (map[k] != null ? row[map[k] as number] || "" : "");
+  const lines: Record<string, string>[] = [];
+  const totals: Record<string, string> = {};
+  for (const row of rows.slice(start)) {
+    const first = row.find(Boolean) || "";
+    if (/^total\b/i.test(first)) {
+      totals.pcs = at(row, "pcs");
+      totals.cft = at(row, "cft");
+      totals.cbm = at(row, "cbm");
+      continue;
+    }
+    if (/^(sub\s*total|grand|difference|supplier total)\b/i.test(first)) continue;
+    let l = at(row, "l");
+    let w = at(row, "w");
+    let t = at(row, "t");
+    let pcs = at(row, "pcs");
+    const sized = map.size != null ? expandSize(at(row, "size")) : null;
+    if (sized) {
+      l = sized.l;
+      w = sized.w;
+      t = sized.t;
+      if (sized.pcs) pcs = sized.pcs;
+    }
+    lines.push({ item: at(row, "serial"), l, w, t, pcs, cft: at(row, "cft") });
+  }
+  return parsePurchaseRead({ title, lines, totals });
+}
+
+/** The purchase check's local read: lines when the columns are clear, otherwise the rows as text for the reader. */
+export async function readPurchaseSheetBytes(name: string, buf: Uint8Array): Promise<{ read: PurchaseRead } | { text: string }> {
+  const grids = await sheetGrids(name, buf);
+  for (const grid of grids) {
+    const read = purchaseFromGrid(grid);
+    if (read.lines.length) return { read };
+  }
+  const text = grids.map((g) => sheetText(g)).find(Boolean) || "";
+  if (!text) throw new Error("That file is empty");
+  return { text };
 }
 
 /** Same open quote, plus the sheet lines. Always flips on the long-list print. */

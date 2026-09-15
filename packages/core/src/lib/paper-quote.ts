@@ -50,34 +50,47 @@ export const FILE_READ_PROMPT =
   "1-5 or 1,5 means 1.5. Give rate only when a rate column has a number for that row. customerName only when a customer or party name is written. " +
   "Do not invent sizes; leave a field empty when the document does not show it.";
 
+/** A supplier's measurement list for a purchase check: every line as printed, their CFT per line and their totals. */
+export const PURCHASE_READ_PROMPT =
+  "Read this supplier's timber measurement list: a packing list, tally sheet or container list, from Excel, a PDF or a photo. Return JSON only: " +
+  '{"title":"","lines":[{"item":"","l":"6.3","w":"5","t":"3","pcs":"18","cft":"11.719"}],"totals":{"pcs":"","cft":"","cbm":""}} ' +
+  "Copy every number exactly as printed. Do not convert units and do not round: a length printed 6.3 stays 6.3. " +
+  "l is the length, w the width, t the thickness, pcs the number of pieces, cft the CFT printed for that line (empty when none), item the item or serial number when printed. " +
+  "When lengths run down the side and sizes like 5X3 run across the top with piece and CFT columns, make one line per filled cell: l from the row, w and t from the size (5X3 is w 5, t 3), pcs and cft from that cell. " +
+  "Skip empty cells, headings, subtotals and column totals. " +
+  "totals are the grand total pieces, CFT and CBM printed on the document, empty when not printed. title is the container number, lot or supplier name when printed.";
+
 /** What one read sends to the model: a photo or PDF as a file part, or a sheet's rows inside the prompt. */
 export type PaperInput =
-  | { kind: "photo" | "pdf"; media: string; data: string; prompt: string; empty: string }
-  | { kind: "text"; prompt: string; empty: string };
+  | { kind: "photo" | "pdf"; media: string; data: string; prompt: string; empty: string; purchase: boolean }
+  | { kind: "text"; prompt: string; empty: string; purchase: boolean };
 
 export const PAPER_PHOTO_MAX_CHARS = 500_000;
 /** About 3 MB of PDF once base64. Vercel refuses request bodies over 4.5 MB. */
 export const PAPER_PDF_MAX_CHARS = 4_200_000;
 export const PAPER_TEXT_MAX_CHARS = 60_000;
 
-/** Check what the app sent (a photo, a PDF, or a sheet as text) and pick the prompt for it. */
+/** Check what the app sent (a photo, a PDF, or a sheet as text) and pick the prompt for it. mode "purchase" reads a supplier's list. */
 export function paperInput(body: unknown): PaperInput | { error: string } {
-  const b = (body && typeof body === "object" ? body : {}) as { image?: unknown; pdf?: unknown; text?: unknown };
+  const b = (body && typeof body === "object" ? body : {}) as { image?: unknown; pdf?: unknown; text?: unknown; mode?: unknown };
   const pick = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const purchase = b.mode === "purchase";
+  const filePrompt = purchase ? PURCHASE_READ_PROMPT : FILE_READ_PROMPT;
   const pdf = pick(b.pdf);
   if (pdf) {
     if (pdf.length > PAPER_PDF_MAX_CHARS) return { error: "That PDF is too big. Send one under 3 MB, or a photo of the list." };
     const m = pdf.match(/^data:application\/pdf;base64,([A-Za-z0-9+/=]+)$/);
     if (!m) return { error: "Send a PDF file" };
-    return { kind: "pdf", media: "application/pdf", data: m[1], prompt: FILE_READ_PROMPT, empty: "No sizes found in that file" };
+    return { kind: "pdf", media: "application/pdf", data: m[1], prompt: filePrompt, empty: "No sizes found in that file", purchase };
   }
   const text = pick(b.text);
   if (text) {
     if (text.length > PAPER_TEXT_MAX_CHARS) return { error: "That sheet is too long to read in one go. Split it into smaller sheets." };
     return {
       kind: "text",
-      prompt: FILE_READ_PROMPT + "\nThe sheet, one row per line, cells split by |:\n" + text,
+      prompt: filePrompt + "\nThe sheet, one row per line, cells split by |:\n" + text,
       empty: "No sizes found in that file",
+      purchase,
     };
   }
   const image = pick(b.image);
@@ -85,7 +98,8 @@ export function paperInput(body: unknown): PaperInput | { error: string } {
   const m = image.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i);
   if (!m) return { error: "Send a JPEG or PNG photo" };
   const media = m[1].toLowerCase() === "image/jpg" ? "image/jpeg" : m[1].toLowerCase();
-  return { kind: "photo", media, data: m[2], prompt: PAPER_READ_PROMPT, empty: "No sizes found on that photo" };
+  const prompt = purchase ? PURCHASE_READ_PROMPT : PAPER_READ_PROMPT;
+  return { kind: "photo", media, data: m[2], prompt, empty: "No sizes found on that photo", purchase };
 }
 
 export function blankPaperLine(): PaperLine {
@@ -126,7 +140,7 @@ export function expandCrossSize(raw: string): { l: string; w: string; t: string;
   return { l: parts[0], w: parts[1], t: parts[2], pcs: parts[3] };
 }
 
-function extractJson(text: string): unknown {
+export function extractJson(text: string): unknown {
   const raw = String(text || "").trim();
   if (!raw) throw new Error("Empty AI reply");
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -248,7 +262,7 @@ export function paperAddedMessage(lines: PaperLine[], from: "photo" | "file" = "
 
 export type PaperReadStep = { model: string; key: string };
 export type PaperStepReply = { status: number; text?: string; message?: string };
-export type PaperStepsResult = { read: PaperRead; step: PaperReadStep } | { error: string; busy: boolean };
+export type PaperStepsResult<R = PaperRead> = { read: R; step: PaperReadStep } | { error: string; busy: boolean };
 
 export const PAPER_BUSY_MESSAGE = "Google's list reader is busy right now. Wait a minute, then tap Try again.";
 const PAPER_STEP_MAX_MS = 30_000;
@@ -258,11 +272,11 @@ const PAPER_STEP_MIN_MS = 8_000;
  * Try each model/key step until one reads sizes. Busy, out of quota, timeouts and cut-off replies move on;
  * a clear "no sizes" answer stops. A step never starts with less than 8 seconds of the budget left.
  */
-export async function readPaperSteps(
+export async function readPaperSteps<R extends { lines: unknown[] } = PaperRead>(
   steps: PaperReadStep[],
   run: (step: PaperReadStep, timeoutMs: number) => Promise<PaperStepReply>,
-  opts: { budgetMs: number; now?: () => number; empty?: string },
-): Promise<PaperStepsResult> {
+  opts: { budgetMs: number; stepMs?: number; now?: () => number; empty?: string; parse?: (text: string) => R },
+): Promise<PaperStepsResult<R>> {
   const now = opts.now ?? Date.now;
   const start = now();
   let busy = false;
@@ -272,7 +286,7 @@ export async function readPaperSteps(
     if (left < PAPER_STEP_MIN_MS) break;
     let reply: PaperStepReply;
     try {
-      reply = await run(step, Math.min(left, PAPER_STEP_MAX_MS));
+      reply = await run(step, Math.min(left, opts.stepMs ?? PAPER_STEP_MAX_MS));
     } catch (e) {
       reply = { status: 0, message: e instanceof Error ? e.message : "Request failed" };
     }
@@ -281,9 +295,9 @@ export async function readPaperSteps(
       lastErr = reply.message || "AI error " + reply.status;
       continue;
     }
-    let read: PaperRead;
+    let read: R;
     try {
-      read = parsePaperAiJson(reply.text || "");
+      read = (opts.parse ?? (parsePaperAiJson as unknown as (text: string) => R))(reply.text || "");
     } catch {
       lastErr = "Could not read that list — try a clearer photo";
       continue;

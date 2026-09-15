@@ -4257,6 +4257,27 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .person-id{font-family:var(--mono); font-size:12px; color:var(--ink-soft)}
 .person-hint{margin:0 0 6px; font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
 .stmt.person-row .stmt-sub{white-space:normal; overflow-wrap:anywhere}
+/* Purchase check: a supplier list in L / W / T / Pcs with our totals against theirs. */
+.pc-open{margin-top:12px}
+.pc-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:10px; margin:16px 0 10px}
+.pc-name{display:flex; flex-direction:column; gap:4px; flex:1 1 220px; font-size:12px; color:var(--ink-soft)}
+.pc-name input{padding:9px 11px; border:1px solid var(--line-2); border-radius:var(--radius-sm); background:var(--panel-2); color:var(--ink); font:inherit; font-size:15px}
+.pc-acts{display:flex; flex-wrap:wrap; gap:6px}
+.pc-notation{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin:4px 0 12px; font-size:13px; color:var(--ink)}
+.pc-notation small{flex:1 1 100%; color:var(--ink-soft)}
+.pc-totals{grid-template-columns:repeat(3,minmax(0,1fr)); margin:6px 0 10px}
+.pc-totals .sub.pc-ok{color:var(--green)}
+.pc-totals .sub.pc-off{color:var(--danger)}
+.pc-warn{margin:6px 0; padding:8px 10px; border-radius:var(--radius-sm); background:rgba(165,61,41,.07); color:var(--danger); font-size:13px}
+.pc-note{margin:4px 0 10px}
+.pc-group{margin:14px 0}
+.pc-group-head{margin:0 0 6px; font-size:14px; font-weight:700; color:var(--ink)}
+.pc-group-head span{font-family:var(--mono); font-size:12px; font-weight:400; color:var(--ink-soft)}
+.pc-table-wrap{overflow-x:auto}
+.pc-table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:13px; font-variant-numeric:tabular-nums}
+.pc-table th{padding:6px 8px; border-bottom:1px solid var(--line-2); text-align:right; font-family:var(--body); font-size:11px; font-weight:700; color:var(--ink-soft)}
+.pc-table td{padding:5px 8px; border-bottom:1px solid var(--line); text-align:right; color:var(--ink)}
+.pc-table th:first-child,.pc-table td:first-child{text-align:left}
 
 /* ============================================================================
    PHONE KIT: sub-screens wear the Home / Money / Business look on a phone.
