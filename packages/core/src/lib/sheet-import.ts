@@ -467,16 +467,18 @@ export function purchaseFromGrid(grid: string[][]): PurchaseRead {
   const map = cols;
   const at = (row: string[], k: ColKind) => (map[k] != null ? row[map[k] as number] || "" : "");
   const lines: Record<string, string>[] = [];
-  const totals: Record<string, string> = {};
+  let totals: Record<string, string> = {};
+  let theirs: Record<string, string> | null = null;
   for (const row of rows.slice(start)) {
     const first = row.find(Boolean) || "";
-    if (/^total\b/i.test(first)) {
-      totals.pcs = at(row, "pcs");
-      totals.cft = at(row, "cft");
-      totals.cbm = at(row, "cbm");
+    // our own Excel has TOTAL (ours) and then Supplier total (theirs), so reopening it keeps their figures
+    if (/^(supplier )?total\b/i.test(first)) {
+      const sums = { pcs: at(row, "pcs"), cft: at(row, "cft"), cbm: at(row, "cbm") };
+      if (/^supplier/i.test(first)) theirs = sums;
+      else totals = sums;
       continue;
     }
-    if (/^(sub\s*total|grand|difference|supplier total)\b/i.test(first)) continue;
+    if (/^(sub\s*total|grand|difference)\b/i.test(first)) continue;
     let l = at(row, "l");
     let w = at(row, "w");
     let t = at(row, "t");
@@ -490,7 +492,7 @@ export function purchaseFromGrid(grid: string[][]): PurchaseRead {
     }
     lines.push({ item: at(row, "serial"), l, w, t, pcs, cft: at(row, "cft") });
   }
-  return parsePurchaseRead({ title, lines, totals });
+  return parsePurchaseRead({ title, lines, totals: theirs ?? totals });
 }
 
 /** The purchase check's local read: lines when the columns are clear, otherwise the rows as text for the reader. */
