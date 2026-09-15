@@ -42,9 +42,11 @@ import DateField from "./DateField";
 import EwayBillPanel from "./EwayBillPanel";
 import { showReviewQr } from "@/store/review-qr-store";
 import { extractPincode } from "@/lib/ewaybill";
-import PaperQuoteView from "@/components/views/PaperQuoteView";
+import PaperScanner from "@/components/PaperScanner";
+import { PaperJobsBar, usePaperReader } from "./PaperReader";
 import SheetImportView from "@/components/views/SheetImportView";
-import { applyPaperToDoc } from "@/lib/paper-quote";
+import { applyPaperToDoc, paperAddedMessage } from "@/lib/paper-quote";
+import { takePendingPaper } from "@/lib/paper-client";
 import { applySheetToDoc } from "@/lib/sheet-import";
 import { TabIcon } from "@/components/Icons";
 
@@ -203,10 +205,12 @@ export default function Editor({
   const pendingFocus = useRef<{ si: number; ri: number; k: string } | null>(null);
   const [editingNo, setEditingNo] = useState(false);
   const [ewayAutoRun, setEwayAutoRun] = useState(false);
-  const [paperOpen, setPaperOpen] = useState(false);
-  const [paperFile, setPaperFile] = useState<File | null>(null);
-  const paperCamRef = useRef<HTMLInputElement>(null);
-  const paperLibRef = useRef<HTMLInputElement>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  // scanned photos read in the background; their lines land on this quotation and save
+  const paper = usePaperReader((got) => {
+    commit(applyPaperToDoc(docRef.current, got), true);
+    toast(paperAddedMessage(got.lines));
+  });
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetFile, setSheetFile] = useState<File | null>(null);
   const excelRef = useRef<HTMLInputElement>(null);
@@ -977,7 +981,7 @@ export default function Editor({
     if (action === "print") onPrint();
     else if (action === "wa") onWaSend();
     else if (action === "remind-balance") onWaBalance();
-    else if (action === "paper") setPaperOpen(true);
+    else if (action === "paper") setScanOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1073,20 +1077,18 @@ export default function Editor({
     if (!temporary && !isInv && doc.id) prefSet("lastOpen", { store: "quotations", id: doc.id });
   }, [temporary, isInv, doc.id]);
 
-  function takePaperFile(file: File | undefined) {
-    if (!file) return;
-    setPaperFile(file);
-    setPaperOpen(true);
-  }
-  function closePaper() {
-    setPaperFile(null);
-    setPaperOpen(false);
-  }
-  function openPaperCam() {
-    paperCamRef.current?.click();
-  }
-  function openPaperLib() {
-    paperLibRef.current?.click();
+  // a photo scanned on Home or the empty editor starts reading as soon as its quotation opens
+  useEffect(() => {
+    if (!feat.simpleQuote || isInv || temporary || !doc.id) return;
+    const file = takePendingPaper(doc.id);
+    if (file) void paper.start(file);
+    // start only queues a read; running again for a new function identity would read twice
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.id]);
+
+  function takeScan(file: File) {
+    setScanOpen(false);
+    void paper.start(file);
   }
   function takeSheetFile(file: File | undefined) {
     if (!file) return;
@@ -1106,11 +1108,8 @@ export default function Editor({
   const paperOk = feat.simpleQuote && !isInv;
   const paperBtns = paperOk ? (
     <>
-      <button className="btn sm" type="button" onClick={openPaperCam}>
-        From paper
-      </button>
-      <button className="btn sm" type="button" onClick={openPaperLib}>
-        Add image
+      <button className="btn sm" type="button" onClick={() => setScanOpen(true)}>
+        Scan paper
       </button>
       <button className="btn sm" type="button" onClick={() => excelRef.current?.click()}>
         Excel
@@ -1120,27 +1119,6 @@ export default function Editor({
 
   const paperInputs = paperOk ? (
     <>
-      <input
-        ref={paperCamRef}
-        type="file"
-        accept="image/*,.heic,.heif"
-        capture="environment"
-        hidden
-        onChange={(e) => {
-          takePaperFile(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
-      <input
-        ref={paperLibRef}
-        type="file"
-        accept="image/*,.heic,.heif"
-        hidden
-        onChange={(e) => {
-          takePaperFile(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
       <input
         ref={excelRef}
         type="file"
@@ -1154,19 +1132,8 @@ export default function Editor({
     </>
   ) : null;
 
-  const paperOverlay = paperOpen ? (
-    <div className="paper-quote-overlay">
-      <PaperQuoteView
-        initialFile={paperFile}
-        onApply={(got) => {
-          commit(applyPaperToDoc(docRef.current, got), true);
-          closePaper();
-          toast("Lines added to this quotation — check them");
-        }}
-        onCancel={closePaper}
-      />
-    </div>
-  ) : null;
+  const paperOverlay = paperOk && scanOpen ? <PaperScanner onPhoto={takeScan} onClose={() => setScanOpen(false)} /> : null;
+  const paperBar = paperOk ? <PaperJobsBar jobs={paper.jobs} onRetry={paper.retry} onDismiss={paper.dismiss} /> : null;
 
   const sheetOverlay = sheetOpen ? (
     <div className="paper-quote-overlay">
@@ -1193,6 +1160,7 @@ export default function Editor({
           </button>
           {paperBtns}
         </div>
+        {paperBar}
         <div className="empty" style={{ padding: 48, textAlign: "center" }}>
           No quotation open.
         </div>
@@ -1493,6 +1461,8 @@ export default function Editor({
           </button>
         )}
       </div>
+
+      {paperBar}
 
       {/* printable sheet */}
       <div

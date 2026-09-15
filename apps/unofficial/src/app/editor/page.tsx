@@ -4,19 +4,17 @@ import { useRouter } from "next/navigation";
 import { prefGet } from "@/lib/data";
 import { createQuotation } from "@/lib/create";
 import { useApp } from "@/store/useApp";
-import PaperQuoteView from "@/components/views/PaperQuoteView";
+import PaperScanner from "@/components/PaperScanner";
+import { paperTargetQuote } from "@/lib/paper-client";
 import SheetImportView from "@/components/views/SheetImportView";
 
 export default function Page() {
   const { ready } = useApp();
   const router = useRouter();
   const [checked, setChecked] = useState(false);
-  const [paperFile, setPaperFile] = useState<File | null>(null);
-  const [paperOpen, setPaperOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const [sheetFile, setSheetFile] = useState<File | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const camRef = useRef<HTMLInputElement>(null);
-  const libRef = useRef<HTMLInputElement>(null);
   const xlsRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -33,10 +31,10 @@ export default function Page() {
     router.push("/editor/" + d.id);
   }
 
-  function take(file: File | undefined) {
-    if (!file) return;
-    setPaperFile(file);
-    setPaperOpen(true);
+  async function takeScan(file: File) {
+    setScanOpen(false);
+    const id = await paperTargetQuote(file);
+    router.push("/editor/" + id);
   }
 
   if (!checked) {
@@ -58,37 +56,13 @@ export default function Page() {
         <button className="btn primary" onClick={create}>
           + Create a quotation
         </button>
-        <button className="btn" onClick={() => camRef.current?.click()}>
-          From paper
-        </button>
-        <button className="btn" onClick={() => libRef.current?.click()}>
-          Add image
+        <button className="btn" onClick={() => setScanOpen(true)}>
+          Scan paper
         </button>
         <button className="btn" onClick={() => xlsRef.current?.click()}>
           Excel
         </button>
       </div>
-      <input
-        ref={camRef}
-        type="file"
-        accept="image/*,.heic,.heif"
-        capture="environment"
-        hidden
-        onChange={(e) => {
-          take(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
-      <input
-        ref={libRef}
-        type="file"
-        accept="image/*,.heic,.heif"
-        hidden
-        onChange={(e) => {
-          take(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
       <input
         ref={xlsRef}
         type="file"
@@ -102,17 +76,7 @@ export default function Page() {
           setSheetOpen(true);
         }}
       />
-      {paperOpen ? (
-        <div className="paper-quote-overlay">
-          <PaperQuoteView
-            initialFile={paperFile}
-            onCancel={() => {
-              setPaperOpen(false);
-              setPaperFile(null);
-            }}
-          />
-        </div>
-      ) : null}
+      {scanOpen ? <PaperScanner onPhoto={(file) => void takeScan(file)} onClose={() => setScanOpen(false)} /> : null}
       {sheetOpen ? (
         <div className="paper-quote-overlay">
           <SheetImportView

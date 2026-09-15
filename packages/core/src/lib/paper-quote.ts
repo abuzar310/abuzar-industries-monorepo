@@ -1,3 +1,4 @@
+import { isGeminiBusy } from "./ai-host";
 import type { Doc, Section } from "./types";
 
 /** One row on the review list. Tick = include. Nothing is saved until Confirm. */
@@ -14,6 +15,13 @@ export type PaperLine = {
 export type PaperRead = {
   customerName: string;
   lines: PaperLine[];
+};
+
+/** What a read hands to the quotation. */
+export type PaperApply = {
+  lines: PaperLine[];
+  customerName: string;
+  paperPhoto: string;
 };
 
 /** Yard lists: wood name, then L×B×H×pcs or columns "L B H Pices". B = width, H = thickness. */
@@ -194,4 +202,59 @@ export function applyPaperToDoc(
     paperPhoto: opts.paperPhoto || doc.paperPhoto,
     sections: mergePaperSections(doc.sections || [], sectionsFromPaperLines(opts.lines)),
   };
+}
+
+/** Toast after paper lines land on a quotation. */
+export function paperAddedMessage(lines: PaperLine[]): string {
+  const n = lines.filter((l) => l.keep && paperLineHasSize(l)).length;
+  return n + (n === 1 ? " line" : " lines") + " added from paper. Check the sizes.";
+}
+
+export type PaperReadStep = { model: string; key: string };
+export type PaperStepReply = { status: number; text?: string; message?: string };
+export type PaperStepsResult = { read: PaperRead; step: PaperReadStep } | { error: string; busy: boolean };
+
+export const PAPER_BUSY_MESSAGE = "Google's list reader is busy right now. Wait a minute, then tap Try again.";
+const PAPER_STEP_MAX_MS = 30_000;
+const PAPER_STEP_MIN_MS = 8_000;
+
+/**
+ * Try each model/key step until one reads sizes. Busy, out of quota, timeouts and cut-off replies move on;
+ * a clear "no sizes" answer stops. A step never starts with less than 8 seconds of the budget left.
+ */
+export async function readPaperSteps(
+  steps: PaperReadStep[],
+  run: (step: PaperReadStep, timeoutMs: number) => Promise<PaperStepReply>,
+  opts: { budgetMs: number; now?: () => number },
+): Promise<PaperStepsResult> {
+  const now = opts.now ?? Date.now;
+  const start = now();
+  let busy = false;
+  let lastErr = "";
+  for (const step of steps) {
+    const left = opts.budgetMs - (now() - start);
+    if (left < PAPER_STEP_MIN_MS) break;
+    let reply: PaperStepReply;
+    try {
+      reply = await run(step, Math.min(left, PAPER_STEP_MAX_MS));
+    } catch (e) {
+      reply = { status: 0, message: e instanceof Error ? e.message : "Request failed" };
+    }
+    if (reply.status !== 200) {
+      if (isGeminiBusy(reply.status)) busy = true;
+      lastErr = reply.message || "AI error " + reply.status;
+      continue;
+    }
+    let read: PaperRead;
+    try {
+      read = parsePaperAiJson(reply.text || "");
+    } catch {
+      lastErr = "Could not read that list — try a clearer photo";
+      continue;
+    }
+    if (!read.lines.length) return { error: "No sizes found on that photo", busy: false };
+    return { read, step };
+  }
+  if (busy) return { error: PAPER_BUSY_MESSAGE, busy: true };
+  return { error: lastErr || "Could not read that list — try a clearer photo", busy: false };
 }

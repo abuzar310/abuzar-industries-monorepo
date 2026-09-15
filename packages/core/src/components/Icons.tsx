@@ -427,6 +427,18 @@ export function IconLogOut({ size = 18, className }: Props) {
   ));
 }
 
+export function IconScan({ size = 18, className }: Props) {
+  return lucide(size, className, (
+    <>
+      <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+      <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+      <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+      <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+      <path d="M7 12h10" />
+    </>
+  ));
+}
+
 export const ICON_MAP: Record<string, React.FC<Props>> = {
   home: IconHome,
   transactions: IconTransactions,
@@ -461,6 +473,7 @@ export const ICON_MAP: Record<string, React.FC<Props>> = {
   rupee: IconRupee,
   lock: IconLock,
   logout: IconLogOut,
+  scan: IconScan,
 };
 
 export function TabIcon({ icon, size = 16, className }: { icon?: string; size?: number; className?: string }) {

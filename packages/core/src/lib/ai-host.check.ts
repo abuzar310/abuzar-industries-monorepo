@@ -5,7 +5,9 @@ import {
   DEFAULT_GEMINI_MODEL,
   geminiGenerateUrl,
   geminiPaperModel,
+  geminiPaperPlan,
   isGemini,
+  isGeminiBusy,
   isKintio,
   kintioMessagesUrl,
   normalizeAiHost,
@@ -36,4 +38,23 @@ assert.equal(geminiPaperModel("gpt-4o-mini"), DEFAULT_GEMINI_MODEL);
 assert.equal(geminiPaperModel("gemini-2.5-flash"), "gemini-2.5-flash");
 assert.ok(geminiGenerateUrl("gemini-3.6-flash", "AIzaX").includes("/v1beta/models/gemini-3.6-flash:generateContent"));
 assert.equal(textFromGemini({ candidates: [{ content: { parts: [{ text: " hi " }] } }] }), "hi");
+
+// Paper reading: chosen model first, the fallback model next on the other key, no repeats.
+assert.deepEqual(geminiPaperPlan("gemini-3.6-flash", ["k1", "k2", "k1", ""], ["gemini-3.5-flash", "gemini-3.6-flash"]), [
+  { model: "gemini-3.6-flash", key: "k1" },
+  { model: "gemini-3.5-flash", key: "k2" },
+  { model: "gemini-3.6-flash", key: "k2" },
+  { model: "gemini-3.5-flash", key: "k1" },
+]);
+assert.deepEqual(geminiPaperPlan("gpt-4o-mini", ["k1"], ["gemini-3.5-flash"]), [
+  { model: DEFAULT_GEMINI_MODEL, key: "k1" },
+  { model: "gemini-3.5-flash", key: "k1" },
+]);
+assert.deepEqual(geminiPaperPlan("gemini-3.6-flash", [], ["gemini-3.5-flash"]), []);
+assert.equal(isGeminiBusy(503), true);
+assert.equal(isGeminiBusy(429), true);
+assert.equal(isGeminiBusy(500), true);
+assert.equal(isGeminiBusy(0), true);
+assert.equal(isGeminiBusy(400), false);
+assert.equal(isGeminiBusy(403), false);
 console.log("ai-host.check ok");

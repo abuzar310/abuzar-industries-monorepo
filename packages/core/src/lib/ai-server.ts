@@ -8,6 +8,7 @@ import {
   DEFAULT_GEMINI_MODEL,
   geminiGenerateUrl,
   geminiPaperModel,
+  geminiPaperPlan,
   isGemini,
   isGeminiKey,
   isKintio,
@@ -17,7 +18,7 @@ import {
   textFromAnthropicSse,
   textFromGemini,
 } from "@/lib/ai-host";
-import { PAPER_READ_PROMPT, parsePaperAiJson } from "@/lib/paper-quote";
+import { PAPER_READ_PROMPT, parsePaperAiJson, readPaperSteps } from "@/lib/paper-quote";
 
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
@@ -243,6 +244,8 @@ export async function handleAiChat(req: Request, appLabel: string, schema: AppSc
 }
 
 const PAPER_MAX_CHARS = 500_000;
+// The route gets 60 seconds on Vercel. Stop starting new tries with time left to answer.
+const PAPER_BUDGET_MS = 50_000;
 
 function paperImageParts(image: string) {
   const m = image.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i);
@@ -296,7 +299,9 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
     if (gemini) {
       const parts = paperImageParts(image);
       if (!parts) return json({ error: "Send a JPEG or PNG photo" }, 400);
-      const payload = {
+      // Thinking stays on: without it the model reads their handwritten 2 as 4 or 11.
+      // 8192 tokens leave room for the thinking plus a long list.
+      const payload = JSON.stringify({
         systemInstruction: { parts: [{ text: "Return JSON only. No markdown." }] },
         contents: [
           {
@@ -307,26 +312,30 @@ export async function handleAiReadPaper(req: Request, schema: AppSchema): Promis
             ],
           },
         ],
-        generationConfig: { temperature: 0, maxOutputTokens: 2000, responseMimeType: "application/json" },
-      };
-      let lastErr = "";
-      for (const gKey of gemini.keys) {
-        const upstream = await fetch(geminiGenerateUrl(gemini.model, gKey), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: abort,
-        });
-        const data = (await upstream.json().catch(() => null)) as unknown;
-        if (!upstream.ok) {
-          lastErr = upstreamErrorMessage(data, upstream.status).slice(0, 400);
-          continue;
-        }
-        text = textFromGemini(data);
-        if (text) break;
-        lastErr = "Empty reply from Gemini";
+        generationConfig: { temperature: 0, maxOutputTokens: 8192, responseMimeType: "application/json" },
+      });
+      const got = await readPaperSteps(
+        geminiPaperPlan(gemini.model, gemini.keys),
+        async (step, timeoutMs) => {
+          const upstream = await fetch(geminiGenerateUrl(step.model, step.key), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: payload,
+            signal: AbortSignal.timeout(timeoutMs),
+          });
+          const data = (await upstream.json().catch(() => null)) as unknown;
+          if (!upstream.ok) {
+            return { status: upstream.status, message: upstreamErrorMessage(data, upstream.status).slice(0, 400) };
+          }
+          return { status: 200, text: textFromGemini(data) };
+        },
+        { budgetMs: PAPER_BUDGET_MS },
+      );
+      if ("error" in got) {
+        const status = got.busy ? 503 : /No sizes/.test(got.error) ? 422 : 502;
+        return json({ error: got.error, busy: got.busy }, status);
       }
-      if (!text) return json({ error: lastErr || "Could not read that list — try a clearer photo" }, 502);
+      return json(got.read);
     } else if (isKintio(host, key)) {
       const parts = paperImageParts(image);
       if (!parts) return json({ error: "Send a JPEG or PNG photo" }, 400);
