@@ -81,6 +81,29 @@ export function geminiPaperModel(model: string): string {
   return DEFAULT_GEMINI_MODEL;
 }
 
+/** Second model for paper reads. In tests it read the yard lists exactly when the first model was busy. */
+export const GEMINI_PAPER_FALLBACKS = ["gemini-3.5-flash"];
+
+/** Paper read order: the chosen model on the first key, the fallback model on the next key, and so on. No repeats. */
+export function geminiPaperPlan(
+  model: string,
+  keys: string[],
+  fallbacks: string[] = GEMINI_PAPER_FALLBACKS,
+): { model: string; key: string }[] {
+  const models = [...new Set([model, ...fallbacks].map((m) => geminiPaperModel(m)))];
+  const uniq = [...new Set(keys.map((k) => k.trim()).filter(Boolean))];
+  const plan: { model: string; key: string }[] = [];
+  for (let shift = 0; shift < uniq.length; shift++) {
+    models.forEach((m, i) => plan.push({ model: m, key: uniq[(i + shift) % uniq.length] }));
+  }
+  return plan;
+}
+
+/** Busy, out of quota, timed out or offline: worth trying the next key or model. */
+export function isGeminiBusy(status: number): boolean {
+  return status === 0 || status === 429 || status >= 500;
+}
+
 export function geminiGenerateUrl(model: string, key: string): string {
   return (
     GEMINI_HOST +

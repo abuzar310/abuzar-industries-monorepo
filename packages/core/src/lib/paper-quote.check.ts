@@ -11,6 +11,7 @@ import {
   sectionsFromPaperLines,
   applyPaperToDoc,
   mergePaperSections,
+  readPaperSteps,
 } from "./paper-quote.ts";
 
 const fenced = parsePaperAiJson(`here
@@ -134,4 +135,82 @@ assert.equal(onto.customerName, "Ismail");
 assert.equal(onto.notes, "keep me");
 assert.equal(onto.sections[0].rows[0].pcs, "4");
 
-console.log("paper-quote.check OK");
+// Reading loop: Google busy or out of quota moves on; a good answer stops; the time budget holds.
+async function readStepsChecks() {
+  const good8 = '{"lines":[{"name":"Teak","l":"8","w":"5","t":"3","pcs":"4"}]}';
+
+  const calls: string[] = [];
+  const moved = await readPaperSteps(
+    [{ model: "a", key: "1" }, { model: "b", key: "2" }, { model: "a", key: "2" }],
+    async (step) => {
+      calls.push(step.model + step.key);
+      return step.model === "a" ? { status: 503, message: "high demand" } : { status: 200, text: good8 };
+    },
+    { budgetMs: 50_000 },
+  );
+  assert.deepEqual(calls, ["a1", "b2"]);
+  assert.ok("read" in moved && moved.read.lines.length === 1 && moved.step.model === "b");
+
+  const busy = await readPaperSteps(
+    [{ model: "a", key: "1" }, { model: "b", key: "1" }],
+    async () => ({ status: 429, message: "You exceeded your current quota" }),
+    { budgetMs: 50_000 },
+  );
+  assert.ok("error" in busy && busy.busy === true);
+
+  const cut = await readPaperSteps(
+    [{ model: "a", key: "1" }, { model: "b", key: "1" }],
+    async (step) =>
+      step.model === "a"
+        ? { status: 200, text: '{"lines":[{"name":"Teak","l":"8"' }
+        : { status: 200, text: '{"lines":[{"name":"Teak","l":"9","w":"6","t":"2","pcs":"10"}]}' },
+    { budgetMs: 50_000 },
+  );
+  assert.ok("read" in cut && cut.read.lines[0].pcs === "10");
+
+  let asked = 0;
+  const none = await readPaperSteps(
+    [{ model: "a", key: "1" }, { model: "b", key: "1" }],
+    async () => {
+      asked++;
+      return { status: 200, text: '{"customerName":"","lines":[]}' };
+    },
+    { budgetMs: 50_000 },
+  );
+  assert.ok("error" in none && none.busy === false && /No sizes/.test(none.error));
+  assert.equal(asked, 1);
+
+  const badKey = await readPaperSteps(
+    [{ model: "a", key: "bad" }, { model: "a", key: "good" }],
+    async (step) => (step.key === "bad" ? { status: 403, message: "API key not valid" } : { status: 200, text: good8 }),
+    { budgetMs: 50_000 },
+  );
+  assert.ok("read" in badKey);
+
+  const allBad = await readPaperSteps(
+    [{ model: "a", key: "x" }],
+    async () => ({ status: 403, message: "API key not valid" }),
+    { budgetMs: 50_000 },
+  );
+  assert.ok("error" in allBad && allBad.busy === false && /API key/.test(allBad.error));
+
+  // each attempt eats 30s: attempt 1 at 0s, attempt 2 at 30s (20s left), attempt 3 would start past the budget
+  let clock = 0;
+  const slow = await readPaperSteps(
+    [{ model: "a", key: "1" }, { model: "b", key: "1" }, { model: "c", key: "1" }],
+    async () => {
+      clock += 30_000;
+      throw new Error("The operation was aborted due to timeout");
+    },
+    { budgetMs: 50_000, now: () => clock },
+  );
+  assert.ok("error" in slow && slow.busy === true);
+  assert.equal(clock, 60_000);
+}
+
+readStepsChecks()
+  .then(() => console.log("paper-quote.check OK"))
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });

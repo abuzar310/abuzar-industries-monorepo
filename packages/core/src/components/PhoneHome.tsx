@@ -3,8 +3,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TabIcon } from "@/components/Icons";
+import PaperScanner from "@/components/PaperScanner";
 import { dateSortKey, inr, quoteOwnBill, todayStr } from "@/lib/calc";
 import { createQuotation } from "@/lib/create";
+import { paperTargetQuote } from "@/lib/paper-client";
 import { allRec } from "@/lib/data";
 import { dayTotals, inDaybook } from "@/lib/expenses";
 import { toast } from "@/store/app-store";
@@ -87,6 +89,7 @@ export default function PhoneHome({
   const [buys, setBuys] = useState<Purchase[]>([]);
   const [monthOnly, setMonthOnly] = useState(true);
   const [making, setMaking] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const quick = phoneQuickActions(feat);
   const cloaked = !!cloakMoney;
   const curYm = ymNow();
@@ -98,6 +101,10 @@ export default function PhoneHome({
   }, [isOwner, dataVersion]);
 
   async function onQuick(href: string) {
+    if (href === "/paper-quote") {
+      setScanOpen(true);
+      return;
+    }
     if (href !== "/editor") {
       router.push(href);
       return;
@@ -111,6 +118,12 @@ export default function PhoneHome({
     } finally {
       setMaking(false);
     }
+  }
+
+  async function takeScan(file: File) {
+    setScanOpen(false);
+    const id = await paperTargetQuote(file);
+    router.push("/editor/" + id);
   }
 
   function inScope(display: string) {
@@ -269,6 +282,7 @@ export default function PhoneHome({
           </button>
         ))}
       </div>
+      {scanOpen ? <PaperScanner onPhoto={(file) => void takeScan(file)} onClose={() => setScanOpen(false)} /> : null}
       {attention.length > 0 && (
         <>
           <div className="phone-sec-h">

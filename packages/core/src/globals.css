@@ -4202,16 +4202,6 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 
 .paper-quote{max-width:720px}
 .paper-quote-overlay{position:fixed; inset:0; z-index:170; overflow:auto; background:var(--bg); padding:16px 18px 88px}
-.paper-crop-wrap{margin:12px 0}
-.paper-crop{position:relative; max-width:min(100%,520px); touch-action:none; user-select:none; background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius-sm)}
-.paper-crop img{display:block; width:100%; height:auto; pointer-events:none}
-.paper-crop-box{position:absolute; border:2px solid #fff; box-shadow:0 0 0 9999px rgba(0,0,0,.45); cursor:move; touch-action:none}
-.paper-crop-h{position:absolute; width:28px; height:28px; background:#fff; border-radius:4px; box-shadow:0 0 0 1px rgba(0,0,0,.2)}
-.paper-crop-h.nw{left:-10px; top:-10px; cursor:nwse-resize}
-.paper-crop-h.ne{right:-10px; top:-10px; cursor:nesw-resize}
-.paper-crop-h.sw{left:-10px; bottom:-10px; cursor:nesw-resize}
-.paper-crop-h.se{right:-10px; bottom:-10px; cursor:nwse-resize}
-.paper-quote-pic{display:block; max-width:min(100%,280px); max-height:180px; object-fit:contain; margin:12px 0; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--panel-2)}
 .paper-lines{display:flex; flex-direction:column; gap:10px; margin:14px 0}
 .paper-line{padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius-md); background:var(--panel-2)}
 .paper-line.off{opacity:.45}
@@ -4225,6 +4215,36 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 @media (max-width:640px){
   .paper-dims{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
+
+/* Scan paper: a live camera that takes the photo once the list is steady and sharp */
+.paper-scan{position:fixed; inset:0; z-index:188; display:flex; flex-direction:column; background:#14100c; color:#F4E9D8; overscroll-behavior:contain; touch-action:none;
+  padding:max(12px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px))}
+.paper-scan-top{display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px}
+.paper-scan-top b{font-family:var(--body); font-size:17px; font-weight:700}
+.paper-scan-x{width:44px; height:44px; padding:0; border:0; border-radius:999px; background:rgba(244,233,216,.12); color:inherit; font-size:26px; line-height:44px; cursor:pointer}
+.paper-scan-view{position:relative; flex:1 1 auto; min-height:0; margin:10px 0; display:grid; place-items:center; overflow:hidden; border-radius:18px; background:#000}
+.paper-scan-view video{width:100%; height:100%; object-fit:cover}
+.paper-scan-frame{position:absolute; inset:8%; border:2px solid rgba(244,233,216,.85); border-radius:14px; box-shadow:0 0 0 999px rgba(0,0,0,.28); pointer-events:none}
+.paper-scan-msg{max-width:32ch; margin:0; padding:24px; font-size:15px; line-height:1.5; text-align:center}
+.paper-scan-hint{display:flex; flex-direction:column; align-items:center; gap:8px; min-height:52px; font-family:var(--body); font-size:15px; font-weight:600; text-align:center}
+.paper-scan-bar{display:block; width:min(240px, 70%); height:6px; overflow:hidden; border-radius:999px; background:rgba(244,233,216,.18)}
+.paper-scan-bar i{display:block; height:100%; border-radius:inherit; background:var(--brass); transition:width .2s ease-out}
+.paper-scan-acts{display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:10px}
+.paper-scan-acts .btn{flex:1 1 140px; max-width:240px; min-height:48px; justify-content:center; border-radius:999px}
+.paper-scan button:focus-visible{outline:2px solid #F4E9D8; outline-offset:2px; box-shadow:none}
+.paper-scan-acts .btn.primary{background:#F4E9D8; border-color:#F4E9D8; color:#14100c}
+.paper-scan-acts .btn:disabled{opacity:.45; cursor:default}
+@media (min-width:761px){ .paper-scan{padding:24px max(24px, calc(50vw - 360px))} }
+
+/* Scan paper: photos being read, under the quotation toolbar */
+.paper-jobs{display:grid; gap:8px; margin:10px 0 0}
+.paper-job{display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; padding:10px 12px; border:1px solid var(--line-2); border-radius:12px; background:var(--panel-2); font-size:13px; color:var(--ink)}
+.paper-job.is-error{border-color:rgba(165,61,41,.4); background:rgba(165,61,41,.06); color:var(--danger)}
+.paper-job-pic{flex:0 0 auto; width:40px; height:40px; border-radius:8px; object-fit:cover; background:var(--line)}
+.paper-job-text{flex:1 1 180px; min-width:0; display:flex; align-items:center; gap:8px; overflow-wrap:anywhere}
+.paper-job-acts{display:flex; gap:6px; margin-left:auto}
+.paper-spin{flex:0 0 auto; width:16px; height:16px; border-radius:50%; border:2px solid var(--line-2); border-top-color:var(--ochre); animation:paper-spin .8s linear infinite}
+@keyframes paper-spin{to{transform:rotate(360deg)}}
 
 /* ============================================================================
    PHONE KIT: sub-screens wear the Home / Money / Business look on a phone.
@@ -4581,7 +4601,6 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   /* ---- From paper / From Excel: line cards = Home cards, Home fields ---- */
   .ph-kit.paper-quote{max-width:none}
   .ph-kit .hint{margin:10px 2px 0; font-size:12px; text-align:left; color:var(--ink-soft)}
-  .ph-kit .paper-quote-pic{border-radius:14px}
   .ph-kit .paper-lines{gap:10px; margin:12px 0}
   .ph-kit .paper-line{padding:12px 14px; border-radius:16px; border-color:var(--line-2); box-shadow:var(--shadow-card)}
   .ph-kit .paper-keep{min-height:44px; margin:0; font-size:13.5px; font-weight:700; color:var(--ink)}
@@ -4590,11 +4609,6 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .ph-kit .paper-dims .modal-field{margin-top:6px}
   .ph-kit .paper-dims .modal-field input:not([type=checkbox]):not([type=radio]){padding:10px 8px; text-align:center}
   .ph-kit .paper-dims .btn{align-self:end; min-height:48px; margin-bottom:0; border-radius:14px}
-  .ph-kit .paper-crop-h{width:36px; height:36px}
-  .ph-kit .paper-crop-h.nw{left:-14px; top:-14px}
-  .ph-kit .paper-crop-h.ne{right:-14px; top:-14px}
-  .ph-kit .paper-crop-h.sw{left:-14px; bottom:-14px}
-  .ph-kit .paper-crop-h.se{right:-14px; bottom:-14px}
 
   /* ---- Contacts report: screen only, Print keeps the A4 table ---- */
   .ph-kit .rep-controls{gap:8px; margin-bottom:12px}
@@ -5189,4 +5203,8 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .editor-none.ph-kit .rowbtns{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px}
   .editor-none.ph-kit .rowbtns .btn{min-height:48px; padding:10px 12px; display:inline-flex; align-items:center; justify-content:center; border-radius:14px; font-family:var(--body); font-size:14px; letter-spacing:0}
   .editor-none.ph-kit .rowbtns .btn.primary{grid-column:1 / -1; min-height:50px; font-size:15px}
+
+  /* Scan paper reading rows */
+  .paper-jobs.ph-kit .paper-job{padding:10px 12px; border-radius:16px}
+  .paper-jobs.ph-kit .paper-job-acts{flex:1 1 100%; justify-content:flex-end}
 }

@@ -39,7 +39,7 @@ export function phoneSectionOf(tabs: Tab[], href: string): PhoneSection | "home"
 
 export function phoneQuickActions(feat: AppFeatures) {
   const out: { href: string; label: string; icon: string }[] = [{ href: "/editor", label: "New quotation", icon: "file-plus" }];
-  if (feat.simpleQuote) out.push({ href: "/paper-quote", label: "From paper", icon: "file-text" });
+  if (feat.simpleQuote) out.push({ href: "/paper-quote", label: "Scan paper", icon: "scan" });
   if (feat.acceptPayment) out.push({ href: "/receipts", label: "Receipt", icon: "receipt" });
   out.push({ href: "/customers", label: "Customer", icon: "customers" });
   if (feat.simpleQuote) {
