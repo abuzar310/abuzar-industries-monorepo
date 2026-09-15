@@ -4223,3 +4223,112 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 @media (max-width:640px){
   .paper-dims{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
+
+/* ============================================================================
+   PHONE KIT — sub-screens wear the Home / Money / Business look on a phone.
+   Look only: it restyles class hooks the screens already use; no behaviour.
+   A screen opts in by adding `ph-kit` to its root. Desktop stays identical.
+   ============================================================================ */
+.ph-only{display:none}
+/* the desktop 3-letter row tile keeps its tile colour and font: .stmt span:first-child scores (0,2,1)
+   and would repaint the wrapper span, so this needs (0,3,0) */
+.stmt .stmt-ic .desk-only{color:inherit; font-family:inherit}
+/* was an inline style on the Receipts sub-titles — same desktop result */
+.ledger-page .sectitle.sectitle-sub{margin-top:24px; font-size:22px}
+@media(max-width:760px){
+  .ph-only{display:inline-flex; align-items:center; justify-content:center}
+  .desk-only{display:none}
+  .ph-kit.ledger-page{padding:0}
+
+  /* page title = the Money / Business section title, with a Home icon tile */
+  .ph-kit .sectitle{font-size:26px; letter-spacing:-.02em; margin:2px 0 14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; text-wrap:balance}
+  .ph-kit .sectitle small{flex-basis:100%; margin-top:-6px; font-size:12.5px; color:var(--ink-soft)}
+  .ph-kit .sectitle .phone-ico{width:36px; height:36px; border-radius:11px; color:var(--ochre-deep); background:rgba(198,143,49,.16)}
+  /* sub-titles = Home's "Needs attention" / "Recent activity" headings */
+  .ph-kit .sectitle.sectitle-sub{font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0; margin:22px 0 8px; gap:8px}
+  .ph-kit .sectitle.sectitle-sub small{flex-basis:auto; margin-top:0; font-size:12px}
+  .ph-kit .sectitle.sectitle-sub .phone-ico{width:28px; height:28px; border-radius:9px; color:var(--walnut); background:rgba(51,36,26,.06)}
+
+  /* cards = Home's overview card */
+  .ph-kit .panel-card{margin-top:12px; border-radius:18px; border:1px solid var(--line-2); background:var(--panel-2); box-shadow:var(--shadow-card)}
+
+  /* segmented choices = Home pills; the chosen one is walnut like the active tab */
+  .ph-kit .db-seg{gap:6px; flex-wrap:wrap}
+  .ph-kit .db-seg .seg-btn{flex:1 1 auto; min-width:0; min-height:44px; padding:9px 14px; border-radius:999px;
+    font-size:13px; font-weight:700; line-height:1.2; text-align:center; color:var(--ink); background:var(--paper); border:1px solid var(--line-2);
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+    transition:background-color .15s ease, border-color .15s ease, color .15s ease, transform .1s ease}
+  .ph-kit .db-seg .seg-btn svg{color:var(--walnut)}
+  .ph-kit .db-seg .seg-btn.on{color:#F4E9D8; background:var(--walnut); border-color:var(--walnut)}
+  .ph-kit .db-seg .seg-btn.on svg{color:var(--brass)}
+  .ph-kit .db-seg .seg-btn.on.in{background:var(--green); border-color:var(--green)}
+  .ph-kit .db-seg .seg-btn.on.out{background:var(--danger); border-color:var(--danger)}
+  .ph-kit .db-seg .seg-btn:active{transform:scale(.97)}
+  .ph-kit .db-seg .seg-btn:disabled{opacity:.45}
+  .ph-kit .db-seg .seg-btn:focus-visible{outline:none; box-shadow:var(--ring)}
+
+  /* fields: 16px text so the phone never zooms, 48px tall, Home's corner radius */
+  .ph-kit .modal-field{margin-top:12px}
+  .ph-kit .modal-field > span{display:block; margin-bottom:6px; font-family:var(--body); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft)}
+  .ph-kit .modal-field > span small{font-size:11px; font-weight:500; letter-spacing:0; text-transform:none; color:var(--ink-soft) !important}
+  .ph-kit .modal-field input:not([type=checkbox]):not([type=radio]),.ph-kit .modal-field select,.ph-kit .modal-field textarea{
+    width:100%; min-height:48px; padding:10px 14px; font-size:16px; border-radius:14px; border:1px solid var(--line-2); background:var(--paper)}
+  .ph-kit .modal-field textarea{min-height:88px}
+  .ph-kit .modal-field input:focus,.ph-kit .modal-field select:focus,.ph-kit .modal-field textarea:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}
+
+  /* chips (UPI accounts, dues) */
+  .ph-kit .acct-chip{min-height:44px; padding:9px 14px; font-size:13px; font-weight:600; border-radius:999px; background:var(--panel-2);
+    touch-action:manipulation; -webkit-tap-highlight-color:transparent; transition:background-color .15s ease, border-color .15s ease, transform .1s ease}
+  .ph-kit .acct-chip.on{color:#F4E9D8; background:var(--walnut); border-color:var(--walnut); box-shadow:none}
+  .ph-kit .acct-chip:active{transform:scale(.97)}
+  .ph-kit .acct-add-src{min-height:44px; font-size:16px; border-radius:999px}
+
+  /* buttons: one main action, 50px, Home's radius; clear disabled state */
+  .ph-kit .btn{touch-action:manipulation; -webkit-tap-highlight-color:transparent}
+  .ph-kit .btn.primary{min-height:50px; border-radius:14px; font-size:15px; font-weight:700; box-shadow:0 10px 22px -14px rgba(176,124,40,.7)}
+  .ph-kit .btn.sm{min-height:36px; border-radius:999px}
+  .ph-kit .btn:active{transform:scale(.98)}
+  .ph-kit .btn:disabled,.ph-kit .btn[disabled]{opacity:.55; transform:none; box-shadow:none; cursor:default}
+  .ph-kit .btn:focus-visible{outline:none; box-shadow:var(--ring)}
+
+  /* list rows = Home's "Recent activity" rows: icon tile, name over detail, amount */
+  .ph-kit .stmt{display:grid; grid-template-columns:32px minmax(0,1fr) auto; grid-template-areas:"ic main amt" "ic main acts"; align-items:start; gap:6px 10px; padding:12px; border-bottom:1px solid var(--line)}
+  .ph-kit .stmt > .stmt-ic{grid-area:ic}
+  .ph-kit .stmt > .stmt-main{grid-area:main; min-width:0}
+  .ph-kit .stmt > .stmt-amt{grid-area:amt; text-align:right}
+  .ph-kit .stmt > .pb-rowacts{grid-area:acts; justify-self:end}
+  .ph-kit .stmt-ic{width:32px; height:32px; border-radius:10px}
+  .ph-kit .stmt-to{font-family:var(--body); font-size:13.5px; font-weight:700; line-height:1.3}
+  .ph-kit .stmt-to .acct-overall-hint{margin-left:2px; font-family:var(--body); font-size:11.5px; font-weight:500; color:var(--ink-soft)}
+  .ph-kit .stmt-sub{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .stmt-amt{font-size:13px}
+  .ph-kit .stmt .pb-rowacts{gap:8px; margin:0}
+  .ph-kit .pb-rowacts .pb-x{width:36px; height:36px; border-radius:999px; display:grid; place-items:center; font-size:17px; color:var(--ink-soft); background:rgba(51,36,26,.05)}
+  .ph-kit .pb-rowacts .pb-x:active{transform:scale(.94)}
+
+  /* "By customer": the 5-column bank table folds to two lines per entry */
+  .ph-kit .pc-head{flex-wrap:wrap; row-gap:4px; min-height:52px}
+  /* group headers = light Home rows instead of dark bars; the open/close arrow comes back */
+  .ph-kit .panel-card > .pc-head{padding:12px 14px; font-family:var(--body); font-size:13.5px; font-weight:700; letter-spacing:0; text-transform:none; color:var(--ink); background:transparent}
+  .ph-kit .panel-card > .pc-head .um-caret{display:inline-block; font-size:11px; opacity:1; color:var(--ink-soft)}
+  .ph-kit .panel-card > .pc-head small{flex-basis:100%; margin-left:0 !important; font-size:12px; color:var(--ink-soft)}
+  .ph-kit .panel-card > .bank-ledger{border:0; border-top:1px solid var(--line); border-radius:0; background:transparent}
+  .ph-kit .bank-hdr{display:none}
+  .ph-kit .bank-row{position:relative; display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 12px; padding:10px 14px}
+  .ph-kit .bank-row .bank-parts{order:-1; flex:1 1 100%; padding-right:84px; font-size:13px}
+  .ph-kit .bank-row .bl-acts{position:absolute; top:8px; right:10px; display:flex; gap:6px}
+  .ph-kit .bank-row .bank-date{font-size:11px}
+  .ph-kit .bank-row .bank-amt{font-size:12px}
+  .ph-kit .bank-row .bank-amt:empty{display:none}
+  .ph-kit .bank-row .bank-amt.dr::before{content:"Dr "; font-weight:600; color:var(--ink-faint)}
+  .ph-kit .bank-row .bank-amt.cr::before{content:"Cr "; font-weight:600; color:var(--ink-faint)}
+  .ph-kit .bank-row .bank-amt.bal{margin-left:auto}
+  .ph-kit .bl-btn{width:34px; height:34px; min-width:0; min-height:0; padding:0; display:grid; place-items:center; border:0; border-radius:999px; font-size:15px; color:var(--ink-soft); background:rgba(51,36,26,.06)}
+  .ph-kit .bl-btn.danger{color:var(--danger)}
+  .ph-kit .bl-btn:active{transform:scale(.94)}
+
+  .ph-kit .pager{gap:8px 10px; font-size:12px}
+  .ph-kit .pager .btn{min-height:40px; border-radius:999px}
+  .ph-kit .empty{padding:28px 16px; font-size:13px}
+}

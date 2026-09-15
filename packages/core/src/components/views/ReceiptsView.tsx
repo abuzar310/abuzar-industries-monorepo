@@ -48,6 +48,7 @@ import { confirmDialog } from "@/store/dialog-store";
 import AccountPicker from "@/components/AccountPicker";
 import CustomerPicker from "@/components/editor/CustomerPicker";
 import Pager, { PAGE, usePager } from "@/components/Pager";
+import { TabIcon } from "@/components/Icons";
 import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
@@ -1059,17 +1060,20 @@ export default function ReceiptsView() {
   }
 
   return (
-    <div className="ledger-page">
+    <div className="ledger-page ph-kit">
       <div className="sectitle">
-        Receipts <small>— record a payment received or paid out</small>
+        <span className="phone-ico ph-only"><TabIcon icon="receipt" size={18} /></span>
+        Receipts <small><span className="desk-only">— </span>record a payment received or paid out</small>
       </div>
 
       <div className="panel-card" style={{ padding: 16 }}>
         <div className="db-seg sm" style={{ margin: "0 0 14px" }}>
           <button className={"seg-btn" + (kind === "received" ? " on" : "")} type="button" onClick={() => setKind("received")} disabled={editing}>
+            <TabIcon icon="rupee" size={16} className="ph-only" />
             Received
           </button>
           <button className={"seg-btn" + (kind === "paid" ? " on" : "")} type="button" onClick={() => setKind("paid")} disabled={editing}>
+            <TabIcon icon="bag" size={16} className="ph-only" />
             Paid out
           </button>
         </div>
@@ -1706,15 +1710,17 @@ export default function ReceiptsView() {
         </div>
       )}
 
-      <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+      <div className="sectitle sectitle-sub">
+        <span className="phone-ico ph-only"><TabIcon icon="wallet" size={16} /></span>
         Received from name <small>— ₹{inr(nameRecvTotal)} · {nameRecvList.length}</small>
       </div>
       {nameRecvList.length ? (
         <div className="panel-card" style={{ padding: "0 0 4px" }}>
           {namePg.view.map((entry) => (
             <div className="stmt" key={entry.key}>
-              <div className={"stmt-ic " + (entry.e.mode === "upi" ? "upi" : "cash")}>
-                {(entry.e.party || "?").slice(0, 3)}
+              <div className={"stmt-ic " + (entry.e.mode === "upi" ? "upi" : "cash")} title={entry.e.party || ""}>
+                <span className="desk-only">{(entry.e.party || "?").slice(0, 3)}</span>
+                <TabIcon icon={entry.e.mode === "upi" ? "payments" : "wallet"} size={16} className="ph-only" />
               </div>
               <div className="stmt-main">
                 <div className="stmt-to">
@@ -1745,7 +1751,8 @@ export default function ReceiptsView() {
       )}
       <Pager page={namePg.page} pages={namePg.pages} total={namePg.total} onPage={namePg.setPage} />
 
-      <div id="receipts-paid-out" className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+      <div id="receipts-paid-out" className="sectitle sectitle-sub">
+        <span className="phone-ico ph-only"><TabIcon icon="bag" size={16} /></span>
         Paid out
         <small>
           {" — ₹"}{inr(paidOutTotal)} · {paidOutList.length}
@@ -1765,7 +1772,10 @@ export default function ReceiptsView() {
         <div className="panel-card" style={{ padding: "0 0 4px" }}>
           {paidPg.view.map((entry) => (
             <div className="stmt" key={entry.key}>
-              <div className="stmt-ic due">{spendCategoryOf(entry.e).slice(0, 3)}</div>
+              <div className="stmt-ic due" title={spendCategoryOf(entry.e)}>
+                <span className="desk-only">{spendCategoryOf(entry.e).slice(0, 3)}</span>
+                <TabIcon icon="bag" size={16} className="ph-only" />
+              </div>
               <div className="stmt-main">
                 <div className="stmt-to">
                   {spendCategoryOf(entry.e)}
@@ -1807,7 +1817,8 @@ export default function ReceiptsView() {
       )}
       <Pager page={paidPg.page} pages={paidPg.pages} total={paidPg.total} onPage={paidPg.setPage} />
 
-      <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
+      <div className="sectitle sectitle-sub">
+        <span className="phone-ico ph-only"><TabIcon icon="customers" size={16} /></span>
         By customer <small>— {groups.length}</small>
       </div>
       {groups.length ? (
