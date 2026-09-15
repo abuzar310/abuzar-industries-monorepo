@@ -20,6 +20,7 @@ import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 import { Paged } from "../Pager";
 import PassbookPrint, { type PassbookLine } from "../PassbookPrint";
 import PdfButtons from "../PdfButtons";
+import PersonCardButton from "../PersonCardButton";
 import { TabIcon } from "../Icons";
 import DocList from "./DocList";
 
@@ -280,6 +281,7 @@ export default function CustomerDetail({ id }: { id: string }) {
             </div>
           </div>
           <div className="links" style={{ marginTop: 0 }}>
+            <PersonCardButton store="customers" id={cust.id} />
             {twin ? (
               <button
                 className="btn sm"

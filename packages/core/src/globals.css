@@ -4249,6 +4249,12 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .paper-job-acts{display:flex; gap:6px; margin-left:auto}
 .paper-spin{flex:0 0 auto; width:16px; height:16px; border-radius:50%; border:2px solid var(--line-2); border-top-color:var(--ochre); animation:paper-spin .8s linear infinite}
 @keyframes paper-spin{to{transform:rotate(360deg)}}
+/* Person card: records reuse .stmt rows; the buttons sit at the row end, the search box above the matches. */
+.person-acts{flex:0 0 auto; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px}
+.person-find{display:block; width:100%; margin:0 0 10px; padding:10px 12px; border:1px solid var(--line-2); border-radius:var(--radius-sm); background:var(--panel-2); color:var(--ink); font:inherit}
+.person-id{font-family:var(--mono); font-size:12px; color:var(--ink-soft)}
+.person-hint{margin:0 0 6px; font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+.stmt.person-row .stmt-sub{white-space:normal; overflow-wrap:anywhere}
 
 /* ============================================================================
    PHONE KIT: sub-screens wear the Home / Money / Business look on a phone.
@@ -4384,6 +4390,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .ph-kit .stmt:has(> .stmt-ic) > .stmt-main{grid-area:main; min-width:0}
   .ph-kit .stmt:has(> .stmt-ic) > .stmt-amt{grid-area:amt; text-align:right}
   .ph-kit .stmt:has(> .stmt-ic) > .pb-rowacts{grid-area:acts; justify-self:end}
+  .ph-kit .stmt:has(> .stmt-ic) > .person-acts{grid-column:2 / -1; justify-content:flex-start; margin-top:8px}
   .ph-kit .stmt-ic{width:32px; height:32px; border-radius:10px}
   .ph-kit .stmt-to{font-family:var(--body); font-size:13.5px; font-weight:700; line-height:1.3}
   .ph-kit .stmt-to .acct-overall-hint{margin-left:2px; font-family:var(--body); font-size:11.5px; font-weight:500; color:var(--ink-soft)}

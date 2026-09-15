@@ -14,6 +14,7 @@ import { dialPhone, waLink } from "@/lib/whatsapp";
 import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import CarpenterHistory, { CarpenterPendingList, CarpenterQuoteList } from "./CarpenterHistory";
+import PersonCardButton from "../PersonCardButton";
 import PhotoField from "../PhotoField";
 import { TabIcon } from "../Icons";
 import { Paged } from "../Pager";
@@ -159,6 +160,7 @@ export default function CarpenterDetail({ id }: { id: string }) {
             </div>
           </div>
           <div className="links" style={{ marginTop: 0 }}>
+            {rollup.record ? <PersonCardButton store="carpenters" id={rollup.record.id} /> : null}
             {acct ? (
               <button className="btn sm" onClick={() => router.push("/customers/" + acct.id)}>
                 Account
