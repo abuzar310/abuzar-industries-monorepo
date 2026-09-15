@@ -40,6 +40,9 @@ ok(containerNote.ftIn && containerNote.why === "cft", "the supplier's CFT proves
 const boxed = buildCheck(container);
 ok(boxed.ftIn && boxed.pcs.ok === true && boxed.cft.ok === true && near(boxed.cft.ours, 83.993, 0.01), "our totals match the supplier's");
 ok(boxed.groups.length === 1 && boxed.groups[0].width === 5 && boxed.lines[0].t === 3 && boxed.lines[0].l === 6, "grouped by width, thickness then length");
+// every sorted line remembers its place in their list, so an edit on the sheet changes the right line
+ok(boxed.lines.map((x) => x.at).sort((a, b) => a - b).join() === "0,1,2,3,4", "each line keeps its place in their list");
+ok(boxed.lines.every((x) => container.lines[x.at].pcs === String(x.pcs) && container.lines[x.at].t === String(x.t)), "the place points at the same line");
 const asDecimal = buildCheck(container, false);
 ok(asDecimal.cft.ok === false && asDecimal.cft.diff > 0.5, "read as decimal feet the CFT comes out too high");
 
@@ -86,7 +89,18 @@ async function files() {
   const again = await readPurchaseSheetBytes("tally.xlsx", bytes);
   ok(
     "read" in again && again.read.title === "MSDU2592526" && again.read.totals.pcs === 114 && near(again.read.totals.cft ?? 0, 83.993, 0.01),
-    "the purchase reader finds our title and TOTAL row, not the supplier or difference rows",
+    "the purchase reader finds our title and the supplier's totals",
+  );
+  // our Excel is the saved copy: reopening it keeps their totals, not our TOTAL row, and their item numbers
+  const tallyBack = await readPurchaseSheetBytes("tally.xlsx", xlsxBytes([tallySheet(tallied)]));
+  ok(
+    "read" in tallyBack && tallyBack.read.totals.pcs === 43 && tallyBack.read.totals.cft === 2.472 && tallyBack.read.lines.map((x) => x.item).join() === "130,9",
+    "a reopened sheet keeps the supplier totals and item numbers",
+  );
+  const blankBack = await readPurchaseSheetBytes("plain.xlsx", xlsxBytes([tallySheet(buildCheck(plain(["6", "7"])))]));
+  ok(
+    "read" in blankBack && blankBack.read.lines.length === 2 && blankBack.read.totals.pcs === null && blankBack.read.totals.cft === null,
+    "a list with no supplier total still has none after reopening",
   );
 
   const grid = [

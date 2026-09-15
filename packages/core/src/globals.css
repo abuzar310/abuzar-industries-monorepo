@@ -4257,27 +4257,52 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .person-id{font-family:var(--mono); font-size:12px; color:var(--ink-soft)}
 .person-hint{margin:0 0 6px; font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
 .stmt.person-row .stmt-sub{white-space:normal; overflow-wrap:anywhere}
-/* Purchase check: a supplier list in L / W / T / Pcs with our totals against theirs. */
-.pc-open{margin-top:12px}
-.pc-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:10px; margin:16px 0 10px}
-.pc-name{display:flex; flex-direction:column; gap:4px; flex:1 1 220px; font-size:12px; color:var(--ink-soft)}
-.pc-name input{padding:9px 11px; border:1px solid var(--line-2); border-radius:var(--radius-sm); background:var(--panel-2); color:var(--ink); font:inherit; font-size:15px}
-.pc-acts{display:flex; flex-wrap:wrap; gap:6px}
-.pc-notation{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin:4px 0 12px; font-size:13px; color:var(--ink)}
-.pc-notation small{flex:1 1 100%; color:var(--ink-soft)}
-.pc-totals{grid-template-columns:repeat(3,minmax(0,1fr)); margin:6px 0 10px}
-.pc-totals .sub.pc-ok{color:var(--green)}
-.pc-totals .sub.pc-off{color:var(--danger)}
-.pc-warn{margin:6px 0; padding:8px 10px; border-radius:var(--radius-sm); background:rgba(165,61,41,.07); color:var(--danger); font-size:13px}
-.pc-note{margin:4px 0 10px}
-.pc-group{margin:14px 0}
-.pc-group-head{margin:0 0 6px; font-size:14px; font-weight:700; color:var(--ink)}
-.pc-group-head span{font-family:var(--mono); font-size:12px; font-weight:400; color:var(--ink-soft)}
-.pc-table-wrap{overflow-x:auto}
-.pc-table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:13px; font-variant-numeric:tabular-nums}
-.pc-table th{padding:6px 8px; border-bottom:1px solid var(--line-2); text-align:right; font-family:var(--body); font-size:11px; font-weight:700; color:var(--ink-soft)}
-.pc-table td{padding:5px 8px; border-bottom:1px solid var(--line); text-align:right; color:var(--ink)}
-.pc-table th:first-child,.pc-table td:first-child{text-align:left}
+/* Purchase check: a supplier list in L / W / T / Pcs with our totals against theirs. pchk- keeps it clear of the panel-card .pc-* classes. */
+.pchk-open{margin-top:12px}
+.pchk-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:10px; margin:16px 0 10px}
+.pchk-name{display:flex; flex-direction:column; gap:4px; flex:1 1 220px; font-size:12px; color:var(--ink-soft)}
+.pchk-name input{padding:9px 11px; border:1px solid var(--line-2); border-radius:var(--radius-sm); background:var(--panel-2); color:var(--ink); font:inherit; font-size:15px}
+.pchk-acts{display:flex; flex-wrap:wrap; gap:6px}
+.pchk-notation{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin:4px 0 12px; font-size:13px; color:var(--ink)}
+.pchk-notation small{flex:1 1 100%; color:var(--ink-soft)}
+.pchk-totals{grid-template-columns:repeat(3,minmax(0,1fr)); margin:6px 0 10px}
+.pchk-totals .sub.pchk-ok{color:var(--green)}
+.pchk-totals .sub.pchk-off{color:var(--danger)}
+.pchk-warn{margin:6px 0; padding:8px 10px; border-radius:var(--radius-sm); background:rgba(165,61,41,.07); color:var(--danger); font-size:13px}
+.pchk-note{margin:4px 0 10px}
+/* the sheet: one Excel-style table where each width is a folder that opens on tap */
+.pchk-sheet-wrap{overflow-x:auto; margin:8px 0 16px; border:1px solid var(--line-2); border-radius:var(--radius-sm); background:var(--panel-2)}
+.pchk-sheet{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:13px; font-variant-numeric:tabular-nums}
+.pchk-sheet th,.pchk-sheet td{padding:7px 6px; border:1px solid var(--line); text-align:right; color:var(--ink)}
+.pchk-sheet tr > :first-child{text-align:left}
+.pchk-sheet thead th{background:var(--paper); font-family:var(--body); font-size:11px; font-weight:700; line-height:1.25; color:var(--ink-soft); vertical-align:bottom}
+.pchk-fold-row,.pchk-line,.pchk-supplier{cursor:pointer}
+.pchk-fold-row > th,.pchk-fold-row > td{padding-top:11px; padding-bottom:11px; background:var(--paper-2); font-weight:700}
+.pchk-fold-btn,.pchk-cell-btn{display:block; width:100%; margin:0; padding:0; border:0; background:none; font:inherit; color:inherit; text-align:inherit; cursor:pointer}
+.pchk-fold-btn{font-family:var(--body); font-size:13px}
+.pchk-fold-btn small{margin-left:6px; font-family:var(--mono); font-size:11px; font-weight:400; color:var(--ink-soft)}
+.pchk-fold-btn:focus-visible,.pchk-cell-btn:focus-visible{outline:2px solid var(--ochre-deep); outline-offset:2px}
+.pchk-caret{display:inline-block; width:1.1em; color:var(--ink-soft); transition:transform var(--t-fast)}
+.pchk-fold.open .pchk-caret{transform:rotate(90deg)}
+.pchk-fold:not(.open) .pchk-line{display:none}
+.pchk-line:hover > td,.pchk-line.editing > td{background:rgba(198,143,49,.1)}
+.pchk-add > td{padding:6px}
+.pchk-sheet tfoot th{font-family:var(--body); font-size:12px}
+.pchk-total > th,.pchk-total > td{border-top:2px solid var(--line-2); font-weight:700}
+.pchk-diff .pchk-ok{color:var(--green)}
+.pchk-diff .pchk-off{color:var(--danger); font-weight:700}
+.pchk-edit > td{padding:10px; background:var(--paper-2)}
+.pchk-form{display:grid; grid-template-columns:repeat(auto-fit,minmax(88px,1fr)); gap:8px}
+.pchk-form label{display:flex; flex-direction:column; gap:3px; font-family:var(--body); font-size:11px; font-weight:600; color:var(--ink-soft)}
+.pchk-form input{min-width:0; min-height:44px; padding:8px 9px; border:1px solid var(--line-2); border-radius:var(--radius-sm); background:#fff; color:var(--ink); font-family:var(--mono); font-size:16px}
+.pchk-form input:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}
+.pchk-form-acts{grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:6px}
+.pchk-hint,.pchk-error{margin:8px 0 0; font-family:var(--body); font-size:12px; color:var(--ink-soft)}
+.pchk-error{color:var(--danger)}
+/* a PDF prints every folder open */
+.pdf-capture .pchk-fold .pchk-line{display:table-row}
+.pdf-capture .pchk-caret{display:none}
+.pdf-capture .pchk-line > td{background:none}
 
 /* ============================================================================
    PHONE KIT: sub-screens wear the Home / Money / Business look on a phone.

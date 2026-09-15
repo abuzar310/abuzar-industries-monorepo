@@ -83,7 +83,8 @@ export function guessNotation(read: PurchaseRead): Notation {
   return { ftIn: inchLike, why: inchLike ? "pattern" : "none" };
 }
 
-export type CheckLine = { item: string; l: number; w: number; t: number; pcs: number; cft: number; cbm: number };
+/** at is where the line sits in their list, so a change made on the sorted sheet lands on the right line. */
+export type CheckLine = { at: number; item: string; l: number; w: number; t: number; pcs: number; cft: number; cbm: number };
 export type CheckGroup = { width: number; lines: CheckLine[]; pcs: number; cft: number; cbm: number };
 /** ok is null when the supplier printed no total to check against. */
 export type TotalCheck = { ours: number; theirs: number | null; ok: boolean | null; diff: number };
@@ -109,13 +110,13 @@ function compare(ours: number, theirs: number | null, slack: number, share: numb
 
 export function buildCheck(read: PurchaseRead, ftIn = guessNotation(read).ftIn): PurchaseCheck {
   const lines: CheckLine[] = read.lines
-    .map((x) => {
+    .map((x, at) => {
       const l = lengthFeet(x.l, ftIn);
       const w = purchaseNum(x.w) ?? 0;
       const t = purchaseNum(x.t) ?? 0;
       const pcs = purchaseNum(x.pcs) ?? 0;
       const cft = lineCft(l, w, t, pcs);
-      return { item: x.item, l, w, t, pcs, cft, cbm: cft / CBM_TO_CFT };
+      return { at, item: x.item, l, w, t, pcs, cft, cbm: cft / CBM_TO_CFT };
     })
     .sort((a, b) => a.w - b.w || a.t - b.t || a.l - b.l);
   const groups: CheckGroup[] = [];
@@ -164,19 +165,18 @@ export function tallySheet(check: PurchaseCheck): XlsxSheet {
     rows.push({ cells: ["Subtotal", "", "", "", g.pcs, r3(g.cft), r3(g.cbm)], bold: true });
   }
   rows.push({ cells: ["TOTAL", "", "", "", check.pcs.ours, r3(check.cft.ours), r3(check.cbm.ours)], bold: true });
-  if (check.pcs.theirs !== null || check.cft.theirs !== null || check.cbm.theirs !== null) {
-    rows.push({ cells: ["Supplier total", "", "", "", check.pcs.theirs, check.cft.theirs, check.cbm.theirs] });
-    rows.push({
-      cells: [
-        "Difference",
-        "",
-        "",
-        "",
-        check.pcs.theirs === null ? null : r3(check.pcs.diff),
-        check.cft.theirs === null ? null : r3(check.cft.diff),
-        check.cbm.theirs === null ? null : r3(check.cbm.diff),
-      ],
-    });
-  }
+  // written even when their list has no totals, so reopening this file never takes our TOTAL for theirs
+  rows.push({ cells: ["Supplier total", "", "", "", check.pcs.theirs, check.cft.theirs, check.cbm.theirs] });
+  rows.push({
+    cells: [
+      "Difference",
+      "",
+      "",
+      "",
+      check.pcs.theirs === null ? null : r3(check.pcs.diff),
+      check.cft.theirs === null ? null : r3(check.cft.diff),
+      check.cbm.theirs === null ? null : r3(check.cbm.diff),
+    ],
+  });
   return { name: "Tally", widths: [12, 12, 12, 14, 8, 12, 12], rows, threeDecimals: [5, 6] };
 }
