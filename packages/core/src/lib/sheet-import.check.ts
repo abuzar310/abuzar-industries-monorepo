@@ -165,6 +165,19 @@ const sharedXml = `<sst><si><t>L</t></si><si><t>B</t></si><si><t>H</t></si><si><
 const fromXml = parseSheetGrid(gridFromXlsxParts(sheetXml, sharedXml));
 assert.equal(fromXml.lines[0].pcs, "4");
 
+// Excel writes empty styled cells as <c r="B1" s="13" />. The cells after them keep their own places.
+const styled = gridFromXlsxParts(
+  '<sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" s="13" /><c r="C1" s="14"/></row>' +
+    '<row r="2"><c r="A2" t="s"><v>1</v></c><c r="B2" s="1"/><c r="C2"><v>7</v></c></row>' +
+    '<row r="3"><c r="A3" s="15" t="s"><v>2</v></c><c r="B3" s="15" /><c r="C3" s="11"><f>SUM(C2)</f><v>402</v></c></row></sheetData>',
+  "<sst><si><t>Tally</t></si><si><t>Item No.</t></si><si><t>TOTAL</t></si></sst>",
+);
+assert.deepEqual(styled, [
+  ["Tally", "", ""],
+  ["Item No.", "", "7"],
+  ["TOTAL", "", "402"],
+]);
+
 function u16(n: number) {
   const b = new Uint8Array(2);
   new DataView(b.buffer).setUint16(0, n, true);

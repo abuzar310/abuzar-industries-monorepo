@@ -628,6 +628,9 @@ export default function BuysView() {
           <h1 className="buys-h1"><span className="phone-ico ph-only"><TabIcon icon="bag" size={18} /></span>Suppliers</h1>
           <p className="buys-sub">Timber in · suppliers & from-accounts</p>
         </div>
+        <button type="button" className="btn sm no-print" onClick={() => router.push("/buys/check")}>
+          Purchase check
+        </button>
       </div>
 
       {/* Headline dashboard — whole-book figures (never narrowed by the register
