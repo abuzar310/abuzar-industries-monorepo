@@ -38,7 +38,7 @@ export default function CarpenterHistory({
               {showCarpenter ? (
                 <button
                   type="button"
-                  style={{ background: "none", border: 0, padding: 0, font: "inherit", color: "inherit", cursor: "pointer", fontWeight: 600 }}
+                  className="stmt-link"
                   onClick={() => router.push(p.href)}
                 >
                   {p.carpenter}
@@ -46,7 +46,7 @@ export default function CarpenterHistory({
               ) : p.partyId ? (
                 <button
                   type="button"
-                  style={{ background: "none", border: 0, padding: 0, font: "inherit", color: "inherit", cursor: "pointer", fontWeight: 600 }}
+                  className="stmt-link"
                   onClick={() => router.push("/customers/" + p.partyId)}
                 >
                   {p.party}
@@ -127,7 +127,7 @@ export function CarpenterPendingList({
               {showCarpenter ? (
                 <button
                   type="button"
-                  style={{ background: "none", border: 0, padding: 0, font: "inherit", color: "inherit", cursor: "pointer", fontWeight: 600 }}
+                  className="stmt-link"
                   onClick={() => router.push(p.href)}
                 >
                   {p.carpenter}
@@ -135,7 +135,7 @@ export function CarpenterPendingList({
               ) : p.partyId ? (
                 <button
                   type="button"
-                  style={{ background: "none", border: 0, padding: 0, font: "inherit", color: "inherit", cursor: "pointer", fontWeight: 600 }}
+                  className="stmt-link"
                   onClick={() => router.push("/customers/" + p.partyId)}
                 >
                   {p.party}
@@ -192,7 +192,7 @@ export function CarpenterQuoteList({
   }
   return (
     <div className="panel-card" style={{ marginTop: 0 }}>
-      <table className="carp-roster">
+      <table className="carp-roster roster-quotes">
         <thead>
           <tr>
             <th>Date</th>

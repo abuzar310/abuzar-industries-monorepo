@@ -13,6 +13,7 @@ import { autoPostEnabled, backfillInvoices, setAutoPost } from "@/lib/ledger-aut
 import { getBusinessPincode, isValidPincode, setBusinessPincode } from "@/lib/ewaybill";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog } from "@/store/dialog-store";
+import { TabIcon } from "@/components/Icons";
 
 export default function SettingsView() {
   const router = useRouter();
@@ -155,13 +156,14 @@ export default function SettingsView() {
   }
 
   return (
-    <div>
+    <div className="ph-kit">
       <div className="sectitle">
-        Settings <small>— app &amp; backup</small>
+        <span className="phone-ico ph-only"><TabIcon icon="settings" size={18} /></span>
+        Settings <small><span className="desk-only">— </span>app &amp; backup</small>
       </div>
 
       <div className="setbox">
-        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>AI assistant</div>
+        <div className="pc-head set-head">AI assistant</div>
         <p className="note">
           Owner only. OpenAI-compatible hosts, or Kintio (Anthropic /v1/messages). The key is stored
           in this app&apos;s cloud and is never shown again.
@@ -204,7 +206,7 @@ export default function SettingsView() {
       </div>
 
       <div className="setbox">
-        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Cloud</div>
+        <div className="pc-head set-head">Cloud</div>
         <p className="note">
           The cloud database is the single source of truth — every save goes straight there, and
           every device shows the same data within seconds. Nothing is stored on this device.
@@ -213,7 +215,7 @@ export default function SettingsView() {
 
       {ewayOn && (
         <div className="setbox">
-          <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>E-way bill · business PIN</div>
+          <div className="pc-head set-head">E-way bill · business PIN</div>
           <p className="note">
             From-place PIN used in the NIC bulk JSON (ewaybillgst.gov.in). Default is Chitradurga 577501.
           </p>
@@ -243,7 +245,7 @@ export default function SettingsView() {
 
       {ledgerOn && (
         <div className="setbox">
-          <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Ledger</div>
+          <div className="pc-head set-head">Ledger</div>
           <p className="note">
             When on, every invoice writes a Sales/Purchase voucher (and a Receipt/Payment for money received) straight into
             the Ledger. Leave off to keep the Ledger manual.
@@ -256,7 +258,7 @@ export default function SettingsView() {
       )}
 
       <div className="setbox">
-        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Backup</div>
+        <div className="pc-head set-head">Backup</div>
         <p className="note">Export a full backup file you can keep anywhere or move to another device.</p>
         <div className="rowbtns">
           <button className="btn sm" onClick={exportBackup}>Export backup (.json)</button>
@@ -266,7 +268,7 @@ export default function SettingsView() {
 
       {receiptsApp && (
         <div className="setbox">
-          <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Apply receipts to quotations</div>
+          <div className="pc-head set-head">Apply receipts to quotations</div>
           <p className="note">
             Re-applies past <b>Receipts</b> payments onto each customer&apos;s open quotations, so their quotes and
             Statements show as paid. Totals don&apos;t change and it&apos;s safe to run again.
@@ -278,7 +280,7 @@ export default function SettingsView() {
       )}
 
       <div className="setbox">
-        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Recycle bin</div>
+        <div className="pc-head set-head">Recycle bin</div>
         <p className="note">
           Deleted quotations &amp; invoices stay here — never really removed from the cloud. Restore anytime, or move to Archive.
         </p>
@@ -305,7 +307,7 @@ export default function SettingsView() {
       </div>
 
       <div className="setbox">
-        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Archive</div>
+        <div className="pc-head set-head">Archive</div>
         <p className="note">
           Hidden invoices/quotations that were “deleted forever”. They still exist in the cloud — restore any time.
         </p>
@@ -331,7 +333,7 @@ export default function SettingsView() {
       </div>
 
       <div className="setbox">
-        <div className="pc-head" style={{ margin: "-14px -16px 4px" }}>Install app</div>
+        <div className="pc-head set-head">Install app</div>
         <p className="note">Install to your phone / desktop — opens in its own window with a home-screen icon and enables notifications.</p>
         <div className="rowbtns">
           <button className="btn primary sm" onClick={installApp}>Install on this device</button>

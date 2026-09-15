@@ -21,6 +21,7 @@ import type { Carpenter, Expense } from "@/lib/types";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import { toast } from "@/store/app-store";
 import { useApp } from "@/store/useApp";
+import { TabIcon } from "@/components/Icons";
 
 export const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -255,7 +256,8 @@ export function HistList({
             const body = (
               <>
                 <div className={"stmt-ic " + (ev.kind === "received" ? "cash" : ev.kind === "setoff" ? "upi" : "due")}>
-                  {ev.kind === "received" ? "₹" : ev.kind === "setoff" ? "−" : ev.kind === "opening" ? "Old" : "Rent"}
+                  <span className="desk-only">{ev.kind === "received" ? "₹" : ev.kind === "setoff" ? "−" : ev.kind === "opening" ? "Old" : "Rent"}</span>
+                  <TabIcon icon={ev.kind === "received" ? "wallet" : ev.kind === "setoff" ? "scale" : ev.kind === "opening" ? "ledger" : "building"} size={16} className="ph-only" />
                 </div>
                 <div className="stmt-main">
                   <div className="stmt-to">{ev.label}</div>

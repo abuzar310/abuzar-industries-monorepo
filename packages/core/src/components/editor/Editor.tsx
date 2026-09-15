@@ -46,6 +46,7 @@ import PaperQuoteView from "@/components/views/PaperQuoteView";
 import SheetImportView from "@/components/views/SheetImportView";
 import { applyPaperToDoc } from "@/lib/paper-quote";
 import { applySheetToDoc } from "@/lib/sheet-import";
+import { TabIcon } from "@/components/Icons";
 
 const DIMCOLS: ("l" | "w" | "t" | "pcs")[] = ["l", "w", "t", "pcs"];
 const NO_SEL: Set<number> = new Set(); // stable empty selection for non-active boxes
@@ -1185,8 +1186,8 @@ export default function Editor({
   if (cloakMoney && feat.simpleQuote) {
     return (
       <div className="view active" id="v-editor">
-        <div className="doctool">
-          <span className="lab">New</span>
+        <div className="doctool ph-kit">
+          <span className="lab"><span className="phone-ico ph-only"><TabIcon icon="file-plus" size={16} /></span>New</span>
           <button className="btn sm" onClick={onNewQuote}>
             + Quotation
           </button>
@@ -1391,8 +1392,8 @@ export default function Editor({
   return (
     <div className="view active" id="v-editor">
       {/* top toolbar */}
-      <div className="doctool">
-        <span className="lab">New</span>
+      <div className="doctool ph-kit">
+        <span className="lab"><span className="phone-ico ph-only"><TabIcon icon="file-plus" size={16} /></span>New</span>
         <button className="btn sm" onClick={onNewQuote}>
           + Quotation
         </button>
@@ -1888,7 +1889,7 @@ export default function Editor({
       </div>
 
       {/* bottom actions — tight primary row + overflow */}
-      <div className="doctool">
+      <div className="doctool ph-kit">
         {temporary ? (
           <>
             <button className="btn temp-save" onClick={() => saveTempAsNew("Draft")}>
@@ -1938,7 +1939,7 @@ export default function Editor({
         )}
         {!isInv && (
           <button
-            className={"btn" + (doc.hidePricesOnPrint ? " primary" : "")}
+            className={"btn doc-toggle" + (doc.hidePricesOnPrint ? " primary" : "")}
             onClick={toggleHidePrices}
             title="When on, Print / PDF omit rates, prices, and bill totals — sizes and quantities only"
           >
@@ -1947,7 +1948,7 @@ export default function Editor({
         )}
         {feat.simpleQuote && !isInv && (
           <button
-            className={"btn" + (denseMode ? " primary" : "")}
+            className={"btn doc-toggle" + (denseMode ? " primary" : "")}
             onClick={toggleDense}
             title="Long list print — skinny table, more lines on two pages"
           >
@@ -1955,7 +1956,7 @@ export default function Editor({
           </button>
         )}
         {feat.simpleQuote && !denseMode && (
-          <button className={"btn" + (freeMode ? " primary" : "")} onClick={toggleFree} title="Drag & resize the boxes freely on the A4 page">
+          <button className={"btn doc-toggle" + (freeMode ? " primary" : "")} onClick={toggleFree} title="Drag & resize the boxes freely on the A4 page">
             {freeMode ? "✓ Free arrange" : "Free arrange"}
           </button>
         )}
@@ -1984,7 +1985,7 @@ export default function Editor({
             Convert to Invoice
           </button>
         )}
-        <div style={{ marginLeft: "auto" }}>
+        <div className="doc-more">
           <MoreMenu>
             <button onClick={onPdf}>Download PDF</button>
             {!isInv && <button onClick={onWaRemind}>WhatsApp reminder</button>}
@@ -2007,14 +2008,14 @@ export default function Editor({
 
       {/* App A: accept payment on a created quotation → final price + cash/UPI → Daybook */}
       {feat.acceptPayment && !isInv && temporary && (
-        <div className="panel-card no-print" style={{ marginTop: 12, borderColor: "var(--ochre)" }}>
-          <p style={{ margin: 0, fontFamily: "var(--disp)", fontWeight: 600, color: "var(--ochre-deep)" }}>
+        <div className="panel-card no-print ph-kit" style={{ marginTop: 12, borderColor: "var(--ochre)" }}>
+          <p className="cmp-title">
             Comparison tab — nothing is saved yet.
           </p>
-          <p style={{ margin: "6px 0 10px", color: "var(--ink-soft)", fontSize: 13 }}>
+          <p className="cmp-note">
             Enter rates and sizes freely. When you want to keep it, save as a draft or new quotation (allocates a number).
           </p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div className="cmp-acts">
             <button type="button" className="btn temp-save" onClick={() => saveTempAsNew("Draft")}>
               Save as draft
             </button>
@@ -2084,7 +2085,7 @@ export default function Editor({
 
       {/* internal note — only for us, never printed */}
       {feat.simpleQuote && !isInv && (
-        <div className="panel-card no-print" style={{ marginTop: 12 }}>
+        <div className="panel-card no-print ph-kit" style={{ marginTop: 12 }}>
           <label className="modal-field" style={{ flexBasis: "100%", width: "100%" }}>
             <span>Internal note <small style={{ color: "var(--ink-faint)" }}>— only for us, never printed</small></span>
             <textarea
@@ -2092,7 +2093,7 @@ export default function Editor({
               placeholder="e.g. deliver by Friday, rate negotiated, balance promised next week…"
               value={doc.notes || ""}
               onChange={(e) => setField("notes", e.target.value)}
-              style={{ resize: "vertical", width: "100%", fontFamily: "var(--body)", fontSize: 14, padding: "8px 10px" }}
+              className="note-ta"
             />
           </label>
           {doc.paperPhoto ? (

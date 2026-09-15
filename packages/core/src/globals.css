@@ -4227,7 +4227,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 }
 
 /* ============================================================================
-   PHONE KIT — sub-screens wear the Home / Money / Business look on a phone.
+   PHONE KIT: sub-screens wear the Home / Money / Business look on a phone.
    Look only: it restyles class hooks the screens already use; no behaviour.
    A screen opts in by adding `ph-kit` to its root. Desktop stays identical.
    ============================================================================ */
@@ -4235,11 +4235,69 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 /* the desktop 3-letter row tile keeps its tile colour and font: .stmt span:first-child scores (0,2,1)
    and would repaint the wrapper span, so this needs (0,3,0) */
 .stmt .stmt-ic .desk-only{color:inherit; font-family:inherit}
-/* was an inline style on the Receipts sub-titles — same desktop result */
+/* Receipts sub-titles: moved from inline styles, same desktop result */
 .ledger-page .sectitle.sectitle-sub{margin-top:24px; font-size:22px}
-@media(max-width:760px){
-  .ph-only{display:inline-flex; align-items:center; justify-content:center}
-  .desk-only{display:none}
+/* Customer page sub-titles: moved from inline styles, same desktop result */
+.cd-screen .sectitle.sectitle-sub{margin-top:24px; font-size:22px}
+.cd-screen .sectitle.cd-stmt-head{display:flex; align-items:center; gap:12px}
+/* a PDF capture never shows the phone-only icons */
+.pdf-capture .ph-only{display:none !important}
+/* Carpenters, Logs and Settings: moved from inline styles, same desktop result */
+.rowbtns.carp-tools{align-items:center; gap:10px; flex-wrap:wrap}
+.db-seg.carp-sort{margin-left:auto}
+.custcard h3.carp-name{font-size:26px}
+.stmt-link{background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; font-weight:600}
+.setbox > .pc-head.set-head{margin:-14px -16px 4px}
+.log-scroll{overflow-x:auto}
+.log-table{width:100%; border-collapse:collapse; font-size:12px}
+.log-head{background:var(--t-cream2, #f6f0e4); border-bottom:1px solid var(--line)}
+.log-th{padding:8px 10px; text-align:left; font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-faint); white-space:nowrap}
+.log-th.r{text-align:right}
+.log-row{border-bottom:1px solid var(--line); cursor:pointer; vertical-align:top}
+.log-td{padding:8px 10px}
+.log-td.log-amt{text-align:right; font-family:var(--mono); font-weight:700}
+.log-td.log-mode{font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+.log-when{font-family:var(--mono); font-size:11px; white-space:nowrap}
+.log-time{color:var(--ink-faint)}
+.log-open{padding:8px 4px 12px}
+.log-open-top{display:flex; gap:12px; flex-wrap:wrap; margin-bottom:8px; align-items:baseline}
+.log-open-when{margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+.log-meta{display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:8px; margin-bottom:10px; font-size:12px}
+.log-pre{margin:0; padding:12px; background:var(--t-cream2, #f6f0e4); border-radius:8px; white-space:pre-wrap; word-break:break-word; font-family:var(--mono); font-size:11px; line-height:1.55}
+.log-who{font-weight:600}
+.log-role{font-size:10px; color:var(--ink-faint); text-transform:capitalize}
+.log-pill{display:inline-block; padding:1px 7px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; background:rgba(0,0,0,0.04)}
+.log-what{font-weight:600}
+.log-sub{font-size:10px; color:var(--ink-faint)}
+.log-tap{font-size:10px; color:var(--ink-faint); margin-top:2px}
+.log-meta-k{font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); font-weight:700}
+.log-meta-v{font-family:var(--mono); font-size:11px; word-break:break-all}
+/* Daybook, Balances, Books and Transactions: moved from inline styles, same desktop result */
+.sectitle.sectitle-sub.sub-28{margin-top:28px; font-size:22px}
+.pc-head .pc-head-meta{font-family:var(--mono); font-size:12px; text-transform:none; letter-spacing:0}
+.acct-field .acct-field-lbl{font-size:12px; color:var(--ink-soft); font-weight:600}
+.custcard .lch-bal{margin-top:8px}
+.stmt-filters .txn-search{min-width:180px; padding:4px 8px; font-size:12px}
+/* editor side cards and the empty /editor screen: moved from inline styles, same desktop result */
+.cmp-title{margin:0; font-family:var(--disp); font-weight:600; color:var(--ochre-deep)}
+.cmp-note{margin:6px 0 10px; color:var(--ink-soft); font-size:13px}
+.cmp-acts{display:flex; gap:8px; flex-wrap:wrap}
+.modal-field textarea.note-ta{resize:vertical; width:100%; font-family:var(--body); font-size:14px; padding:8px 10px}
+.doc-more{margin-left:auto}
+.pb-foot .pb-of{grid-column:2 / 4; color:var(--ink-faint)}
+.comm-lock-title{font-family:var(--disp); font-weight:600}
+.comm-lock-note{display:block; color:var(--ink-faint); margin-bottom:12px; line-height:1.45}
+.editor-none{text-align:center; padding:54px 20px}
+.editor-none-title{font-family:var(--serif); font-size:30px; letter-spacing:-.01em; color:var(--walnut); margin-bottom:8px}
+.editor-none .editor-none-note{margin:0 0 20px}
+.editor-none .rowbtns{justify-content:center}
+.editor-none .rowbtns .btn{font-size:16px; padding:12px 24px}
+@media screen and (max-width:760px){
+  /* helpers act only inside a kit screen: a PDF capture is a detached clone rendered at 700px and must keep its desktop look */
+  .ph-kit{--ink-soft:#736350}
+  .ph-kit input::placeholder,.ph-kit textarea::placeholder{color:var(--ink-soft)}
+  .ph-kit .ph-only{display:inline-flex; align-items:center; justify-content:center}
+  .ph-kit .desk-only{display:none}
   .ph-kit.ledger-page{padding:0}
 
   /* page title = the Money / Business section title, with a Home icon tile */
@@ -4268,7 +4326,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .ph-kit .db-seg .seg-btn.on.out{background:var(--danger); border-color:var(--danger)}
   .ph-kit .db-seg .seg-btn:active{transform:scale(.97)}
   .ph-kit .db-seg .seg-btn:disabled{opacity:.45}
-  .ph-kit .db-seg .seg-btn:focus-visible{outline:none; box-shadow:var(--ring)}
+  .ph-kit .db-seg .seg-btn:focus-visible{outline:2px solid var(--ochre-deep); outline-offset:2px}
 
   /* fields: 16px text so the phone never zooms, 48px tall, Home's corner radius */
   .ph-kit .modal-field{margin-top:12px}
@@ -4289,17 +4347,19 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   /* buttons: one main action, 50px, Home's radius; clear disabled state */
   .ph-kit .btn{touch-action:manipulation; -webkit-tap-highlight-color:transparent}
   .ph-kit .btn.primary{min-height:50px; border-radius:14px; font-size:15px; font-weight:700; box-shadow:0 10px 22px -14px rgba(176,124,40,.7)}
-  .ph-kit .btn.sm{min-height:36px; border-radius:999px}
+  .ph-kit .btn.sm{min-height:44px; border-radius:999px}
   .ph-kit .btn:active{transform:scale(.98)}
   .ph-kit .btn:disabled,.ph-kit .btn[disabled]{opacity:.55; transform:none; box-shadow:none; cursor:default}
-  .ph-kit .btn:focus-visible{outline:none; box-shadow:var(--ring)}
+  .ph-kit .btn:focus-visible{outline:2px solid var(--ochre-deep); outline-offset:2px}
 
   /* list rows = Home's "Recent activity" rows: icon tile, name over detail, amount */
-  .ph-kit .stmt{display:grid; grid-template-columns:32px minmax(0,1fr) auto; grid-template-areas:"ic main amt" "ic main acts"; align-items:start; gap:6px 10px; padding:12px; border-bottom:1px solid var(--line)}
-  .ph-kit .stmt > .stmt-ic{grid-area:ic}
-  .ph-kit .stmt > .stmt-main{grid-area:main; min-width:0}
-  .ph-kit .stmt > .stmt-amt{grid-area:amt; text-align:right}
-  .ph-kit .stmt > .pb-rowacts{grid-area:acts; justify-self:end}
+  .ph-kit .stmt{gap:6px 10px; padding:12px; border-bottom:1px solid var(--line)}
+  /* compact grid only for rows shaped like Receipts (icon tile + name block); other row shapes keep their own flow */
+  .ph-kit .stmt:has(> .stmt-ic):has(> .stmt-main){display:grid; grid-template-columns:32px minmax(0,1fr) auto; grid-template-areas:"ic main amt" "ic main acts"; align-items:start}
+  .ph-kit .stmt:has(> .stmt-ic) > .stmt-ic{grid-area:ic}
+  .ph-kit .stmt:has(> .stmt-ic) > .stmt-main{grid-area:main; min-width:0}
+  .ph-kit .stmt:has(> .stmt-ic) > .stmt-amt{grid-area:amt; text-align:right}
+  .ph-kit .stmt:has(> .stmt-ic) > .pb-rowacts{grid-area:acts; justify-self:end}
   .ph-kit .stmt-ic{width:32px; height:32px; border-radius:10px}
   .ph-kit .stmt-to{font-family:var(--body); font-size:13.5px; font-weight:700; line-height:1.3}
   .ph-kit .stmt-to .acct-overall-hint{margin-left:2px; font-family:var(--body); font-size:11.5px; font-weight:500; color:var(--ink-soft)}
@@ -4323,8 +4383,8 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .ph-kit .bank-row .bank-date{font-size:11px}
   .ph-kit .bank-row .bank-amt{font-size:12px}
   .ph-kit .bank-row .bank-amt:empty{display:none}
-  .ph-kit .bank-row .bank-amt.dr::before{content:"Dr "; font-weight:600; color:var(--ink-faint)}
-  .ph-kit .bank-row .bank-amt.cr::before{content:"Cr "; font-weight:600; color:var(--ink-faint)}
+  .ph-kit .bank-row .bank-amt.dr::before{content:"Dr "; font-weight:600; color:var(--ink-soft)}
+  .ph-kit .bank-row .bank-amt.cr::before{content:"Cr "; font-weight:600; color:var(--ink-soft)}
   .ph-kit .bank-row .bank-amt.bal{margin-left:auto}
   .ph-kit .bl-btn{width:34px; height:34px; min-width:0; min-height:0; padding:0; display:grid; place-items:center; border:0; border-radius:999px; font-size:15px; color:var(--ink-soft); background:rgba(51,36,26,.06)}
   .ph-kit .bl-btn.danger{color:var(--danger)}
@@ -4333,4 +4393,800 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .ph-kit .pager{gap:8px 10px; font-size:12px}
   .ph-kit .pager .btn{min-height:40px; border-radius:999px}
   .ph-kit .empty{padding:28px 16px; font-size:13px}
+
+  /* ---- shared: toolbars, search, empty states, report pills ---- */
+  .ph-kit .rowbtns{gap:8px; margin:10px 0 4px}
+  .ph-kit .rowbtns .btn.sm{padding:8px 14px; font-size:13px}
+  .ph-kit .searchbar{height:48px; margin:12px 0 6px; padding:0 2px 0 14px; gap:8px; border-radius:14px; background:var(--paper); box-shadow:none}
+  .ph-kit .searchbar .s-ic{font-size:18px; color:var(--ink-soft)}
+  .ph-kit .searchbar input{align-self:stretch; height:auto; font-size:16px}
+  .ph-kit .searchbar .s-clear{width:44px; height:44px; line-height:44px; font-size:20px; border-radius:999px; background:transparent; color:var(--ink-soft)}
+  .ph-kit .searchbar .s-count{padding:0 10px 0 0; font-family:var(--body); font-size:11.5px; font-weight:600; color:var(--ink-soft)}
+  .ph-kit .empty .empty-icon{font-size:28px}
+  .ph-kit .empty .empty-title{font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0}
+  .ph-kit .empty .empty-note{font-size:12px; color:var(--ink-soft)}
+  .ph-kit .rep-seg{flex:1 1 100%; display:flex; gap:6px; border:0; border-radius:0; overflow:visible}
+  .ph-kit .rep-seg button{flex:1 1 0; min-width:0; min-height:44px; padding:9px 10px; border:1px solid var(--line-2); border-radius:999px; background:var(--paper);
+    font-family:var(--body); font-size:13px; font-weight:700; color:var(--ink); touch-action:manipulation; -webkit-tap-highlight-color:transparent}
+  .ph-kit .rep-seg button:first-child{border-left:1px solid var(--line-2)}
+  .ph-kit .rep-seg button.on{color:#F4E9D8; background:var(--walnut); border-color:var(--walnut)}
+  .ph-kit .rep-seg button:active{transform:scale(.97)}
+
+  /* ---- Quotations rows (list page + customer page): Home "Recent activity" type ---- */
+  .ph-kit .listwrap{margin-top:10px; border-radius:16px; overflow:hidden}
+  .ph-kit .bulkbar{margin:10px 0 4px; padding:6px 6px 6px 14px; border-radius:14px; font-size:13px}
+  /* select box: a 20px rounded square drawn inside a 32px tap area (the transparent border is the extra reach) */
+  .ph-kit .selcol input[type="checkbox"]{appearance:none; -webkit-appearance:none; box-sizing:border-box; flex:0 0 auto; width:32px; height:32px; margin:-5px 2px -5px -6px; padding:1.5px;
+    border:6px solid transparent; border-radius:14px; vertical-align:middle; cursor:pointer;
+    background:linear-gradient(var(--paper),var(--paper)) content-box, linear-gradient(var(--line-2),var(--line-2)) padding-box}
+  .ph-kit .selcol input[type="checkbox"]:checked{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.4l2.9 2.9 6-6.6' fill='none' stroke='%23F4E9D8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 13px no-repeat padding-box, linear-gradient(var(--walnut),var(--walnut)) padding-box}
+  .ph-kit .selcol input[type="checkbox"]:focus-visible{outline:2px solid var(--ochre); outline-offset:-4px}
+  .ph-kit .badge{padding:3px 8px; font-size:9.5px}
+  .ph-kit .lrow:not(.sup-lrow){grid-template-columns:minmax(0,1fr) auto; gap:2px 10px; padding:12px 14px; font-size:13px}
+  .ph-kit .lrow:not(.sup-lrow) > .nm{grid-column:1; grid-row:1; font-family:var(--body); font-size:14px; font-weight:700; line-height:1.3; overflow-wrap:anywhere}
+  .ph-kit .lrow:not(.sup-lrow) > .col-status{grid-column:2; grid-row:1; align-self:start}
+  .ph-kit .lrow:not(.sup-lrow) > .id{grid-column:1; grid-row:2; font-family:var(--body); font-size:11.5px; font-weight:600; color:var(--ink-soft)}
+  .ph-kit .lrow:not(.sup-lrow) > .mut.col-date{grid-column:2; grid-row:2; justify-self:end; font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .lrow:not(.sup-lrow) > .mut.col-party{grid-column:1 / -1; grid-row:3; font-family:var(--body); font-size:11.5px; line-height:1.45; color:var(--ink-soft)}
+  .ph-kit .lrow:not(.sup-lrow) > .col-amt{grid-column:1 / -1; grid-row:4; display:flex; flex-wrap:wrap; align-items:baseline; gap:0 10px; margin-top:8px; padding-top:8px; border-top:1px dashed var(--line)}
+  .ph-kit .lrow .col-amt > .amt{font-size:15px; font-weight:700; color:var(--ink)}
+  .ph-kit .lrow .col-amt > .mut{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .lrow .col-amt > .acts{flex:1 1 100%; display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
+  .ph-kit .lrow .col-amt > .acts .btn{flex:1 1 calc(33.333% - 6px); min-width:0; min-height:44px; padding:8px 6px; border-radius:999px; font-size:12.5px; text-align:center}
+
+  /* ---- Customers cards: Home list items; actions are 44px pills, two per line ---- */
+  .ph-kit .rowbtns > .db-seg.sm{flex:1 1 100%}
+  .ph-kit .custgrid{gap:10px; margin-top:10px}
+  .ph-kit .custcard{padding:14px; border-radius:16px}
+  .ph-kit .custcard:hover{transform:none; box-shadow:var(--shadow-card)}
+  .ph-kit .custcard:active{background:rgba(51,36,26,.03)}
+  .ph-kit .custcard h3{font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0; line-height:1.3; overflow-wrap:anywhere}
+  .ph-kit .custcard .ph{margin-top:1px; font-family:var(--body); font-size:12px; font-weight:600}
+  .ph-kit .custcard .meta2{margin-top:6px; font-size:11.5px; line-height:1.55; color:var(--ink-soft)}
+  .ph-kit .custcard .links{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin-top:10px}
+  .ph-kit .custcard .links .btn{min-width:0; padding:8px 10px; border-radius:999px; font-size:13px}
+  .ph-kit .custcard .links .btn:only-child{grid-column:1 / -1}
+
+  /* ---- Customer page ---- */
+  .ph-kit .cd-screen > .btn.sm{padding:8px 16px}
+  .ph-kit .cd-screen > .custcard{padding:16px; border-radius:18px}
+  .ph-kit .cd-screen > .custcard h3{font-family:var(--serif); font-weight:600; letter-spacing:-.02em; line-height:1.15}
+  .ph-kit .cd-screen > .custcard .links{flex:1 1 100%; grid-template-columns:repeat(3,minmax(0,1fr))}
+  .ph-kit .cd-screen > .custcard .links .btn{padding:6px 8px; font-size:12.5px; line-height:1.15; white-space:normal}
+  .ph-kit .cd-screen > .custcard .links .btn.primary{order:-1; grid-column:1 / -1; min-height:50px; border-radius:14px; font-size:15px}
+  .ph-kit .stat{padding:12px 14px; border-radius:16px}
+  .ph-kit .stat:hover{transform:none; box-shadow:var(--shadow-card)}
+  .ph-kit .stat:hover::before{opacity:0}
+  .ph-kit .stat .k{font-family:var(--body); font-size:10px; letter-spacing:.08em; color:var(--ink-soft)}
+  .ph-kit .stat .v{margin-top:4px; font-family:var(--mono); font-size:15px; font-weight:700; line-height:1.2; overflow-wrap:anywhere}
+  .ph-kit .cs-runbal{font-family:var(--body); font-size:11px; color:var(--ink-soft)}
+  .ph-kit .cs-sum{gap:6px 14px; margin-top:0; padding:12px 14px; font-size:12px}
+  .ph-kit .cs-sum .cs-due{padding:6px 12px; font-size:12.5px; color:#F4E9D8}
+  .ph-kit .cd-stmt-pdf{flex:1 1 100%}
+  .ph-kit .cd-stmt-pdf .btn{flex:1 1 0}
+
+  /* ---- Suppliers (Buys): header = kit title ---- */
+  .ph-kit .buys-top{padding:0; margin:2px 0 12px}
+  .ph-kit .buys-h1{font-size:26px; letter-spacing:-.02em; display:flex; align-items:center; gap:10px; text-wrap:balance}
+  .ph-kit .buys-h1 .phone-ico{width:36px; height:36px; border-radius:11px; color:var(--ochre-deep); background:rgba(198,143,49,.16)}
+  .ph-kit .buys-sub{margin-top:4px; font-family:var(--body); font-size:12.5px; color:var(--ink-soft)}
+  .ph-kit .buys-kpis{grid-template-columns:1fr 1fr; gap:8px; padding:0; margin-bottom:12px}
+  .ph-kit .buys-kpi{padding:12px 14px; border-radius:16px; min-width:0}
+  .ph-kit .buys-kpi.head{grid-column:1 / -1; padding:14px; border-radius:18px}
+  .ph-kit .buys-kpi-label{margin-bottom:4px; font-family:var(--body); font-size:10px; letter-spacing:.08em}
+  .ph-kit .buys-kpi-val{margin-bottom:2px; font-size:16px; overflow-wrap:anywhere}
+  .ph-kit .buys-kpi.head .buys-kpi-val{font-size:28px}
+  .ph-kit .buys-kpi-word{font-family:var(--body); font-size:11.5px}
+  .ph-kit .buys-bar{padding:0; gap:8px; margin-bottom:12px}
+  .ph-kit .buys-bar select,.ph-kit .buys-search{flex:1 1 100%; min-height:48px; padding:10px 14px; font-size:16px; border-radius:14px; background:var(--paper)}
+  .ph-kit .buys-bar select:focus,.ph-kit .buys-search:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}
+  .ph-kit .buys-check{flex:1 1 calc(50% - 4px); justify-content:center; min-height:44px; padding:0 14px; border:1px solid var(--line-2); border-radius:999px;
+    background:var(--paper); font-size:13px; font-weight:600; color:var(--ink)}
+  .ph-kit .buys-check input{width:18px; height:18px; accent-color:var(--walnut)}
+  .ph-kit .buys-bar .btn{flex:1 1 calc(50% - 4px)}
+  .ph-kit .buys-card{border-radius:16px}
+  .ph-kit .buys-empty{padding:28px 16px; font-size:13px}
+  .ph-kit .buys-link{display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 12px; border:1px solid var(--line-2); border-radius:999px; background:var(--paper);
+    font-family:var(--body); font-size:12.5px; letter-spacing:0; text-transform:none; color:var(--ink);
+    touch-action:manipulation; -webkit-tap-highlight-color:transparent}
+  .ph-kit .buys-link.danger{color:var(--danger)}
+  .ph-kit .buys-link.mute{color:var(--ink-soft)}
+  .ph-kit .buys-link:active{transform:scale(.97)}
+  .ph-kit .buys-ov-row{min-height:60px; padding:12px 14px; gap:6px 10px}
+  .ph-kit .buys-ov-name strong{font-family:var(--body); font-size:14px; font-weight:700}
+  .ph-kit .buys-ov-name em{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .buys-ov-row .num{font-size:13px; font-weight:700}
+  .ph-kit .buys-ov-detail{padding:0 14px 14px}
+  .ph-kit .buys-ov-paidline span{font-size:12px}
+  .ph-kit .buys-ov-froms li{padding:10px 0 10px 12px}
+  .ph-kit .buys-ov-froms strong{font-family:var(--body); font-size:13.5px; font-weight:700}
+  .ph-kit .buys-ov-froms em{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .buys-ov-from-nums{font-size:12px}
+  .ph-kit .buys-ov-acts{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px}
+  .ph-kit .buys-reg-row{gap:8px; padding:14px}
+  .ph-kit .buys-reg-main{gap:10px}
+  .ph-kit .buys-reg-who{gap:2px}
+  .ph-kit .buys-reg-date,.ph-kit .buys-reg-bill,.ph-kit .buys-reg-meta{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .buys-reg-who strong{font-family:var(--body); font-size:14px; font-weight:700; overflow-wrap:anywhere}
+  .ph-kit .buys-reg-from{font-size:12.5px}
+  .ph-kit .buys-reg-bal b{font-size:15px}
+  .ph-kit .buys-side{padding:10px 12px; border-radius:14px}
+  .ph-kit .buys-side-h b{font-size:14px}
+  .ph-kit .buys-side-lines{font-size:12px}
+  .ph-kit .buys-reg-acts{display:grid; grid-template-columns:minmax(0,1.4fr) 1fr 1fr; gap:6px}
+  .ph-kit .buys-remind-pick{display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 10px; border:1px solid var(--line-2); border-radius:999px; background:var(--paper);
+    font-family:var(--body); font-size:12.5px; letter-spacing:0; text-transform:none}
+  .ph-kit .buys-reg-foot{padding:12px 14px; gap:6px 14px; font-size:12.5px}
+  .ph-kit .buys-entry{padding:14px}
+  .ph-kit .buys-entry-head span{font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0; text-transform:none; color:var(--ink)}
+  .ph-kit .buys-entry-sec h4,.ph-kit .buys-entry-grid label{font-family:var(--body); letter-spacing:.06em; color:var(--ink-soft)}
+  .ph-kit .buys-entry-grid{gap:10px}
+  .ph-kit .buys-entry-grid input,.ph-kit .buys-entry-grid select,.ph-kit .buys-entry-grid .datefield-txt{min-height:48px; padding:10px 14px; font-size:16px; border-radius:14px; background:var(--paper)}
+  .ph-kit .buys-entry-grid input:read-only{background:rgba(51,36,26,.04)}
+  .ph-kit .buys-entry-grid input:focus,.ph-kit .buys-entry-grid select:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}
+  .ph-kit .buys-entry-grid .datefield-cal{min-width:44px; min-height:44px; font-size:18px; opacity:.8}
+  .ph-kit .buys-entry-actions .btn{flex:1 1 100%; min-height:50px; border-radius:14px; font-size:15px}
+  /* payments table folds to one card per payment, no sideways scroll */
+  .ph-kit .buys-scroll{overflow:visible}
+  .ph-kit .buys-grid,.ph-kit .buys-grid tbody{display:block; width:100%}
+  .ph-kit .buys-grid thead{display:none}
+  .ph-kit .buys-grid tbody tr{display:grid; grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"name tot" "from date" "inv inv" "cash bank" "note note" "acts acts"; gap:2px 10px; padding:12px 14px; border-bottom:1px solid var(--line)}
+  .ph-kit .buys-grid tbody tr:last-child{border-bottom:0}
+  .ph-kit .buys-grid tbody tr:hover td{background:transparent}
+  .ph-kit .buys-grid td{display:block; padding:0; border:0; white-space:normal; line-height:1.35; text-align:left}
+  .ph-kit .buys-grid td:nth-child(1){grid-area:date; justify-self:end; font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .buys-grid td:nth-child(2){grid-area:name; font-family:var(--body); font-size:14px; font-weight:700}
+  .ph-kit .buys-grid td:nth-child(3){grid-area:from; font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .buys-grid td:nth-child(4){grid-area:inv; font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .buys-grid td:nth-child(4)::before{content:"Invoice: "}
+  .ph-kit .buys-grid td:nth-child(5){grid-area:cash; font-size:12px}
+  .ph-kit .buys-grid td:nth-child(6){grid-area:bank; justify-self:end; font-size:12px}
+  .ph-kit .buys-grid td:nth-child(5)::before{content:"Cash "; font-family:var(--body); color:var(--ink-soft)}
+  .ph-kit .buys-grid td:nth-child(6)::before{content:"Bank "; font-family:var(--body); color:var(--ink-soft)}
+  .ph-kit .buys-grid td:nth-child(7){grid-area:tot; font-size:13px; font-weight:700; text-align:right}
+  .ph-kit .buys-grid td:nth-child(8){grid-area:note; max-width:none; font-family:var(--body); font-size:11.5px}
+  .ph-kit .buys-grid td:nth-child(9){grid-area:acts; width:auto; display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px}
+  .ph-kit .buys-grid .acts .buys-link + .buys-link{margin-left:0}
+  .ph-kit .buys-grid tbody tr:has(> td[colspan]){display:block; padding:0; border-bottom:0}
+  .ph-kit .buys-grid td[colspan]{display:block; text-align:center}
+
+  /* ---- Website quotations ---- */
+  .ph-kit .wq-head{gap:10px; margin-bottom:12px}
+  .ph-kit .wq-title{font-size:26px; letter-spacing:-.02em; display:flex; align-items:center; gap:10px; text-wrap:balance}
+  .ph-kit .wq-title .phone-ico{width:36px; height:36px; border-radius:11px; color:var(--ochre-deep); background:rgba(198,143,49,.16)}
+  .ph-kit .wq-sub{margin-top:4px; font-size:12.5px; color:var(--ink-soft)}
+  .ph-kit .wq-kpis{gap:8px}
+  .ph-kit .wq-kpi{padding:12px 14px; border-radius:16px; box-shadow:var(--shadow-card)}
+  .ph-kit .wq-kpi span{font-family:var(--body); color:var(--ink-soft)}
+  .ph-kit .wq-kpi strong{font-size:20px}
+  .ph-kit .wq-toolbar{gap:8px}
+  .ph-kit .wq-search{flex:1 1 100%; min-height:48px; padding:10px 14px; font-size:16px; border-radius:14px; background:var(--paper)}
+  .ph-kit .wq-search:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}
+  .ph-kit .wq-list{gap:10px}
+  .ph-kit .wq-card{border-radius:16px; box-shadow:var(--shadow-card)}
+  .ph-kit .wq-card-main{min-height:64px; padding:12px 14px; touch-action:manipulation; -webkit-tap-highlight-color:transparent}
+  .ph-kit .wq-card-main:active{background:rgba(51,36,26,.04)}
+  .ph-kit .wq-card-top strong{font-family:var(--body); font-size:14px; overflow-wrap:anywhere}
+  .ph-kit .wq-status{padding:3px 8px; font-family:var(--body)}
+  .ph-kit .wq-card-meta{gap:2px 10px; margin-top:4px; font-family:var(--body); font-size:11.5px}
+  .ph-kit .wq-detail{padding:0 14px 14px; overflow:visible}
+  .ph-kit .wq-sec-title{font-family:var(--body); font-size:12.5px}
+  .ph-kit .wq-table{min-width:0; font-size:12px}
+  .ph-kit .wq-table th,.ph-kit .wq-table td{padding:6px 4px}
+  .ph-kit .wq-actions{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .ph-kit .wq-actions .btn{min-height:48px; border-radius:14px}
+  .ph-kit .wq-actions .btn:only-child{grid-column:1 / -1}
+
+  /* ---- From paper / From Excel: line cards = Home cards, Home fields ---- */
+  .ph-kit.paper-quote{max-width:none}
+  .ph-kit .hint{margin:10px 2px 0; font-size:12px; text-align:left; color:var(--ink-soft)}
+  .ph-kit .paper-quote-pic{border-radius:14px}
+  .ph-kit .paper-lines{gap:10px; margin:12px 0}
+  .ph-kit .paper-line{padding:12px 14px; border-radius:16px; border-color:var(--line-2); box-shadow:var(--shadow-card)}
+  .ph-kit .paper-keep{min-height:44px; margin:0; font-size:13.5px; font-weight:700; color:var(--ink)}
+  .ph-kit .paper-keep input{width:22px; height:22px; accent-color:var(--walnut)}
+  .ph-kit .paper-dims{gap:8px}
+  .ph-kit .paper-dims .modal-field{margin-top:6px}
+  .ph-kit .paper-dims .modal-field input:not([type=checkbox]):not([type=radio]){padding:10px 8px; text-align:center}
+  .ph-kit .paper-dims .btn{align-self:end; min-height:48px; margin-bottom:0; border-radius:14px}
+  .ph-kit .paper-crop-h{width:36px; height:36px}
+  .ph-kit .paper-crop-h.nw{left:-14px; top:-14px}
+  .ph-kit .paper-crop-h.ne{right:-14px; top:-14px}
+  .ph-kit .paper-crop-h.sw{left:-14px; bottom:-14px}
+  .ph-kit .paper-crop-h.se{right:-14px; bottom:-14px}
+
+  /* ---- Contacts report: screen only, Print keeps the A4 table ---- */
+  .ph-kit .rep-controls{gap:8px; margin-bottom:12px}
+  .ph-kit .rep-range{gap:8px; align-items:stretch}
+  .ph-kit .rep-range > label{flex:1 1 100%; font-family:var(--body); letter-spacing:.06em; color:var(--ink-soft)}
+  .ph-kit .rep-range input{min-height:48px; padding:10px 14px; font-size:16px; border-radius:14px; background:var(--paper)}
+  .ph-kit .rep-range input:focus{outline:none; border-color:var(--ochre); box-shadow:var(--ring)}
+  .ph-kit .rep-doc{padding:14px; border-radius:18px; overflow:visible; box-shadow:var(--shadow-card)}
+  .ph-kit .rep-head{flex-wrap:wrap; gap:4px 12px; margin-bottom:12px}
+  .ph-kit .rep-brand h1{font-size:17px}
+  .ph-kit .rep-meta{text-align:left}
+  .ph-kit .rep-summary.cols3{grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px}
+  .ph-kit .rep-summary > div{padding:8px 4px; border-radius:12px}
+  .ph-kit .rep-table{display:block; min-width:0}
+  .ph-kit .rep-table colgroup,.ph-kit .rep-table thead{display:none}
+  .ph-kit .rep-table tbody{display:block; overflow:hidden; border:1px solid var(--line-2); border-radius:16px; background:var(--panel-2)}
+  .ph-kit .rep-table tbody tr{display:grid; grid-template-columns:32px minmax(0,1fr); gap:2px 10px; padding:12px; background:transparent; border-bottom:1px solid var(--line)}
+  .ph-kit .rep-table tbody tr:last-child{border-bottom:0}
+  .ph-kit .rep-table td{grid-column:2; display:block; padding:0; border:0; overflow:visible; text-align:left; font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .rep-table td:first-child{grid-column:1; grid-row:1 / span 4; width:32px; height:32px; display:grid; place-items:center; border-radius:10px;
+    font-size:11px; font-weight:700; color:var(--walnut); background:rgba(51,36,26,.06)}
+  .ph-kit .rep-table td:nth-child(2){font-size:13.5px; font-weight:700; color:var(--ink)}
+  .ph-kit .rep-table.ct-cust td:nth-child(4)::before{content:"Carpenter: "}
+  .ph-kit .rep-table.ct-cust td:nth-child(5)::before{content:"Carpenter phone: "}
+  .ph-kit .rep-table.ct-carp td:nth-child(4)::before{content:"Parties: "}
+  .ph-kit .rep-table.ct-carp td:nth-child(5)::before{content:"Customers: "}
+  .ph-kit .rep-empty{padding:20px 0}
+  .ph-kit .rep-foot{text-align:left; font-size:11.5px; color:var(--ink-soft)}
+
+  /* contact names get a 34px tap area without moving the text */
+  .ph-kit .rep-table td a{display:inline-block; padding:8px 0; margin:-8px 0}
+
+  /* ==== people & records screens ==== */
+  /* shared: section headings, details toggles, split amount cells, two-column rows, report filters */
+  .ph-kit .dash-section{flex-wrap:wrap; align-items:center; gap:4px 8px; margin-bottom:8px; font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0; text-transform:none; color:var(--ink)}
+  .ph-kit .dash-section span:not(.phone-ico){font-family:var(--body); font-size:12px; font-weight:400; color:var(--ink-soft)}
+  .ph-kit .dash-section .phone-ico{width:28px; height:28px; border-radius:9px; color:var(--walnut); background:rgba(51,36,26,.06)}
+  .ph-kit .sqltoggle>summary{min-height:44px; font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0; text-transform:none; color:var(--ink)}
+  .ph-kit .sqltoggle>summary::before{font-size:11px; color:var(--ink-soft)}
+  .ph-kit .cs-card{padding:0}
+  .ph-kit .stmt > .cs-amt{display:contents}
+  .ph-kit .stmt > .cs-amt > .stmt-amt{grid-area:amt; text-align:right}
+  .ph-kit .stmt > .cs-amt > .cs-runbal{grid-area:acts; justify-self:end; margin-top:0}
+  .ph-kit .stmt > .cs-amt > .btn{grid-area:acts; justify-self:end}
+  .ph-kit .stmt > .cs-amt > div:not(.stmt-amt){grid-column:1 / -1; grid-row:3; display:flex; gap:6px; flex-wrap:wrap}
+  .ph-kit .stmt > .cs-amt > div > .btn{flex:1 1 auto}
+  .ph-kit .exprow{padding:12px 14px}
+  .ph-kit .exprow .expnote{font-size:13.5px; font-weight:700}
+  .ph-kit .exprow .expnote small{font-family:var(--body); font-size:11.5px; font-weight:400; color:var(--ink-soft)}
+  .ph-kit .rep-range > label > input,.ph-kit .rep-range > label > select{flex:0 0 auto}
+  .ph-kit .rep-range select{min-height:48px; padding:10px 14px; font-size:16px; border-radius:14px; background:var(--paper)}
+  .ph-kit .rep-presets{gap:6px}
+  .ph-kit .rep-presets .btn.sm{flex:1 1 auto; padding:9px 14px; border-radius:999px; font-family:var(--body); font-size:13px; font-weight:700;
+    color:var(--ink); background:var(--paper); border-color:var(--line-2); box-shadow:none}
+  .ph-kit .rep-presets .btn.sm.primary{color:#F4E9D8; background:var(--walnut); border-color:var(--walnut)}
+  .ph-kit .cd-stmt-head > span:not(.phone-ico):not(.cd-stmt-pdf){flex:1 1 0; min-width:0}
+
+  /* ---- Rent: tenant cards ---- */
+  .ph-kit .rent-hero{gap:12px}
+  .ph-kit .rent-pick{padding:14px; border-radius:18px}
+  .ph-kit .rent-pick:hover{border-color:var(--line-2)}
+  .ph-kit .rent-pick-name{font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0; text-transform:none; color:var(--ink)}
+  .ph-kit .rent-pick-phone{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .rent-pick-k{font-family:var(--body); font-size:10.5px; letter-spacing:.06em; color:var(--ink-soft)}
+  .ph-kit .rent-pick-v{font-size:26px; font-weight:700; margin-top:2px}
+  .ph-kit .rent-pick-sub{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .rent-pick-tools,.ph-kit .rent-sec-tools{gap:8px}
+  .ph-kit .rent-ico{min-height:44px; padding:0 16px; border-radius:999px; font-family:var(--body); font-size:13px; letter-spacing:0; text-transform:none;
+    background:var(--paper); touch-action:manipulation; -webkit-tap-highlight-color:transparent}
+  .ph-kit .rent-ico:active{transform:scale(.97)}
+  /* ---- Rent: one tenant, light head row instead of the walnut bar ---- */
+  .ph-kit .rent-section{margin-top:12px; border-radius:18px}
+  .ph-kit .rent-section > .pc-head{padding:12px 14px; gap:8px; font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0; text-transform:none;
+    color:var(--ink); background:transparent; border-bottom:1px solid var(--line)}
+  .ph-kit .rent-section > .pc-head .phone-ico{width:28px; height:28px; border-radius:9px; color:var(--walnut); background:rgba(51,36,26,.06)}
+  .ph-kit .rent-section > .pc-head .rent-sec-tools{flex:1 1 100%; margin-left:0; justify-content:flex-start}
+  .ph-kit .rent-section > .pc-head .rent-ico{color:var(--ink); background:var(--paper); border-color:var(--line-2)}
+  .ph-kit .rent-section > .pc-head .rent-ico.merge{color:color-mix(in srgb, var(--ochre-deep) 80%, var(--ink))}
+  .ph-kit .rent-body{padding:14px}
+  .ph-kit .rent-who{margin:0 0 12px}
+  .ph-kit .rent-who .ph{font-family:var(--body); font-size:13.5px; font-weight:700; color:var(--ink)}
+  .ph-kit .rent-due{padding:14px; border-radius:16px}
+  .ph-kit .rent-due-k{font-family:var(--body); font-size:10.5px; letter-spacing:.06em}
+  .ph-kit .rent-due-s{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .rent-year{padding:12px; border-radius:16px; background:var(--panel-2)}
+  .ph-kit .rent-year-bar{gap:10px}
+  .ph-kit .rent-year-top{flex:1 1 100%; gap:8px}
+  .ph-kit .rent-year-top b{flex:1 1 auto; font-size:18px}
+  .ph-kit .rent-year-top .btn.sm{min-width:44px}
+  .ph-kit .rent-year-amt{flex:1 1 100%}
+  .ph-kit .rent-year-amt .modal-field{flex:1 1 auto; width:auto; margin-top:0}
+  .ph-kit .rent-year-amt .btn{min-height:48px; border-radius:14px}
+  .ph-kit .rent-mos{border-radius:16px; border-color:var(--line-2)}
+  .ph-kit .rent-mo{min-height:52px; padding:6px 8px 6px 12px}
+  .ph-kit .rent-mo-name{font-family:var(--body); font-size:13.5px; font-weight:700; letter-spacing:0}
+  .ph-kit .rent-mo-tick{flex:0 0 32px; width:32px; height:32px; border-radius:10px}
+  .ph-kit .rent-act{padding:14px; border-radius:16px; background:var(--panel-2)}
+  .ph-kit .rent-act-h b{font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0}
+  .ph-kit .rent-act-h p{font-size:12px; color:var(--ink-soft)}
+  .ph-kit .rent-act-n{flex:0 0 32px; width:32px; height:32px; border-radius:10px}
+  .ph-kit .rent-chips{gap:8px}
+  .ph-kit .rent-chip{flex:1 1 auto; padding:9px 14px; font-family:var(--body); font-size:13px; letter-spacing:0; text-align:center;
+    touch-action:manipulation; -webkit-tap-highlight-color:transparent}
+  .ph-kit .rent-chip:active{transform:scale(.97)}
+  .ph-kit .rent-of{font-family:var(--body); font-size:12px; color:var(--ink-soft)}
+  .ph-kit .rent-qrow{min-height:52px; padding:10px 14px; border-radius:14px; border-color:var(--line-2); background:var(--paper)}
+  .ph-kit .rent-qrow > span:first-child{font-family:var(--body); font-size:13.5px; font-weight:700}
+  .ph-kit .rent-qrow small{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .rent-qgo{font-family:var(--body); font-size:12px; font-weight:700; letter-spacing:0; text-transform:none; color:color-mix(in srgb, var(--ochre-deep) 80%, var(--ink))}
+  .ph-kit .rent-form{padding:12px; border-radius:16px; background:var(--panel-2)}
+  .ph-kit .rent-hist-list{border-radius:16px; border-color:var(--line-2); background:var(--panel-2)}
+  .ph-kit .rent-hist-list button.stmt{border-bottom-color:var(--line)}
+  .ph-kit .stmt > .rent-hist-act{grid-column:2 / -1; grid-row:3; justify-self:end; font-family:var(--body); font-size:11.5px; letter-spacing:0; text-transform:none}
+
+  /* ---- Carpenters ---- */
+  .ph-kit .carp-tools{gap:8px}
+  .ph-kit .carp-tools > .db-seg{flex:1 1 100%}
+  .ph-kit .db-seg.carp-sort{margin-left:0}
+  .ph-kit .carp-tools > .btn{flex:1 1 40%; font-size:13px}
+  .ph-kit .carp-card-top{gap:12px}
+  .ph-kit .custcard h3.carp-name{font-family:var(--serif); font-size:26px; font-weight:600; letter-spacing:-.02em; line-height:1.15}
+  .ph-kit .carp-card-top:has(> .photo-field > .rowbtns){flex-wrap:wrap}
+  .ph-kit .carp-card-top > .photo-field:has(> .rowbtns){flex:1 1 100%; flex-direction:row; flex-wrap:wrap; align-items:center; gap:10px}
+  .ph-kit .carp-card-top > .photo-field > .rowbtns{flex:1 1 150px; width:auto; margin:0}
+  .ph-kit .carp-card-top:has(> .photo-field > .rowbtns) > .carp-who{flex:1 1 100%}
+  .ph-kit .carp-roster,.ph-kit .carp-roster tbody{display:block}
+  .ph-kit .carp-roster thead{display:none}
+  .ph-kit .carp-roster tbody tr{display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:baseline; gap:2px 12px; padding:12px 14px; border-bottom:1px solid var(--line)}
+  .ph-kit .carp-roster tbody tr:last-child{border-bottom:0}
+  .ph-kit .carp-roster td{display:block; min-width:0; padding:0; border:0}
+  .ph-kit .carp-roster .col-phone,.ph-kit .carp-roster .col-last{display:none}
+  .ph-kit .carp-roster .nm{font-family:var(--body); font-size:13.5px; font-weight:700}
+  .ph-kit .carp-roster .ph,.ph-kit .carp-roster .mut{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .carp-roster .num,.ph-kit .carp-roster .paid,.ph-kit .carp-roster .pend{font-size:13px}
+  .ph-kit .carp-roster td.num::before,.ph-kit .carp-roster td.paid::before,.ph-kit .carp-roster td.pend::before{font-family:var(--body); font-size:11px; font-weight:600; color:var(--ink-soft)}
+  .ph-kit .roster-who td:first-child{grid-column:1; grid-row:1}
+  .ph-kit .roster-who td.paid{grid-column:2; grid-row:1}
+  .ph-kit .roster-who td.num{grid-column:1; grid-row:2; text-align:left}
+  .ph-kit .roster-who td.pend{grid-column:2; grid-row:2}
+  .ph-kit .roster-who td.num::before{content:"Customers "}
+  .ph-kit .roster-who td.paid::before{content:"Paid "}
+  .ph-kit .roster-who td.pend::before{content:"Pending "}
+  .ph-kit .roster-cust td.num{grid-column:2; grid-row:1}
+  .ph-kit .roster-cust td.num::before{content:"Quotes "}
+  .ph-kit .roster-quotes td:nth-child(2){grid-column:1; grid-row:1}
+  .ph-kit .roster-quotes td.num{grid-column:2; grid-row:1}
+  .ph-kit .roster-quotes td.mut{grid-column:1; grid-row:2}
+  .ph-kit .roster-quotes td.paid{grid-column:2; grid-row:2}
+  .ph-kit .roster-quotes td:nth-child(3):not(.num){grid-column:1 / -1; grid-row:3; font-size:12px; color:var(--ink-soft)}
+  .ph-kit .roster-quotes td.num::before{content:"Bill "}
+  .ph-kit .roster-quotes td.paid::before{content:"Paid "}
+  .ph-kit .stmt-to .stmt-link{display:inline-block; padding:13px 0; margin:-13px 0; font-weight:700}
+
+  /* ---- Attendance: pay panel ---- */
+  .ph-kit .att-pp{padding:14px}
+  .ph-kit .att-pp .acct-overall-h{margin-bottom:10px; font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0; text-transform:none; color:var(--ink)}
+  .ph-kit .att-pp-sum{font-family:var(--body); font-size:12.5px; color:var(--ink-soft)}
+  .ph-kit .att-pp-sub{font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .att-debt-chip{padding:6px 12px; font-family:var(--body); font-size:12px}
+  .ph-kit .att-pp .rec-grid > label:last-child{grid-column:1 / -1}
+  .ph-kit .att-paidby{gap:8px}
+  .ph-kit .att-paidby > .db-seg{flex:1 1 100%}
+  .ph-kit .att-paidby-lbl{font-family:var(--body); font-size:11px; letter-spacing:.06em; color:var(--ink-soft)}
+  .ph-kit .att-give-where{flex-basis:100%; margin-left:0; font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .att-pp-debtopt{min-height:44px; font-size:13px; color:var(--ink-soft)}
+  .ph-kit .att-pp-debtopt input{width:20px; height:20px}
+  .ph-kit .att-pp-dedlink{display:flex; align-items:center; min-height:44px; font-size:13px; color:var(--ochre-deep)}
+  .ph-kit .att-pp-hint{font-size:12.5px; color:var(--ink-soft)}
+  .ph-kit .att-give{padding:12px; border-radius:16px}
+  .ph-kit .att-give-row{gap:0 10px}
+  .ph-kit .att-give-row .modal-field{flex:1 1 100%; min-width:0}
+  .ph-kit .att-give-preview{font-family:var(--body); font-size:12.5px}
+  /* week bar */
+  .ph-kit .att-nav{gap:8px; margin-top:14px}
+  .ph-kit .att-nav > span:not([class]){display:none}
+  .ph-kit .att-nav > .btn{flex:1 1 auto}
+  .ph-kit .att-week{font-family:var(--body); font-size:15px; color:var(--ink)}
+  .ph-kit .att-payday-sel{flex:1 1 100%; justify-content:space-between; font-family:var(--body); font-size:11px; letter-spacing:.06em; color:var(--ink-soft)}
+  .ph-kit .att-payday-sel select{min-height:44px; padding:8px 12px; border-radius:14px; background:var(--paper)}
+  /* register: light head, one card per worker */
+  .ph-kit .tsheet{margin-top:14px; border-radius:18px; border-color:var(--line-2); background:var(--panel-2); box-shadow:var(--shadow-card)}
+  .ph-kit .tsheet-head{flex-wrap:wrap; gap:2px 8px; padding:14px 14px 10px; font-family:var(--body); font-size:15px; letter-spacing:0;
+    color:var(--ink); background:transparent; border-bottom:1px solid var(--line)}
+  .ph-kit .tsheet-head small{flex-basis:100%; font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .tsheet-body{padding:0}
+  .ph-kit .t-empty{padding:28px 16px; font-size:13px; color:var(--ink-soft)}
+  .ph-kit .att-table{display:block; min-width:0; font-size:13px}
+  .ph-kit .att-table thead{display:none}
+  .ph-kit .att-table tbody{display:block}
+  .ph-kit .att-table tbody tr{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px 2px; padding:12px; border-bottom:1px solid var(--line)}
+  .ph-kit .att-table tbody tr:last-child{border-bottom:0}
+  .ph-kit .att-table td{display:block; min-width:0; padding:0; border:0}
+  .ph-kit .att-table td:first-child{grid-column:1 / 7; grid-row:1; align-self:center; position:static; background:transparent; box-shadow:none}
+  .ph-kit .att-name{display:inline-flex; align-items:center; min-height:44px; font-family:var(--body); font-size:14px}
+  .ph-kit .att-name .um-caret{display:inline-block; opacity:1; color:var(--ink-soft)}
+  .ph-kit .att-rate{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .att-table td.att-acts{grid-column:7; grid-row:1; justify-self:end; align-self:center}
+  .ph-kit .att-table td.att-day{grid-row:2; padding:0; text-align:center; border-radius:10px}
+  .ph-kit .att-table td.att-day::before{display:block; margin-bottom:3px; font-family:var(--body); font-size:10px; font-weight:700; color:var(--ink-soft)}
+  .ph-kit .att-table td:nth-child(2)::before{content:"Mon"}
+  .ph-kit .att-table td:nth-child(3)::before{content:"Tue"}
+  .ph-kit .att-table td:nth-child(4)::before{content:"Wed"}
+  .ph-kit .att-table td:nth-child(5)::before{content:"Thu"}
+  .ph-kit .att-table td:nth-child(6)::before{content:"Fri"}
+  .ph-kit .att-table td:nth-child(7)::before{content:"Sat"}
+  .ph-kit .att-table td:nth-child(8)::before{content:"Sun"}
+  .ph-kit .att-table .att-cell{width:100%; max-width:44px; height:44px; border-radius:12px}
+  .ph-kit .att-table td.amt{grid-row:3; min-width:0; padding:8px 0 0; text-align:left; font-size:13px}
+  .ph-kit .att-table td.amt::before{display:block; font-family:var(--body); font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft)}
+  .ph-kit .att-table td:nth-child(9){grid-column:1 / 3}
+  .ph-kit .att-table td:nth-child(10){grid-column:3 / 5}
+  .ph-kit .att-table td:nth-child(11){grid-column:5 / 8}
+  .ph-kit .att-table td:nth-child(12){grid-row:4; grid-column:1 / 5}
+  .ph-kit .att-table td:nth-child(13){grid-row:4; grid-column:5 / 8}
+  .ph-kit .att-table td:nth-child(9)::before{content:"Days"}
+  .ph-kit .att-table td:nth-child(10)::before{content:"Earned ₹"}
+  .ph-kit .att-table td:nth-child(11)::before{content:"Paid ₹"}
+  .ph-kit .att-table td:nth-child(12)::before{content:"Week closing"}
+  .ph-kit .att-table td:nth-child(13)::before{content:"Advance"}
+  .ph-kit .att-table td.amt:empty::after{content:"—"; color:var(--ink-soft)}
+  .ph-kit .att-bal{min-height:32px; text-align:left; font-size:13px; white-space:normal}
+  .ph-kit .att-carry{white-space:normal}
+  .ph-kit .att-table tbody tr:has(> td.att-acct-cell){display:block; padding:0}
+  .ph-kit .att-card{position:static; max-width:none; border-radius:16px}
+  .ph-kit .att-hero-main{min-width:0}
+  .ph-kit .att-hero-k{font-family:var(--body); font-size:11px; letter-spacing:.06em; color:var(--ink-soft)}
+  .ph-kit .att-hero-sub{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .att-hero-acts{flex:1 1 100%}
+  .ph-kit .att-hero-acts .btn{flex:1 1 auto}
+  .ph-kit .att-card .pbd-lbl{padding:12px 0 4px; font-family:var(--body); font-size:11px; letter-spacing:.06em; color:var(--ink-soft)}
+  .ph-kit .att-hist-toggle{min-height:44px; flex-wrap:wrap; font-size:13px}
+  .ph-kit .att-hist-toggle .um-caret{display:inline-block; opacity:1; color:var(--ink-soft)}
+  .ph-kit .att-hist-week{font-family:var(--body); font-size:11px; color:var(--ink-soft)}
+
+  /* ---- Logs: rows fold into 3-line cards ---- */
+  .ph-kit .log-scroll{overflow-x:visible}
+  .ph-kit .log-table,.ph-kit .log-table tbody{display:block}
+  .ph-kit .log-table thead{display:none}
+  .ph-kit .log-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 12px; padding:12px 14px}
+  .ph-kit .log-row > .log-td{display:block; min-width:0; padding:0}
+  .ph-kit .log-row > .log-td:nth-child(4){grid-column:1; grid-row:1}
+  .ph-kit .log-row > .log-amt{grid-column:2; grid-row:1; font-size:13px}
+  .ph-kit .log-row > .log-td:nth-child(2){grid-column:1; grid-row:2}
+  .ph-kit .log-row > .log-td:nth-child(3){grid-column:2; grid-row:2; justify-self:end}
+  .ph-kit .log-row > .log-td:nth-child(1){grid-column:1; grid-row:3}
+  .ph-kit .log-row > .log-mode{grid-column:2; grid-row:3; text-align:right}
+  .ph-kit .log-row > .log-td[colspan="6"]{grid-column:1 / -1; grid-row:1}
+  .ph-kit .log-what{font-family:var(--body); font-size:13.5px; font-weight:700}
+  .ph-kit .log-sub,.ph-kit .log-tap{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .log-who,.ph-kit .log-role{display:inline; font-family:var(--body); font-size:12px}
+  .ph-kit .log-role{margin-left:6px; font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .log-when{display:flex; gap:6px; font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .log-mode{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .log-mode > div{display:inline; margin-left:6px}
+  .ph-kit .log-open{padding:4px 0 8px}
+  .ph-kit .log-meta{grid-template-columns:1fr 1fr}
+  .ph-kit .log-pre{border-radius:14px}
+
+  /* ---- Settings: light titles instead of walnut bars ---- */
+  .ph-kit .setbox{margin-top:12px; padding:14px; border-radius:18px}
+  .ph-kit .setbox > .pc-head.set-head{min-height:0; margin:0 0 4px; padding:0; border-radius:0; background:transparent;
+    font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0; text-transform:none; color:var(--ink)}
+  .ph-kit .setbox .note{font-size:12.5px; color:var(--ink-soft)}
+  .ph-kit .setbox label{margin:14px 0 0; font-family:var(--body); font-size:11px; letter-spacing:.06em; color:var(--ink-soft)}
+  .ph-kit .setbox input:not([type=checkbox]):not([type=radio]){margin-top:6px; min-height:48px; padding:10px 14px; border-radius:14px; background:var(--paper)}
+  .ph-kit .setbox .exprow{padding:12px 0}
+
+  /* ---- AI assistant ---- */
+  .ph-kit.ai-page{gap:12px; padding:0 0 8px}
+  .ph-kit .ai-page-head{flex-wrap:wrap}
+  .ph-kit .ai-page-title{display:flex; align-items:center; gap:10px; font-family:var(--serif); font-size:26px; font-weight:600; letter-spacing:-.02em; text-wrap:balance}
+  .ph-kit .ai-page-title .phone-ico{width:36px; height:36px; border-radius:11px; color:var(--ochre-deep); background:rgba(198,143,49,.16)}
+  .ph-kit .ai-page-sub{font-size:12.5px; color:var(--ink-soft)}
+  .ph-kit .ai-empty p{margin:6px 0 8px; font-family:var(--body); font-size:15px; font-weight:700; color:var(--ink)}
+  .ph-kit .ai-starters{gap:0; overflow:hidden; border:1px solid var(--line-2); border-radius:16px; background:var(--panel-2)}
+  .ph-kit .ai-starter{min-height:52px; padding:12px 14px; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent;
+    font-size:13px; font-weight:600; touch-action:manipulation; -webkit-tap-highlight-color:transparent}
+  .ph-kit .ai-starter:last-child{border-bottom:0}
+  .ph-kit .ai-starter:hover{transform:none; border-color:var(--line)}
+  .ph-kit .ai-starter:active{background:rgba(51,36,26,.05)}
+  .ph-kit .ai-bubble-role{font-size:10.5px; color:var(--ink-soft)}
+  .ph-kit .ai-bubble-body{font-size:14px}
+  .ph-kit .ai-bubble--user .ai-bubble-body{border-radius:18px 18px 6px 18px}
+  .ph-kit .ai-bubble--assistant .ai-bubble-body{border-radius:18px 18px 18px 6px}
+  .ph-kit .ai-composer{bottom:calc(64px + env(safe-area-inset-bottom, 0px)); gap:8px}
+  .ph-kit .ai-input{min-height:48px; padding:12px 14px; border-radius:14px; border-color:var(--line-2); background:var(--paper)}
+
+  /* ---- staff chat ---- */
+  .ph-kit.staff-chat{gap:12px; padding:0 0 8px}
+  .ph-kit .staff-chat-title{font-family:var(--serif); font-size:26px; font-weight:600; letter-spacing:-.02em}
+  .ph-kit .staff-chat-mark{width:36px; height:36px; border-radius:11px}
+  .ph-kit .staff-chat-sub{font-size:12.5px; color:var(--ink-soft)}
+  .ph-kit .staff-chat-who{font-size:10.5px; color:var(--ink-soft)}
+  .ph-kit .staff-chat-body{border-radius:18px 18px 18px 6px; font-size:14px}
+  .ph-kit .staff-chat-msg.mine .staff-chat-body{border-radius:18px 18px 6px 18px}
+  .ph-kit .staff-chat-form{bottom:calc(64px + env(safe-area-inset-bottom, 0px)); gap:8px}
+  .ph-kit .staff-chat-input{min-height:48px; padding:12px 14px; border-radius:14px; border-color:var(--line-2); background:var(--paper)}
+
+  /* ==== money screens ==== */
+  /* shared: two-up stat tiles, filter rows, day bands, wrapping notes, bank rows without row buttons, card-head meta, overview cards */
+  .ph-kit .dash-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px}
+  .ph-kit .dash-grid > .stat:last-child:nth-child(odd){grid-column:1 / -1}
+  .ph-kit .searchbar:focus-within{box-shadow:var(--ring)}
+  .ph-kit .stmt-filters .paysel{min-height:48px; padding:10px 14px; border-radius:14px; font-size:16px; background:var(--paper); box-shadow:none}
+  .ph-kit .stmt-filters .paysel:focus{border-color:var(--ochre); box-shadow:var(--ring)}
+  .ph-kit .stmt-filters .stmt-clear{border-radius:999px; padding:9px 16px}
+  .ph-kit .stmt-filters > label{min-height:44px}
+  .ph-kit .stmt-filters > .btn.sm{min-width:44px; padding:0 12px}
+  .ph-kit .stmt-filters > .btn.sm ~ .paysel{flex:1 1 0; min-width:0}
+  .ph-kit .db-day-head{padding:12px 14px 4px; background:transparent; border-left:0}
+  .ph-kit .db-day-date{padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; font-family:var(--body); font-size:12px; font-weight:700; color:var(--ink-soft)}
+  .ph-kit .db-day-date small{font-weight:500}
+  .ph-kit :not(.stmt-main) > .stmt-sub{white-space:normal; overflow:visible}
+  .ph-kit .bank-row:not(:has(.bl-acts)) .bank-parts{padding-right:0}
+  .ph-kit .bank-row:not(:has(.bl-acts)) .bank-date:not(:empty){display:inline}
+  .ph-kit .bank-row:not(:has(.bl-acts)) .bank-parts small{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .bank-row .bank-amt:not(.bal) .bal-tag{display:none}
+  .ph-kit .panel-card > .pc-head .pc-head-meta{flex-basis:100%; font-family:var(--body); font-size:11.5px; font-weight:500; color:var(--ink-soft)}
+  .ph-kit .party-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:12px 0 0}
+  .ph-kit .party-card{padding:12px 14px; border-radius:16px; background:var(--panel-2); box-shadow:none}
+  .ph-kit .party-grid > .party-card.hero{grid-column:1 / -1; border-radius:18px; box-shadow:var(--shadow-card)}
+  .ph-kit .party-stat-label{font-family:var(--body); font-size:10px; letter-spacing:.08em; color:var(--ink-soft)}
+  .ph-kit .party-stat-value{margin-top:4px; font-size:15px; font-weight:700}
+  .ph-kit .party-card.hero .party-stat-value{font-size:26px}
+  .ph-kit .party-stat-sub{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  /* Attendance: the small "+ amount" under each day gets a 32px tap area without moving the row */
+  .ph-kit .att-table td.att-day .att-day-amt{display:flex; align-items:center; justify-content:center; min-width:36px; min-height:32px; margin:-6px auto -8px; padding:0 6px}
+
+  /* ---- Daybook ---- */
+  .ph-kit .carry-bar{min-height:52px; padding:10px 14px; border-radius:16px; border-color:var(--line-2); background:var(--panel-2)}
+  .ph-kit .carry-bar span{font-family:var(--body); font-size:13px; font-weight:700; letter-spacing:0; color:var(--ink)}
+  .ph-kit .carry-bar b{padding:3px 9px; border-radius:999px; font-size:12px; color:color-mix(in srgb, var(--ochre-deep) 80%, var(--ink)); background:rgba(198,143,49,.16)}
+  .ph-kit .ses-trail{padding:2px 14px}
+  .ph-kit .ses-trow{min-height:44px; align-items:center; padding:10px 0; border-bottom-style:solid}
+  .ph-kit .ses-trow > span{font-family:var(--body); font-size:13px; font-weight:700; color:var(--ink)}
+  .ph-kit .ses-trow small{font-family:var(--body); font-size:11.5px; font-weight:500; color:var(--ink-soft)}
+  .ph-kit .ses-trow b{font-size:13px}
+  .ph-kit .panel-card.db-entry{padding:14px}
+  .ph-kit .db-amt > span,.ph-kit .db-cat > span,.ph-kit .db-note > span,.ph-kit .acct-field .acct-field-lbl{font-family:var(--body); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft)}
+  .ph-kit .acct-field .acct-field-lbl small{letter-spacing:0; text-transform:none}
+  .ph-kit .db-amt input,.ph-kit .db-cat select,.ph-kit .db-note input{min-height:48px; padding:10px 14px; border-radius:14px; background:var(--paper)}
+  .ph-kit .db-srow{padding:12px 14px; gap:4px 8px}
+  .ph-kit .db-srow .amt{font-size:12px}
+  .ph-kit .db-srow .amt.in::before{content:"In "; font-weight:600; color:var(--ink-soft)}
+  .ph-kit .db-srow .amt.out:not(.bal)::before{content:"Out "; font-weight:600; color:var(--ink-soft)}
+  .ph-kit .db-srow .amt.bal::before{content:"Bal "; font-weight:600; color:var(--ink-soft)}
+  .ph-kit .db-day-sum{padding:10px 14px; font-family:var(--body); font-size:12px}
+  .ph-kit .db-day-sum b{font-size:12px; box-shadow:none; color:color-mix(in srgb, var(--ochre-deep) 80%, var(--ink)); background:rgba(198,143,49,.16)}
+  .ph-kit .exptag{min-height:32px; display:inline-grid; place-items:center; padding:0 8px; border-radius:10px; font-family:var(--body); font-size:10px}
+  .ph-kit .expnote{font-family:var(--body); font-size:13.5px; font-weight:700; line-height:1.3}
+  .ph-kit .expnote small{margin-top:2px; font-family:var(--body); font-size:11.5px; font-weight:500; color:var(--ink-soft)}
+  .ph-kit .expamt{font-size:13px}
+  .ph-kit .db-srow .x-row,.ph-kit .exprow .x-row,.ph-kit .pc-head .x-row{min-width:44px; min-height:44px; display:grid; place-items:center; border-radius:999px; font-size:17px; color:var(--ink-soft); background:rgba(51,36,26,.05)}
+  .ph-kit.ph-daybook .exprow{grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"tag note amt" "tag note acts"; align-items:start; gap:4px 10px; padding:12px 14px}
+  .ph-kit.ph-daybook .exprow > .exptag{grid-area:tag; min-width:44px}
+  .ph-kit.ph-daybook .exprow > .expnote{grid-area:note}
+  .ph-kit.ph-daybook .exprow > .expamt{grid-area:amt}
+  .ph-kit.ph-daybook .exprow > .x-row{grid-area:acts; justify-self:end}
+  .ph-kit .pbd-lbl{padding:12px 14px 4px; font-family:var(--body); font-size:11px; letter-spacing:.06em; color:var(--ink-soft)}
+
+  /* ---- Balances: party cards = Home rows (name + phone left, balance right, detail, actions) ---- */
+  .ph-kit.ledger-page .custgrid > .custcard{display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"name bal" "ph bal" "meta meta" "links links"; column-gap:12px; padding:14px; border-radius:16px; box-shadow:none}
+  .ph-kit.ledger-page .custgrid > .custcard > h3{grid-area:name; margin:0}
+  .ph-kit.ledger-page .custgrid > .custcard > .ph{grid-area:ph; font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit.ledger-page .custgrid > .custcard > .meta2{grid-area:meta; margin-top:8px}
+  .ph-kit.ledger-page .custgrid > .custcard > .lch-bal{grid-area:bal; align-self:start; margin-top:0; font-size:15px}
+  .ph-kit.ledger-page .custgrid > .custcard > .links{grid-area:links; margin-top:10px}
+
+  /* ---- Accounts ---- */
+  .ph-kit .acct-overall{margin:4px 0 8px; padding:14px 14px 12px; border:1px solid var(--line-2); border-radius:18px; background:var(--panel-2); box-shadow:var(--shadow-card)}
+  .ph-kit .acct-overall-h{font-family:var(--body); font-size:10px; letter-spacing:.08em; color:var(--ink-soft)}
+  .ph-kit .acct-overall-grid{gap:12px 10px}
+  .ph-kit .acct-stat .k{font-family:var(--body); font-size:9.5px; letter-spacing:.06em; color:var(--ink-soft)}
+  .ph-kit .acct-stat .v{font-size:17px; letter-spacing:0}
+  .ph-kit .acct-stat .sub{font-family:var(--body); font-size:11px; color:var(--ink-soft)}
+  .ph-kit .acct-stat-btn{min-height:44px}
+  .ph-kit .acct-form{margin:8px 0 12px; padding:14px; border:1px solid var(--line-2); border-radius:18px; background:var(--panel-2)}
+  .ph-kit .acct-holder .acct-form{padding:12px 0; border:0; border-top:1px solid var(--line); border-radius:0; background:transparent}
+  .ph-kit .acct-hint{font-size:12px; color:var(--ink-soft)}
+  .ph-kit .acct-day-label{margin-bottom:8px}
+  .ph-kit .acct-day-label > span{font-family:var(--body); font-size:15px; color:var(--ink)}
+  .ph-kit.acct-page .acct-empty{padding:16px 0; font-size:13px}
+  .ph-kit .acct-trow{gap:4px 10px; padding:12px 0}
+  .ph-kit .acct-trow .who{font-family:var(--body); font-size:13.5px; font-weight:700}
+  .ph-kit .acct-trow .meta{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .acct-tag{padding:3px 8px; font-size:10px}
+  .ph-kit .acct-holder{margin:0 0 12px; padding:0 14px 14px; border:1px solid var(--line-2); border-radius:18px; background:var(--panel-2); box-shadow:var(--shadow-card)}
+  .ph-kit .acct-holder-bar{min-height:52px; padding:12px 0; gap:6px 10px}
+  .ph-kit .acct-holder-count{font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .acct-holder-meta{flex-basis:100%; gap:6px 12px; font-family:var(--body); font-size:11.5px}
+  .ph-kit .acct-holder-bar .um-caret,.ph-kit .acct-sub-name .um-caret,.ph-kit .acct-book .acct-fold .um-caret{display:inline-block; font-size:11px; opacity:1; color:var(--ink-soft)}
+  .ph-kit .acct-sub-bar{padding:14px 0 6px; gap:4px 10px}
+  .ph-kit .acct-sub-name{font-family:var(--body); font-size:14px}
+  .ph-kit .acct-sub-fig{font-size:16px}
+  .ph-kit .acct-sub-bar .pb-x{width:44px; height:44px; display:grid; place-items:center; border-radius:999px; font-size:17px; color:var(--ink-soft); background:rgba(51,36,26,.05)}
+  /* passbook rows keep the kit's two-line fold; the row menu parks top-right like Receipts' row buttons */
+  .ph-kit .acct-book .bank-row .acct-txn-more{position:absolute; top:4px; right:0}
+  .ph-kit .acct-book .bank-row .acct-txn-more-slot,.ph-kit .acct-book .bank-row .bank-date:empty{display:none}
+  .ph-kit .acct-book .bank-row .bank-parts{padding-right:52px}
+  .ph-kit .acct-book .bank-row.bank-open .bank-parts,.ph-kit .acct-book .bank-row.bank-total .bank-parts{padding-right:0}
+  .ph-kit .acct-book .bank-row .acct-move{flex:1 1 100%; order:2}
+  .ph-kit .acct-txn-who{font-family:var(--body); font-size:13.5px; font-weight:700}
+  .ph-kit .acct-row-menu button{min-height:44px; font-family:var(--body); font-size:14px}
+
+  /* ---- Books (the kit sits on a wrapper so the Books PDF never sees it) ---- */
+  .ph-kit > .ledger-page{padding:0}
+  .ph-kit .books-grid{gap:10px}
+  .ph-kit .books-row{min-height:44px; align-items:center; padding:10px 2px; font-family:var(--body); font-size:13px}
+  .ph-kit .books-row small{font-size:11px; color:var(--ink-soft)}
+  .ph-kit .books-row b{font-family:var(--mono); font-size:13px}
+  .ph-kit .books-row.books-total b{font-size:14px}
+  .ph-kit .books-row.books-go:active{background:rgba(51,36,26,.04)}
+  .ph-kit .books-name-btn{min-width:44px; min-height:44px; display:inline-grid; place-items:center; border-radius:999px; font-size:15px; color:var(--ink-soft); background:rgba(51,36,26,.05)}
+
+  /* ---- Transactions: table rows fold into Home rows ---- */
+  .ph-kit .dash-table,.ph-kit .dash-table tbody{display:block}
+  .ph-kit .dash-table thead{display:none}
+  .ph-kit .dash-table tr{display:grid; grid-template-columns:auto auto auto minmax(0,1fr) auto;
+    grid-template-areas:"type party party party amt" "type date mode by stat" "type note note note note"; gap:2px 8px; align-items:center; padding:12px 14px}
+  .ph-kit .dash-table td{padding:0 !important}
+  .ph-kit .dash-table td:nth-child(1){grid-area:date}
+  .ph-kit .dash-table td:nth-child(2){grid-area:type; align-self:start}
+  .ph-kit .dash-table td:nth-child(3){grid-area:party; min-width:0; font-size:13.5px}
+  .ph-kit .dash-table td:nth-child(4){grid-area:amt}
+  .ph-kit .dash-table td:nth-child(5){grid-area:mode}
+  .ph-kit .dash-table td:nth-child(6){grid-area:note; min-width:0}
+  .ph-kit .dash-table td:nth-child(7){grid-area:by; min-width:0}
+  .ph-kit .dash-table td:nth-child(8){grid-area:stat}
+  .ph-kit .txn-badge{display:inline-grid; place-items:center; min-width:44px; min-height:32px; padding:0 8px; border-radius:10px;
+    font-family:var(--body); font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--danger); background:rgba(165,61,41,.1)}
+  .ph-kit .txn-badge.receipt,.ph-kit .txn-badge.repayment,.ph-kit .txn-badge.payment{color:color-mix(in srgb, var(--green) 85%, var(--ink)); background:rgba(86,107,59,.1)}
+
+  /* a stat tile that fills its row gets the bigger figure */
+  .ph-kit .dash-grid > .stat:last-child:nth-child(odd) .v{font-size:17px}
+
+  /* ==== quotation editor: toolbars and side cards only; no rule here reaches #sheet ==== */
+  /* open quotations = Home pills; the open one is walnut */
+  .editor-tabs.ph-kit{gap:6px; padding:2px 0 10px; background:transparent; border-bottom:0; scrollbar-width:none; -webkit-overflow-scrolling:touch}
+  .editor-tabs.ph-kit::-webkit-scrollbar{display:none}
+  .editor-tabs.ph-kit .etab{flex:0 0 auto; min-height:44px; padding:0 0 0 14px; gap:2px; border:1px solid var(--line-2); border-radius:999px; background:var(--panel-2);
+    font-family:var(--body); font-size:13px; font-weight:700; color:var(--ink); touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+    transition:background-color .15s ease, border-color .15s ease, transform .1s ease}
+  .editor-tabs.ph-kit .etab.active{color:#F4E9D8; background:var(--walnut); border-color:var(--walnut)}
+  .editor-tabs.ph-kit .etab.temp{font-style:normal; color:var(--ochre-deep); border-style:dashed}
+  .editor-tabs.ph-kit .etab.temp.active{color:#F4E9D8; background:var(--walnut); border:1px solid var(--walnut)}
+  .editor-tabs.ph-kit .etab.dirty::after{order:-1; width:7px; height:7px; margin-right:4px; background:var(--brass)}
+  .editor-tabs.ph-kit .etab-label small{max-width:96px; margin-left:4px; font-size:11.5px; font-weight:500; color:inherit; opacity:.75}
+  .editor-tabs.ph-kit .etab-close{width:44px; height:44px; padding:0; display:grid; place-items:center; border-radius:999px; font-size:18px; color:inherit; opacity:.7}
+  .editor-tabs.ph-kit .etab-new{width:44px; height:44px; margin:0; border:1px solid var(--line-2); border-radius:999px; background:var(--panel-2); color:var(--walnut); font-size:20px}
+  .editor-tabs.ph-kit .etab:active,.editor-tabs.ph-kit .etab-new:active{transform:scale(.97)}
+
+  /* toolbars = Home card with pill actions; the main Save is the one brass 50px button */
+  .doctool.ph-kit{margin-top:12px; padding:12px; gap:8px; border-radius:18px; border:1px solid var(--line-2); background:var(--panel-2); box-shadow:var(--shadow-card)}
+  .doctool.ph-kit .lab{flex:1 1 100%; display:inline-flex; align-items:center; gap:8px; font-family:var(--body); font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--ink-soft)}
+  .doctool.ph-kit .lab .phone-ico{width:28px; height:28px; border-radius:9px; color:var(--walnut); background:rgba(51,36,26,.06)}
+  .doctool.ph-kit .btn{flex:1 1 calc(50% - 4px); min-width:0; min-height:44px; padding:10px 12px; display:inline-flex; align-items:center; justify-content:center; text-align:center;
+    border-radius:999px; font-family:var(--body); font-size:13px; letter-spacing:0; box-shadow:none}
+  .doctool.ph-kit .btn:not(.primary):not(.wa):not(.go):not(.warn){color:var(--ink); background:var(--paper); border-color:var(--line-2)}
+  .doctool.ph-kit .btn.doc-toggle.primary{color:#F4E9D8; background:var(--walnut); border-color:var(--walnut); box-shadow:none}
+  .doctool.ph-kit .btn.primary:not(.doc-toggle){flex-basis:100%; min-height:50px; border-radius:14px; font-size:15px; box-shadow:0 10px 22px -14px rgba(176,124,40,.7)}
+  .doctool.ph-kit .btn.save-btn.save-clean{color:var(--ink-soft); background:transparent; border-color:var(--line-2); box-shadow:none}
+  .doctool.ph-kit:has(.moremenu) .btn.primary:not(.doc-toggle){order:-1}
+  .doctool.ph-kit .btn.wa,.doctool.ph-kit .btn.go{min-height:48px; border-radius:14px}
+  .doctool.ph-kit .badge{min-height:28px; padding:4px 12px; border-radius:999px; font-family:var(--body); font-size:11px; letter-spacing:.04em}
+  .doctool.ph-kit button.badge{min-height:44px}
+  .doctool.ph-kit select.paysel,.doctool.ph-kit select.statussel{flex:1 1 calc(50% - 4px); min-height:44px; border-radius:14px; font-size:16px}
+  .doctool.ph-kit > .doc-more{flex:1 1 100%; margin-left:0}
+  .doctool.ph-kit .moremenu{display:block}
+  .doctool.ph-kit .moremenu > .btn{width:100%}
+
+  /* side cards that carry ph-kit themselves: compare, internal note, payments, commission lock */
+  .panel-card.ph-kit{margin-top:12px; padding:14px; border-radius:18px; border:1px solid var(--line-2); background:var(--panel-2); box-shadow:var(--shadow-card)}
+  .panel-card.ph-kit .cmp-title{font-family:var(--body); font-size:14px; font-weight:700; line-height:1.3}
+  .panel-card.ph-kit .cmp-note{font-size:11.5px; line-height:1.45}
+  .panel-card.ph-kit .cmp-acts .btn{flex:1 1 calc(50% - 4px); min-height:48px; display:inline-flex; align-items:center; justify-content:center; border-radius:14px; font-family:var(--body); letter-spacing:0}
+  .panel-card.ph-kit .modal-field textarea.note-ta{font-size:16px; padding:10px 14px}
+  .panel-card.ph-kit .paper-on-doc > span{font-family:var(--body); font-size:11px; letter-spacing:.06em; color:var(--ink-soft)}
+  .panel-card.ph-kit .paper-on-doc img{max-width:100%; border-radius:14px}
+
+  /* payments: print toggle, advance / editing bars */
+  .panel-card.ph-kit .fp-print-opt{min-height:44px; margin:4px 0 10px; gap:10px; font-size:13px; line-height:1.35; color:var(--ink)}
+  .panel-card.ph-kit .fp-print-opt input{flex:0 0 auto; width:22px; height:22px; margin:0}
+  .panel-card.ph-kit .fp-print-opt small{font-size:11.5px; color:var(--ink-soft)}
+  .panel-card.ph-kit .pb-editbar{flex-wrap:wrap; gap:8px 12px; padding:10px 12px; border:1px solid var(--line-2); border-radius:14px; font-family:var(--body); font-size:13px; font-weight:600; line-height:1.4}
+  .panel-card.ph-kit .pb-editbar button{min-height:44px; padding:8px 16px; border-radius:999px; font-family:var(--body); font-size:13px; letter-spacing:0; text-transform:none; color:var(--ink); background:var(--paper)}
+  .panel-card.ph-kit .paybook > .pb-editbar{border:0; border-bottom:1px solid var(--line); border-radius:0}
+  /* the payments book folds into Home rows, so the card never scrolls sideways */
+  .panel-card.ph-kit .paybook{overflow:visible; border-radius:14px; background:var(--panel-2)}
+  .panel-card.ph-kit .pb-r{min-width:0}
+  .panel-card.ph-kit .pb-h{display:none}
+  .panel-card.ph-kit .paybook > .db-seg,.panel-card.ph-kit .paybook > small{padding:0 12px}
+  .panel-card.ph-kit .pb-r:not(.pb-h):not(.pb-add):not(.pb-note):not(.pb-foot){grid-template-columns:32px minmax(0,1fr) auto;
+    grid-template-areas:"ic mode amt" "ic acct acts" "ic when acts"; align-items:start; gap:2px 10px; padding:12px}
+  .panel-card.ph-kit .pb-r > .pb-ic{grid-area:ic; width:32px; height:32px; border-radius:10px; color:var(--walnut); background:rgba(51,36,26,.06)}
+  .panel-card.ph-kit .pb-r > .pb-mode{grid-area:mode; min-width:0; font-family:var(--body); font-size:13.5px; font-weight:700; line-height:1.3; color:var(--ink)}
+  .panel-card.ph-kit .pb-r > .pb-acct{grid-area:acct; white-space:normal; overflow-wrap:anywhere; font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .panel-card.ph-kit .pb-r > .pb-when{grid-area:when; white-space:normal; font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .panel-card.ph-kit .pb-r > .pb-amt{grid-area:amt; justify-self:end; font-size:13.5px}
+  .panel-card.ph-kit .pb-r > .pb-rowacts{grid-area:acts; justify-self:end; gap:8px; margin-top:4px}
+  /* add a payment: amount | mode, account chips full width, date | + */
+  .panel-card.ph-kit .pb-add{grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:12px}
+  .panel-card.ph-kit .pb-add > :nth-child(3){grid-column:1 / -1}
+  .panel-card.ph-kit .pb-in,.panel-card.ph-kit .pb-sel{min-height:48px; padding:10px 14px; font-size:16px; border-radius:14px; background:var(--paper)}
+  .panel-card.ph-kit span.pb-in{display:flex; align-items:center; background:transparent; border-style:dashed}
+  .panel-card.ph-kit .pb-plus{width:100%; height:48px; min-height:48px; border-radius:14px; font-size:22px;
+    background:linear-gradient(180deg,var(--brass),var(--ochre)); box-shadow:0 10px 22px -14px rgba(176,124,40,.7)}
+  .panel-card.ph-kit .pb-note{grid-template-columns:minmax(0,1fr); padding:0 12px 12px}
+  /* received | Bal / Settled, then "received of" | clear (these follow the row rules on purpose) */
+  .panel-card.ph-kit .pb-foot{grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"amt bal" "of x"; align-items:center; gap:2px 10px; padding:12px}
+  .panel-card.ph-kit .pb-foot > .pb-amt{grid-area:amt; justify-self:start; font-size:15px}
+  .panel-card.ph-kit .pb-foot > .pb-of{grid-area:of; font-family:var(--body); font-size:11.5px; font-weight:500; line-height:1.4; color:var(--ink-soft)}
+  .panel-card.ph-kit .pb-foot > .pb-bal{grid-area:bal; min-height:44px; display:inline-flex; align-items:center; justify-content:flex-end; font-size:14px}
+  .panel-card.ph-kit .pb-foot > :last-child{grid-area:x; justify-self:end}
+  .panel-card.ph-kit .pb-foot > .pb-x{width:36px; height:36px; display:grid; place-items:center; border-radius:999px; color:var(--ink-soft); background:rgba(51,36,26,.05)}
+
+  /* commission lock card (never the in-sheet lock bar) */
+  .panel-card.ph-kit .pb-comm .modal-field{margin-top:0}
+  .panel-card.ph-kit .comm-lock-head{gap:10px; margin-bottom:8px}
+  .panel-card.ph-kit .comm-lock-head .phone-ico{width:32px; height:32px; border-radius:10px; color:#6b4a12; background:#f4e6c8}
+  .panel-card.ph-kit .comm-lock-title{font-family:var(--body); font-size:15px; font-weight:700; color:var(--ink)}
+  .panel-card.ph-kit .comm-lock-stamp{padding:5px 10px; border-radius:999px; font-family:var(--body); font-size:11px; letter-spacing:.08em}
+  .panel-card.ph-kit .comm-lock-sum{margin-left:auto; font-size:20px}
+  .panel-card.ph-kit .comm-lock-meta,.panel-card.ph-kit .comm-lock-note{font-family:var(--body); font-size:11.5px; line-height:1.5; color:var(--ink-soft)}
+  .panel-card.ph-kit .rowbtns{gap:8px}
+  .panel-card.ph-kit .rowbtns .btn{flex:1 1 calc(50% - 4px); min-height:48px; display:inline-flex; align-items:center; justify-content:center; border-radius:14px; font-family:var(--body); font-size:14px; letter-spacing:0}
+  .panel-card.ph-kit .rowbtns .btn.primary{flex-basis:100%; min-height:50px; font-size:15px}
+  .panel-card.ph-kit .rowbtns .btn.sm{border-radius:999px; font-size:13px}
+  .panel-card.ph-kit .btn.warn{color:var(--danger); background:rgba(165,61,41,.06); border-color:rgba(165,61,41,.35)}
+  .panel-card.ph-kit .rent-act{padding:12px; border-color:var(--line-2); border-radius:14px; background:var(--paper-2)}
+  .panel-card.ph-kit .rent-act-n{flex:0 0 32px; width:32px; height:32px; border-radius:10px; color:var(--walnut); background:rgba(51,36,26,.06)}
+  .panel-card.ph-kit .rent-act-h b{font-family:var(--body); font-size:14px; font-weight:700; letter-spacing:0}
+  .panel-card.ph-kit .rent-act-h p,.panel-card.ph-kit .rent-of{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .panel-card.ph-kit .rent-qrow{min-height:52px; padding:10px 12px; border-color:var(--line-2); border-radius:14px; font-size:13.5px; font-weight:700}
+  .panel-card.ph-kit .rent-qrow small{font-family:var(--body); font-size:11.5px; font-weight:500; color:var(--ink-soft)}
+
+  /* lists that open at <body> level (customer / carpenter pickers, More menu) */
+  body:has(.ph-kit) .custpick-list{padding:6px; border-radius:18px; border-color:var(--line-2); background:var(--panel-2); box-shadow:var(--shadow-lg)}
+  body:has(.ph-kit) .custpick-item{min-height:48px; padding:10px 12px; align-items:center; flex-wrap:wrap; column-gap:6px; border-radius:12px; font-family:var(--body); font-size:14px}
+  body:has(.ph-kit) .custpick-item b{font-weight:700}
+  body:has(.ph-kit) .custpick-item small{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  body:has(.ph-kit) .moremenu-pop{padding:6px; border-radius:18px; box-shadow:var(--shadow-lg)}
+  body:has(.ph-kit) .moremenu-pop button{min-height:48px; padding:12px 14px; border-radius:12px; font-size:14px; font-weight:600}
+
+  /* dialogs: scroll when tall, 48px actions that wrap */
+  .modal-card.ph-kit{width:100%; max-width:480px; max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px); overflow-y:auto; overscroll-behavior:contain;
+    padding:20px 18px 18px; border-radius:18px}
+  .modal-card.ph-kit .modal-title{font-family:var(--body); font-size:18px; font-weight:700; letter-spacing:-.01em; line-height:1.25; text-wrap:balance}
+  .modal-card.ph-kit .modal-msg{font-size:13px; line-height:1.5}
+  .modal-card.ph-kit .modal-actions{flex-wrap:wrap; gap:8px; margin-top:18px}
+  .modal-card.ph-kit .modal-actions .btn{flex:1 1 calc(50% - 4px); min-height:48px; padding:10px 14px; display:inline-flex; align-items:center; justify-content:center;
+    border-radius:14px; font-family:var(--body); font-size:15px; letter-spacing:0}
+  .modal-card.ph-kit .modal-actions .btn.warn:first-child{order:3; flex-basis:100%; margin-right:0}
+
+  /* PDF preview: light Home header instead of the dark bar; clear of the notch */
+  .pdf-preview.ph-kit .pdf-preview-bar{gap:8px 10px; padding:max(10px, env(safe-area-inset-top, 0px)) 16px 12px; background:var(--panel-2); border-bottom:1px solid var(--line-2)}
+  .pdf-preview.ph-kit .pdf-preview-who b{font-family:var(--body); font-size:15px; font-weight:700; letter-spacing:0; color:var(--ink)}
+  .pdf-preview.ph-kit .pdf-preview-who small{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .pdf-preview.ph-kit .pdf-preview-acts{flex:1 1 100%; margin-left:0; gap:8px}
+  .pdf-preview.ph-kit .pdf-preview-acts .btn{flex:1 1 0; min-height:44px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px;
+    font-family:var(--body); font-size:13px; letter-spacing:0; color:var(--ink); background:var(--paper); border-color:var(--line-2)}
+  .pdf-preview.ph-kit .pdf-preview-acts .btn.primary{color:#fff; background:linear-gradient(180deg,var(--brass),var(--ochre)); border-color:var(--ochre-deep); box-shadow:0 10px 22px -14px rgba(176,124,40,.7)}
+  .pdf-preview.ph-kit .pdf-preview-pages{padding:16px 12px max(24px, env(safe-area-inset-bottom, 0px)); gap:14px}
+  .pdf-preview.ph-kit .pdf-preview-page{width:100%; border-radius:4px}
+
+  /* shared helpers inside any kit screen: page numbers, account picker */
+  .ph-kit .pager-n{min-width:44px; height:44px; border-radius:999px; font-family:var(--body); font-weight:700}
+  .ph-kit .pager-n.on{color:#F4E9D8; background:var(--walnut); border-color:var(--walnut)}
+  .ph-kit .pager-meta{font-family:var(--body); font-size:11.5px; color:var(--ink-soft)}
+  .ph-kit .acct-pick{gap:8px}
+  .ph-kit .acct-new{min-height:44px; padding:9px 14px; border-radius:999px; font-size:16px; background:var(--paper)}
+
+  /* review flyer: 44px close */
+  .review-qr-panel.ph-kit .review-qr-close{top:8px; right:8px; width:44px; height:44px; padding:0; display:grid; place-items:center; font-size:26px}
+
+  /* lock screen */
+  .lock-card.ph-kit{width:100%; max-width:400px; padding:28px 20px 22px; border-radius:18px}
+  .lock-card.ph-kit .lock-brand{font-size:26px}
+  .lock-card.ph-kit .lock-sub{margin:16px 0 12px; font-size:13px}
+  .lock-card.ph-kit .lock-users{gap:10px}
+  .lock-card.ph-kit .lock-user{min-height:120px; padding:16px 10px; border-radius:14px; background:var(--paper-2); touch-action:manipulation; -webkit-tap-highlight-color:transparent}
+  .lock-card.ph-kit .lock-user:active{transform:scale(.97)}
+  .lock-card.ph-kit .lock-user b{font-family:var(--body); font-size:15px}
+  .lock-card.ph-kit .lock-user small{font-family:var(--body); font-size:11.5px; letter-spacing:0; text-transform:none; color:var(--ink-soft)}
+  .lock-card.ph-kit .lock-back{width:44px; height:44px; border-radius:999px; font-size:20px}
+  .lock-card.ph-kit input{min-height:48px; padding:10px 14px; border-radius:14px; font-size:16px; background:var(--paper)}
+  .lock-card.ph-kit .login-err{font-family:var(--body); font-size:12px}
+
+  /* /editor with nothing open */
+  .editor-none.ph-kit{padding:36px 0 8px}
+  .editor-none.ph-kit .editor-none-title{font-family:var(--body); font-size:22px; font-weight:700; letter-spacing:-.02em; color:var(--ink)}
+  .editor-none.ph-kit .editor-none-note{font-size:13px; color:var(--ink-soft)}
+  .editor-none.ph-kit .rowbtns{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px}
+  .editor-none.ph-kit .rowbtns .btn{min-height:48px; padding:10px 12px; display:inline-flex; align-items:center; justify-content:center; border-radius:14px; font-family:var(--body); font-size:14px; letter-spacing:0}
+  .editor-none.ph-kit .rowbtns .btn.primary{grid-column:1 / -1; min-height:50px; font-size:15px}
 }

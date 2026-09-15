@@ -36,6 +36,7 @@ import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import type { Expense } from "@/lib/types";
+import { TabIcon } from "@/components/Icons";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const PAYDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -849,9 +850,10 @@ export default function AttendanceView() {
   }
 
   return (
-    <div>
+    <div className="ph-kit">
       <div className="sectitle">
-        Attendance <small>— weekly wage register &amp; worker accounts</small>
+        <span className="phone-ico ph-only"><TabIcon icon="calendar" size={18} /></span>
+        Attendance <small><span className="desk-only">— </span>weekly wage register &amp; worker accounts</small>
       </div>
 
       {active.length > 0 && payPanel()}

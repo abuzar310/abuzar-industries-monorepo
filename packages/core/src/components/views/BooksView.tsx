@@ -30,6 +30,7 @@ import { toast } from "@/store/app-store";
 import Pager, { PAGE, usePager } from "@/components/Pager";
 import PassbookPrint, { type PassbookLine } from "@/components/PassbookPrint";
 import PdfButtons from "@/components/PdfButtons";
+import { TabIcon } from "@/components/Icons";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
@@ -469,9 +470,10 @@ export default function BooksView() {
   }, [view, monthLabel]);
 
   return (
-    <div className="ledger-page" ref={pageRef}>
+    <div className="ph-kit"><div className="ledger-page" ref={pageRef}>
       <div className="sectitle no-print">
-        Books <small>— monthly income &amp; expense · assets &amp; liabilities</small>
+        <span className="phone-ico ph-only"><TabIcon icon="book" size={18} /></span>
+        Books <small><span className="desk-only">— </span>monthly income &amp; expense · assets &amp; liabilities</small>
       </div>
 
       {/* which book to show — a visible chooser (this was one long scroll before) */}
@@ -652,7 +654,7 @@ export default function BooksView() {
       <div className="panel-card" style={{ marginTop: 18 }}>
         <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <span><Name id="led.head" extra={" · " + monthRows.length + (monthRows.length === 1 ? " entry" : " entries")} /></span>
-          <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
+          <span className="pc-head-meta">
             in ₹{inr(ledIn)} · out ₹{inr(ledOut)}
           </span>
         </div>
@@ -759,7 +761,7 @@ export default function BooksView() {
       <div className="panel-card" style={{ marginTop: 18 }}>
         <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <span><Name id="cash.head" /></span>
-          <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
+          <span className="pc-head-meta">
             closing ₹{inr(cashClose)}
           </span>
         </div>
@@ -830,7 +832,7 @@ export default function BooksView() {
       <div className="panel-card" style={{ marginTop: 18 }}>
         <div className="pc-head" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <span><Name id="bank.head" /></span>
-          <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
+          <span className="pc-head-meta">
             on hand ₹{inr(bankLedger.totalBalance)}
           </span>
         </div>
@@ -888,7 +890,8 @@ export default function BooksView() {
       {/* balance sheet — formal two-sided view; both totals tie */}
       {view === "balance" && (
       <>
-      <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
+      <div className="sectitle sectitle-sub sub-28">
+        <span className="phone-ico ph-only"><TabIcon icon="scale" size={16} /></span>
         <Name id="bal.head" />
       </div>
       <div className="books-grid">
@@ -920,7 +923,8 @@ export default function BooksView() {
       {view === "assets" && (
       <>
       {/* assets & liabilities — live snapshot */}
-      <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
+      <div className="sectitle sectitle-sub sub-28">
+        <span className="phone-ico ph-only"><TabIcon icon="wallet" size={16} /></span>
         <Name id="ast.head" />
       </div>
       <div className="books-grid">
@@ -968,6 +972,6 @@ export default function BooksView() {
           rows={view === "ledger" ? ledgerPdfRows : cashPdfRows}
         />
       )}
-    </div>
+    </div></div>
   );
 }

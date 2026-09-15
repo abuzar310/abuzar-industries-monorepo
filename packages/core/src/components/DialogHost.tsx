@@ -34,7 +34,7 @@ export default function DialogHost() {
 
   return (
     <div className="modal-scrim" onMouseDown={cancel}>
-      <div className="modal-card" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div className="modal-card ph-kit" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <h3 className="modal-title">{dialog.title}</h3>
         {dialog.message && <p className="modal-msg">{dialog.message}</p>}
         {dialog.fields.length > 0 && (

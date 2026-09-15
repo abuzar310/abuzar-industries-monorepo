@@ -43,7 +43,7 @@ export default function StaffChatView() {
   if (!ready || !user) return null;
 
   return (
-    <div className="staff-chat">
+    <div className="staff-chat ph-kit">
       <header className="staff-chat-head">
         <div>
           <h1 className="staff-chat-title">

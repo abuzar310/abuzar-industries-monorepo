@@ -12,6 +12,7 @@ import { useApp } from "@/store/useApp";
 import { bumpData, toast } from "@/store/app-store";
 import { confirmDialog, formDialog } from "@/store/dialog-store";
 import type { DaybookSession, Doc, Expense, PayMode } from "@/lib/types";
+import { TabIcon } from "@/components/Icons";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id;
 
@@ -292,9 +293,10 @@ export default function ExpensesView() {
   const closedPg = usePager(closed, PAGE, "");
 
   return (
-    <div>
+    <div className="ph-kit ph-daybook">
       <div className="sectitle">
-        Daybook <small>— current session</small>
+        <span className="phone-ico ph-only"><TabIcon icon="book" size={18} /></span>
+        Daybook <small><span className="desk-only">— </span>current session</small>
       </div>
 
       {carryIn > 0 && (
@@ -308,7 +310,7 @@ export default function ExpensesView() {
         <div className="panel-card" style={{ marginTop: 12, borderColor: "var(--ochre)" }}>
           <div className="pc-head" style={{ justifyContent: "space-between" }}>
             <span>{isOwner ? "⏳ Handover to confirm" : "⏳ Awaiting Owner confirmation"}</span>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
+            <span className="pc-head-meta">
               by {userName(pending.by)} · {pending.date}
             </span>
           </div>
@@ -381,13 +383,13 @@ export default function ExpensesView() {
               </div>
               {mode === "upi" && (
                 <div className="acct-field">
-                  <span style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 600 }}>UPI to which account?</span>
+                  <span className="acct-field-lbl">UPI to which account?</span>
                   <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
                 </div>
               )}
               {mode === "cash" && (
                 <div className="acct-field">
-                  <span style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 600 }}>
+                  <span className="acct-field-lbl">
                     Cash held by which account? <small style={{ fontWeight: 500 }}>(optional)</small>
                   </span>
                   <AccountPicker value={acct} onChange={setAcct} accounts={upiAccts} />
@@ -450,7 +452,7 @@ export default function ExpensesView() {
         <div className="panel-card" style={{ marginTop: 16 }}>
           <div className="pc-head" style={{ justifyContent: "space-between" }}>
             <span>Current session · {list.length} entries</span>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
+            <span className="pc-head-meta">
               day-wise statement · running balance
             </span>
           </div>
@@ -517,8 +519,9 @@ export default function ExpensesView() {
 
       {recvList.length > 0 && (
         <>
-          <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
-            Statements <small>— ₹{inr(recvTotal)} received · {recvList.length}</small>
+          <div className="sectitle sectitle-sub sub-28">
+            <span className="phone-ico ph-only"><TabIcon icon="payments" size={16} /></span>
+            Statements <small><span className="desk-only">— </span>₹{inr(recvTotal)} received · {recvList.length}</small>
           </div>
           <p className="note" style={{ marginTop: -6 }}>
             Every payment a customer made — cash &amp; UPI — and who took it. (UPI stays out of the Manager&apos;s cash handover.)
@@ -526,7 +529,7 @@ export default function ExpensesView() {
           <div className="panel-card">
             <div className="pc-head" style={{ justifyContent: "space-between" }}>
               <span>Customer · Phone · Date</span>
-              <span style={{ fontFamily: "var(--mono)", fontSize: 12, textTransform: "none", letterSpacing: 0 }}>
+              <span className="pc-head-meta">
                 Total ₹{inr(recvTotal)}
               </span>
             </div>
@@ -560,8 +563,9 @@ export default function ExpensesView() {
 
       {closed.length > 0 && (
         <>
-          <div className="sectitle" style={{ marginTop: 28, fontSize: 22 }}>
-            Session history <small>— {closed.length}</small>
+          <div className="sectitle sectitle-sub sub-28">
+            <span className="phone-ico ph-only"><TabIcon icon="calendar" size={16} /></span>
+            Session history <small><span className="desk-only">— </span>{closed.length}</small>
           </div>
           <p className="note" style={{ marginTop: -6 }}>Tap a day to see every transaction in it.</p>
           {closedPg.view.map((s) => {
@@ -595,7 +599,7 @@ export default function ExpensesView() {
                     {s.date} · Given ₹{inr(s.given)}
                     {carried > 0 ? " · ₹" + inr(carried) + " carried" : ""}
                   </span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "var(--mono)", fontSize: 12, letterSpacing: 0, textTransform: "none" }}>
+                  <span className="pc-head-meta" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                     In ₹{inr(s.totalIn)} · Spent ₹{inr(s.spent)} · {s.count} entries · by {userName(s.by)}
                     {isOwner && (
                       <button

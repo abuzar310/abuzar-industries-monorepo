@@ -39,7 +39,7 @@ export default function PdfPreviewHost() {
   }
 
   return (
-    <div className="pdf-preview" role="dialog" aria-modal="true" aria-label="PDF preview">
+    <div className="pdf-preview ph-kit" role="dialog" aria-modal="true" aria-label="PDF preview">
       <div className="pdf-preview-bar">
         <div className="pdf-preview-who">
           <b>{preview.name.replace(/\.pdf$/i, "")}</b>

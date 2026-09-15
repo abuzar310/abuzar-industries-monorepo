@@ -19,6 +19,7 @@ import { bumpData, setSearch, toast } from "@/store/app-store";
 import CarpenterHistory, { CarpenterPendingList } from "./CarpenterHistory";
 import PartySearchBar from "../PartySearchBar";
 import PhotoField from "../PhotoField";
+import { TabIcon } from "../Icons";
 import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 
 type PageTab = "who" | "commission";
@@ -163,16 +164,18 @@ export default function CarpentersView() {
   );
 
   return (
-    <div>
+    <div className="ph-kit">
       <div className="sectitle">
+        <span className="phone-ico ph-only"><TabIcon icon="customers" size={18} /></span>
         Carpenters{" "}
         <small>
+          <span className="desk-only">— </span>
           {tab === "who"
-            ? "— " + rows.length + " contact" + (rows.length === 1 ? "" : "s")
-            : "— pending and paid"}
+            ? rows.length + " contact" + (rows.length === 1 ? "" : "s")
+            : "pending and paid"}
         </small>
       </div>
-      <div className="rowbtns" style={{ alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <div className="rowbtns carp-tools">
         <div className="db-seg sm" role="group" aria-label="Carpenters or commission">
           <button className={"seg-btn" + (tab === "who" ? " on" : "")} type="button" onClick={() => pickTab("who")}>
             Who
@@ -191,7 +194,7 @@ export default function CarpentersView() {
         <button className="btn sm" onClick={recordCommission}>
           Record commission
         </button>
-        <div className="db-seg sm" style={{ marginLeft: "auto" }} role="group" aria-label="Sort carpenters">
+        <div className="db-seg sm carp-sort" role="group" aria-label="Sort carpenters">
           <button className={"seg-btn" + (sortBy === "pending" ? " on" : "")} type="button" onClick={() => pickSort("pending")}>
             Pending first
           </button>
@@ -329,18 +332,20 @@ export default function CarpentersView() {
           </div>
 
           <div className="dash-section" style={{ marginTop: 22 }}>
+            <span className="phone-ico ph-only"><TabIcon icon="clipboard" size={16} /></span>
             Pending
             <span>· locked, not yet given</span>
           </div>
           <CarpenterPendingList lines={pending} showCarpenter />
 
           <div className="dash-section" style={{ marginTop: 22 }}>
+            <span className="phone-ico ph-only"><TabIcon icon="customers" size={16} /></span>
             Who
             <span>· {rows.length}</span>
           </div>
           {rows.length ? (
             <div className="panel-card" style={{ marginTop: 0 }}>
-              <table className="carp-roster">
+              <table className="carp-roster roster-who">
                 <thead>
                   <tr>
                     <th>Carpenter</th>
@@ -384,6 +389,7 @@ export default function CarpentersView() {
             </div>
           )}
           <div className="dash-section" style={{ marginTop: 22 }}>
+            <span className="phone-ico ph-only"><TabIcon icon="wallet" size={16} /></span>
             Transaction history
             <span>· commission we paid</span>
           </div>

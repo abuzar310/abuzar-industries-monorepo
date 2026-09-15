@@ -5,6 +5,7 @@ import { fetchAllTransactions, type AllTransaction } from "@/lib/data";
 import { inr } from "@/lib/calc";
 import { useApp } from "@/store/useApp";
 import Pager from "@/components/Pager";
+import { TabIcon } from "@/components/Icons";
 
 const TXNS_PAGE_SIZE = 100;
 
@@ -105,9 +106,10 @@ export default function TransactionsView() {
     t.type === "receipt" || t.type === "repayment" || t.type === "payment";
 
   return (
-    <div>
+    <div className="ph-kit">
       <div className="sectitle">
-        Transactions <small>— all money movement in one place</small>
+        <span className="phone-ico ph-only"><TabIcon icon="transactions" size={18} /></span>
+        Transactions <small><span className="desk-only">— </span>all money movement in one place</small>
       </div>
 
       {/* Filters bar */}
@@ -154,12 +156,11 @@ export default function TransactionsView() {
         </label>
 
         <input
-          className="paysel"
+          className="paysel txn-search"
           type="text"
           placeholder="Search party or note…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 180, padding: "4px 8px", fontSize: 12 }}
         />
 
         {(month || year || typeFilter || showDeleted || search) && (

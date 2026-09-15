@@ -32,6 +32,7 @@ import { confirmDialog, formDialog } from "@/store/dialog-store";
 import { generatePdf } from "@/lib/pdf";
 import DateField from "@/components/editor/DateField";
 import PdfButtons from "@/components/PdfButtons";
+import { TabIcon } from "@/components/Icons";
 import type { Purchase, Supplier } from "@/lib/types";
 
 type Seg = "ledger" | "payments" | "buyers";
@@ -621,10 +622,10 @@ export default function BuysView() {
   }
 
   return (
-    <div className="buys-page" ref={pageRef}>
+    <div className="ph-kit"><div className="buys-page" ref={pageRef}>
       <div className="buys-top">
         <div>
-          <h1 className="buys-h1">Suppliers</h1>
+          <h1 className="buys-h1"><span className="phone-ico ph-only"><TabIcon icon="bag" size={18} /></span>Suppliers</h1>
           <p className="buys-sub">Timber in · suppliers & from-accounts</p>
         </div>
       </div>
@@ -1355,6 +1356,6 @@ export default function BuysView() {
         </div>
       )}
 
-    </div>
+    </div></div>
   );
 }

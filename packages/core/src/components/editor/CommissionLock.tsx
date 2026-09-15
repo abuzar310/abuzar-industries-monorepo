@@ -19,6 +19,7 @@ import { confirmDialog } from "@/store/dialog-store";
 import type { Carpenter, CommissionLock as Lock, Customer, Doc, Expense } from "@/lib/types";
 import CustomerPicker from "./CustomerPicker";
 import CarpenterPicker, { type CarpenterHit } from "./CarpenterPicker";
+import { TabIcon } from "@/components/Icons";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -233,12 +234,13 @@ export default function CommissionLock({
   return (
     <div
       id="comm-lock"
-      className={"panel-card no-print" + (isLocked ? " comm-lock-on" : "")}
+      className={"panel-card no-print ph-kit" + (isLocked ? " comm-lock-on" : "")}
       style={{ marginTop: 12, padding: 14 }}
     >
       {isLocked && !editing ? (
         <>
           <div className="comm-lock-head">
+            <span className="phone-ico ph-only"><TabIcon icon="lock" size={16} /></span>
             <span className="comm-lock-stamp">Locked</span>
             <span className="comm-lock-sum">₹{inr(lockedAmt)}</span>
           </div>
@@ -270,12 +272,13 @@ export default function CommissionLock({
       ) : (
         <>
           <div className="comm-lock-head">
+            <span className="phone-ico ph-only"><TabIcon icon="lock" size={16} /></span>
             {isLocked ? <span className="comm-lock-stamp">Locked</span> : null}
-            <div style={{ fontFamily: "var(--disp)", fontWeight: 600 }}>
+            <div className="comm-lock-title">
               {isLocked ? "Edit commission lock" : "Commission lock"}
             </div>
           </div>
-          <small style={{ display: "block", color: "var(--ink-faint)", marginBottom: 12, lineHeight: 1.45 }}>
+          <small className="comm-lock-note">
             Decides what we will pay the carpenter. Does not pay this wood bill. Pay later from Carpenters
             {isLocked
               ? pending > 0

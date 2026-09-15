@@ -20,6 +20,7 @@ import type { Carpenter, Customer, Doc, Expense } from "@/lib/types";
 import { Paged } from "../Pager";
 import PassbookPrint, { type PassbookLine } from "../PassbookPrint";
 import PdfButtons from "../PdfButtons";
+import { TabIcon } from "../Icons";
 import DocList from "./DocList";
 
 export default function CustomerDetail({ id }: { id: string }) {
@@ -54,14 +55,16 @@ export default function CustomerDetail({ id }: { id: string }) {
     if (ready) load();
   }, [ready, dataVersion, load]);
 
-  if (cust === undefined) return <div className="sectitle">Customer <small>— loading…</small></div>;
+  if (cust === undefined) return <div className="ph-kit"><div className="sectitle">Customer <small><span className="desk-only">— </span>loading…</small></div></div>;
   if (cust === null)
     return (
+      <div className="ph-kit">
       <div className="empty">
         <div className="empty-title">Customer not found</div>
         <button className="btn sm" style={{ marginTop: 12 }} onClick={() => router.push("/customers")}>
           ← Back to customers
         </button>
+      </div>
       </div>
     );
 
@@ -245,7 +248,7 @@ export default function CustomerDetail({ id }: { id: string }) {
   }
 
   return (
-    <div>
+    <div className="ph-kit">
       <div className="cd-screen">
       <button className="btn sm" style={{ marginBottom: 14 }} onClick={() => router.push("/customers")}>
         ← Customers
@@ -316,10 +319,11 @@ export default function CustomerDetail({ id }: { id: string }) {
 
       {(stmtRows.length > 0 || opening > 0) && (
         <>
-          <div className="sectitle" style={{ marginTop: 24, fontSize: 22, display: "flex", alignItems: "center", gap: 12 }}>
-            <span>Account statement <small>— every bill &amp; payment, running balance</small></span>
+          <div className="sectitle sectitle-sub cd-stmt-head">
+            <span className="phone-ico ph-only"><TabIcon icon="statement" size={16} /></span>
+            <span>Account statement <small><span className="desk-only">— </span>every bill &amp; payment, running balance</small></span>
             {canPrint && (
-              <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8 }}>
+              <span className="cd-stmt-pdf" style={{ marginLeft: "auto", display: "inline-flex", gap: 8 }}>
                 <PdfButtons
                   onPreview={() => void runStmtPdf(true)}
                   onDownload={() => void runStmtPdf(false)}
@@ -332,7 +336,7 @@ export default function CustomerDetail({ id }: { id: string }) {
           <div className="panel-card cs-card">
             {opening > 0 && info.page === 0 && (
               <div className="stmt">
-                <div className="stmt-ic due">₹</div>
+                <div className="stmt-ic due"><span className="desk-only">₹</span><TabIcon icon="scale" size={16} className="ph-only" /></div>
                 <div className="stmt-main">
                   <div className="stmt-to">Opening balance</div>
                   <div className="stmt-sub">old dues from before the app</div>
@@ -352,7 +356,8 @@ export default function CustomerDetail({ id }: { id: string }) {
                 title={ev.kind === "quote" ? "Open this quotation" : undefined}
               >
                 <div className={"stmt-ic " + (ev.kind === "quote" ? "due" : ev.pay === "upi" ? "upi" : "cash")}>
-                  {ev.kind === "quote" ? "Bill" : ev.pay === "upi" ? "UPI" : "₹"}
+                  <span className="desk-only">{ev.kind === "quote" ? "Bill" : ev.pay === "upi" ? "UPI" : "₹"}</span>
+                  <TabIcon icon={ev.kind === "quote" ? "file-text" : ev.pay === "upi" ? "payments" : "wallet"} size={16} className="ph-only" />
                 </div>
                 <div className="stmt-main">
                   <div className="stmt-to">{ev.label}{ev.sub ? <span className="acct-overall-hint"> · {ev.sub}</span> : null}</div>
@@ -379,8 +384,9 @@ export default function CustomerDetail({ id }: { id: string }) {
         </>
       )}
 
-      <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
-        <span>Quotations <small>— {quotes.length}</small></span>
+      <div className="sectitle sectitle-sub">
+        <span className="phone-ico ph-only"><TabIcon icon="clipboard" size={16} /></span>
+        <span>Quotations <small><span className="desk-only">— </span>{quotes.length}</small></span>
       </div>
       <div className="listwrap">
         <DocList docs={quotes} empty="No quotations for this customer yet." />
@@ -388,8 +394,9 @@ export default function CustomerDetail({ id }: { id: string }) {
 
       {invoiceMode && (
         <>
-          <div className="sectitle" style={{ marginTop: 24, fontSize: 22 }}>
-            Invoices <small>— {invs.length}</small>
+          <div className="sectitle sectitle-sub">
+            <span className="phone-ico ph-only"><TabIcon icon="invoices" size={16} /></span>
+            Invoices <small><span className="desk-only">— </span>{invs.length}</small>
           </div>
           <div className="listwrap">
             <DocList docs={invs} empty="No invoices for this customer yet." />

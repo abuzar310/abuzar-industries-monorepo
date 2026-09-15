@@ -1,6 +1,7 @@
 "use client";
 // Landing-site quote inbox — Pending → Import to Quotation (new FY number) / Delete.
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { TabIcon } from "../Icons";
 import { useRouter } from "next/navigation";
 import { allRec, delRec, put } from "@/lib/data";
 import { createQuotation } from "@/lib/create";
@@ -141,10 +142,10 @@ export default function WebsiteQuotationsView() {
   }
 
   return (
-    <div className="wq-page">
+    <div className="wq-page ph-kit">
       <div className="wq-head">
         <div>
-          <h1 className="wq-title">Website Quotations</h1>
+          <h1 className="wq-title"><span className="phone-ico ph-only"><TabIcon icon="file-text" size={18} /></span>Website Quotations</h1>
           <p className="wq-sub">
             Quotes sent from the website. Review first — Import creates a real numbered quotation.
           </p>

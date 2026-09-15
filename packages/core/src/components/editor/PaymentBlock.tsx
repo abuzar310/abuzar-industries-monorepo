@@ -13,6 +13,7 @@ import { confirmDialog } from "@/store/dialog-store";
 import { showReviewQr } from "@/store/review-qr-store";
 import type { Customer, Doc, Expense } from "@/lib/types";
 import CustomerPicker from "./CustomerPicker";
+import { TabIcon } from "@/components/Icons";
 
 const userName = (id: string) => USERS.find((u) => u.id === id)?.name || id || "—";
 const hhmm = (iso: string) => {
@@ -474,7 +475,7 @@ export default function PaymentBlock({
   const showAdd = !settled || editId || forNext;
 
   return (
-    <div className="panel-card no-print" style={{ marginTop: 12, padding: 14 }}>
+    <div className="panel-card no-print ph-kit" style={{ marginTop: 12, padding: 14 }}>
       <label className="modal-field" style={{ marginBottom: 6 }}>
         <span>
           Final price ₹ <small style={{ color: "var(--ink-faint)" }}>(quote ₹{inr(quoteGrand)})</small>
@@ -525,6 +526,7 @@ export default function PaymentBlock({
             id={"payline-" + l.id}
             key={l.id}
           >
+            <span className="phone-ico ph-only pb-ic"><TabIcon icon={l.commission ? "briefcase" : l.mode === "upi" ? "payments" : "wallet"} size={16} /></span>
             <span className="pb-amt">₹ {inr(l.amount)}</span>
             <span className="pb-mode">{modeLabel(l)}</span>
             <span className="pb-acct">
@@ -761,7 +763,7 @@ export default function PaymentBlock({
 
         <div className="pb-r pb-foot">
           <span className="pb-amt">₹ {inr(received)}</span>
-          <span className="pb-mode" style={{ gridColumn: "2 / 4", color: "var(--ink-faint)" }}>
+          <span className="pb-mode pb-of">
             received of ₹{inr(bill)}
             {advBal > 0.5 ? ` · ₹${inr(advBal)} on account` : ""}
           </span>

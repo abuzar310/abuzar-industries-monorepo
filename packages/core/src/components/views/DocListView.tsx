@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { TabIcon } from "../Icons";
 import { useRouter } from "next/navigation";
 import { allRec } from "@/lib/data";
 import { computeDoc, dateSortKey, inr, qty } from "@/lib/calc";
@@ -258,9 +259,10 @@ export default function DocListView({ store, title, sub, statusCol, empty, showN
 
   return (
     <>
-    <div>
+    <div className="ph-kit">
       <div className="sectitle">
-        {title} <small>— {sub}</small>
+        <span className="phone-ico ph-only"><TabIcon icon={isInv ? "invoices" : "clipboard"} size={18} /></span>
+        {title} <small><span className="desk-only">— </span>{sub}</small>
       </div>
 
       {showNew && (

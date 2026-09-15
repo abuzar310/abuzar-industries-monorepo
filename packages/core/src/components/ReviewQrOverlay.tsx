@@ -25,7 +25,7 @@ export default function ReviewQrOverlay() {
       aria-label="Google review QR"
       onClick={hideReviewQr}
     >
-      <div className="review-qr-panel review-qr-panel--flyer" onClick={(e) => e.stopPropagation()}>
+      <div className="review-qr-panel review-qr-panel--flyer ph-kit" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="review-qr-close" onClick={hideReviewQr} aria-label="Close">
           ×
         </button>

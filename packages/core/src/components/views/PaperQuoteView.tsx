@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { TabIcon } from "../Icons";
 import { useRouter } from "next/navigation";
 import { createQuotation } from "@/lib/create";
 import { getRec, prefGet, put } from "@/lib/data";
@@ -261,10 +262,11 @@ export default function PaperQuoteView({
   }
 
   return (
-    <div className="paper-quote">
+    <div className="paper-quote ph-kit">
       <div className="sectitle">
+        <span className="phone-ico ph-only"><TabIcon icon="file-text" size={18} /></span>
         {intoOpen ? "Add paper to this quotation" : "New quote from paper"}
-        <small> — photo, crop, then check</small>
+        <small><span className="desk-only"> — </span>photo, crop, then check</small>
       </div>
       <p className="hint">Crop the list, then check the lines. Nothing is saved until you confirm.</p>
 
