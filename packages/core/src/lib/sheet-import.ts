@@ -3,7 +3,6 @@ import {
   applyPaperToDoc,
   expandCrossSize,
   normalizePaperDim,
-  paperQuoteSeed,
   parsePaperRead,
   type PaperLine,
   type PaperRead,
@@ -11,9 +10,24 @@ import {
 
 export type { PaperLine, PaperRead };
 
+/** Everything the import button takes. Old .xls is listed so picking one gets a clear message. */
+export const IMPORT_ACCEPT =
+  ".xlsx,.xlsm,.xls,.csv,.pdf,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,image/*,.heic,.heif";
+
+export type ImportKind = "image" | "pdf" | "sheet" | "other";
+
+export function importKind(file: { name: string; type: string }): ImportKind {
+  const name = String(file.name || "").toLowerCase();
+  const type = String(file.type || "").toLowerCase();
+  if (type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/.test(name)) return "image";
+  if (/\.(xlsx|xlsm|xls|csv|tsv|txt)$/.test(name) || /spreadsheet|excel|csv/.test(type)) return "sheet";
+  return "other";
+}
+
 const OLE = [0xd0, 0xcf, 0x11, 0xe0];
 
-type ColKind = "l" | "w" | "t" | "pcs" | "wood" | "rate" | "size";
+type ColKind = "l" | "w" | "t" | "pcs" | "wood" | "rate" | "size" | "serial";
 type ColMap = Partial<Record<ColKind, number>>;
 
 function xmlText(s: string): string {
@@ -28,24 +42,33 @@ function xmlText(s: string): string {
     .trim();
 }
 
-function normHead(s: string): string {
-  return String(s || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
+const L_HEADS = new Set(["l", "len", "lng", "lenght", "length"]);
+const W_HEADS = new Set(["b", "w", "br", "bth", "wd", "breadth", "breath", "bredth", "width", "wide"]);
+const T_HEADS = new Set(["h", "t", "ht", "th", "thk", "height", "hight", "thick", "thickness"]);
+const PCS_HEADS = new Set(["pcs", "pc", "pieces", "piece", "pices", "pice", "qty", "quantity", "nos"]);
+const WOOD_HEADS = new Set(["wood", "item", "items", "name", "particulars", "particular", "description", "desc", "timber", "species", "material"]);
+const SIZE_HEADS = new Set(["size", "sizes", "dimension", "dimensions", "dim", "lxbxh", "lxwxh", "lbh", "lwh"]);
+const SERIAL_HEADS = new Set(["sl", "slno", "sno", "sr", "srno", "serial", "serialno", "sn", "no", "sino", "#"]);
 
+/** What a heading names, however it is written: "Length (ft)", "Breath", "No. of Pcs", "Sl No". */
 function classify(cell: string): ColKind | "" {
-  const h = normHead(cell);
-  if (!h) return "";
-  if (["l", "length", "len", "lng"].includes(h)) return "l";
-  if (["b", "breadth", "width", "w", "bth"].includes(h)) return "w";
-  if (["h", "height", "thickness", "t", "ht", "thk"].includes(h)) return "t";
-  if (["pices", "pice", "pieces", "piece", "pcs", "pc", "qty", "nos"].includes(h)) return "pcs";
-  if (["wood", "item", "name", "particulars", "particular", "description", "timber", "species"].includes(h))
-    return "wood";
-  if (["rate", "rs", "price", "percft", "cftrate"].includes(h)) return "rate";
-  if (["size", "sizes", "dimension", "dim", "lxbxh"].includes(h)) return "size";
+  const words = String(cell || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9#]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+  if (!words.length) return "";
+  const joined = words.join("");
+  const first = words[0];
+  if (words.includes("rate") || first === "rs" || first === "price") return "rate";
+  if (words.some((w) => PCS_HEADS.has(w))) return "pcs";
+  if (SERIAL_HEADS.has(joined)) return "serial";
+  if (SIZE_HEADS.has(joined) || SIZE_HEADS.has(first)) return "size";
+  if (L_HEADS.has(first)) return "l";
+  if (W_HEADS.has(first)) return "w";
+  if (T_HEADS.has(first)) return "t";
+  if (WOOD_HEADS.has(first) || words.includes("particulars")) return "wood";
   return "";
 }
 
@@ -67,7 +90,7 @@ function isWoodToken(s: string): boolean {
   if (!t || /^\d/.test(t)) return false;
   if (classify(t)) return false;
   if (/^(total|grand|cft|sq\.?\s*ft|amount|amt)\b/i.test(t)) return false;
-  return /[a-zA-Z\u00C0-\u024F]/.test(t);
+  return /[a-zA-ZÀ-ɏ]/.test(t);
 }
 
 function expandSize(raw: string): { l: string; w: string; t: string; pcs?: string } | null {
@@ -107,6 +130,22 @@ function pickCustomer(grid: string[][]): string {
   return "";
 }
 
+/** A leading column that counts 1, 2, 3 down the rows is a serial number, not a length. */
+function serialColumn(rows: string[][]): number {
+  for (const c of [0, 1]) {
+    const nums = rows
+      .map((r) => String(r[c] ?? "").trim())
+      .filter((v) => /^\d+$/.test(v))
+      .map(Number);
+    if (nums.length < 3 || nums[0] > 1) continue;
+    let steps = 0;
+    for (let i = 1; i < nums.length; i++) if (nums[i] === nums[i - 1] + 1) steps++;
+    if (steps >= nums.length - 2) return c;
+  }
+  return -1;
+}
+
+/** One row as loose fields. The name stays empty when the row has none; the caller carries the wood down. */
 function rowToLoose(row: string[], cols: ColMap | null): Record<string, unknown> | null {
   if (!row.some((c) => String(c || "").trim())) return null;
   const blob = row.join(" ").trim();
@@ -140,42 +179,38 @@ function rowToLoose(row: string[], cols: ColMap | null): Record<string, unknown>
         }
       }
     }
-    return { name: name || "Teak", l, w, t, pcs, rate };
+    return { name, l, w, t, pcs, rate };
   }
 
   for (const cell of row) {
     const four = expandCrossSize(cell);
     if (four) {
       const wood = row.find((c) => isWoodToken(c) && !expandSize(c));
-      return { name: wood || "Teak", ...four };
+      return { name: wood || "", ...four };
     }
   }
   const woodAt = row.findIndex((c) => isWoodToken(c));
   const start = woodAt >= 0 ? woodAt + 1 : 0;
   const nums = numsFrom(row, start);
-  if (nums.length >= 4) {
-    return {
-      name: woodAt >= 0 ? row[woodAt] : "Teak",
-      l: nums[0],
-      w: nums[1],
-      t: nums[2],
-      pcs: nums[3],
-    };
+  // five numbers with no heading could be a rate or a count: too unsure, so the reader decides
+  if (nums.length > 4) return null;
+  if (nums.length === 4) {
+    return { name: woodAt >= 0 ? row[woodAt] : "", l: nums[0], w: nums[1], t: nums[2], pcs: nums[3] };
   }
   if (woodAt >= 0 && nums.length === 0) return { name: row[woodAt] };
   const three = row.map((c) => expandSize(c)).find((x) => x && !("pcs" in x && x.pcs));
   if (three && nums.length === 1) {
-    return { name: woodAt >= 0 ? row[woodAt] : "Teak", l: three.l, w: three.w, t: three.t, pcs: nums[0] };
+    return { name: woodAt >= 0 ? row[woodAt] : "", l: three.l, w: three.w, t: three.t, pcs: nums[0] };
   }
   return null;
 }
 
-/** L / B / H / Pices columns, or a wood heading then 8x5x3x4. Rate is per wood, not per row. */
+/** Headings in any order and spelling (serial numbers skipped), or a wood heading then 8x5x3x4. Rate is per wood. */
 export function parseSheetGrid(grid: string[][]): PaperRead {
   const rows = (grid || []).map((r) => (r || []).map((c) => String(c ?? "").trim()));
   let cols: ColMap | null = null;
   let start = 0;
-  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+  for (let i = 0; i < Math.min(rows.length, 40); i++) {
     const found = headerMap(rows[i]);
     if (found) {
       cols = found;
@@ -183,12 +218,30 @@ export function parseSheetGrid(grid: string[][]): PaperRead {
       break;
     }
   }
+  const serial = cols ? -1 : serialColumn(rows.slice(start));
   const lines: Record<string, unknown>[] = [];
+  let wood = "";
   for (let i = start; i < rows.length; i++) {
-    const loose = rowToLoose(rows[i], cols);
-    if (loose) lines.push(loose);
+    const row = serial < 0 ? rows[i] : rows[i].map((c, j) => (j === serial ? "" : c));
+    const loose = rowToLoose(row, cols);
+    if (!loose) continue;
+    const named = String(loose.name || "").trim();
+    if (named) wood = named;
+    lines.push({ ...loose, name: named || wood || "Teak" });
   }
   return parsePaperRead({ customerName: pickCustomer(rows), lines });
+}
+
+/** Rows as text for the reader when the rules can't place the columns: one row per line, cells split by |. */
+export function sheetText(grid: string[][], maxRows = 400): string {
+  const out: string[] = [];
+  for (const r of grid || []) {
+    const cells = (r || []).map((c) => String(c ?? "").replace(/\s+/g, " ").trim());
+    while (cells.length && !cells[cells.length - 1]) cells.pop();
+    if (cells.length) out.push(cells.join(" | "));
+    if (out.length >= maxRows) break;
+  }
+  return out.join("\n").slice(0, 40_000);
 }
 
 export function parseCsv(text: string): string[][] {
@@ -348,7 +401,8 @@ function looksZip(buf: Uint8Array): boolean {
   return buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b;
 }
 
-export async function parseXlsxBytes(buf: Uint8Array): Promise<PaperRead> {
+/** Every sheet in the workbook, in order. */
+async function xlsxGrids(buf: Uint8Array): Promise<string[][][]> {
   const files = await unzip(buf);
   const sheets = files
     .filter((f) => /xl\/worksheets\/sheet\d+\.xml$/i.test(f.name))
@@ -356,42 +410,40 @@ export async function parseXlsxBytes(buf: Uint8Array): Promise<PaperRead> {
   if (!sheets.length) throw new Error("No sheet found in that Excel file");
   const shared = files.find((f) => /xl\/sharedStrings\.xml$/i.test(f.name));
   const dec = new TextDecoder("utf-8");
-  const grid = gridFromXlsxParts(dec.decode(sheets[0].bytes), shared ? dec.decode(shared.bytes) : "");
-  const parsed = parseSheetGrid(grid);
-  if (!parsed.lines.length) throw new Error("No sizes found in that sheet");
-  return parsed;
+  const sharedXml = shared ? dec.decode(shared.bytes) : "";
+  return sheets.map((s) => gridFromXlsxParts(dec.decode(s.bytes), sharedXml));
 }
 
-export async function parseSheetBytes(name: string, buf: Uint8Array): Promise<PaperRead> {
+/** Lines when the rules can place the columns, otherwise the rows as text for the reader. */
+export type SheetAttempt = { read: PaperRead } | { text: string };
+
+function attemptGrids(grids: string[][][]): SheetAttempt {
+  for (const grid of grids) {
+    const read = parseSheetGrid(grid);
+    if (read.lines.length) return { read };
+  }
+  const text = grids.map((g) => sheetText(g)).find(Boolean) || "";
+  if (!text) throw new Error("That file is empty");
+  return { text };
+}
+
+export async function readSheetBytes(name: string, buf: Uint8Array): Promise<SheetAttempt> {
   const lower = String(name || "").toLowerCase();
   if (looksOle(buf) || (lower.endsWith(".xls") && !lower.endsWith(".xlsx"))) {
-    throw new Error("Save that file as .xlsx or CSV, then upload");
+    throw new Error("Old .xls files can't be opened here. In Excel use Save As and pick .xlsx, or save it as a PDF.");
   }
-  if (looksZip(buf) || /\.xlsx?m?$/.test(lower)) return parseXlsxBytes(buf);
-  const text = new TextDecoder("utf-8").decode(buf);
-  const parsed = parseSheetGrid(parseCsv(text));
-  if (!parsed.lines.length) throw new Error("No sizes found in that file");
-  return parsed;
+  if (looksZip(buf) || /\.xlsx?m?$/.test(lower)) return attemptGrids(await xlsxGrids(buf));
+  return attemptGrids([parseCsv(new TextDecoder("utf-8").decode(buf))]);
 }
 
-export async function parseSheetFile(file: File): Promise<PaperRead> {
-  const buf = new Uint8Array(await file.arrayBuffer());
-  return parseSheetBytes(file.name, buf);
+export async function readSheetFile(file: File): Promise<SheetAttempt> {
+  return readSheetBytes(file.name, new Uint8Array(await file.arrayBuffer()));
 }
 
 /** Same open quote, plus the sheet lines. Always flips on the long-list print. */
 export function applySheetToDoc(doc: Doc, opts: { lines: PaperLine[]; customerName: string }): Doc {
   return {
     ...applyPaperToDoc(doc, { lines: opts.lines, customerName: opts.customerName, paperPhoto: doc.paperPhoto || "" }),
-    listLayout: "dense",
-    freeLayout: false,
-  };
-}
-
-export function sheetQuoteSeed(opts: { lines: PaperLine[]; customerName: string }): Partial<Doc> {
-  return {
-    ...paperQuoteSeed({ lines: opts.lines, customerName: opts.customerName, paperPhoto: "" }),
-    notes: "From Excel",
     listLayout: "dense",
     freeLayout: false,
   };

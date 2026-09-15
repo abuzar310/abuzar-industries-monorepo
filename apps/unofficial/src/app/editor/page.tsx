@@ -6,16 +6,15 @@ import { createQuotation } from "@/lib/create";
 import { useApp } from "@/store/useApp";
 import PaperScanner from "@/components/PaperScanner";
 import { paperTargetQuote } from "@/lib/paper-client";
-import SheetImportView from "@/components/views/SheetImportView";
+import { IMPORT_ACCEPT, importKind } from "@/lib/sheet-import";
 
 export default function Page() {
   const { ready } = useApp();
   const router = useRouter();
   const [checked, setChecked] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
-  const [sheetFile, setSheetFile] = useState<File | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const xlsRef = useRef<HTMLInputElement>(null);
+  const [scanFile, setScanFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!ready) return;
@@ -31,10 +30,25 @@ export default function Page() {
     router.push("/editor/" + d.id);
   }
 
-  async function takeScan(file: File) {
+  function closeScan() {
     setScanOpen(false);
+    setScanFile(null);
+  }
+
+  /** The photo or file waits in memory while its quotation opens, then reads there. */
+  async function openWith(file: File) {
+    closeScan();
     const id = await paperTargetQuote(file);
     router.push("/editor/" + id);
+  }
+
+  /** A photo goes through the crop screen first; Excel, CSV and PDF go straight to the quotation. */
+  function takeImport(file: File | undefined) {
+    if (!file) return;
+    if (importKind(file) === "image") {
+      setScanFile(file);
+      setScanOpen(true);
+    } else void openWith(file);
   }
 
   if (!checked) {
@@ -59,34 +73,22 @@ export default function Page() {
         <button className="btn" onClick={() => setScanOpen(true)}>
           Scan paper
         </button>
-        <button className="btn" onClick={() => xlsRef.current?.click()}>
-          Excel
+        <button className="btn" onClick={() => fileRef.current?.click()}>
+          Excel / PDF
         </button>
       </div>
       <input
-        ref={xlsRef}
+        ref={fileRef}
         type="file"
-        accept=".xlsx,.xlsm,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        accept={IMPORT_ACCEPT}
         hidden
         onChange={(e) => {
-          const file = e.target.files?.[0];
+          takeImport(e.target.files?.[0]);
           e.target.value = "";
-          if (!file) return;
-          setSheetFile(file);
-          setSheetOpen(true);
         }}
       />
-      {scanOpen ? <PaperScanner onPhoto={(file) => void takeScan(file)} onClose={() => setScanOpen(false)} /> : null}
-      {sheetOpen ? (
-        <div className="paper-quote-overlay">
-          <SheetImportView
-            initialFile={sheetFile}
-            onCancel={() => {
-              setSheetOpen(false);
-              setSheetFile(null);
-            }}
-          />
-        </div>
+      {scanOpen ? (
+        <PaperScanner file={scanFile ?? undefined} onPhoto={(file) => void openWith(file)} onClose={closeScan} />
       ) : null}
     </div>
   );

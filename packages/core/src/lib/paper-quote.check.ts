@@ -4,8 +4,9 @@ import {
   blankPaperLine,
   expandCrossSize,
   normalizePaperDim,
+  paperAddedMessage,
+  paperInput,
   paperLineHasSize,
-  paperQuoteSeed,
   parsePaperAiJson,
   parsePaperRead,
   sectionsFromPaperLines,
@@ -53,16 +54,21 @@ assert.equal(empty[0].name, "Teak");
 assert.equal(paperLineHasSize(blankPaperLine()), false);
 assert.equal(paperLineHasSize({ ...blankPaperLine(), pcs: "2" }), true);
 
-const seed = paperQuoteSeed({
-  lines: [{ keep: true, name: "Teak", l: "12", w: "6", t: "1", pcs: "4", rate: "4000" }],
-  customerName: "  Ismail  ",
-  paperPhoto: "data:image/jpeg;base64,xx",
-});
-assert.equal(seed.customerName, "Ismail");
-assert.equal(seed.status, "Draft");
-assert.equal(seed.notes, "From paper");
-assert.equal(seed.paperPhoto, "data:image/jpeg;base64,xx");
-assert.equal(seed.sections?.[0].rows[0].l, "12");
+// what one read sends: a photo, a PDF, or a sheet as text; anything else is refused before it costs a read
+const photoIn = paperInput({ image: "data:image/jpg;base64,QUJD" });
+assert.ok("kind" in photoIn && photoIn.kind === "photo" && photoIn.media === "image/jpeg" && photoIn.data === "QUJD");
+const pdfIn = paperInput({ pdf: "data:application/pdf;base64,JVBERi0x" });
+assert.ok("kind" in pdfIn && pdfIn.kind === "pdf" && pdfIn.data === "JVBERi0x" && pdfIn.empty === "No sizes found in that file");
+const textIn = paperInput({ text: "L | B | H\n8 | 5 | 3" });
+assert.ok("kind" in textIn && textIn.kind === "text" && textIn.prompt.endsWith("8 | 5 | 3"));
+assert.ok("error" in paperInput({ image: "not a photo" }));
+assert.ok("error" in paperInput({ pdf: "data:text/plain;base64,QUJD" }));
+assert.ok("error" in paperInput({ pdf: "data:application/pdf;base64," + "A".repeat(4_300_000) }));
+assert.ok("error" in paperInput(null));
+assert.equal(
+  paperAddedMessage([{ keep: true, name: "Teak", l: "8", w: "5", t: "3", pcs: "4", rate: "" }], "file"),
+  "1 line added from the file. Check the sizes.",
+);
 
 assert.throws(() => parsePaperAiJson("no json here"), /not JSON/);
 
@@ -179,6 +185,12 @@ async function readStepsChecks() {
   );
   assert.ok("error" in none && none.busy === false && /No sizes/.test(none.error));
   assert.equal(asked, 1);
+  const noneInFile = await readPaperSteps(
+    [{ model: "a", key: "1" }],
+    async () => ({ status: 200, text: '{"lines":[]}' }),
+    { budgetMs: 50_000, empty: "No sizes found in that file" },
+  );
+  assert.ok("error" in noneInFile && noneInFile.error === "No sizes found in that file");
 
   const badKey = await readPaperSteps(
     [{ model: "a", key: "bad" }, { model: "a", key: "good" }],

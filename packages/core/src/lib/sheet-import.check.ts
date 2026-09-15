@@ -4,12 +4,16 @@ import { deflateRawSync } from "node:zlib";
 import {
   applySheetToDoc,
   gridFromXlsxParts,
+  importKind,
   parseCsv,
-  parseSheetBytes,
   parseSheetGrid,
-  parseXlsxBytes,
-  sheetQuoteSeed,
+  readSheetBytes,
+  sheetText,
 } from "./sheet-import.ts";
+
+const enc = (s: string) => new TextEncoder().encode(s);
+const sizes = (read: { lines: { name: string; l: string; w: string; t: string; pcs: string }[] }) =>
+  read.lines.map((l) => [l.name, l.l, l.w, l.t, l.pcs]);
 
 const headed = parseSheetGrid([
   ["L", "B", "H", "Pices"],
@@ -43,11 +47,13 @@ const grouped = parseSheetGrid([
   ["Teak", "8", "5", "3", "4", "4200"],
   ["", "9", "6", "2", "2", ""],
   ["Honne", "7", "4", "2", "1", ""],
+  ["", "6", "4", "2", "3", ""],
 ]);
 assert.equal(grouped.lines[0].rate, "4200");
 assert.equal(grouped.lines[0].name, "Teak");
 assert.equal(grouped.lines[1].name, "Teak");
 assert.equal(grouped.lines[2].name, "Honne");
+assert.equal(grouped.lines[3].name, "Honne", "a blank wood cell keeps the wood above it");
 
 const sized = parseSheetGrid([
   ["Size", "Qty"],
@@ -70,14 +76,73 @@ const named = parseSheetGrid([
 ]);
 assert.equal(named.customerName, "Raju");
 
-const csv = parseSheetGrid(
-  parseCsv('L,B,H,Pices\n8,5,3,4\n"9",6,2,10'),
-);
+const csv = parseSheetGrid(parseCsv('L,B,H,Pices\n8,5,3,4\n"9",6,2,10'));
 assert.equal(csv.lines.length, 2);
 assert.equal(csv.lines[1].l, "9");
 
 const junk = parseSheetGrid([["Total", "100"], ["", "", "", ""]]);
 assert.equal(junk.lines.length, 0);
+
+// a real-world sheet: title rows, serial numbers, headings with units and spelling slips, extra columns, a total
+const messy = parseSheetGrid([
+  ["CUT SIZE TIMBER LIST"],
+  ["Customer: Ramesh"],
+  [],
+  ["Sl No", "Particulars", "Length (ft)", "Breath (in)", "Thickness (in)", "No. of Pcs", "CFT", "Amount"],
+  ["1", "Teak", "8", "5", "3", "4", "", ""],
+  ["2", "", "9", "6", "2", "10", "", ""],
+  ["3", "Honne", "7", "4", "2", "1", "", ""],
+  ["", "Total", "", "", "", "15", "", ""],
+]);
+assert.equal(messy.customerName, "Ramesh");
+assert.deepEqual(sizes(messy), [
+  ["Teak", "8", "5", "3", "4"],
+  ["Teak", "9", "6", "2", "10"],
+  ["Honne", "7", "4", "2", "1"],
+]);
+
+const spelled = parseSheetGrid([
+  ["S.No", "Item", "LENGTH", "WIDTH", "HEIGHT", "Qty", "Rate/CFT"],
+  ["1", "Teak", "12", "6", "1", "2", "4200"],
+]);
+assert.deepEqual(sizes(spelled), [["Teak", "12", "6", "1", "2"]]);
+assert.equal(spelled.lines[0].rate, "4200");
+
+const shuffled = parseSheetGrid([
+  ["Nos", "T", "W", "L", "#"],
+  ["4", "3", "5", "8", "1"],
+]);
+assert.deepEqual(sizes(shuffled), [["Teak", "8", "5", "3", "4"]]);
+
+const deep = parseSheetGrid([...Array.from({ length: 30 }, (_, i) => ["Note " + i]), ["L", "B", "H", "Pcs"], ["8", "5", "3", "4"]]);
+assert.equal(deep.lines.length, 1, "the heading can sit far down the sheet");
+
+// no heading: a column counting 1, 2, 3 is the serial number
+const counted = parseSheetGrid([
+  ["1", "8", "5", "3", "4"],
+  ["2", "9", "6", "2", "10"],
+  ["3", "7", "4", "2", "1"],
+]);
+assert.deepEqual(sizes(counted), [
+  ["Teak", "8", "5", "3", "4"],
+  ["Teak", "9", "6", "2", "10"],
+  ["Teak", "7", "4", "2", "1"],
+]);
+assert.equal(parseSheetGrid([["8", "5", "3", "4", "4200"]]).lines.length, 0, "five numbers and no heading is left to the reader");
+
+assert.equal(sheetText([["Teak wood order", ""], ["8 by 5 by 3", "4 nos"], [], ["", ""]]), "Teak wood order\n8 by 5 by 3 | 4 nos");
+
+assert.equal(importKind({ name: "List.PDF", type: "" }), "pdf");
+assert.equal(importKind({ name: "scan.bin", type: "application/pdf" }), "pdf");
+assert.equal(importKind({ name: "IMG_1.HEIC", type: "" }), "image");
+assert.equal(importKind({ name: "photo", type: "image/jpeg" }), "image");
+assert.equal(importKind({ name: "cut.xlsx", type: "" }), "sheet");
+assert.equal(importKind({ name: "old.xls", type: "application/vnd.ms-excel" }), "sheet");
+assert.equal(importKind({ name: "sizes.csv", type: "text/csv" }), "sheet");
+assert.equal(
+  importKind({ name: "notes.docx", type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+  "other",
+);
 
 const sheetXml = `<?xml version="1.0"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -185,22 +250,38 @@ function zipFiles(files: { name: string; data: Uint8Array }[], deflate: boolean)
 
 async function binaryCases() {
   const parts = [
-    { name: "xl/worksheets/sheet1.xml", data: new TextEncoder().encode(sheetXml) },
-    { name: "xl/sharedStrings.xml", data: new TextEncoder().encode(sharedXml) },
+    { name: "xl/worksheets/sheet1.xml", data: enc(sheetXml) },
+    { name: "xl/sharedStrings.xml", data: enc(sharedXml) },
   ];
-  const xlsx = await parseXlsxBytes(zipFiles(parts, false));
-  assert.equal(xlsx.lines[0].l, "8");
-  assert.equal(xlsx.lines[0].pcs, "4");
-  const deflated = await parseXlsxBytes(zipFiles(parts, true));
-  assert.equal(deflated.lines[0].pcs, "4");
+  const stored = await readSheetBytes("cut.xlsx", zipFiles(parts, false));
+  assert.ok("read" in stored && stored.read.lines[0].l === "8" && stored.read.lines[0].pcs === "4");
+  const deflated = await readSheetBytes("cut.xlsx", zipFiles(parts, true));
+  assert.ok("read" in deflated && deflated.read.lines[0].pcs === "4");
 
-  const csvBytes = await parseSheetBytes("sizes.csv", new TextEncoder().encode("L,B,H,Pcs\n8,5,3,4\n"));
-  assert.equal(csvBytes.lines[0].pcs, "4");
-
-  await assert.rejects(
-    () => parseSheetBytes("old.xls", new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0, 0, 0, 0])),
-    /xlsx or CSV/,
+  // the sizes sit on the second sheet, after a sheet of notes
+  const notesXml = `<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Deliver on Monday</t></is></c></row></sheetData></worksheet>`;
+  const two = await readSheetBytes(
+    "two.xlsx",
+    zipFiles(
+      [
+        { name: "xl/worksheets/sheet1.xml", data: enc(notesXml) },
+        { name: "xl/worksheets/sheet2.xml", data: enc(sheetXml) },
+        { name: "xl/sharedStrings.xml", data: enc(sharedXml) },
+      ],
+      true,
+    ),
   );
+  assert.ok("read" in two && two.read.lines.length === 1);
+
+  const csvBytes = await readSheetBytes("sizes.csv", enc("L,B,H,Pcs\n8,5,3,4\n"));
+  assert.ok("read" in csvBytes && csvBytes.read.lines[0].pcs === "4");
+
+  // a layout the rules can't place goes to the reader as text
+  const odd = await readSheetBytes("odd.csv", enc("Teak wood order\n8 by 5 by 3,4 nos\n"));
+  assert.ok("text" in odd && odd.text === "Teak wood order\n8 by 5 by 3 | 4 nos");
+
+  await assert.rejects(() => readSheetBytes("empty.csv", enc("\n\n")), /empty/);
+  await assert.rejects(() => readSheetBytes("old.xls", new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0, 0, 0, 0])), /Save As/);
 }
 
 const onto = applySheetToDoc(
@@ -219,11 +300,6 @@ assert.equal(onto.listLayout, "dense");
 assert.equal(onto.freeLayout, false);
 assert.equal(onto.paperPhoto, "data:image/jpeg;base64,xx");
 assert.equal(onto.sections[0].rows[0].pcs, "4");
-
-const seed = sheetQuoteSeed({ lines: headed.lines, customerName: "  Raju  " });
-assert.equal(seed.customerName, "Raju");
-assert.equal(seed.listLayout, "dense");
-assert.equal(seed.notes, "From Excel");
 
 binaryCases()
   .then(() => console.log("sheet-import.check OK"))
