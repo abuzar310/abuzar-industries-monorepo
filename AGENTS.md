@@ -60,6 +60,21 @@ browser NEVER talks to Postgres or Supabase directly; the only secret is
 9. Schema changes go into `db/cloud-schema.sql` (keep it idempotent) and are
    applied with psql against `DATABASE_URL`.
 
+## The Excel tab (`apps/unofficial/src/excel`)
+
+Cut Size has an owner-only **Excel** tab at `/excel`: our own spreadsheet, built on
+the free Univer core with ExcelJS for `.xlsx` in a Web Worker. It is the one part of
+the app that is deliberately device-local — workbooks live in IndexedDB and never
+touch the business schemas, `lib/data.ts`, or any table above. The cloud-only rules
+govern business data, which this screen never handles. Never put business data in it.
+
+Its code sits outside `packages/core` on purpose, so the official app neither
+installs nor bundles the engine, and everything inside it uses **relative imports**
+(`@/*` resolves into this app and then core, which the sheet does not use). Never
+import `@univerjs-pro/*`: `apps/unofficial/src/excel/license.check.ts` fails the
+check chain the moment a paid or licence-infecting package appears, and it also
+pins the Univer version so an upgrade is always deliberate.
+
 ## Verify after changes
 
 ```

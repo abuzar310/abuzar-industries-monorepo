@@ -24,5 +24,6 @@ export const TABS: Tab[] = [
   { label: "Logs", href: "/logs", owner: true, group: "records" },
   { label: "Contacts", href: "/contacts", owner: true, icon: "customers", group: "more" },
   { label: "AI", href: "/ai", group: "more" },
+  { label: "Excel", href: "/excel", owner: true, icon: "squares", group: "more" },
   { label: "Settings", href: "/settings", owner: true, group: "more" },
 ];

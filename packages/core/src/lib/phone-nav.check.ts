@@ -36,5 +36,6 @@ ok(phoneQuickActions({ invoices: true, simpleQuote: false, acceptPayment: false 
 ok(phoneQuickActions({ invoices: false, simpleQuote: true, acceptPayment: true })[0].href === "/editor", "quote is first quick action");
 ok(phoneQuickActions({ invoices: false, simpleQuote: true, acceptPayment: true })[1].href === "/paper-quote", "from paper");
 ok(!!phoneTabIcon("/receipts") && !!phoneTabIcon("/stock"), "shelf icons");
+ok(phoneTabIcon("/excel") === "squares" && phoneSectionOf(tabs, "/excel") === "more", "excel sits in more");
 
 console.log(`phone-nav.check OK (${n} assertions)`);

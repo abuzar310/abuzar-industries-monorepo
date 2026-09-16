@@ -70,6 +70,7 @@ const TAB_ICO: Record<string, string> = {
   "/logs": "clipboard",
   "/contacts": "customers",
   "/ai": "chart",
+  "/excel": "squares",
   "/settings": "settings",
   "/reports": "chart",
 };
