@@ -26,13 +26,14 @@ export const STORE_TABLE: Record<string, string> = {
   websiteQuotations: "website_quotations",
   carpenters: "carpenters",
   chat: "chat",
+  purchaseSheets: "purchase_sheets",
 };
 
 /** Tables synced to clients (documents once — not once per doc store). */
 export const SYNC_TABLES = [
   "documents", "customers", "suppliers", "stock", "expenses", "sessions",
   "ledgers", "vouchers", "collections", "pay_holders", "workers", "attendance",
-  "activity", "purchases", "website_quotations", "carpenters", "chat",
+  "activity", "purchases", "website_quotations", "carpenters", "chat", "purchase_sheets",
 ] as const;
 
 /** Physical table → the store name clients know it by. */
@@ -54,6 +55,7 @@ export const TABLE_STORE: Record<string, string> = {
   website_quotations: "websiteQuotations",
   carpenters: "carpenters",
   chat: "chat",
+  purchase_sheets: "purchaseSheets",
 };
 
 let _pool: Pool | null = null;
@@ -115,6 +117,8 @@ const chatReady = new Set<string>();
 const chatEnsuring = new Map<string, Promise<void>>();
 const carpentersReady = new Set<string>();
 const carpentersEnsuring = new Map<string, Promise<void>>();
+const purchaseSheetsReady = new Set<string>();
+const purchaseSheetsEnsuring = new Map<string, Promise<void>>();
 const websiteQuotationsReady = new Set<string>();
 const websiteQuotationsEnsuring = new Map<string, Promise<void>>();
 
@@ -168,6 +172,22 @@ export async function ensureWebsiteQuotationsTable(schema: AppSchema): Promise<v
 }
 
 /** Standalone carpenter contacts (Cut Size) — create if DB predates this table. */
+/** Purchase check sheets came after the schema shipped, so a database without the table gets it on first use. */
+export async function ensurePurchaseSheetsTable(schema: AppSchema): Promise<void> {
+  if (purchaseSheetsReady.has(schema)) return;
+  let pending = purchaseSheetsEnsuring.get(schema);
+  if (!pending) {
+    pending = (async () => {
+      await ensureRecTable(schema, "purchase_sheets");
+      purchaseSheetsReady.add(schema);
+    })().finally(() => {
+      purchaseSheetsEnsuring.delete(schema);
+    });
+    purchaseSheetsEnsuring.set(schema, pending);
+  }
+  await pending;
+}
+
 export async function ensureCarpentersTable(schema: AppSchema): Promise<void> {
   if (carpentersReady.has(schema)) return;
   let pending = carpentersEnsuring.get(schema);

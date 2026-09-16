@@ -48,7 +48,9 @@ declare
     -- standalone carpenter contacts (Cut Size; not tied to a customer)
     'carpenters',
     -- owner <-> manager in-app chat
-    'chat'
+    'chat',
+    -- Cut Size Purchase check: a supplier measurement list saved as our own sheet
+    'purchase_sheets'
   ];
 begin
   foreach sch in array array['official', 'unofficial'] loop

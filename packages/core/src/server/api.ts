@@ -37,6 +37,7 @@ import {
   ensureChatTable,
   ensureCarpentersTable,
   ensureWebsiteQuotationsTable,
+  ensurePurchaseSheetsTable,
   type AppSchema,
   type Row,
 } from "./db";
@@ -162,6 +163,8 @@ function storeLabel(store: string): string {
     websiteQuotations: "website quotation",
     website_quotations: "website quotation",
     carpenters: "carpenter",
+    purchaseSheets: "purchase sheet",
+    purchase_sheets: "purchase sheet",
   };
   return m[store] || store;
 }
@@ -399,6 +402,7 @@ export function createDataApi(schema: AppSchema) {
         ensureChatTable(schema),
         ensureCarpentersTable(schema),
         ensureWebsiteQuotationsTable(schema),
+        ensurePurchaseSheetsTable(schema),
       ]);
     }
 
