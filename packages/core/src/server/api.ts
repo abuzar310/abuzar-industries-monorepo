@@ -36,6 +36,7 @@ import {
   TABLE_STORE,
   ensureChatTable,
   ensureCarpentersTable,
+  ensurePurchaseSheetsTable,
   type AppSchema,
   type Row,
 } from "./db";
@@ -159,6 +160,8 @@ function storeLabel(store: string): string {
     pay_holders: "pay holder",
     purchases: "purchase buy",
     carpenters: "carpenter",
+    purchaseSheets: "purchase sheet",
+    purchase_sheets: "purchase sheet",
   };
   return m[store] || store;
 }
@@ -390,6 +393,7 @@ export function createDataApi(schema: AppSchema) {
     if (!user) return err(401, "Not signed in");
     await ensureChatTable(schema);
     await ensureCarpentersTable(schema);
+    await ensurePurchaseSheetsTable(schema);
 
     if (a === "bootstrap" && method === "GET") {
       const out: AnyRec = {};

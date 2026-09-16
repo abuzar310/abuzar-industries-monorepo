@@ -25,13 +25,14 @@ export const STORE_TABLE: Record<string, string> = {
   purchases: "purchases",
   carpenters: "carpenters",
   chat: "chat",
+  purchaseSheets: "purchase_sheets",
 };
 
 /** Tables synced to clients (documents once — not once per doc store). */
 export const SYNC_TABLES = [
   "documents", "customers", "suppliers", "stock", "expenses", "sessions",
   "ledgers", "vouchers", "collections", "pay_holders", "workers", "attendance",
-  "activity", "purchases", "carpenters", "chat",
+  "activity", "purchases", "carpenters", "chat", "purchase_sheets",
 ] as const;
 
 /** Physical table → the store name clients know it by. */
@@ -52,6 +53,7 @@ export const TABLE_STORE: Record<string, string> = {
   purchases: "purchases",
   carpenters: "carpenters",
   chat: "chat",
+  purchase_sheets: "purchaseSheets",
 };
 
 let _pool: Pool | null = null;
@@ -89,6 +91,8 @@ const chatReady = new Set<string>();
 const chatEnsuring = new Map<string, Promise<void>>();
 const carpentersReady = new Set<string>();
 const carpentersEnsuring = new Map<string, Promise<void>>();
+const purchaseSheetsReady = new Set<string>();
+const purchaseSheetsEnsuring = new Map<string, Promise<void>>();
 
 async function ensureRecTable(schema: AppSchema, table: string): Promise<void> {
   const t = tableRef(schema, table);
@@ -135,6 +139,22 @@ export async function ensureCarpentersTable(schema: AppSchema): Promise<void> {
       carpentersEnsuring.delete(schema);
     });
     carpentersEnsuring.set(schema, pending);
+  }
+  await pending;
+}
+
+/** Purchase check sheets came after the schema shipped, so a database without the table gets it on first use. */
+export async function ensurePurchaseSheetsTable(schema: AppSchema): Promise<void> {
+  if (purchaseSheetsReady.has(schema)) return;
+  let pending = purchaseSheetsEnsuring.get(schema);
+  if (!pending) {
+    pending = (async () => {
+      await ensureRecTable(schema, "purchase_sheets");
+      purchaseSheetsReady.add(schema);
+    })().finally(() => {
+      purchaseSheetsEnsuring.delete(schema);
+    });
+    purchaseSheetsEnsuring.set(schema, pending);
   }
   await pending;
 }

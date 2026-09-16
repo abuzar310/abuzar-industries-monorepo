@@ -221,7 +221,8 @@ export type StoreName =
   | "activity"
   | "purchases"
   | "carpenters"
-  | "chat";
+  | "chat"
+  | "purchaseSheets";
 
 /** Standalone carpenter contact (Cut Size) — not a customer / ledger party. */
 export interface Carpenter {

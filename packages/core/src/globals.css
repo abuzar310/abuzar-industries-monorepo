@@ -4255,7 +4255,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .person-id{font-family:var(--mono); font-size:12px; color:var(--ink-soft)}
 .person-hint{margin:0 0 6px; font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
 .stmt.person-row .stmt-sub{white-space:normal; overflow-wrap:anywhere}
-/* Purchase check: a supplier list in L / W / T / Pcs with our totals against theirs. pchk- keeps it clear of the panel-card .pc-* classes. */
+/* Purchase check: supplier lists kept as our own sheets, in folders. pchk- keeps it clear of the panel-card .pc-* classes. */
 .pchk-open{margin-top:12px}
 .pchk-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:10px; margin:16px 0 10px}
 .pchk-name{display:flex; flex-direction:column; gap:4px; flex:1 1 220px; font-size:12px; color:var(--ink-soft)}
@@ -4263,30 +4263,46 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .pchk-acts{display:flex; flex-wrap:wrap; gap:6px}
 .pchk-notation{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin:4px 0 12px; font-size:13px; color:var(--ink)}
 .pchk-notation small{flex:1 1 100%; color:var(--ink-soft)}
-.pchk-totals{grid-template-columns:repeat(3,minmax(0,1fr)); margin:6px 0 10px}
-.pchk-totals .sub.pchk-ok{color:var(--green)}
-.pchk-totals .sub.pchk-off{color:var(--danger)}
-.pchk-warn{margin:6px 0; padding:8px 10px; border-radius:var(--radius-sm); background:rgba(165,61,41,.07); color:var(--danger); font-size:13px}
-.pchk-note{margin:4px 0 10px}
-/* the sheet: one Excel-style table where each width is a folder that opens on tap */
-.pchk-sheet-wrap{overflow-x:auto; margin:8px 0 16px; border:1px solid var(--line-2); border-radius:var(--radius-sm); background:var(--panel-2)}
-.pchk-sheet{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:13px; font-variant-numeric:tabular-nums}
-.pchk-sheet th,.pchk-sheet td{padding:7px 6px; border:1px solid var(--line); text-align:right; color:var(--ink)}
+/* folder and sheet lists */
+.pchk-list{list-style:none; margin:10px 0 16px; padding:0; border:1px solid var(--line-2); border-radius:var(--radius-md); overflow:hidden; background:var(--panel-2)}
+.pchk-list li{border-bottom:1px solid var(--line)}
+.pchk-list li:last-child{border-bottom:none}
+.pchk-row{width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 15px; border:0; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer}
+.pchk-row:hover{background:rgba(176,124,40,.04)}
+.pchk-row:focus-visible{outline:2px solid var(--ochre-deep); outline-offset:-2px}
+.pchk-row-name{min-width:0}
+.pchk-row-name strong{display:block; font-size:15px; font-weight:600; color:var(--ink); line-height:1.25; overflow-wrap:anywhere}
+.pchk-row-name em{display:block; margin-top:3px; font-style:normal; font-family:var(--mono); font-size:11.5px; color:var(--ink-faint)}
+.pchk-row-end{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12.5px; color:var(--ink-soft); white-space:nowrap}
+.pchk-row-end .pchk-ok{color:var(--green)}
+.pchk-row-end .pchk-off{color:var(--danger)}
+.pchk-chev{font-style:normal; font-size:14px; color:var(--ink-faint)}
+.pchk-empty{margin:10px 0 14px; padding:14px 16px; border:1px dashed var(--line-2); border-radius:var(--radius-md); color:var(--ink-soft); font-size:13px}
+/* the check in one line instead of three cards, so more of the sheet fits on screen */
+.pchk-strip{display:flex; flex-wrap:wrap; gap:4px 14px; margin:8px 0 8px; padding:9px 12px; border:1px solid var(--line-2); border-radius:var(--radius-sm); background:var(--panel-2); font-family:var(--mono); font-size:12.5px; color:var(--ink)}
+.pchk-strip span{white-space:nowrap}
+.pchk-strip b{font-weight:700}
+.pchk-strip .pchk-ok{color:var(--green)}
+.pchk-strip .pchk-off{color:var(--danger)}
+.pchk-warn{margin:6px 0; padding:8px 10px; border-radius:var(--radius-sm); background:rgba(165,61,41,.07); color:var(--danger); font-size:12.5px}
+.pchk-note{margin:4px 0 8px; font-size:12px}
+/* the sheet: every line on the page, small and tight like Excel */
+.pchk-sheet-wrap{overflow-x:auto; margin:6px 0 16px; border:1px solid var(--line-2); border-radius:var(--radius-sm); background:var(--panel-2)}
+.pchk-sheet{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11.5px; font-variant-numeric:tabular-nums}
+.pchk-sheet th,.pchk-sheet td{padding:3px 5px; border:1px solid var(--line); text-align:right; color:var(--ink)}
 .pchk-sheet tr > :first-child{text-align:left}
-.pchk-sheet thead th{background:var(--paper); font-family:var(--body); font-size:11px; font-weight:700; line-height:1.25; color:var(--ink-soft); vertical-align:bottom}
-.pchk-fold-row,.pchk-line,.pchk-supplier{cursor:pointer}
-.pchk-fold-row > th,.pchk-fold-row > td{padding-top:11px; padding-bottom:11px; background:var(--paper-2); font-weight:700}
-.pchk-fold-btn,.pchk-cell-btn{display:block; width:100%; margin:0; padding:0; border:0; background:none; font:inherit; color:inherit; text-align:inherit; cursor:pointer}
-.pchk-fold-btn{font-family:var(--body); font-size:13px}
-.pchk-fold-btn small{margin-left:6px; font-family:var(--mono); font-size:11px; font-weight:400; color:var(--ink-soft)}
-.pchk-fold-btn:focus-visible,.pchk-cell-btn:focus-visible{outline:2px solid var(--ochre-deep); outline-offset:2px}
-.pchk-caret{display:inline-block; width:1.1em; color:var(--ink-soft); transition:transform var(--t-fast)}
-.pchk-fold.open .pchk-caret{transform:rotate(90deg)}
-.pchk-fold:not(.open) .pchk-line{display:none}
+.pchk-sheet thead th{background:var(--paper); font-family:var(--body); font-size:10px; font-weight:700; line-height:1.2; color:var(--ink-soft); vertical-align:bottom}
+.pchk-group > th{padding:6px 5px; background:var(--paper-2); font-family:var(--body); font-size:11.5px; font-weight:700; color:var(--ink)}
+.pchk-group small{margin-left:6px; font-family:var(--mono); font-size:10.5px; font-weight:400; color:var(--ink-soft)}
+.pchk-sub > th,.pchk-sub > td{background:rgba(246,240,228,.55); font-weight:700}
+.pchk-line{cursor:pointer}
 .pchk-line:hover > td,.pchk-line.editing > td{background:rgba(198,143,49,.1)}
+.pchk-cell-btn{display:block; width:100%; margin:0; padding:0; border:0; background:none; font:inherit; color:inherit; text-align:inherit; cursor:pointer}
+.pchk-cell-btn:focus-visible{outline:2px solid var(--ochre-deep); outline-offset:1px}
 .pchk-add > td{padding:6px}
-.pchk-sheet tfoot th{font-family:var(--body); font-size:12px}
+.pchk-sheet tfoot th{font-family:var(--body); font-size:11.5px}
 .pchk-total > th,.pchk-total > td{border-top:2px solid var(--line-2); font-weight:700}
+.pchk-supplier{cursor:pointer}
 .pchk-diff .pchk-ok{color:var(--green)}
 .pchk-diff .pchk-off{color:var(--danger); font-weight:700}
 .pchk-edit > td{padding:10px; background:var(--paper-2)}
@@ -4297,9 +4313,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .pchk-form-acts{grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:6px}
 .pchk-hint,.pchk-error{margin:8px 0 0; font-family:var(--body); font-size:12px; color:var(--ink-soft)}
 .pchk-error{color:var(--danger)}
-/* a PDF prints every folder open */
-.pdf-capture .pchk-fold .pchk-line{display:table-row}
-.pdf-capture .pchk-caret{display:none}
+/* a PDF keeps the sheet plain */
 .pdf-capture .pchk-line > td{background:none}
 
 /* ============================================================================
