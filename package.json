@@ -7,7 +7,7 @@
     "dev": "next dev apps/unofficial -p 3010",
     "dev:unofficial": "next dev apps/unofficial -p 3010",
     "dev:official": "next dev apps/official -p 3020",
-    "build:unofficial": "next build apps/unofficial",
+    "build:unofficial": "npm --prefix apps/unofficial run build",
     "build:official": "next build apps/official",
     "start:unofficial": "next start apps/unofficial -p 3010",
     "start:official": "next start apps/official -p 3020",
