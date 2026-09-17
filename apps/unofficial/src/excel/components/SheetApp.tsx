@@ -55,7 +55,7 @@ export default function SheetApp() {
     if (!wb) return;
     // Commit the in-cell editor first. save() only sees the model, so an open editor
     // used to write an empty sheet over a book that already had values.
-    const ender = wb as { endEditingAsync?: (keep?: boolean) => Promise<void>; endEditing?: (keep?: boolean) => void };
+    const ender = wb as unknown as { endEditingAsync?: (keep?: boolean) => Promise<boolean>; endEditing?: (keep?: boolean) => void };
     try {
       if (ender.endEditingAsync) await ender.endEditingAsync(true);
       else ender.endEditing?.(true);
