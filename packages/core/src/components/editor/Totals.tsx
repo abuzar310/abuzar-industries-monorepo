@@ -115,19 +115,21 @@ export default function Totals({
         <div className="t-row">
           <span className="lab gst-lab">
             GST
-            <button type="button" className="gst-toggle" title="Switch % / flat ₹" onClick={() => onGstMode(flat ? "percent" : "flat")}>
-              {flat ? "₹ flat" : "%"}
-            </button>
-            <input
-              type="number"
-              inputMode="decimal"
-              value={cloakMoney ? "0" : doc.gst}
-              readOnly={cloakMoney}
-              onChange={(e) => {
-                if (!cloakMoney) onGst(e.target.value);
-              }}
-            />
-            {flat ? "" : "%"}
+            <span className="no-print">
+              <button type="button" className="gst-toggle" title="Switch % / flat ₹" onClick={() => onGstMode(flat ? "percent" : "flat")}>
+                {flat ? "₹ flat" : "%"}
+              </button>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={cloakMoney ? "0" : doc.gst}
+                readOnly={cloakMoney}
+                onChange={(e) => {
+                  if (!cloakMoney) onGst(e.target.value);
+                }}
+              />
+              {flat ? "" : "%"}
+            </span>
           </span>
           <span className="val">{inr(gstAmt)}</span>
         </div>
