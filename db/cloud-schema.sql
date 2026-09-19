@@ -50,7 +50,9 @@ declare
     -- owner <-> manager in-app chat
     'chat',
     -- Cut Size Purchase check: a supplier measurement list saved as our own sheet
-    'purchase_sheets'
+    'purchase_sheets',
+    -- Cut Size Excel: opened workbooks (Univer snapshots)
+    'excel_books'
   ];
 begin
   foreach sch in array array['official', 'unofficial'] loop

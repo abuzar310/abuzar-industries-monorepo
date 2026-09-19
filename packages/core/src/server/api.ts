@@ -38,6 +38,7 @@ import {
   ensureCarpentersTable,
   ensureWebsiteQuotationsTable,
   ensurePurchaseSheetsTable,
+  ensureExcelBooksTable,
   type AppSchema,
   type Row,
 } from "./db";
@@ -165,6 +166,8 @@ function storeLabel(store: string): string {
     carpenters: "carpenter",
     purchaseSheets: "purchase sheet",
     purchase_sheets: "purchase sheet",
+    excelBooks: "excel book",
+    excel_books: "excel book",
   };
   return m[store] || store;
 }
@@ -403,6 +406,7 @@ export function createDataApi(schema: AppSchema) {
         ensureCarpentersTable(schema),
         ensureWebsiteQuotationsTable(schema),
         ensurePurchaseSheetsTable(schema),
+        ensureExcelBooksTable(schema),
       ]);
     }
 

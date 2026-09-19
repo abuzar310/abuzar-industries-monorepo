@@ -27,13 +27,14 @@ export const STORE_TABLE: Record<string, string> = {
   carpenters: "carpenters",
   chat: "chat",
   purchaseSheets: "purchase_sheets",
+  excelBooks: "excel_books",
 };
 
 /** Tables synced to clients (documents once — not once per doc store). */
 export const SYNC_TABLES = [
   "documents", "customers", "suppliers", "stock", "expenses", "sessions",
   "ledgers", "vouchers", "collections", "pay_holders", "workers", "attendance",
-  "activity", "purchases", "website_quotations", "carpenters", "chat", "purchase_sheets",
+  "activity", "purchases", "website_quotations", "carpenters", "chat", "purchase_sheets", "excel_books",
 ] as const;
 
 /** Physical table → the store name clients know it by. */
@@ -56,6 +57,7 @@ export const TABLE_STORE: Record<string, string> = {
   carpenters: "carpenters",
   chat: "chat",
   purchase_sheets: "purchaseSheets",
+  excel_books: "excelBooks",
 };
 
 let _pool: Pool | null = null;
@@ -119,6 +121,8 @@ const carpentersReady = new Set<string>();
 const carpentersEnsuring = new Map<string, Promise<void>>();
 const purchaseSheetsReady = new Set<string>();
 const purchaseSheetsEnsuring = new Map<string, Promise<void>>();
+const excelBooksReady = new Set<string>();
+const excelBooksEnsuring = new Map<string, Promise<void>>();
 const websiteQuotationsReady = new Set<string>();
 const websiteQuotationsEnsuring = new Map<string, Promise<void>>();
 
@@ -171,7 +175,22 @@ export async function ensureWebsiteQuotationsTable(schema: AppSchema): Promise<v
   await pending;
 }
 
-/** Standalone carpenter contacts (Cut Size) — create if DB predates this table. */
+/** Cut Size Excel books — create if this database predates the table. */
+export async function ensureExcelBooksTable(schema: AppSchema): Promise<void> {
+  if (excelBooksReady.has(schema)) return;
+  let pending = excelBooksEnsuring.get(schema);
+  if (!pending) {
+    pending = (async () => {
+      await ensureRecTable(schema, "excel_books");
+      excelBooksReady.add(schema);
+    })().finally(() => {
+      excelBooksEnsuring.delete(schema);
+    });
+    excelBooksEnsuring.set(schema, pending);
+  }
+  await pending;
+}
+
 /** Purchase check sheets came after the schema shipped, so a database without the table gets it on first use. */
 export async function ensurePurchaseSheetsTable(schema: AppSchema): Promise<void> {
   if (purchaseSheetsReady.has(schema)) return;
@@ -217,15 +236,26 @@ export async function q<T = Row>(text: string, params: unknown[] = []): Promise<
 
 /** All live rows of a table (deleted rows excluded). */
 export async function listRows(schema: AppSchema, table: string): Promise<Row[]> {
-  return q(`select * from ${tableRef(schema, table)} where deleted_at is null order by created_at`);
+  try {
+    return await q(`select * from ${tableRef(schema, table)} where deleted_at is null order by created_at`);
+  } catch (e) {
+    // ponytail: excel_books is new; empty until the first write creates the table.
+    if (table === "excel_books" && (e as { code?: string }).code === "42P01") return [];
+    throw e;
+  }
 }
 
 /** Rows changed since a timestamp — INCLUDING soft-deleted ones, so every client converges. */
 export async function changedRows(schema: AppSchema, table: string, sinceIso: string): Promise<Row[]> {
-  return q(
-    `select * from ${tableRef(schema, table)} where updated_at > $1 order by updated_at`,
-    [sinceIso],
-  );
+  try {
+    return await q(
+      `select * from ${tableRef(schema, table)} where updated_at > $1 order by updated_at`,
+      [sinceIso],
+    );
+  } catch (e) {
+    if (table === "excel_books" && (e as { code?: string }).code === "42P01") return [];
+    throw e;
+  }
 }
 
 export async function getRow(schema: AppSchema, table: string, id: string): Promise<Row | undefined> {

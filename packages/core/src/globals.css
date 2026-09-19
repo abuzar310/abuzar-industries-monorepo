@@ -5278,7 +5278,7 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
   .paper-jobs.ph-kit .paper-job-acts{flex:1 1 100%; justify-content:flex-end}
 }
 
-/* ---------- Excel tab (Cut Size only): our own spreadsheet, kept on this device ----------
+/* ---------- Excel tab (Cut Size only): workbooks persist through the data API ----------
    The sheet wants the whole content area, so the page container drops its gutter for this
    one screen — same escape hatch the Tally sandbox uses. The frame measures its own height
    in SheetApp, because the top nav wraps to two rows at some widths. */
@@ -5308,6 +5308,10 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .xl-x{width:36px; border:0; background:none; color:var(--danger); font-size:16px; cursor:pointer}
 .xl-x:hover{background:var(--ochre-soft)}
 .xl-holder{flex:1; min-height:0; position:relative}
+.xl-frame:fullscreen,.xl-frame.is-full{width:100vw; height:100dvh; background:var(--panel-2)}
+.xl-frame.is-full{position:fixed; inset:0; z-index:80}
+body.xl-full .phone-tabs{display:none}
+.xl-pop-preset{display:flex; flex-direction:column}
 @media screen and (max-width:760px){
   /* Five buttons plus the name field ran 22px past a 375px phone, which clipped CSV.
      Tighter padding fits them all; the row still scrolls sideways on anything narrower.

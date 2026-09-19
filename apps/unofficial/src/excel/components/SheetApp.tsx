@@ -9,6 +9,7 @@ import { shouldWriteSnap } from "../lib/persist";
 import { deleteBook, getLastOpen, listBooks, loadSnapshot, saveBook, setLastOpen, stamp, type BookMeta } from "../lib/store";
 import { exportXlsx, freshId, importXlsx } from "../lib/xlsx-io";
 import { csvFromSheet, snapshotFromCsv } from "../lib/csv";
+import { EXCEL_PRESETS, snapshotFromPreset } from "../lib/preset";
 import type { UniSnapshot } from "../lib/xlsx-convert";
 
 type UniverAPI = ReturnType<typeof createUniver>["univerAPI"];
@@ -19,7 +20,7 @@ const dayText = (at: number) =>
   " " +
   new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 
-/** The engine under our own top bar. Every change saves to this device; Books lists what is kept. */
+/** The engine under our own top bar. Open, preset, and edits save to the database. */
 export default function SheetApp() {
   const frame = useRef<HTMLDivElement>(null);
   const holder = useRef<HTMLDivElement>(null);
@@ -35,6 +36,8 @@ export default function SheetApp() {
   const [status, setStatus] = useState<SaveState>("loading");
   const [books, setBooks] = useState<BookMeta[]>([]);
   const [showBooks, setShowBooks] = useState(false);
+  const [showPresets, setShowPresets] = useState(false);
+  const [full, setFull] = useState(false);
 
   function rename(next: string) {
     nameRef.current = next;
@@ -103,16 +106,26 @@ export default function SheetApp() {
     const fit = () => {
       const el = frame.current;
       if (!el) return;
+      if (document.fullscreenElement === el || el.classList.contains("is-full")) {
+        el.style.height = "100dvh";
+        return;
+      }
       const bar = document.querySelector(".phone-tabs");
       const bottom = bar ? bar.getBoundingClientRect().height : 0;
       el.style.height = Math.max(320, window.innerHeight - el.getBoundingClientRect().top - bottom) + "px";
     };
+    const onFull = () => {
+      setFull(!!document.fullscreenElement);
+      fit();
+    };
     fit();
     window.addEventListener("resize", fit);
     window.addEventListener("orientationchange", fit);
+    document.addEventListener("fullscreenchange", onFull);
     return () => {
       window.removeEventListener("resize", fit);
       window.removeEventListener("orientationchange", fit);
+      document.removeEventListener("fullscreenchange", onFull);
     };
   }, []);
 
@@ -259,8 +272,36 @@ export default function SheetApp() {
     }, 500);
   }
 
+  function toggleFull() {
+    const el = frame.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    if (el.requestFullscreen) {
+      void el.requestFullscreen().catch(() => classFull(el));
+      return;
+    }
+    classFull(el);
+  }
+
+  function classFull(el: HTMLDivElement) {
+    const on = !el.classList.contains("is-full");
+    el.classList.toggle("is-full", on);
+    document.body.classList.toggle("xl-full", on);
+    el.style.height = on ? "100dvh" : "";
+    setFull(on);
+  }
+
+  async function applyPreset(csv: string, label: string) {
+    setShowPresets(false);
+    const snap = snapshotFromPreset(csv, label);
+    await show(snap as unknown as Record<string, unknown>, snap.name);
+  }
+
   async function removeBook(book: BookMeta) {
-    if (!window.confirm("Delete “" + book.name + "” from this device?")) return;
+    if (!window.confirm("Delete “" + book.name + "”?")) return;
     await deleteBook(book.id);
     const open = apiRef.current?.getActiveWorkbook();
     if (open && open.getId() === book.id) await show(null);
@@ -284,11 +325,30 @@ export default function SheetApp() {
           aria-label="Workbook name"
           spellCheck={false}
         />
-        <button type="button" className="xl-btn" onClick={() => setShowBooks((v) => !v)} aria-expanded={showBooks}>
+        <button
+          type="button"
+          className="xl-btn"
+          onClick={() => {
+            setShowPresets(false);
+            setShowBooks((v) => !v);
+          }}
+          aria-expanded={showBooks}
+        >
           Books
         </button>
         <button type="button" className="xl-btn" onClick={() => void show(null)}>
           New
+        </button>
+        <button
+          type="button"
+          className="xl-btn"
+          onClick={() => {
+            setShowBooks(false);
+            setShowPresets((v) => !v);
+          }}
+          aria-expanded={showPresets}
+        >
+          Preset
         </button>
         <button type="button" className="xl-btn" onClick={() => fileRef.current?.click()}>
           Open
@@ -298,6 +358,9 @@ export default function SheetApp() {
         </button>
         <button type="button" className="xl-btn" onClick={exportCsvNow}>
           CSV
+        </button>
+        <button type="button" className="xl-btn" onClick={toggleFull} aria-pressed={full}>
+          {full ? "Exit" : "Full"}
         </button>
         <input
           ref={fileRef}
@@ -311,9 +374,19 @@ export default function SheetApp() {
           }}
         />
         <span className="xl-hint" role="status">
-          {status === "loading" ? "Opening…" : status === "saving" ? "Saving…" : "Saved on this device"}
+          {status === "loading" ? "Opening…" : status === "saving" ? "Saving…" : "Saved"}
         </span>
       </header>
+      {showPresets ? (
+        <div className="xl-pop xl-pop-preset">
+          {EXCEL_PRESETS.map((p) => (
+            <button key={p.id} type="button" className="xl-open" onClick={() => void applyPreset(p.csv, p.label)}>
+              <strong>{p.label}</strong>
+              <em>{p.csv.replace(/,/g, " · ")}</em>
+            </button>
+          ))}
+        </div>
+      ) : null}
       {showBooks ? (
         <div className="xl-pop">
           {books.length === 0 ? <p className="xl-empty">Nothing saved yet.</p> : null}

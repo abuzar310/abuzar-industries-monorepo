@@ -223,7 +223,8 @@ export type StoreName =
   | "websiteQuotations"
   | "carpenters"
   | "chat"
-  | "purchaseSheets";
+  | "purchaseSheets"
+  | "excelBooks";
 
 /** Landing-site timber quote submission — isolated until Import to Quotation. */
 export interface WebsiteQuoteRow {
