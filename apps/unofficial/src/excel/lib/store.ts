@@ -1,10 +1,14 @@
 // Workbooks live in the unofficial schema (`excelBooks`), same path as every other record.
-// A one-shot lift copies any leftover on-device books so opening Excel after this
-// change does not drop what was already saved in IndexedDB.
+// Folders are a small meta list. Books without a folder sit in "My sheets".
+// A one-shot lift copies leftover on-device books so nothing from IndexedDB is dropped.
 
 import { allRec, delRec, getRec, metaGet, metaSet, put } from "@/lib/data";
+import { DEFAULT_FOLDER_ID, folderOf } from "./folder";
 
-export type BookMeta = { id: string; name: string; savedAt: number };
+export { DEFAULT_FOLDER_ID, folderOf };
+
+export type FolderMeta = { id: string; name: string; savedAt: number };
+export type BookMeta = { id: string; name: string; savedAt: number; folderId: string };
 export type ExcelBook = BookMeta & { snap: Record<string, unknown> };
 
 /** When a save happened. Module-level keeps component code pure for the compiler lint. */
@@ -13,6 +17,7 @@ type Snap = Record<string, unknown>;
 
 const STORE = "excelBooks" as const;
 const LAST = "excelLastOpen";
+const FOLDERS = "excelFolders";
 
 let lifted = false;
 
@@ -24,7 +29,16 @@ function asBook(row: unknown): ExcelBook | null {
   const savedAt = typeof r.savedAt === "number" ? r.savedAt : Number(r.savedAt);
   if (!Number.isFinite(savedAt)) return null;
   if (!r.snap || typeof r.snap !== "object") return null;
-  return { id: r.id, name: r.name, savedAt, snap: r.snap };
+  return { id: r.id, name: r.name, savedAt, folderId: folderOf(r.folderId), snap: r.snap };
+}
+
+function asFolder(row: unknown): FolderMeta | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Partial<FolderMeta>;
+  if (typeof r.id !== "string" || !r.id) return null;
+  if (typeof r.name !== "string" || !r.name.trim()) return null;
+  const savedAt = typeof r.savedAt === "number" ? r.savedAt : Number(r.savedAt) || 0;
+  return { id: r.id, name: r.name.trim(), savedAt };
 }
 
 export async function listBooks(): Promise<BookMeta[]> {
@@ -33,7 +47,49 @@ export async function listBooks(): Promise<BookMeta[]> {
     .map(asBook)
     .filter((r): r is ExcelBook => !!r)
     .sort((a, b) => b.savedAt - a.savedAt)
-    .map(({ id, name, savedAt }) => ({ id, name, savedAt }));
+    .map(({ id, name, savedAt, folderId }) => ({ id, name, savedAt, folderId }));
+}
+
+export async function listFolders(): Promise<FolderMeta[]> {
+  const raw = await metaGet<unknown[]>(FOLDERS, []);
+  const extra = (Array.isArray(raw) ? raw : []).map(asFolder).filter((f): f is FolderMeta => !!f);
+  if (!extra.some((f) => f.id === DEFAULT_FOLDER_ID)) {
+    extra.unshift({ id: DEFAULT_FOLDER_ID, name: "My sheets", savedAt: 0 });
+  }
+  return extra;
+}
+
+export async function addFolder(name: string): Promise<FolderMeta> {
+  const folders = await listFolders();
+  const folder: FolderMeta = {
+    id: "fld-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    name: name.trim() || "Folder",
+    savedAt: stamp(),
+  };
+  await metaSet(FOLDERS, [...folders, folder]);
+  return folder;
+}
+
+export async function renameFolder(id: string, name: string): Promise<void> {
+  const clean = name.trim();
+  if (!clean) return;
+  const folders = await listFolders();
+  await metaSet(
+    FOLDERS,
+    folders.map((f) => (f.id === id ? { ...f, name: clean } : f)),
+  );
+}
+
+export async function deleteFolder(id: string): Promise<void> {
+  if (id === DEFAULT_FOLDER_ID) return;
+  for (const book of (await listBooks()).filter((b) => b.folderId === id)) {
+    const row = await getRec<ExcelBook>(STORE, book.id);
+    if (row) await put(STORE, { ...row, folderId: DEFAULT_FOLDER_ID });
+  }
+  await metaSet(
+    FOLDERS,
+    (await listFolders()).filter((f) => f.id !== id),
+  );
 }
 
 export async function loadSnapshot(id: string): Promise<Snap | null> {
@@ -41,7 +97,15 @@ export async function loadSnapshot(id: string): Promise<Snap | null> {
 }
 
 export async function saveBook(meta: BookMeta, snapshot: Snap): Promise<void> {
-  await put(STORE, { ...meta, snap: snapshot });
+  const prev = await getRec<ExcelBook>(STORE, meta.id);
+  await put(STORE, {
+    ...prev,
+    id: meta.id,
+    name: meta.name,
+    savedAt: meta.savedAt,
+    folderId: folderOf(meta.folderId || prev?.folderId),
+    snap: snapshot,
+  });
 }
 
 export async function deleteBook(id: string): Promise<void> {
@@ -68,7 +132,7 @@ async function liftDeviceBooks(): Promise<void> {
   if (cloud.length) return;
   for (const row of await readIdbBooks()) {
     if (!asBook(row)) continue;
-    await put(STORE, row);
+    await put(STORE, { ...row, folderId: folderOf(row.folderId) });
   }
 }
 
@@ -114,7 +178,7 @@ async function readIdbBooks(): Promise<ExcelBook[]> {
       const row = await req<{ id: string; data: Snap } | undefined>(
         d.transaction("snaps").objectStore("snaps").get(meta.id),
       );
-      if (row?.data) out.push({ ...meta, snap: row.data });
+      if (row?.data) out.push({ ...meta, folderId: folderOf(meta.folderId), snap: row.data });
     }
     return out;
   } catch {

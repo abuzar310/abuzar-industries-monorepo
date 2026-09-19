@@ -5,43 +5,60 @@ import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import UniverPresetSheetsCoreEnUS from "@univerjs/preset-sheets-core/locales/en-US";
 import { makeDebounce, shouldAutosave, type Debounced } from "../lib/autosave";
+import { DEFAULT_FOLDER_ID } from "../lib/folder";
 import { shouldWriteSnap } from "../lib/persist";
-import { deleteBook, getLastOpen, listBooks, loadSnapshot, saveBook, setLastOpen, stamp, type BookMeta } from "../lib/store";
+import {
+  addFolder,
+  deleteBook,
+  deleteFolder,
+  listBooks,
+  listFolders,
+  loadSnapshot,
+  renameFolder,
+  saveBook,
+  setLastOpen,
+  stamp,
+  type BookMeta,
+  type FolderMeta,
+} from "../lib/store";
 import { exportXlsx, freshId, importXlsx } from "../lib/xlsx-io";
 import { csvFromSheet, snapshotFromCsv } from "../lib/csv";
-import { EXCEL_PRESETS, snapshotFromPreset } from "../lib/preset";
 import type { UniSnapshot } from "../lib/xlsx-convert";
+import ExcelHome from "./ExcelHome";
 
 type UniverAPI = ReturnType<typeof createUniver>["univerAPI"];
 type SaveState = "loading" | "saving" | "saved";
+type Pending = { snapshot: Record<string, unknown> | null; name?: string; folderId: string };
 
-const dayText = (at: number) =>
-  new Date(at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) +
-  " " +
-  new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-
-/** The engine under our own top bar. Open, preset, and edits save to the database. */
+/** Home first. The engine only mounts when a book is opened, so Excel click is a window, not a sheet. */
 export default function SheetApp() {
   const frame = useRef<HTMLDivElement>(null);
   const holder = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const apiRef = useRef<UniverAPI | null>(null);
   const autoRef = useRef<Debounced | null>(null);
-  // The open unit is tracked by id: getActiveWorkbook() can point at a stale unit for a moment.
   const unitRef = useRef<string>("");
-  // Like Excel, the book's name is ours (the file's name), not a cell of the engine.
-  // The store row is the truth; the engine's internal name is only mirrored best-effort.
   const nameRef = useRef("");
+  const folderRef = useRef(DEFAULT_FOLDER_ID);
+  const pendingRef = useRef<Pending | null>(null);
+  const [view, setView] = useState<"home" | "sheet">("home");
+  const [folderId, setFolderId] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [status, setStatus] = useState<SaveState>("loading");
+  const [status, setStatus] = useState<SaveState>("saved");
   const [books, setBooks] = useState<BookMeta[]>([]);
-  const [showBooks, setShowBooks] = useState(false);
-  const [showPresets, setShowPresets] = useState(false);
+  const [folders, setFolders] = useState<FolderMeta[]>([]);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [full, setFull] = useState(false);
 
   function rename(next: string) {
     nameRef.current = next;
     setName(next);
+  }
+
+  async function refreshLists() {
+    const [nextBooks, nextFolders] = await Promise.all([listBooks(), listFolders()]);
+    setBooks(nextBooks);
+    setFolders(nextFolders);
   }
 
   function openWorkbook() {
@@ -56,8 +73,6 @@ export default function SheetApp() {
   async function persistNow() {
     const wb = openWorkbook();
     if (!wb) return;
-    // Commit the in-cell editor first. save() only sees the model, so an open editor
-    // used to write an empty sheet over a book that already had values.
     const ender = wb as unknown as { endEditingAsync?: (keep?: boolean) => Promise<boolean>; endEditing?: (keep?: boolean) => void };
     try {
       if (ender.endEditingAsync) await ender.endEditingAsync(true);
@@ -73,14 +88,18 @@ export default function SheetApp() {
       return;
     }
     await saveBook(
-      { id, name: nameRef.current || String(snap.name || "") || "Book", savedAt: stamp() },
+      {
+        id,
+        name: nameRef.current || String(snap.name || "") || "Book",
+        savedAt: stamp(),
+        folderId: folderRef.current,
+      },
       snap,
     );
-    setBooks(await listBooks());
+    await refreshLists();
     setStatus("saved");
   }
 
-  /** Close what is open and show the given snapshot (or a fresh book). */
   async function show(snapshot: Record<string, unknown> | null, displayName?: string) {
     const api = apiRef.current;
     if (!api) return;
@@ -100,9 +119,25 @@ export default function SheetApp() {
     await setLastOpen(wb.getId());
   }
 
+  function enterSheet(pending: Pending) {
+    folderRef.current = pending.folderId;
+    pendingRef.current = pending;
+    setStatus("loading");
+    setView("sheet");
+  }
+
+  async function goHome() {
+    autoRef.current?.flush();
+    await persistNow();
+    setView("home");
+    setMoreOpen(false);
+  }
+
   useEffect(() => {
-    // The sheet fills whatever the app chrome leaves. The top nav wraps to two rows at some
-    // widths and the phone bar covers the bottom, so measure it rather than guess a height.
+    void refreshLists();
+  }, []);
+
+  useEffect(() => {
     const fit = () => {
       const el = frame.current;
       if (!el) return;
@@ -130,11 +165,10 @@ export default function SheetApp() {
   }, []);
 
   useEffect(() => {
+    if (view !== "sheet") return;
     const outer = holder.current;
     if (!outer) return;
     let dead = false;
-    // Each mount paints into its own inner div. React's dev remount then lets the deferred
-    // dispose tear down only its own div, never the DOM the next mount just painted.
     const container = document.createElement("div");
     container.style.cssText = "position:absolute;inset:0";
     outer.appendChild(container);
@@ -157,22 +191,10 @@ export default function SheetApp() {
       }
     });
     void (async () => {
-      const last = await getLastOpen();
-      const rows = await listBooks();
-      const snapshot = last ? await loadSnapshot(last) : null;
+      const pending = pendingRef.current;
+      pendingRef.current = null;
       if (dead) return;
-      const wb = univerAPI.createWorkbook((snapshot ?? {}) as Parameters<UniverAPI["createWorkbook"]>[0]);
-      unitRef.current = wb.getId();
-      const row = last ? rows.find((b) => b.id === last) : undefined;
-      const display = row?.name || wb.getName() || nextName(rows);
-      rename(display);
-      try {
-        if (wb.getName() !== display) wb.setName(display);
-      } catch {
-        /* the store row carries the name */
-      }
-      await persistNow();
-      await setLastOpen(wb.getId());
+      await show(pending?.snapshot ?? null, pending?.name);
       if (!dead) setStatus("saved");
     })();
     exposeForChecks(univerAPI);
@@ -181,18 +203,15 @@ export default function SheetApp() {
       heard?.dispose();
       auto.cancel();
       apiRef.current = null;
-      // Deferred: a synchronous dispose during React's own render (StrictMode remount) trips
-      // "Attempted to synchronously unmount a root while React was already rendering".
+      unitRef.current = "";
       setTimeout(() => {
         univer.dispose();
         container.remove();
       }, 0);
     };
-    // The engine mounts once; everything after that flows through its own events.
-  }, []);
+  }, [view]);
 
   useEffect(() => {
-    // A save can be at most a second behind a closing tab; flushing here closes that gap.
     const flush = () => autoRef.current?.flush();
     window.addEventListener("beforeunload", flush);
     return () => window.removeEventListener("beforeunload", flush);
@@ -214,16 +233,22 @@ export default function SheetApp() {
     void persistNow();
   }
 
+  function currentFolder() {
+    return folderId || folderRef.current || DEFAULT_FOLDER_ID;
+  }
+
+  function startNew() {
+    const id = currentFolder();
+    folderRef.current = id;
+    enterSheet({ snapshot: null, folderId: id });
+  }
+
   async function openBook(id: string) {
-    const open = apiRef.current?.getActiveWorkbook();
-    if (open && open.getId() === id) {
-      setShowBooks(false);
-      return;
-    }
     const snapshot = await loadSnapshot(id);
     if (!snapshot) return;
-    await show(snapshot, books.find((b) => b.id === id)?.name);
-    setShowBooks(false);
+    const row = books.find((b) => b.id === id);
+    folderRef.current = row?.folderId || DEFAULT_FOLDER_ID;
+    enterSheet({ snapshot, name: row?.name, folderId: folderRef.current });
   }
 
   async function openPickedFile(picked: File) {
@@ -238,7 +263,9 @@ export default function SheetApp() {
       } else {
         snapshot = await importXlsx(picked);
       }
-      await show(snapshot as unknown as Record<string, unknown>, snapshot.name);
+      const id = currentFolder();
+      folderRef.current = id;
+      enterSheet({ snapshot: snapshot as unknown as Record<string, unknown>, name: snapshot.name, folderId: id });
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "Could not open that file");
       setStatus("saved");
@@ -253,7 +280,6 @@ export default function SheetApp() {
     );
   }
 
-  /** The active sheet's values as a .csv file, the way Excel's own CSV save works. */
   function exportCsvNow() {
     const wb = apiRef.current?.getActiveWorkbook();
     if (!wb) return;
@@ -294,128 +320,109 @@ export default function SheetApp() {
     setFull(on);
   }
 
-  async function applyPreset(csv: string, label: string) {
-    setShowPresets(false);
-    const snap = snapshotFromPreset(csv, label);
-    await show(snap as unknown as Record<string, unknown>, snap.name);
-  }
-
   async function removeBook(book: BookMeta) {
     if (!window.confirm("Delete “" + book.name + "”?")) return;
     await deleteBook(book.id);
-    const open = apiRef.current?.getActiveWorkbook();
-    if (open && open.getId() === book.id) await show(null);
-    setBooks(await listBooks());
+    await refreshLists();
+  }
+
+  async function makeFolder() {
+    const name = window.prompt("Folder name", "Folder");
+    if (name == null) return;
+    const folder = await addFolder(name);
+    await refreshLists();
+    setFolderId(folder.id);
+    setMoreOpen(false);
+  }
+
+  async function editFolderName(folder: FolderMeta) {
+    const name = window.prompt("Rename folder", folder.name);
+    if (name == null) return;
+    await renameFolder(folder.id, name);
+    await refreshLists();
+  }
+
+  async function dropFolder(folder: FolderMeta) {
+    if (folder.id === DEFAULT_FOLDER_ID) return;
+    if (!window.confirm("Delete “" + folder.name + "”? Files move to My sheets.")) return;
+    await deleteFolder(folder.id);
+    setFolderId(DEFAULT_FOLDER_ID);
+    await refreshLists();
   }
 
   return (
     <div ref={frame} className="xl-frame">
-      <header className="xl-bar">
-        <span className="xl-mark">Excel</span>
-        <input
-          className="xl-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={renameOpenBook}
-          onKeyDown={(e) => {
-            // Keys typed here belong to the name, never to the sheet's own shortcuts.
-            e.stopPropagation();
-            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-          }}
-          aria-label="Workbook name"
-          spellCheck={false}
+      {view === "home" ? (
+        <ExcelHome
+          folders={folders}
+          books={books}
+          folderId={folderId}
+          moreOpen={moreOpen}
+          onNew={startNew}
+          onOpenFile={() => fileRef.current?.click()}
+          onNewFolder={() => void makeFolder()}
+          onOpenFolder={setFolderId}
+          onOpenBook={(id) => void openBook(id)}
+          onDeleteBook={(b) => void removeBook(b)}
+          onRenameFolder={(f) => void editFolderName(f)}
+          onDeleteFolder={(f) => void dropFolder(f)}
+          onToggleMore={() => setMoreOpen((v) => !v)}
         />
-        <button
-          type="button"
-          className="xl-btn"
-          onClick={() => {
-            setShowPresets(false);
-            setShowBooks((v) => !v);
-          }}
-          aria-expanded={showBooks}
-        >
-          Books
-        </button>
-        <button type="button" className="xl-btn" onClick={() => void show(null)}>
-          New
-        </button>
-        <button
-          type="button"
-          className="xl-btn"
-          onClick={() => {
-            setShowBooks(false);
-            setShowPresets((v) => !v);
-          }}
-          aria-expanded={showPresets}
-        >
-          Preset
-        </button>
-        <button type="button" className="xl-btn" onClick={() => fileRef.current?.click()}>
-          Open
-        </button>
-        <button type="button" className="xl-btn" onClick={exportNow}>
-          Export
-        </button>
-        <button type="button" className="xl-btn" onClick={exportCsvNow}>
-          CSV
-        </button>
-        <button type="button" className="xl-btn" onClick={toggleFull} aria-pressed={full}>
-          {full ? "Exit" : "Full"}
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".xlsx,.csv"
-          hidden
-          onChange={(e) => {
-            const picked = e.target.files?.[0];
-            e.target.value = "";
-            if (picked) void openPickedFile(picked);
-          }}
-        />
-        <span className="xl-hint" role="status">
-          {status === "loading" ? "Opening…" : status === "saving" ? "Saving…" : "Saved"}
-        </span>
-      </header>
-      {showPresets ? (
-        <div className="xl-pop xl-pop-preset">
-          {EXCEL_PRESETS.map((p) => (
-            <button key={p.id} type="button" className="xl-open" onClick={() => void applyPreset(p.csv, p.label)}>
-              <strong>{p.label}</strong>
-              <em>{p.csv.replace(/,/g, " · ")}</em>
+      ) : (
+        <>
+          <header className="xl-bar">
+            <button type="button" className="xl-btn" onClick={() => void goHome()}>
+              ← Files
             </button>
-          ))}
-        </div>
-      ) : null}
-      {showBooks ? (
-        <div className="xl-pop">
-          {books.length === 0 ? <p className="xl-empty">Nothing saved yet.</p> : null}
-          {books.map((b) => (
-            <div key={b.id} className="xl-row">
-              <button type="button" className="xl-open" onClick={() => void openBook(b.id)}>
-                <strong>{b.name}</strong>
-                <em>{dayText(b.savedAt)}</em>
-              </button>
-              <button type="button" className="xl-x" aria-label={"Delete " + b.name} onClick={() => void removeBook(b)}>
-                &times;
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <div ref={holder} className="xl-holder" />
+            <input
+              className="xl-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={renameOpenBook}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              }}
+              aria-label="Workbook name"
+              spellCheck={false}
+            />
+            <button type="button" className="xl-btn" onClick={exportNow}>
+              Export
+            </button>
+            <button type="button" className="xl-btn" onClick={exportCsvNow}>
+              CSV
+            </button>
+            <button type="button" className="xl-btn" onClick={toggleFull} aria-pressed={full}>
+              {full ? "Exit" : "Full"}
+            </button>
+            <span className="xl-hint" role="status">
+              {status === "loading" ? "Opening…" : status === "saving" ? "Saving…" : "Saved"}
+            </span>
+          </header>
+          <div ref={holder} className="xl-holder" />
+        </>
+      )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".xlsx,.csv"
+        hidden
+        onChange={(e) => {
+          const picked = e.target.files?.[0];
+          e.target.value = "";
+          if (picked) void openPickedFile(picked);
+        }}
+      />
     </div>
   );
 }
 
-/** The check harness drives and reads the sheet through this handle. Dev only. */
 function exposeForChecks(api: unknown) {
   if (process.env.NODE_ENV !== "production") {
     (window as unknown as { __excelAPI?: unknown }).__excelAPI = api;
   }
 }
 
-/** Book 1, Book 2, … the first name not already taken. */
 function nextName(existing: BookMeta[]): string {
   const taken = new Set(existing.map((b) => b.name));
   for (let i = 1; ; i++) {
