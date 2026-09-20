@@ -5307,8 +5307,9 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .xl-open em{font-style:normal; font-size:11.5px; color:var(--ink-soft)}
 .xl-x{width:36px; border:0; background:none; color:var(--danger); font-size:16px; cursor:pointer}
 .xl-x:hover{background:var(--ochre-soft)}
-.xl-holder{flex:1; min-height:0; position:relative; touch-action:none; overscroll-behavior:none}
-.xl-holder canvas{touch-action:none}
+.xl-holder{flex:1; min-height:0; position:relative; touch-action:none; overscroll-behavior:none;
+  contain:layout paint; isolation:isolate; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none}
+.xl-holder canvas{touch-action:none; display:block}
 .xl-frame:fullscreen,.xl-frame.is-full{width:100vw; height:100dvh; background:var(--panel-2)}
 .xl-frame.is-full{position:fixed; inset:0; z-index:80}
 body.xl-full .phone-tabs,body.xl-sheet .phone-tabs{display:none}
