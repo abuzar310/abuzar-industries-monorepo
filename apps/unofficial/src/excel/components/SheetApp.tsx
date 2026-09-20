@@ -155,19 +155,24 @@ export default function SheetApp() {
   }, []);
 
   useEffect(() => {
+    let raf = 0;
     const fit = () => {
-      const el = frame.current;
-      if (!el) return;
-      if (document.fullscreenElement === el || el.classList.contains("is-full")) {
-        el.style.height = "100dvh";
-        return;
-      }
-      const bar = document.querySelector(".phone-tabs");
-      const bottom = bar ? bar.getBoundingClientRect().height : 0;
-      const vv = window.visualViewport;
-      const height = vv?.height ?? window.innerHeight;
-      const top = el.getBoundingClientRect().top - (vv?.offsetTop ?? 0);
-      el.style.height = Math.max(320, height - top - bottom) + "px";
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const el = frame.current;
+        if (!el) return;
+        if (document.fullscreenElement === el || el.classList.contains("is-full")) {
+          el.style.height = "100dvh";
+          return;
+        }
+        const bar = document.querySelector(".phone-tabs");
+        const bottom = bar ? bar.getBoundingClientRect().height : 0;
+        const vv = window.visualViewport;
+        const height = vv?.height ?? window.innerHeight;
+        const top = el.getBoundingClientRect().top - (vv?.offsetTop ?? 0);
+        el.style.height = Math.max(320, height - top - bottom) + "px";
+      });
     };
     const onFull = () => {
       setFull(!!document.fullscreenElement);
@@ -176,14 +181,15 @@ export default function SheetApp() {
     fit();
     window.addEventListener("resize", fit);
     window.addEventListener("orientationchange", fit);
+    // visualViewport.scroll fires while the URL bar hides and would reflow the
+    // canvas mid-flick. Resize already covers the size change.
     window.visualViewport?.addEventListener("resize", fit);
-    window.visualViewport?.addEventListener("scroll", fit);
     document.addEventListener("fullscreenchange", onFull);
     return () => {
+      if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("resize", fit);
       window.removeEventListener("orientationchange", fit);
       window.visualViewport?.removeEventListener("resize", fit);
-      window.visualViewport?.removeEventListener("scroll", fit);
       document.removeEventListener("fullscreenchange", onFull);
     };
   }, []);
@@ -197,7 +203,7 @@ export default function SheetApp() {
     container.style.cssText = "position:absolute;inset:0";
     outer.appendChild(container);
     const phone = phoneNow();
-    const { univer, univerAPI } = startEngine(container, phone);
+    const { univer, univerAPI, worker } = startEngine(container, phone);
     apiRef.current = univerAPI;
     const auto = makeDebounce(() => {
       void persistNow();
@@ -228,6 +234,7 @@ export default function SheetApp() {
       document.body.classList.remove("xl-sheet");
       setTimeout(() => {
         univer.dispose();
+        worker?.terminate();
         container.remove();
       }, 0);
     };
