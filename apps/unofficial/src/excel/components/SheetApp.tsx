@@ -13,6 +13,8 @@ import {
   listBooks,
   listFolders,
   loadSnapshot,
+  moveBook,
+  renameBook,
   renameFolder,
   saveBook,
   setLastOpen,
@@ -351,6 +353,18 @@ export default function SheetApp() {
     setFull(on);
   }
 
+  async function editBookName(book: BookMeta) {
+    const next = window.prompt("Rename file", book.name);
+    if (next == null) return;
+    await renameBook(book.id, next);
+    await refreshLists();
+  }
+
+  async function placeBook(book: BookMeta, dest: string) {
+    await moveBook(book.id, dest);
+    await refreshLists();
+  }
+
   async function removeBook(book: BookMeta) {
     if (!window.confirm("Delete “" + book.name + "”?")) return;
     await deleteBook(book.id);
@@ -394,6 +408,8 @@ export default function SheetApp() {
           onNewFolder={() => void makeFolder()}
           onOpenFolder={setFolderId}
           onOpenBook={(id) => void openBook(id)}
+          onRenameBook={(b) => void editBookName(b)}
+          onMoveBook={(b, dest) => void placeBook(b, dest)}
           onDeleteBook={(b) => void removeBook(b)}
           onRenameFolder={(f) => void editFolderName(f)}
           onDeleteFolder={(f) => void dropFolder(f)}

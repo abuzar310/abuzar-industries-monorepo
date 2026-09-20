@@ -112,6 +112,20 @@ export async function deleteBook(id: string): Promise<void> {
   await delRec(STORE, id);
 }
 
+export async function renameBook(id: string, name: string): Promise<void> {
+  const clean = name.trim();
+  if (!clean) return;
+  const row = await getRec<ExcelBook>(STORE, id);
+  if (!row) return;
+  await put(STORE, { ...row, name: clean, savedAt: stamp() });
+}
+
+export async function moveBook(id: string, folderId: string): Promise<void> {
+  const row = await getRec<ExcelBook>(STORE, id);
+  if (!row) return;
+  await put(STORE, { ...row, folderId: folderOf(folderId), savedAt: stamp() });
+}
+
 export async function getLastOpen(): Promise<string | null> {
   const id = await metaGet<string>(LAST, "");
   if (id) return id;

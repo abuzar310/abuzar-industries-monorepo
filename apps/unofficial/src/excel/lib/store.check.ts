@@ -9,6 +9,7 @@ const ok = (cond: boolean, msg: string) => {
 
 ok(folderOf(undefined) === DEFAULT_FOLDER_ID, "empty folder becomes My sheets");
 ok(folderOf("") === DEFAULT_FOLDER_ID, "blank folder becomes My sheets");
+ok(folderOf("   ") === DEFAULT_FOLDER_ID, "whitespace folder becomes My sheets");
 ok(folderOf("fld-yard") === "fld-yard", "named folder stays");
 ok(DEFAULT_FOLDER_ID === "my-sheets", "default folder id");
 

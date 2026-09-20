@@ -18,6 +18,8 @@ interface Props {
   onNewFolder: () => void;
   onOpenFolder: (id: string | null) => void;
   onOpenBook: (id: string) => void;
+  onRenameBook: (book: BookMeta) => void;
+  onMoveBook: (book: BookMeta, folderId: string) => void;
   onDeleteBook: (book: BookMeta) => void;
   onRenameFolder: (folder: FolderMeta) => void;
   onDeleteFolder: (folder: FolderMeta) => void;
@@ -35,6 +37,8 @@ export default function ExcelHome({
   onNewFolder,
   onOpenFolder,
   onOpenBook,
+  onRenameBook,
+  onMoveBook,
   onDeleteBook,
   onRenameFolder,
   onDeleteFolder,
@@ -119,15 +123,15 @@ export default function ExcelHome({
             <p className="xl-empty">Nothing in this folder yet. New Excel or Open puts a file here.</p>
           ) : (
             files.map((b) => (
-              <div key={b.id} className="xl-file">
-                <button type="button" className="xl-file-open" onClick={() => onOpenBook(b.id)}>
-                  <strong>{b.name}</strong>
-                  <em>{dayText(b.savedAt)}</em>
-                </button>
-                <button type="button" className="xl-x" aria-label={"Delete " + b.name} onClick={() => onDeleteBook(b)}>
-                  Delete
-                </button>
-              </div>
+              <FileRow
+                key={b.id}
+                book={b}
+                folders={folders}
+                onOpen={onOpenBook}
+                onRename={onRenameBook}
+                onMove={onMoveBook}
+                onDelete={onDeleteBook}
+              />
             ))
           )}
         </section>
@@ -151,23 +155,74 @@ export default function ExcelHome({
               <h2 className="xl-sec">Recent</h2>
               <section className="xl-files">
                 {recent.map((b) => (
-                  <div key={b.id} className="xl-file">
-                    <button type="button" className="xl-file-open" onClick={() => onOpenBook(b.id)}>
-                      <strong>{b.name}</strong>
-                      <em>
-                        {folders.find((f) => f.id === b.folderId)?.name || "My sheets"} · {dayText(b.savedAt)}
-                      </em>
-                    </button>
-                    <button type="button" className="xl-x" aria-label={"Delete " + b.name} onClick={() => onDeleteBook(b)}>
-                      Delete
-                    </button>
-                  </div>
+                  <FileRow
+                    key={b.id}
+                    book={b}
+                    folders={folders}
+                    showFolder
+                    onOpen={onOpenBook}
+                    onRename={onRenameBook}
+                    onMove={onMoveBook}
+                    onDelete={onDeleteBook}
+                  />
                 ))}
               </section>
             </>
           ) : null}
         </>
       )}
+    </div>
+  );
+}
+
+function FileRow({
+  book,
+  folders,
+  showFolder,
+  onOpen,
+  onRename,
+  onMove,
+  onDelete,
+}: {
+  book: BookMeta;
+  folders: FolderMeta[];
+  showFolder?: boolean;
+  onOpen: (id: string) => void;
+  onRename: (book: BookMeta) => void;
+  onMove: (book: BookMeta, folderId: string) => void;
+  onDelete: (book: BookMeta) => void;
+}) {
+  const folderName = folders.find((f) => f.id === book.folderId)?.name || "My sheets";
+  return (
+    <div className="xl-file">
+      <button type="button" className="xl-file-open" onClick={() => onOpen(book.id)}>
+        <strong>{book.name}</strong>
+        <em>
+          {showFolder ? folderName + " · " : ""}
+          {dayText(book.savedAt)}
+        </em>
+      </button>
+      <button type="button" className="xl-file-act" onClick={() => onRename(book)}>
+        Rename
+      </button>
+      <label className="xl-file-move">
+        <select
+          aria-label={"Move " + book.name}
+          value={book.folderId}
+          onChange={(e) => {
+            if (e.target.value !== book.folderId) onMove(book, e.target.value);
+          }}
+        >
+          {folders.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="button" className="xl-x" aria-label={"Delete " + book.name} onClick={() => onDelete(book)}>
+        Delete
+      </button>
     </div>
   );
 }
