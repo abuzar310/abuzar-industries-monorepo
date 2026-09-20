@@ -5307,10 +5307,20 @@ td.att-day:hover .att-day-amt-add{opacity:.6}
 .xl-open em{font-style:normal; font-size:11.5px; color:var(--ink-soft)}
 .xl-x{width:36px; border:0; background:none; color:var(--danger); font-size:16px; cursor:pointer}
 .xl-x:hover{background:var(--ochre-soft)}
-.xl-holder{flex:1; min-height:0; position:relative}
+.xl-holder{flex:1; min-height:0; position:relative; touch-action:none; overscroll-behavior:none}
+.xl-holder canvas{touch-action:none}
 .xl-frame:fullscreen,.xl-frame.is-full{width:100vw; height:100dvh; background:var(--panel-2)}
 .xl-frame.is-full{position:fixed; inset:0; z-index:80}
-body.xl-full .phone-tabs{display:none}
+body.xl-full .phone-tabs,body.xl-sheet .phone-tabs{display:none}
+body.xl-sheet,body.xl-full{overflow:hidden; overscroll-behavior:none}
+.xl-tools{position:relative; display:flex; align-items:center}
+.xl-tools > summary{list-style:none; cursor:pointer}
+.xl-tools > summary::-webkit-details-marker{display:none}
+.xl-tools-pop{display:flex; align-items:center; gap:inherit}
+@media screen and (min-width:761px){
+  .xl-tools,.xl-tools-pop{display:contents}
+  .xl-tools > summary{display:none}
+}
 .xl-pop-preset{display:flex; flex-direction:column}
 .xl-home{flex:1; min-height:0; overflow:auto; padding:22px 22px 32px; background:var(--paper)}
 .xl-home-top{display:flex; align-items:flex-start; gap:14px; margin-bottom:18px}
@@ -5349,17 +5359,21 @@ body.xl-full .phone-tabs{display:none}
 .xl-file-open em{font-style:normal; font-size:12px; color:var(--ink-soft)}
 .xl-file .xl-x{width:auto; padding:0 14px; font-size:12px}
 @media screen and (max-width:760px){
-  /* Five buttons plus the name field ran 22px past a 375px phone, which clipped CSV.
-     Tighter padding fits them all; the row still scrolls sideways on anything narrower.
+  /* Files + name + More. Full is auto on a phone. Export/CSV sit in the More menu.
      .xl-name must stay after the blanket rule — equal specificity, so order decides. */
-  .xl-bar{gap:6px; padding:0 8px; overflow-x:auto; -webkit-overflow-scrolling:touch}
+  .xl-bar{gap:6px; padding:0 max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+    overflow-x:auto; -webkit-overflow-scrolling:touch}
   .xl-bar > *{flex:0 0 auto}
-  .xl-btn{padding:0 9px}
+  .xl-btn{padding:0 9px; touch-action:manipulation}
   .xl-mark{display:none}
-  .xl-name{flex:1 1 84px; min-width:64px}
-  .xl-hint{display:none}
+  .xl-name{flex:1 1 84px; min-width:64px; font-size:16px}
+  .xl-hint,.xl-full-btn{display:none}
   .xl-pop{left:8px; right:8px; width:auto}
   .xl-home{padding:16px 14px 24px}
   .xl-home-top h1{font-size:22px}
   .xl-act{min-width:calc(50% - 6px)}
+  .xl-tools-pop{position:absolute; top:calc(100% + 4px); right:0; z-index:40; flex-direction:column;
+    gap:6px; padding:8px; background:var(--walnut); border:1px solid rgba(255,255,255,.25);
+    border-radius:8px; box-shadow:var(--shadow-lg)}
+  .xl-frame.is-full .xl-bar{padding-top:env(safe-area-inset-top); height:calc(44px + env(safe-area-inset-top))}
 }

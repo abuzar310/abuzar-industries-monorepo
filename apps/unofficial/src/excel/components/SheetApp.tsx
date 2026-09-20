@@ -1,11 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import "@univerjs/preset-sheets-core/lib/index.css";
-import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
-import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
-import UniverPresetSheetsCoreEnUS from "@univerjs/preset-sheets-core/locales/en-US";
 import { makeDebounce, shouldAutosave, type Debounced } from "../lib/autosave";
+import { startEngine } from "../lib/engine";
 import { DEFAULT_FOLDER_ID } from "../lib/folder";
+import { phoneNow } from "../lib/phone";
 import { shouldWriteSnap } from "../lib/persist";
 import {
   addFolder,
@@ -28,9 +27,15 @@ import type { UniSnapshot } from "../lib/xlsx-convert";
 import { emptyYardSnapshot, yardFromGrid, yardFromSheetBytes } from "../lib/yard-format";
 import ExcelHome from "./ExcelHome";
 
-type UniverAPI = ReturnType<typeof createUniver>["univerAPI"];
+type UniverAPI = ReturnType<typeof startEngine>["univerAPI"];
 type SaveState = "loading" | "saving" | "saved";
-type Pending = { snapshot: Record<string, unknown> | null; name?: string; folderId: string };
+type Pending = {
+  snapshot: Record<string, unknown> | null;
+  name?: string;
+  folderId: string;
+  /** Already in the store — do not write the snapshot again on open (phone hitch). */
+  keep?: boolean;
+};
 
 /** Home first. The engine only mounts when a book is opened, so Excel click is a window, not a sheet. */
 export default function SheetApp() {
@@ -102,7 +107,7 @@ export default function SheetApp() {
     setStatus("saved");
   }
 
-  async function show(snapshot: Record<string, unknown> | null, displayName?: string) {
+  async function show(snapshot: Record<string, unknown> | null, displayName?: string, keep?: boolean) {
     const api = apiRef.current;
     if (!api) return;
     autoRef.current?.flush();
@@ -117,7 +122,12 @@ export default function SheetApp() {
     } catch {
       /* the store row carries the name */
     }
-    await persistNow();
+    if (!keep) {
+      // paint first; a full snapshot write on open is what made the phone hitch
+      requestAnimationFrame(() => {
+        void persistNow();
+      });
+    }
     await setLastOpen(wb.getId());
   }
 
@@ -131,6 +141,9 @@ export default function SheetApp() {
   async function goHome() {
     autoRef.current?.flush();
     await persistNow();
+    const el = frame.current;
+    if (el?.classList.contains("is-full")) classFull(el);
+    document.body.classList.remove("xl-sheet", "xl-full");
     setView("home");
     setMoreOpen(false);
   }
@@ -149,7 +162,10 @@ export default function SheetApp() {
       }
       const bar = document.querySelector(".phone-tabs");
       const bottom = bar ? bar.getBoundingClientRect().height : 0;
-      el.style.height = Math.max(320, window.innerHeight - el.getBoundingClientRect().top - bottom) + "px";
+      const vv = window.visualViewport;
+      const height = vv?.height ?? window.innerHeight;
+      const top = el.getBoundingClientRect().top - (vv?.offsetTop ?? 0);
+      el.style.height = Math.max(320, height - top - bottom) + "px";
     };
     const onFull = () => {
       setFull(!!document.fullscreenElement);
@@ -158,10 +174,14 @@ export default function SheetApp() {
     fit();
     window.addEventListener("resize", fit);
     window.addEventListener("orientationchange", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("scroll", fit);
     document.addEventListener("fullscreenchange", onFull);
     return () => {
       window.removeEventListener("resize", fit);
       window.removeEventListener("orientationchange", fit);
+      window.visualViewport?.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("scroll", fit);
       document.removeEventListener("fullscreenchange", onFull);
     };
   }, []);
@@ -174,17 +194,12 @@ export default function SheetApp() {
     const container = document.createElement("div");
     container.style.cssText = "position:absolute;inset:0";
     outer.appendChild(container);
-    const { univer, univerAPI } = createUniver({
-      locale: LocaleType.EN_US,
-      locales: {
-        [LocaleType.EN_US]: mergeLocales(UniverPresetSheetsCoreEnUS),
-      },
-      presets: [UniverSheetsCorePreset({ container, formulaBar: true, statusBarStatistic: true })],
-    });
+    const phone = phoneNow();
+    const { univer, univerAPI } = startEngine(container, phone);
     apiRef.current = univerAPI;
     const auto = makeDebounce(() => {
       void persistNow();
-    }, 1000);
+    }, phone ? 1800 : 1000);
     autoRef.current = auto;
     const heard = univerAPI.onCommandExecuted((command) => {
       if (shouldAutosave(command.id)) {
@@ -196,16 +211,19 @@ export default function SheetApp() {
       const pending = pendingRef.current;
       pendingRef.current = null;
       if (dead) return;
-      await show(pending?.snapshot ?? null, pending?.name);
+      await show(pending?.snapshot ?? null, pending?.name, pending?.keep);
       if (!dead) setStatus("saved");
     })();
     exposeForChecks(univerAPI);
+    document.body.classList.add("xl-sheet");
+    if (phone && frame.current && !frame.current.classList.contains("is-full")) classFull(frame.current);
     return () => {
       dead = true;
       heard?.dispose();
       auto.cancel();
       apiRef.current = null;
       unitRef.current = "";
+      document.body.classList.remove("xl-sheet");
       setTimeout(() => {
         univer.dispose();
         container.remove();
@@ -258,7 +276,7 @@ export default function SheetApp() {
     if (!snapshot) return;
     const row = books.find((b) => b.id === id);
     folderRef.current = row?.folderId || DEFAULT_FOLDER_ID;
-    enterSheet({ snapshot, name: row?.name, folderId: folderRef.current });
+    enterSheet({ snapshot, name: row?.name, folderId: folderRef.current, keep: true });
   }
 
   async function openPickedFile(picked: File) {
@@ -400,13 +418,18 @@ export default function SheetApp() {
               aria-label="Workbook name"
               spellCheck={false}
             />
-            <button type="button" className="xl-btn" onClick={exportNow}>
-              Export
-            </button>
-            <button type="button" className="xl-btn" onClick={exportCsvNow}>
-              CSV
-            </button>
-            <button type="button" className="xl-btn" onClick={toggleFull} aria-pressed={full}>
+            <details className="xl-tools">
+              <summary className="xl-btn">More</summary>
+              <div className="xl-tools-pop">
+                <button type="button" className="xl-btn" onClick={exportNow}>
+                  Export
+                </button>
+                <button type="button" className="xl-btn" onClick={exportCsvNow}>
+                  CSV
+                </button>
+              </div>
+            </details>
+            <button type="button" className="xl-btn xl-full-btn" onClick={toggleFull} aria-pressed={full}>
               {full ? "Exit" : "Full"}
             </button>
             <span className="xl-hint" role="status">
