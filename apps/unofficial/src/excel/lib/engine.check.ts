@@ -26,6 +26,11 @@ const workerSrc = readFileSync(join(process.cwd(), "apps/unofficial/src/excel/li
 ok(workerSrc.includes("UniverSheetsCoreWorkerPreset"), "formula worker is the official sheets-core worker preset");
 ok(!workerSrc.includes("createUniver"), "formula worker stays a raw Univer app so the facade/DOM does not load in the worker");
 
+const app = readFileSync(join(process.cwd(), "apps/unofficial/src/excel/components/SheetApp.tsx"), "utf8");
+ok(!app.includes('import { startEngine }'), "Files home does not statically import the engine");
+ok(!app.includes('import "@univerjs/preset-sheets-core/lib/index.css"'), "Files home does not statically import Univer CSS");
+ok(app.includes('import("../lib/engine")'), "the engine loads only when a book opens");
+
 const pnpm = join(process.cwd(), "node_modules/.pnpm");
 ok(existsSync(pnpm), "pnpm store is present so we can read the installed engine");
 const sheetsUi = readdirSync(pnpm).find((name) => name.startsWith("@univerjs+sheets-ui@"));

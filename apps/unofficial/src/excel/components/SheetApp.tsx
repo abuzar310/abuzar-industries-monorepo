@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import "@univerjs/preset-sheets-core/lib/index.css";
 import { makeDebounce, shouldAutosave, type Debounced } from "../lib/autosave";
-import { startEngine } from "../lib/engine";
+import type { SheetEngine } from "../lib/engine";
 import { DEFAULT_FOLDER_ID } from "../lib/folder";
 import { phoneNow } from "../lib/phone";
 import { shouldWriteSnap } from "../lib/persist";
@@ -29,7 +28,7 @@ import type { UniSnapshot } from "../lib/xlsx-convert";
 import { emptyYardSnapshot, yardFromGrid, yardFromSheetBytes } from "../lib/yard-format";
 import ExcelHome from "./ExcelHome";
 
-type UniverAPI = ReturnType<typeof startEngine>["univerAPI"];
+type UniverAPI = SheetEngine["univerAPI"];
 type SaveState = "loading" | "saving" | "saved";
 type Pending = {
   snapshot: Record<string, unknown> | null;
@@ -203,37 +202,50 @@ export default function SheetApp() {
     container.style.cssText = "position:absolute;inset:0";
     outer.appendChild(container);
     const phone = phoneNow();
-    const { univer, univerAPI, worker } = startEngine(container, phone);
-    apiRef.current = univerAPI;
-    const auto = makeDebounce(() => {
-      void persistNow();
-    }, phone ? 1800 : 1000);
-    autoRef.current = auto;
-    const heard = univerAPI.onCommandExecuted((command) => {
-      if (shouldAutosave(command.id)) {
-        setStatus("saving");
-        auto.kick();
-      }
-    });
+    let univer: SheetEngine["univer"] | undefined;
+    let worker: Worker | undefined;
+    let heard: { dispose?: () => void } | undefined;
+    let auto: Debounced | undefined;
+    // Files home must not pay for Univer. Load the engine only when a book opens.
     void (async () => {
+      const [{ startEngine }] = await Promise.all([
+        import("../lib/engine"),
+        import("@univerjs/preset-sheets-core/lib/index.css"),
+      ]);
+      if (dead) return;
+      const engine = startEngine(container, phone);
+      univer = engine.univer;
+      worker = engine.worker;
+      apiRef.current = engine.univerAPI;
+      auto = makeDebounce(() => {
+        void persistNow();
+      }, phone ? 1800 : 1000);
+      autoRef.current = auto;
+      heard = engine.univerAPI.onCommandExecuted((command) => {
+        if (shouldAutosave(command.id)) {
+          setStatus("saving");
+          auto?.kick();
+        }
+      });
       const pending = pendingRef.current;
       pendingRef.current = null;
       if (dead) return;
       await show(pending?.snapshot ?? null, pending?.name, pending?.keep);
-      if (!dead) setStatus("saved");
+      if (dead) return;
+      setStatus("saved");
+      exposeForChecks(engine.univerAPI);
+      document.body.classList.add("xl-sheet");
+      if (phone && frame.current && !frame.current.classList.contains("is-full")) classFull(frame.current);
     })();
-    exposeForChecks(univerAPI);
-    document.body.classList.add("xl-sheet");
-    if (phone && frame.current && !frame.current.classList.contains("is-full")) classFull(frame.current);
     return () => {
       dead = true;
-      heard?.dispose();
-      auto.cancel();
+      heard?.dispose?.();
+      auto?.cancel();
       apiRef.current = null;
       unitRef.current = "";
       document.body.classList.remove("xl-sheet");
       setTimeout(() => {
-        univer.dispose();
+        univer?.dispose();
         worker?.terminate();
         container.remove();
       }, 0);
