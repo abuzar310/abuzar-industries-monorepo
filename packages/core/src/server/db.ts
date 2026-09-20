@@ -83,6 +83,8 @@ export function pool(): Pool {
   // Serverless + session pooler: hold few sockets, give them back before the
   // pooler kills them (~minutes idle). No error listener → the isolate dies
   // and Safa shows "Startup error" until a new instance boots.
+  // Local Postgres has no TLS. Forcing ssl here makes `next dev` refuse 127.0.0.1.
+  const local = /localhost|127\.0\.0\.1/.test(url);
   _pool = new Pool({
     connectionString: url,
     max: 3,
@@ -90,7 +92,7 @@ export function pool(): Pool {
     connectionTimeoutMillis: 8_000,
     allowExitOnIdle: true,
     keepAlive: true,
-    ssl: { rejectUnauthorized: false },
+    ssl: local ? false : { rejectUnauthorized: false },
   });
   _pool.on("error", (err) => {
     console.error("[db] idle client error", err.message);
