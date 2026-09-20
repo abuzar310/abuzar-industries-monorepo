@@ -23,6 +23,7 @@ import {
 } from "../lib/store";
 import { exportXlsx, freshId, importXlsx } from "../lib/xlsx-io";
 import { csvFromSheet, snapshotFromCsv } from "../lib/csv";
+import { snapshotFromPreset } from "../lib/preset";
 import type { UniSnapshot } from "../lib/xlsx-convert";
 import ExcelHome from "./ExcelHome";
 
@@ -243,6 +244,13 @@ export default function SheetApp() {
     enterSheet({ snapshot: null, folderId: id });
   }
 
+  function startPreset(csv: string, label: string) {
+    const snap = snapshotFromPreset(csv, label);
+    const id = currentFolder();
+    folderRef.current = id;
+    enterSheet({ snapshot: snap as unknown as Record<string, unknown>, name: snap.name, folderId: id });
+  }
+
   async function openBook(id: string) {
     const snapshot = await loadSnapshot(id);
     if (!snapshot) return;
@@ -367,6 +375,7 @@ export default function SheetApp() {
           onRenameFolder={(f) => void editFolderName(f)}
           onDeleteFolder={(f) => void dropFolder(f)}
           onToggleMore={() => setMoreOpen((v) => !v)}
+          onPreset={startPreset}
         />
       ) : (
         <>

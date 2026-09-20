@@ -1,5 +1,6 @@
 "use client";
 import { DEFAULT_FOLDER_ID } from "../lib/folder";
+import { EXCEL_PRESETS } from "../lib/preset";
 import type { BookMeta, FolderMeta } from "../lib/store";
 
 const dayText = (at: number) =>
@@ -21,6 +22,7 @@ interface Props {
   onRenameFolder: (folder: FolderMeta) => void;
   onDeleteFolder: (folder: FolderMeta) => void;
   onToggleMore: () => void;
+  onPreset: (csv: string, label: string) => void;
 }
 
 export default function ExcelHome({
@@ -37,6 +39,7 @@ export default function ExcelHome({
   onRenameFolder,
   onDeleteFolder,
   onToggleMore,
+  onPreset,
 }: Props) {
   const folder = folderId ? folders.find((f) => f.id === folderId) : null;
   const files = folderId ? books.filter((b) => b.folderId === folderId) : [];
@@ -96,8 +99,13 @@ export default function ExcelHome({
                 <span>Other actions</span>
               </button>
               {moreOpen ? (
-                <div className="xl-more">
-                  <p>Your sheet preset will land here when you send it.</p>
+                <div className="xl-more xl-pop-preset">
+                  {EXCEL_PRESETS.map((p) => (
+                    <button key={p.id} type="button" className="xl-open" onClick={() => onPreset(p.csv, p.label)}>
+                      <strong>{p.label}</strong>
+                      <em>{p.csv.replace(/,/g, " · ")}</em>
+                    </button>
+                  ))}
                 </div>
               ) : null}
             </div>

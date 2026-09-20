@@ -63,10 +63,11 @@ browser NEVER talks to Postgres or Supabase directly; the only secret is
 ## The Excel tab (`apps/unofficial/src/excel`)
 
 Cut Size has an owner-only **Excel** tab at `/excel`: our own spreadsheet, built on
-the free Univer core with ExcelJS for `.xlsx` in a Web Worker. It is the one part of
-the app that is deliberately device-local — workbooks live in IndexedDB and never
-touch the business schemas, `lib/data.ts`, or any table above. The cloud-only rules
-govern business data, which this screen never handles. Never put business data in it.
+the free Univer core with ExcelJS for `.xlsx` in a Web Worker. Workbooks persist
+through `lib/data.ts` into unofficial `excel_books` (plus a one-shot IndexedDB lift
+for leftover on-device books). Never put quotations, money, or other business rows
+into this screen's own helpers — go through `lib/data.ts`. The engine stays in this
+app so official neither installs nor bundles Univer.
 
 Its code sits outside `packages/core` on purpose, so the official app neither
 installs nor bundles the engine, and everything inside it uses **relative imports**
