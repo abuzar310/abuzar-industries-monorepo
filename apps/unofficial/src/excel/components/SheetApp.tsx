@@ -22,9 +22,10 @@ import {
   type FolderMeta,
 } from "../lib/store";
 import { exportXlsx, freshId, importXlsx } from "../lib/xlsx-io";
-import { csvFromSheet, snapshotFromCsv } from "../lib/csv";
+import { csvFromSheet, parseCsv, snapshotFromCsv } from "../lib/csv";
 import { snapshotFromPreset } from "../lib/preset";
 import type { UniSnapshot } from "../lib/xlsx-convert";
+import { emptyYardSnapshot, yardFromGrid, yardFromSheetBytes } from "../lib/yard-format";
 import ExcelHome from "./ExcelHome";
 
 type UniverAPI = ReturnType<typeof createUniver>["univerAPI"];
@@ -239,13 +240,14 @@ export default function SheetApp() {
   }
 
   function startNew() {
+    const snap = emptyYardSnapshot();
     const id = currentFolder();
     folderRef.current = id;
-    enterSheet({ snapshot: null, folderId: id });
+    enterSheet({ snapshot: snap as unknown as Record<string, unknown>, name: snap.name, folderId: id });
   }
 
-  function startPreset(csv: string, label: string) {
-    const snap = snapshotFromPreset(csv, label);
+  function startPreset(presetId: string) {
+    const snap = snapshotFromPreset(presetId);
     const id = currentFolder();
     folderRef.current = id;
     enterSheet({ snapshot: snap as unknown as Record<string, unknown>, name: snap.name, folderId: id });
@@ -264,12 +266,15 @@ export default function SheetApp() {
     try {
       let snapshot: UniSnapshot;
       if (/\.csv$/i.test(picked.name)) {
-        snapshot = snapshotFromCsv(await picked.text());
+        const text = await picked.text();
+        snapshot = yardFromGrid(parseCsv(text)) ?? snapshotFromCsv(text);
         snapshot.id = freshId();
-        snapshot.name = picked.name.replace(/\.[^.]+$/, "");
+        snapshot.name = picked.name.replace(/\.[^.]+$/, "") || snapshot.name;
         if (!snapshot.sheetOrder.length) throw new Error("No rows found in that file");
       } else {
-        snapshot = await importXlsx(picked);
+        const buf = new Uint8Array(await picked.arrayBuffer());
+        snapshot = (await yardFromSheetBytes(picked.name, buf)) ?? (await importXlsx(picked));
+        snapshot.name = picked.name.replace(/\.[^.]+$/, "") || snapshot.name;
       }
       const id = currentFolder();
       folderRef.current = id;

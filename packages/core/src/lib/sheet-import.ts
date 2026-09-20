@@ -432,7 +432,7 @@ function attemptGrids(grids: string[][][]): SheetAttempt {
 }
 
 /** Every sheet of an Excel file, or the one grid of a CSV. */
-async function sheetGrids(name: string, buf: Uint8Array): Promise<string[][][]> {
+export async function readSheetGrids(name: string, buf: Uint8Array): Promise<string[][][]> {
   const lower = String(name || "").toLowerCase();
   if (looksOle(buf) || (lower.endsWith(".xls") && !lower.endsWith(".xlsx"))) {
     throw new Error("Old .xls files can't be opened here. In Excel use Save As and pick .xlsx, or save it as a PDF.");
@@ -442,7 +442,7 @@ async function sheetGrids(name: string, buf: Uint8Array): Promise<string[][][]> 
 }
 
 export async function readSheetBytes(name: string, buf: Uint8Array): Promise<SheetAttempt> {
-  return attemptGrids(await sheetGrids(name, buf));
+  return attemptGrids(await readSheetGrids(name, buf));
 }
 
 export async function readSheetFile(file: File): Promise<SheetAttempt> {
@@ -497,7 +497,7 @@ export function purchaseFromGrid(grid: string[][]): PurchaseRead {
 
 /** The purchase check's local read: lines when the columns are clear, otherwise the rows as text for the reader. */
 export async function readPurchaseSheetBytes(name: string, buf: Uint8Array): Promise<{ read: PurchaseRead } | { text: string }> {
-  const grids = await sheetGrids(name, buf);
+  const grids = await readSheetGrids(name, buf);
   for (const grid of grids) {
     const read = purchaseFromGrid(grid);
     if (read.lines.length) return { read };

@@ -8,15 +8,18 @@ const ok = (cond: boolean, msg: string) => {
 };
 
 ok(EXCEL_PRESETS.length >= 1, "at least one preset");
-const yard = snapshotFromPreset(EXCEL_PRESETS[0].csv, "Yard sheet", "wb-test");
+ok(EXCEL_PRESETS[0].id === "yard", "yard is first");
+const yard = snapshotFromPreset("yard", "wb-test");
 ok(yard.id === "wb-test", "preset keeps id");
 ok(yard.name === "Yard sheet", "preset keeps name");
 ok(yard.sheetOrder.length === 1, "one sheet");
-const header = yard.sheets[yard.sheetOrder[0]]?.cellData[0];
-ok(header?.[0]?.v === "Date", "A1 Date");
-ok(header?.[6]?.v === "Amount", "G1 Amount");
+const cells = yard.sheets[yard.sheetOrder[0]]?.cellData;
+ok(cells?.[0]?.[2]?.v === "QUOTATION", "yard title");
+ok(cells?.[2]?.[2]?.v === "TEAK", "teak heading");
+ok(cells?.[16]?.[2]?.v === "WHITE TEAK", "white teak heading");
+ok(cells?.[30]?.[2]?.v === "NEEM", "neem heading");
 
-const rec = snapshotFromPreset(EXCEL_PRESETS[1].csv, "Receipts", "wb-rec");
+const rec = snapshotFromPreset("receipts", "wb-rec");
 ok(rec.sheets[rec.sheetOrder[0]]?.cellData[0]?.[1]?.v === "From", "B1 From");
 
 console.log(`excel preset.check OK (${n} assertions)`);

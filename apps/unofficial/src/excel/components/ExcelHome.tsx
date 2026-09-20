@@ -22,7 +22,7 @@ interface Props {
   onRenameFolder: (folder: FolderMeta) => void;
   onDeleteFolder: (folder: FolderMeta) => void;
   onToggleMore: () => void;
-  onPreset: (csv: string, label: string) => void;
+  onPreset: (id: string) => void;
 }
 
 export default function ExcelHome({
@@ -68,11 +68,11 @@ export default function ExcelHome({
       <div className="xl-acts">
         <button type="button" className="xl-act" onClick={onNew}>
           <b>New Excel</b>
-          <span>Blank workbook</span>
+          <span>Teak · White Teak · Neem</span>
         </button>
         <button type="button" className="xl-act" onClick={onOpenFile}>
           <b>Open</b>
-          <span>.xlsx or .csv</span>
+          <span>Purchase list → our sheet</span>
         </button>
         {folder ? (
           <>
@@ -101,9 +101,9 @@ export default function ExcelHome({
               {moreOpen ? (
                 <div className="xl-more xl-pop-preset">
                   {EXCEL_PRESETS.map((p) => (
-                    <button key={p.id} type="button" className="xl-open" onClick={() => onPreset(p.csv, p.label)}>
+                    <button key={p.id} type="button" className="xl-open" onClick={() => onPreset(p.id)}>
                       <strong>{p.label}</strong>
-                      <em>{p.csv.replace(/,/g, " · ")}</em>
+                      <em>{p.hint}</em>
                     </button>
                   ))}
                 </div>
