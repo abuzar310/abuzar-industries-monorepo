@@ -1,9 +1,0 @@
-{
-  "name": "Abuzar Industries",
-  "short_name": "Abuzar",
-  "description": "Timber quotations, invoices, customers, stock and daybook.",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#F2ECE0",
-  "theme_color": "#33241A"
-}

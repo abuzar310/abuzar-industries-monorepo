@@ -76,9 +76,7 @@ function systemPrompt(appLabel: string, schema: AppSchema): string {
     "This app is NOT Tally/Zoho/Vyapar.",
     unofficial
       ? "Cut Size tabs: Dashboard, Balances, Receipts, Accounts, Quotation editor, Quotations, Customers, Carpenters, Suppliers/Buys, Contacts, Daybook, Books, Logs, Attendance. Quote payments: editor Payment / Accept payment (Cash/UPI) or Receipts."
-      : schema === "merged"
-        ? "Testing mix: Cut Size daybook (Balances, Receipts, Accounts, Daybook, Attendance, Excel) plus Official invoices, stock, tally and reports. Quotations are estimates; invoices are the bills."
-        : "Official tabs: Dashboard, Quotation, Quotations, Invoices, Customers, Suppliers, Stock, Reports. Quotations are estimates; invoices are the bills. Stock moves on buy/sell invoices.",
+      : "Official tabs: Dashboard, Quotation, Quotations, Invoices, Customers, Suppliers, Stock, Reports. Quotations are estimates; invoices are the bills. Stock moves on buy/sell invoices.",
     "You have a READ-ONLY database snapshot in this request. You cannot record payments, edit quotes, or change stock.",
     "Never invent GST numbers, bank balances, or payment amounts — use only the READ-ONLY snapshot or figures the user typed.",
     "If the snapshot lists dues, answer who-owes questions from it. Do not say you lack access.",

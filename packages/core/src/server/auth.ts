@@ -1,7 +1,7 @@
 // Server-side auth: scrypt-hashed user passwords in the database + a signed,
 // httpOnly session cookie. No passwords or tokens ever live in browser storage.
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
-import { ensureAppSchema, q, tableRef, type AppSchema } from "./db";
+import { q, tableRef, type AppSchema } from "./db";
 
 export interface AppUser {
   id: string;
@@ -87,7 +87,6 @@ const seeded: Partial<Record<AppSchema, boolean>> = {};
 /** Make sure the app's user rows exist (first boot on a fresh database). */
 export async function ensureUsers(schema: AppSchema): Promise<void> {
   if (seeded[schema]) return;
-  await ensureAppSchema(schema);
   for (const u of DEFAULT_USERS) {
     await q(
       `insert into ${tableRef(schema, "users")} (id, name, role, password)
