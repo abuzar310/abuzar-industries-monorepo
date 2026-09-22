@@ -1,9 +1,10 @@
 -- ============================================================================
 -- NEW cloud-only schema — the database is the single source of truth.
 --
--- Two fully isolated schemas, one per app:
+-- Isolated schemas, one per app:
 --   official   → Abuzar Industries (invoices + stock/trading + ledger)
 --   unofficial → Safa / Cut Size   (quotations + daybook + balances)
+--   merged     → Abuzar-testing mix (both apps, own database)
 --
 -- Design rules (all the old failure modes engineered out):
 --   * One `documents` table per app (kind = 'quotation' | 'invoice') — no more
@@ -55,7 +56,7 @@ declare
     'excel_books'
   ];
 begin
-  foreach sch in array array['official', 'unofficial'] loop
+  foreach sch in array array['official', 'unofficial', 'merged'] loop
     execute format('create schema if not exists %I', sch);
 
     foreach t in array tables loop
@@ -127,5 +128,12 @@ create or replace function unofficial.next_counter(cname text) returns bigint
 language sql as $$
   insert into unofficial.counters (name, n) values (cname, 1)
   on conflict (name) do update set n = unofficial.counters.n + 1
+  returning n;
+$$;
+
+create or replace function merged.next_counter(cname text) returns bigint
+language sql as $$
+  insert into merged.counters (name, n) values (cname, 1)
+  on conflict (name) do update set n = merged.counters.n + 1
   returning n;
 $$;

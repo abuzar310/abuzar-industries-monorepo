@@ -3,7 +3,7 @@
 // the app's authenticated API routes, which call these helpers.
 import { Pool } from "pg";
 
-export type AppSchema = "official" | "unofficial";
+export type AppSchema = "official" | "unofficial" | "merged";
 
 /** Client-facing store names → physical tables (quotations + invoices share one table). */
 export const STORE_TABLE: Record<string, string> = {
@@ -116,6 +116,68 @@ const ident = (s: string) => {
 
 export const tableRef = (schema: AppSchema, table: string) =>
   `${ident(schema)}.${ident(table)}`;
+
+const REC_TABLES = [
+  "documents", "customers", "suppliers", "stock", "expenses", "sessions",
+  "ledgers", "vouchers", "collections", "pay_holders", "workers", "attendance",
+  "activity", "purchases", "website_quotations", "carpenters", "chat",
+  "purchase_sheets", "excel_books",
+] as const;
+
+const schemaReady = new Set<string>();
+const schemaEnsuring = new Map<string, Promise<void>>();
+
+/** Create schema + tables + users/meta/counters on a fresh database (testing mix). */
+export async function ensureAppSchema(schema: AppSchema): Promise<void> {
+  if (schemaReady.has(schema)) return;
+  let pending = schemaEnsuring.get(schema);
+  if (!pending) {
+    pending = (async () => {
+      const sch = ident(schema);
+      await q(`create schema if not exists ${sch}`);
+      await q(`
+        create or replace function public.touch_updated_at() returns trigger
+        language plpgsql as $fn$
+        begin
+          new.updated_at := now();
+          return new;
+        end $fn$`);
+      for (const table of REC_TABLES) await ensureRecTable(schema, table);
+      await q(`
+        create table if not exists ${sch}.meta (
+          k          text primary key,
+          v          jsonb,
+          updated_at timestamptz not null default now()
+        )`);
+      await q(`
+        create table if not exists ${sch}.counters (
+          name text primary key,
+          n    bigint not null default 0
+        )`);
+      await q(`
+        create table if not exists ${sch}.users (
+          id         text primary key,
+          name       text not null,
+          role       text not null check (role in ('owner', 'manager')),
+          password   text not null,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        )`);
+      await q(`
+        create or replace function ${sch}.next_counter(cname text) returns bigint
+        language sql as $fn$
+          insert into ${sch}.counters (name, n) values (cname, 1)
+          on conflict (name) do update set n = ${sch}.counters.n + 1
+          returning n;
+        $fn$`);
+      schemaReady.add(schema);
+    })().finally(() => {
+      schemaEnsuring.delete(schema);
+    });
+    schemaEnsuring.set(schema, pending);
+  }
+  await pending;
+}
 
 const chatReady = new Set<string>();
 const chatEnsuring = new Map<string, Promise<void>>();
@@ -241,8 +303,8 @@ export async function listRows(schema: AppSchema, table: string): Promise<Row[]>
   try {
     return await q(`select * from ${tableRef(schema, table)} where deleted_at is null order by created_at`);
   } catch (e) {
-    // ponytail: excel_books is new; empty until the first write creates the table.
-    if (table === "excel_books" && (e as { code?: string }).code === "42P01") return [];
+    // Missing table on a new schema — empty until ensureAppSchema / first write.
+    if ((e as { code?: string }).code === "42P01") return [];
     throw e;
   }
 }
@@ -255,7 +317,7 @@ export async function changedRows(schema: AppSchema, table: string, sinceIso: st
       [sinceIso],
     );
   } catch (e) {
-    if (table === "excel_books" && (e as { code?: string }).code === "42P01") return [];
+    if ((e as { code?: string }).code === "42P01") return [];
     throw e;
   }
 }
